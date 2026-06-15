@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.45.1';
+const PROJECT_VERSION = 'v60.46.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -1976,6 +1976,7 @@ function renderLineInsightPanels(line) {
           <span>Transporte</span><b>${formatInt(stats.freightTons || 0)} t</b>
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
+          <span>Fréq. effective</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(line.frequency)}</b>
           <span>Composition</span><b>${escapeHtml(capacity.trainComposition || 'Standard')}</b>
         </div>
       </section>
@@ -1985,7 +1986,50 @@ function renderLineInsightPanels(line) {
         ${renderLineFactorBars(factorDetails)}
         <p class="small muted">Contribution avant frais fixes : <b class="${contribution >= 0 ? 'good-text' : 'bad-text'}">${lineMoney(contribution)}</b></p>
       </section>
+
+      ${renderLineStaffNeedsCard(line)}
     </div>
+  `;
+}
+
+function lineDriverCoverageForDisplay(line) {
+  const fromStats = Number(line.stats?.staffing?.driverCoverage);
+  if (Number.isFinite(fromStats)) return Math.max(0, Math.min(100, fromStats));
+  return Math.round(driverCoverageClient() * 100);
+}
+
+function lineStaffNeedsStatusClass(line) {
+  const coverage = lineDriverCoverageForDisplay(line);
+  if (coverage >= 100) return 'good';
+  if (coverage >= 60) return 'warn';
+  return 'bad';
+}
+
+function renderLineStaffNeedsCard(line, options = {}) {
+  const needs = lineStaffNeedsClient(line);
+  const coverage = lineDriverCoverageForDisplay(line);
+  const cls = lineStaffNeedsStatusClass(line);
+  const effectiveFrequency = line.stats?.capacity?.effectiveFrequency ?? line.stats?.staffing?.effectiveFrequency;
+  const requestedFrequency = line.stats?.capacity?.requestedFrequency ?? line.frequency;
+  const lineNeededRoles = staffOrder.map(role => {
+    const label = app.state.balance.staff[role]?.label || role;
+    const need = Math.max(0, Number(needs[role] || 0));
+    return `<div><span>${escapeHtml(label)}</span><b>${formatInt(need)}</b></div>`;
+  }).join('');
+
+  return `
+    <section class="line-insight-panel line-staff-needs-card ${cls}">
+      <h4>Salariés nécessaires</h4>
+      <div class="line-driver-coverage">
+        <span>Couverture conducteurs</span>
+        <b class="${cls}-text">${round(coverage)}%</b>
+        <i><em style="width:${Math.max(0, Math.min(100, coverage))}%"></em></i>
+      </div>
+      <div class="line-staff-grid">${lineNeededRoles}</div>
+      ${Number.isFinite(effectiveFrequency) && Number.isFinite(Number(requestedFrequency)) && Number(effectiveFrequency) < Number(requestedFrequency)
+        ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de conducteurs.</p>`
+        : '<p class="small muted">Conducteurs suffisants : exploitation nominale.</p>'}
+    </section>
   `;
 }
 
@@ -2029,6 +2073,13 @@ function renderLineItem(line) {
   const ticketPrice = lineTicketPrice(line);
   const electrifyCost = line.electrified ? 0 : lineElectrificationCost(line);
   const canElectrify = !line.electrified && app.state.me.cash >= electrifyCost;
+  const operationalStatus = line.stats?.status === 'driver-shortage'
+    ? { cls: 'bad', label: 'Conducteurs insuffisants' }
+    : line.stats?.status === 'resource-shortage'
+      ? { cls: 'bad', label: 'Ressource insuffisante' }
+      : line.stats?.status === 'maintenance'
+        ? { cls: 'warn', label: 'Maintenance' }
+        : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
   const shortStops = stops.length > 4
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);
@@ -2041,7 +2092,7 @@ function renderLineItem(line) {
           <h3>${escapeHtml(lineDisplayName(line))}</h3>
           <p>${escapeHtml(shortStops)}</p>
         </div>
-        <span class="tag ${line.active ? 'good' : 'bad'}">${line.active ? 'Active' : 'Fermée'}</span>
+        <span class="tag ${operationalStatus.cls}">${escapeHtml(operationalStatus.label)}</span>
       </header>
 
       <div class="line-card-modern-route">
@@ -3215,45 +3266,73 @@ function renderStationAsset(s, asset) {
 }
 
 
+function emptyStaffNeedsClient() {
+  return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
+}
+
+function lineStaffNeedsClient(line) {
+  if (line?.staffNeeds) return line.staffNeeds;
+  if (!line?.active) return emptyStaffNeedsClient();
+  const stops = lineStopsOf(line);
+  if (stops.length < 2) return emptyStaffNeedsClient();
+  const dist = lineDistance(line);
+  const frequency = Math.max(1, Math.min(20, Number(line.frequency || 0)));
+  const longLineFactor = 1 + Math.max(0, dist - 180) / 420;
+  const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
+  const passengerService = line.service === 'passengers' || line.service === 'mixed';
+  const train = app.state.me?.trains?.find(t => t.id === line.trainId);
+  return {
+    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor)),
+    controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
+    stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
+    mechanics: train ? Math.max(1, Math.ceil(0.22 + dist * frequency / 1800)) : Math.max(0, Math.ceil(dist * frequency / 2200)),
+    dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
+    engineers: 0
+  };
+}
+
 function computeStaffNeedsClient() {
   const me = app.state.me;
   if (me.staffNeeds) return me.staffNeeds;
   const activeLines = me.lines.filter(l => l.active);
   const stationCount = Object.keys(me.stations || {}).length;
-  let drivers = 0;
-  let controllers = 0;
-  let dispatchers = 0;
+  if (!activeLines.length && !stationCount && !me.trains.length) return emptyStaffNeedsClient();
+
+  const needs = emptyStaffNeedsClient();
   let dailyKm = 0;
-
+  let stationWork = 0;
   for (const line of activeLines) {
-    const train = me.trains.find(t => t.id === line.trainId);
-    const model = train ? app.state.balance.trains[train.modelId] : null;
-    const dist = distance(line.from, line.to);
-    const longLineFactor = 1 + Math.max(0, dist - 180) / 420;
-    drivers += Math.ceil((line.frequency / 2) * longLineFactor);
-    if (line.service === 'passengers' || line.service === 'mixed') {
-      controllers += Math.ceil((line.frequency / 3.2) * Math.min(1.8, longLineFactor));
-    }
-    dispatchers += line.frequency / 18;
-    dailyKm += dist * line.frequency;
+    const lineNeeds = lineStaffNeedsClient(line);
+    needs.drivers += lineNeeds.drivers;
+    needs.controllers += lineNeeds.controllers;
+    needs.dispatchers += lineNeeds.dispatchers;
+    dailyKm += lineDistance(line) * Math.max(1, Math.min(20, Number(line.frequency || 0)));
+    stationWork += Math.max(0, lineStopsOf(line).length - 2);
   }
-
   return {
-    drivers: Math.max(1, drivers),
-    controllers: Math.max(1, controllers),
-    stationAgents: Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12)),
-    mechanics: Math.max(1, Math.ceil(me.trains.length * 0.55 + dailyKm / 1800)),
-    dispatchers: Math.max(1, Math.ceil(activeLines.length / 3 + dispatchers)),
-    engineers: Math.max(1, Math.ceil(me.epoch + 1 + Object.keys(me.techUnlocked || {}).length / 10))
+    drivers: activeLines.length ? Math.max(1, needs.drivers) : 0,
+    controllers: needs.controllers > 0 ? Math.max(1, needs.controllers) : 0,
+    stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16)) : 0,
+    mechanics: me.trains.length ? Math.max(1, Math.ceil(me.trains.length * 0.55 + dailyKm / 1800)) : 0,
+    dispatchers: activeLines.length ? Math.max(1, needs.dispatchers) : 0,
+    engineers: Object.keys(me.techUnlocked || {}).length || me.research > 0 ? Math.max(1, Math.ceil(me.epoch + Object.keys(me.techUnlocked || {}).length / 10)) : 0
   };
 }
 
 function staffNeed(role) {
-  return computeStaffNeedsClient()[role] || 1;
+  return computeStaffNeedsClient()[role] || 0;
 }
 
 function staffRatio(role, count) {
-  return Math.min(1.25, Math.max(0.25, (Number(count || 0) + 0.4) / staffNeed(role)));
+  const need = staffNeed(role);
+  if (need <= 0) return 1.25;
+  return Math.min(1.25, Math.max(0.25, (Number(count || 0) + 0.4) / need));
+}
+
+function driverCoverageClient() {
+  const need = staffNeed('drivers');
+  if (need <= 0) return 1;
+  return Math.max(0, Math.min(1, Number(app.state.me?.staff?.drivers || 0) / need));
 }
 
 function staffStatus(role, count) {
@@ -4685,6 +4764,14 @@ function drawBaseRailNetwork(ctx) {
   ctx.restore();
 }
 
+
+function visualLineWithEffectiveFrequency(line) {
+  const effectiveFrequency = Number(line?.stats?.capacity?.effectiveFrequency ?? line?.stats?.staffing?.effectiveFrequency ?? line?.frequency ?? 0);
+  if (!Number.isFinite(effectiveFrequency) || effectiveFrequency <= 0) return line;
+  if (Math.abs(effectiveFrequency - Number(line.frequency || 0)) < 0.001) return line;
+  return { ...line, frequency: effectiveFrequency };
+}
+
 function drawAllLines(ctx, lite = false) {
   const players = app.state.players || [];
   for (const player of players) {
@@ -4697,9 +4784,9 @@ function drawAllLines(ctx, lite = false) {
       if (lite) continue;
       const train = (player.trains || []).find(t => t.id === line.trainId);
       if (!train || train.maintenance?.active) continue;
-      if (line.stats?.status === 'resource-shortage') continue;
+      if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage') continue;
       const model = app.state.balance.trains[train.modelId];
-      drawTrainSprite(ctx, route.points, player.color, line, model, own, train);
+      drawTrainSprite(ctx, route.points, player.color, visualLineWithEffectiveFrequency(line), model, own, train);
     }
   }
 }

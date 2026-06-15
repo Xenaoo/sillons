@@ -5352,3 +5352,69 @@ dialog.modal--wide {
   color: #d7e3f3;
   line-height: 1.45;
 }
+
+/* ===== v60.46.0 — besoins salariés par ligne ===== */
+.line-staff-needs-card.good {
+  border-color: rgba(106,197,143,.26);
+}
+.line-staff-needs-card.warn {
+  border-color: rgba(245,183,77,.32);
+}
+.line-staff-needs-card.bad {
+  border-color: rgba(239,68,68,.38);
+  background: linear-gradient(180deg, rgba(127,29,29,.16), rgba(3,8,18,.30));
+}
+.line-driver-coverage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+.line-driver-coverage span {
+  color: #b8aa84;
+}
+.line-driver-coverage b {
+  color: #f4e3bd;
+}
+.line-driver-coverage i {
+  grid-column: 1 / -1;
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148,163,184,.16);
+}
+.line-driver-coverage em {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d9a852, #6ac58f);
+}
+.line-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.line-staff-grid div {
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 10px;
+  background: rgba(3,8,18,.34);
+  border: 1px solid rgba(217,168,82,.10);
+}
+.line-staff-grid span {
+  display: block;
+  color: #b8aa84;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.line-staff-grid b {
+  display: block;
+  margin-top: 2px;
+  color: #f4e3bd;
+  font-size: 13px;
+}

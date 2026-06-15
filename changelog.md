@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v60.46.0 — conducteurs requis et besoins salariés par ligne
+
+- incrément de version de cette passe : badge interface `v60.46.0`, package `0.4.36` et schéma d’état serveur `48` ;
+- ajout d’un blocage réel de l’exploitation en cas d’absence de conducteurs : avec 0 conducteur disponible, les lignes actives ne produisent plus de trafic, de recettes ni de consommation ;
+- ajout d’une réduction proportionnelle de la fréquence effective lorsque les conducteurs disponibles sont inférieurs au besoin total de la compagnie ;
+- la réduction est répartie au prorata des besoins conducteurs de chaque ligne : une ligne qui demande plus de conducteurs reçoit une part plus importante, mais toutes les lignes subissent la même couverture globale ;
+- les marchés, l’attractivité, la capacité, la consommation de ressources, les coûts variables, l’usure et les trains affichés tiennent compte de cette fréquence effective ;
+- ajout dans les fiches de lignes du sous-onglet `Modifier` d’une vignette `Salariés nécessaires` listant les besoins par métier : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs et ingénieurs ;
+- la vignette indique aussi la couverture conducteurs et signale la fréquence réduite si l’effectif est insuffisant ;
+- les lignes en manque de conducteurs affichent maintenant un statut explicite `Conducteurs insuffisants`.
+
 ## Version v60.45.1 — correction du clic sur le badge de version
 
 - correction du bug empêchant l’ouverture du popup changelog au clic sur le badge de version ;

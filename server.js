@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.45.1';
-const STATE_SCHEMA_VERSION = 47;
+const PROJECT_VERSION = 'v60.46.0';
+const STATE_SCHEMA_VERSION = 48;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -1103,7 +1103,7 @@ function publicPlayer(p) {
     score: Math.round(scorePlayer(p)),
     stats: p.stats,
     trains: p.trains.map(t => publicTrain(t, p)),
-    lines: p.lines.map(normalizeLine),
+    lines: p.lines.map(line => ({ ...normalizeLine(line), staffNeeds: computeLineStaffNeeds(p, line) })),
     stations: p.stations,
     staff: p.staff,
     staffNeeds: computeStaffNeeds(p),
@@ -2150,6 +2150,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   let marketScore = 0;
 
   const staffing = computeStaffing(player);
+  const staffNeeds = computeStaffNeeds(player);
+  const driverCoverage = driverCoverageForNeed(player, staffNeeds.drivers);
   const policy = BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
   const maintenanceCapacity = 1 + (player.staff.mechanics || 0) * 0.08 + totalMaintenance(player) * 0.12 + techLevel(player, 'electric_standardized_maintenance') * 0.16 + techLevel(player, 'steam_workshops') * 0.1;
   const eventFactor = currentEventFactor();
@@ -2170,7 +2172,48 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const from = stationById(stops[0]);
     const to = stationById(stops[stops.length - 1]);
     const distance = lineDistance(line);
-    const resourceCheck = reserveLineResource(player, resourceRuntime, operatingModel, line, distance, dryRun);
+    const lineNeeds = computeLineStaffNeeds(player, line);
+    const lineDriverCoverage = lineNeeds.drivers > 0 ? driverCoverage : 1;
+    const allocatedDrivers = lineNeeds.drivers > 0 ? lineNeeds.drivers * lineDriverCoverage : 0;
+    const effectiveLine = lineWithEffectiveFrequency(line, lineDriverCoverage);
+    const effectiveFrequency = Number(effectiveLine.frequency || 0);
+    const lineStaffingStats = {
+      needs: lineNeeds,
+      driverCoverage: round2(lineDriverCoverage * 100),
+      allocatedDrivers: round2(allocatedDrivers),
+      requiredDrivers: lineNeeds.drivers,
+      effectiveFrequency: round2(effectiveFrequency),
+      requestedFrequency: Number(line.frequency || 0)
+    };
+    if (lineDriverCoverage <= 0) {
+      line.stats = {
+        passengers: 0,
+        freightTons: 0,
+        revenue: 0,
+        expenses: 0,
+        profit: 0,
+        punctuality: 0,
+        satisfaction: 8,
+        share: 0,
+        status: 'driver-shortage',
+        staffing: lineStaffingStats,
+        capacity: {
+          passengers: 0,
+          freightTons: 0,
+          passengerLoad: null,
+          freightLoad: null,
+          crewFactor: 0,
+          stationFactor: round2(lineStationFactor(player, line) * 100),
+          capacityFactor: 0,
+          driverCoverage: 0,
+          effectiveFrequency: 0,
+          requestedFrequency: Number(line.frequency || 0),
+          trainComposition: operatingModel.compositionSummary
+        }
+      };
+      continue;
+    }
+    const resourceCheck = reserveLineResource(player, resourceRuntime, operatingModel, effectiveLine, distance, dryRun);
     if (!resourceCheck.ok) {
       const label = resourceCheck.type === 'electricity' ? 'électricité commandée insuffisante' : `${resourceCheck.type === 'coal' ? 'charbon' : 'diesel'} insuffisant`;
       line.stats = {
@@ -2183,6 +2226,20 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         satisfaction: 18,
         share: 0,
         status: 'resource-shortage',
+        staffing: lineStaffingStats,
+        capacity: {
+          passengers: 0,
+          freightTons: 0,
+          passengerLoad: null,
+          freightLoad: null,
+          crewFactor: 0,
+          stationFactor: round2(lineStationFactor(player, line) * 100),
+          capacityFactor: 0,
+          driverCoverage: round2(lineDriverCoverage * 100),
+          effectiveFrequency: round2(effectiveFrequency),
+          requestedFrequency: Number(line.frequency || 0),
+          trainComposition: operatingModel.compositionSummary
+        },
         resource: {
           type: resourceCheck.type,
           requiredPerHour: round2(resourceCheck.amountPerHour || 0),
@@ -2194,10 +2251,10 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     }
     const routeDemand = computeRouteDemand(from, to, line, player, eventFactor);
     const passengerDetails = lineCanServeMarket(operatingModel, 'passengers') && lineMarketServices(line).includes('passengers')
-      ? computeLineAttractivenessDetails(player, line, operatingModel, train, distance, staffing, 'passengers')
+      ? computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, distance, staffing, 'passengers')
       : null;
     const freightDetails = lineCanServeMarket(operatingModel, 'freight') && lineMarketServices(line).includes('freight')
-      ? computeLineAttractivenessDetails(player, line, operatingModel, train, distance, staffing, 'freight')
+      ? computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, distance, staffing, 'freight')
       : null;
     const passengerMarket = passengerDetails
       ? marketSnapshot(lineMarkets[routeKey(stops[0], stops[stops.length - 1], 'passengers')] || [], line.id, passengerDetails.score)
@@ -2208,11 +2265,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const scoredShares = [passengerMarket?.share, freightMarket?.share].filter(Number.isFinite);
     if (scoredShares.length) marketScore += scoredShares.reduce((sum, share) => sum + share, 0) / scoredShares.length;
 
-    const crewFactor = Math.min(staffing.drivers, staffing.controllers, staffing.dispatchers);
+    const crewFactor = Math.min(staffing.controllers, staffing.dispatchers);
     const stationFactor = lineStationFactor(player, line);
     const capacityFactor = Math.min(1, crewFactor * stationFactor);
-    const maxPax = operatingModel.capacity * line.frequency * capacityFactor;
-    const maxFreight = operatingModel.freight * line.frequency * capacityFactor;
+    const maxPax = operatingModel.capacity * effectiveFrequency * capacityFactor;
+    const maxFreight = operatingModel.freight * effectiveFrequency * capacityFactor;
     let linePax = 0;
     let lineFreight = 0;
 
@@ -2236,9 +2293,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
     const lineRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
-    const energyCost = computeEnergyCost(player, operatingModel, distance, line.frequency, line.electrified);
-    const maintenanceCost = operatingModel.maintenance * distance * line.frequency * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
-    const passageRights = computePassageRights(player, line, operatingModel, distance);
+    const energyCost = computeEnergyCost(player, operatingModel, distance, effectiveFrequency, line.electrified);
+    const maintenanceCost = operatingModel.maintenance * distance * effectiveFrequency * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
+    const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance);
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
     const variableExpenses = energyCost + maintenanceCost + accessCost;
@@ -2246,7 +2303,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     revenue += lineRevenue;
     expenses += variableExpenses;
 
-    const wearBase = (distance * line.frequency / 120000) * (1.15 - Math.min(0.35, maintenanceCapacity / 20));
+    const wearBase = (distance * effectiveFrequency / 120000) * (1.15 - Math.min(0.35, maintenanceCapacity / 20));
     const techWear = (1 - Math.min(0.14, techLevel(player, 'electric_standardized_maintenance') * 0.025)) * (1 - Math.min(0.1, techLevel(player, 'steam_workshops') * 0.018));
     const wear = wearBase * policy.wearMultiplier * techWear;
     const projectedCondition = clamp(train.condition - wear, 0.12, 1);
@@ -2257,9 +2314,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const reliabilityCondition = dryRun ? train.condition : projectedCondition;
     const reliability = clamp(operatingModel.reliability * reliabilityCondition * (0.86 + Math.min(0.18, maintenanceCapacity / 30)) * crewFactor + policy.reliabilityBonus + techLevel(player, 'safety_training') * 0.006, 0.18, 0.995);
     const delayRisk = 1 - reliability;
-    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, line.frequency - 10) * 1.4, 45, 99);
+    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, effectiveFrequency - 10) * 1.4 - Math.max(0, 1 - lineDriverCoverage) * 18, 35, 99);
     const satisfaction = clamp(
-      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, line.frequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5,
+      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, effectiveFrequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5 - Math.max(0, 1 - lineDriverCoverage) * 12,
       10,
       100
     );
@@ -2273,6 +2330,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       punctuality: round2(punctuality),
       satisfaction: round2(satisfaction),
       share: round2((scoredShares.reduce((sum, share) => sum + share, 0) / Math.max(1, scoredShares.length)) * 100),
+      status: lineDriverCoverage < 0.999 ? 'driver-shortage' : 'ok',
+      staffing: lineStaffingStats,
       market: {
         passengerDemand: Math.round(routeDemand.passengers),
         freightDemand: Math.round(routeDemand.freight),
@@ -2301,6 +2360,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         crewFactor: round2(crewFactor * 100),
         stationFactor: round2(stationFactor * 100),
         capacityFactor: round2(capacityFactor * 100),
+        driverCoverage: round2(lineDriverCoverage * 100),
+        effectiveFrequency: round2(effectiveFrequency),
+        requestedFrequency: Number(line.frequency || 0),
         trainComposition: operatingModel.compositionSummary
       },
       finance: {
@@ -2326,7 +2388,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 
     passengers += linePax;
     freight += lineFreight;
-    co2 += computeCo2(operatingModel, distance, line.frequency);
+    co2 += computeCo2(operatingModel, distance, effectiveFrequency);
     punctualityWeighted += punctuality * Math.max(1, linePax + lineFreight * 0.5);
     satisfactionWeighted += satisfaction * Math.max(1, linePax + lineFreight * 0.5);
     weight += Math.max(1, linePax + lineFreight * 0.5);
@@ -2418,6 +2480,9 @@ function buildLineMarkets() {
   const markets = {};
   for (const player of Object.values(state.players)) {
     const staffing = computeStaffing(player);
+    const needs = computeStaffNeeds(player);
+    const driverCoverage = driverCoverageForNeed(player, needs.drivers);
+    if (driverCoverage <= 0) continue;
     for (const line of player.lines) {
       if (!line.active) continue;
       const train = player.trains.find(t => t.id === line.trainId);
@@ -2427,11 +2492,12 @@ function buildLineMarkets() {
       const operatingModel = getTrainOperatingProfile(train, model, player);
       const stops = lineStops(line);
       const distance = lineDistance(line);
+      const effectiveLine = lineWithEffectiveFrequency(line, driverCoverage);
       for (const market of lineMarketServices(line)) {
         if (!lineCanServeMarket(operatingModel, market)) continue;
         const key = routeKey(stops[0], stops[stops.length - 1], market);
         if (!markets[key]) markets[key] = [];
-        const details = computeLineAttractivenessDetails(player, line, operatingModel, train, distance, staffing, market);
+        const details = computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, distance, staffing, market);
         markets[key].push({
           playerId: player.id,
           companyName: player.name,
@@ -2599,6 +2665,7 @@ function computePlayerResourceFlow(player) {
   player.resources = normalizeResources(player.resources);
   const consumption = { coal: 0, diesel: 0, electricity: 0 };
   const sources = { coal: [], diesel: [], electricity: [] };
+  const driverCoverage = driverCoverageForNeed(player);
   for (const line of player.lines || []) {
     if (!line.active) continue;
     const train = player.trains.find(t => t.id === line.trainId);
@@ -2608,7 +2675,8 @@ function computePlayerResourceFlow(player) {
     const operatingModel = getTrainOperatingProfile(train, model, player);
     const type = trainResourceType(operatingModel);
     if (!type) continue;
-    const perHour = resourceDemandPerHour(operatingModel, lineDistance(line), line.frequency);
+    const effectiveLine = lineWithEffectiveFrequency(line, driverCoverage);
+    const perHour = resourceDemandPerHour(operatingModel, lineDistance(line), effectiveLine.frequency);
     consumption[type] += perHour;
     sources[type].push({
       lineId: line.id,
@@ -2716,48 +2784,79 @@ function computeCo2(model, distance, frequency) {
 }
 
 
+function emptyStaffNeeds() {
+  return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
+}
+
+function computeLineStaffNeeds(player, line) {
+  if (!line?.active) return emptyStaffNeeds();
+  const stops = lineStops(line);
+  if (stops.length < 2) return emptyStaffNeeds();
+  const distance = lineDistance(line);
+  const frequency = clamp(Number(line.frequency || 0), 1, 20);
+  const longLineFactor = 1 + Math.max(0, distance - 180) / 420;
+  const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
+  const passengerService = line.service === 'passengers' || line.service === 'mixed';
+  const train = player?.trains?.find(t => t.id === line.trainId);
+
+  return {
+    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor)),
+    controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
+    stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
+    mechanics: train ? Math.max(1, Math.ceil(0.22 + distance * frequency / 1800)) : Math.max(0, Math.ceil(distance * frequency / 2200)),
+    dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
+    engineers: 0
+  };
+}
+
 function computeStaffNeeds(player) {
   const activeLines = player.lines.filter(l => l.active);
   const stationCount = Object.keys(player.stations || {}).length;
   const trains = player.trains.length;
-  if (!activeLines.length && !stationCount && !trains) {
-    return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
-  }
+  if (!activeLines.length && !stationCount && !trains) return emptyStaffNeeds();
 
-  let drivers = 0;
-  let controllers = 0;
-  let dispatchers = 0;
+  const needs = emptyStaffNeeds();
   let dailyKm = 0;
+  let stationWork = 0;
 
   for (const line of activeLines) {
-    const stops = lineStops(line);
-    const distance = lineDistance(line);
-    const longLineFactor = 1 + Math.max(0, distance - 180) / 420;
-    const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
-    drivers += Math.ceil((line.frequency / 2) * longLineFactor * stopFactor);
-    if (line.service === 'passengers' || line.service === 'mixed') {
-      controllers += Math.ceil((line.frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor));
-    }
-    dispatchers += (line.frequency / 18) * Math.min(1.5, stopFactor);
-    dailyKm += distance * line.frequency;
+    const lineNeeds = computeLineStaffNeeds(player, line);
+    needs.drivers += lineNeeds.drivers;
+    needs.controllers += lineNeeds.controllers;
+    needs.dispatchers += lineNeeds.dispatchers;
+    dailyKm += lineDistance(line) * clamp(Number(line.frequency || 0), 1, 20);
+    stationWork += Math.max(0, lineStops(line).length - 2);
   }
 
   return {
-    drivers: activeLines.length ? Math.max(1, drivers) : 0,
-    controllers: activeLines.length ? Math.max(1, controllers) : 0,
-    stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + activeLines.reduce((s, l) => s + Math.max(0, lineStops(l).length - 2), 0) * 0.16)) : 0,
+    drivers: activeLines.length ? Math.max(1, needs.drivers) : 0,
+    controllers: needs.controllers > 0 ? Math.max(1, needs.controllers) : 0,
+    stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16)) : 0,
     mechanics: trains ? Math.max(1, Math.ceil(trains * 0.55 + dailyKm / 1800)) : 0,
-    dispatchers: activeLines.length ? Math.max(1, Math.ceil(activeLines.length / 3 + dispatchers)) : 0,
+    dispatchers: activeLines.length ? Math.max(1, needs.dispatchers) : 0,
     engineers: Object.keys(player.techUnlocked || {}).length || player.research > 0 ? Math.max(1, Math.ceil(player.epoch + Object.keys(player.techUnlocked || {}).length / 10)) : 0
   };
+}
+
+function driverCoverageForNeed(player, need = null) {
+  const required = Math.max(0, Number((need ?? computeStaffNeeds(player).drivers) || 0));
+  if (required <= 0) return 1;
+  return clamp(Number(player.staff?.drivers || 0) / required, 0, 1);
+}
+
+function lineWithEffectiveFrequency(line, driverCoverage) {
+  const coverage = clamp(Number(driverCoverage), 0, 1);
+  if (coverage >= 0.999) return line;
+  return { ...line, frequency: Math.max(0, Number(line.frequency || 0) * coverage) };
 }
 
 function computeStaffing(player) {
   const needs = computeStaffNeeds(player);
   const training = Math.min(0.24, techLevel(player, 'crew_training') * 0.045);
   const safety = Math.min(0.12, techLevel(player, 'safety_training') * 0.025);
+  const driverBase = driverCoverageForNeed(player, needs.drivers);
   return {
-    drivers: ratio(player.staff.drivers, needs.drivers) + training,
+    drivers: needs.drivers > 0 ? clamp(driverBase + (driverBase > 0 ? training : 0), 0, 1.25) : 1.25,
     controllers: ratio(player.staff.controllers, needs.controllers) + training,
     stationAgents: ratio(player.staff.stationAgents, needs.stationAgents) + safety,
     mechanics: ratio(player.staff.mechanics, needs.mechanics) + training,
@@ -2767,7 +2866,9 @@ function computeStaffing(player) {
 }
 
 function ratio(value, need) {
-  return clamp((Number(value || 0) + 0.4) / need, 0.25, 1.25);
+  const required = Number(need || 0);
+  if (required <= 0) return 1.25;
+  return clamp((Number(value || 0) + 0.4) / required, 0.25, 1.25);
 }
 
 function updateMarket() {

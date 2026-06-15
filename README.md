@@ -25,7 +25,7 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 - Création de compagnie.
 - Achat de matériel roulant.
 - Création de lignes voyageurs, fret ou mixtes.
-- Gestion de fréquence, tarifs et revenus.
+- Gestion de fréquence, tarifs, revenus et fréquence effective selon la couverture conducteurs.
 - Gares améliorables avec coût affiché, niveaux maximums et sélection persistante.
 - Salariés : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs, ingénieurs.
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
