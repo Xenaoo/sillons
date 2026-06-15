@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sillons — Gestion ferroviaire multijoueur</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="setup" class="setup hidden">
+    <form id="setupForm" class="setup-card">
+      <div class="brand-block">
+        <div class="logo-mark">S</div>
+        <div>
+          <h1>Sillons</h1>
+          <p>Gestion ferroviaire multijoueur sur carte de France.</p>
+        </div>
+      </div>
+      <label>Nom de compagnie
+        <input id="companyName" maxlength="28" value="Compagnie des Sillons" autocomplete="off">
+      </label>
+      <label>Couleur de compagnie
+        <input id="companyColor" type="color" value="#60a5fa">
+      </label>
+      <div class="setup-logo-block">
+        <div class="setup-logo-head">
+          <strong>Logo de compagnie</strong>
+          <span class="small muted">Choisis un emblème ferroviaire pixel-art qui colle à la DA du jeu.</span>
+        </div>
+        <div class="setup-logo-preview-card">
+          <img id="setupLogoPreview" src="/assets/company_logos/steam_front.png" alt="Logo sélectionné">
+          <div>
+            <div class="small muted">Sélection actuelle</div>
+            <div id="setupLogoLabel" class="setup-logo-label">Locomotive vapeur</div>
+          </div>
+        </div>
+        <input id="companyLogo" type="hidden" value="steam_front">
+        <div id="logoPicker" class="logo-picker"></div>
+      </div>
+      <button class="primary" type="submit">Créer la compagnie</button>
+      <p class="small muted">Le serveur sauvegarde automatiquement la partie dans <code>data/save.json</code>.</p>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-mark small-logo company-logo-wrap">
+        <img id="companyLogoBadge" class="hidden" src="/assets/company_logos/steam_front.png" alt="Logo compagnie">
+        <span id="companyLogoFallback">S</span>
+      </div>
+      <div>
+        <strong>Sillons</strong>
+        <span id="companySubtitle">Non connecté</span>
+      </div>
+    </div>
+    <div id="topStats" class="top-stats"></div>
+    <div class="top-actions">
+      <button id="renameBtn" class="ghost" title="Renomme ta compagnie ferroviaire.">Compagnie</button>
+      <button id="resetBtn" class="danger ghost" title="Réinitialise ta compagnie actuelle. Action destructive après confirmation.">Reset</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="map-section panel">
+      <div class="map-toolbar">
+        <div>
+          <strong>Carte OpenStreetMap</strong>
+          <span id="mapHint" class="muted">Clique une gare, ou active “Créer arrêt” puis clique n’importe où en France.</span>
+        </div>
+        <div class="map-toolbar-right">
+          <div class="legend">
+            <span><i class="dot neutral"></i> Gare OSM</span>
+            <span><i class="line-sample"></i> Ligne joueur</span>
+          </div>
+          <div class="map-controls">
+            <button id="addStopBtn" class="ghost" type="button" title="Active le mode création : clique ensuite sur la carte pour créer un arrêt jouable. Coût : 55 000 € environ, ajusté par le marché acier.">Créer arrêt</button>
+            <button id="cancelStopBtn" class="ghost hidden" type="button" title="Annule le mode création d’arrêt sans rien dépenser.">Annuler</button>
+            <button id="zoomOutBtn" class="ghost" type="button" title="Dézoome la carte OpenStreetMap.">−</button>
+            <button id="zoomResetBtn" class="ghost" type="button" title="Recentre la carte sur la France entière.">France</button>
+            <button id="zoomInBtn" class="ghost" type="button" title="Zoome la carte OpenStreetMap. Les villes/gares secondaires apparaissent progressivement.">+</button>
+          </div>
+        </div>
+      </div>
+      <div id="osmMap" class="osm-map">
+        <canvas id="map" width="1200" height="820"></canvas>
+      </div>
+    </section>
+
+    <aside class="side panel">
+      <nav class="tabs" id="tabs">
+        <button data-tab="overview" class="active">Vue</button>
+        <button data-tab="lines">Lignes</button>
+        <button data-tab="fleet">Parc</button>
+        <button data-tab="stations">Gares</button>
+        <button data-tab="staff">RH</button>
+        <button data-tab="research">R&D</button>
+        <button data-tab="resources">Énergie</button>
+        <button data-tab="market">Marché</button>
+      </nav>
+      <div id="tabContent" class="tab-content"></div>
+    </aside>
+  </main>
+
+  <div id="toastHost" class="toast-host"></div>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-head">
+        <strong id="modalTitle">Titre</strong>
+        <button value="close" class="icon-btn">×</button>
+      </div>
+      <div id="modalBody"></div>
+    </form>
+  </dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app.js"></script>
+  <div id="versionBadge">v60.43</div>
+</body>
+</html>

@@ -1,0 +1,354 @@
+{
+  "version": 45,
+  "createdAt": 1781511648911,
+  "now": 1781516141580,
+  "day": 1,
+  "eraYear": 1850,
+  "tickSpeed": 2000,
+  "market": {
+    "coal": 1.21,
+    "diesel": 2.8,
+    "electricity": 0.29,
+    "hydrogen": 1.69,
+    "battery": 0.38,
+    "steel": 1.13,
+    "labor": 1.01,
+    "demand": 1,
+    "freight": 1.07
+  },
+  "events": [
+    {
+      "kind": "weather",
+      "title": "Météo difficile : la ponctualité devient plus fragile.",
+      "passenger": 0.94,
+      "freight": 0.92,
+      "remaining": 18
+    },
+    {
+      "kind": "social",
+      "title": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées.",
+      "passenger": 0.97,
+      "freight": 0.97,
+      "remaining": 22
+    }
+  ],
+  "news": [
+    {
+      "day": 1,
+      "text": "Le marché ferroviaire français s’ouvre aux premières compagnies privées."
+    },
+    {
+      "day": 1,
+      "text": "Compagnie des Sillons démarre avec une ligne Caen → Bayeux déjà exploitée."
+    },
+    {
+      "day": 2,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
+    },
+    {
+      "day": 6,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 9,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 10,
+      "text": "Nord Fret IA entre sur le marché ferroviaire."
+    }
+  ],
+  "customStations": {},
+  "players": {
+    "4c7dfa51-225a-487a-aa42-1b0776c4e1d5": {
+      "id": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+      "name": "Compagnie des Sillons",
+      "color": "#60a5fa",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 10000000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1.01,
+      "tech": {
+        "traction": 1,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0,
+        "maintenance": 0
+      },
+      "techUnlocked": {
+        "steam_first_locomotives": 1
+      },
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 53.67261467382236,
+      "co2": 220.34376000000006,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 2000,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 4,
+        "controllers": 1,
+        "stationAgents": 2,
+        "mechanics": 1,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [
+        {
+          "id": "starter-steam-030-mixte",
+          "modelId": "steam_030_mixte",
+          "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+          "condition": 0.9557255999999996,
+          "age": 9,
+          "acquiredDay": 1,
+          "composition": {
+            "mode": "passenger_loco",
+            "passengerCars": 3,
+            "freightCars": 3,
+            "powerUnits": 1,
+            "passengerVariant": "standard",
+            "freightVariant": "covered"
+          },
+          "maintenance": {
+            "active": false,
+            "mode": null,
+            "label": null,
+            "daysLeft": 0,
+            "duration": 0,
+            "targetCondition": 0,
+            "startedDay": null,
+            "cost": 0,
+            "lastServiceDay": 1
+          }
+        }
+      ],
+      "lines": [
+        {
+          "id": "starter-line-caen-bayeux",
+          "code": "COM-001",
+          "from": "CAE",
+          "to": "BAY",
+          "stops": [
+            "CAE",
+            "BAY"
+          ],
+          "trainId": "starter-steam-030-mixte",
+          "service": "passengers",
+          "frequency": 2,
+          "ticketPrice": 3,
+          "tariff": 0.11538461538461539,
+          "active": true,
+          "electrified": false,
+          "createdDay": 1,
+          "stats": {
+            "passengers": 143,
+            "freightTons": 0,
+            "revenue": 530,
+            "expenses": 509,
+            "profit": 21,
+            "punctuality": 45,
+            "satisfaction": 55.62,
+            "share": 100,
+            "market": {
+              "passengerDemand": 548,
+              "freightDemand": 159,
+              "passengerShare": 100,
+              "freightShare": null,
+              "passengerRank": 1,
+              "freightRank": null,
+              "passengerCompetitors": 0,
+              "freightCompetitors": 0,
+              "passengerLeader": {
+                "companyName": "Compagnie des Sillons",
+                "lineCode": "COM-001",
+                "score": 0.99
+              },
+              "freightLeader": null,
+              "passengerScore": 0.99,
+              "freightScore": null,
+              "passengerDemandCapture": 44.08,
+              "freightDemandCapture": null
+            },
+            "attractiveness": {
+              "passenger": {
+                "market": "passengers",
+                "score": 0.99,
+                "factors": {
+                  "price": 78.57,
+                  "frequency": 40.82,
+                  "speed": 31.11,
+                  "comfortOrCapacity": 62.25,
+                  "reputation": 69.21,
+                  "condition": 96.76,
+                  "staff": 40,
+                  "stations": 85,
+                  "operations": 100
+                }
+              },
+              "freight": null
+            },
+            "capacity": {
+              "passengers": 143,
+              "freightTons": 73,
+              "passengerLoad": 100,
+              "freightLoad": 0,
+              "crewFactor": 40,
+              "stationFactor": 85,
+              "capacityFactor": 34,
+              "trainComposition": "3 voiture(s) · Standard"
+            },
+            "finance": {
+              "ticketPrice": 3,
+              "farePerKm": 0.12,
+              "ticketRevenue": 480,
+              "ancillaryRevenue": 50,
+              "freightRevenue": 0,
+              "energyCost": 0,
+              "resourceType": "coal",
+              "resourceConsumptionPerHour": 5.83,
+              "maintenanceCost": 19,
+              "accessCost": 0,
+              "passageRights": 0,
+              "variableExpenses": 19,
+              "contribution": 511,
+              "allocatedOverhead": 490,
+              "netProfit": 21,
+              "margin": 96.44,
+              "totalExpenses": 509,
+              "netMargin": 3.88
+            }
+          },
+          "name": "Caen → Bayeux"
+        }
+      ],
+      "stations": {
+        "CAE": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        },
+        "BAY": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        }
+      },
+      "stats": {
+        "passengers": 1287,
+        "freightTons": 0,
+        "revenue": 5319,
+        "expenses": 4562,
+        "profit": 763,
+        "lastRevenue": 591,
+        "lastExpenses": 509,
+        "lastProfit": 82,
+        "punctuality": 45,
+        "satisfaction": 55.62,
+        "marketShare": 1,
+        "lastBreakdown": {
+          "lineRevenue": 530,
+          "stationRevenue": 62,
+          "staffCost": 374,
+          "stationCost": 116,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 19,
+          "sharedCosts": 490
+        }
+      },
+      "notifications": [
+        {
+          "day": 1,
+          "text": "Partie préparée : 10 000 000 € disponibles, ligne Caen → Bayeux ouverte, locomotive vapeur de départ affectée."
+        },
+        {
+          "day": 1,
+          "text": "Recherche initiale débloquée : Premières locomotives à vapeur niveau 1."
+        },
+        {
+          "day": 1,
+          "text": "Stock de départ ajouté : 2 000 unités de charbon."
+        }
+      ],
+      "createdAt": 1781511648911,
+      "lastSeen": 1781511648911
+    },
+    "b57d13a6-f264-457c-8d64-7f08216358bb": {
+      "id": "b57d13a6-f264-457c-8d64-7f08216358bb",
+      "name": "Nord Fret IA",
+      "color": "#a78bfa",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 500000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 0,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 50,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0
+      },
+      "notifications": [
+        {
+          "day": 10,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        }
+      ],
+      "createdAt": 1781516141612,
+      "lastSeen": 1781516141612
+    }
+  },
+  "nextNpcAt": 41
+}

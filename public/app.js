@@ -1,0 +1,6610 @@
+'use strict';
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
+
+const COMPANY_LOGOS = [
+  { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
+  { id: 'winged_wheel', label: 'Roue ailée', src: '/assets/company_logos/winged_wheel.png' },
+  { id: 'semaphore', label: 'Sémaphore', src: '/assets/company_logos/semaphore.png' },
+  { id: 'royal_track', label: 'Blason voie', src: '/assets/company_logos/royal_track.png' },
+  { id: 'tunnel_arch', label: 'Tunnel', src: '/assets/company_logos/tunnel_arch.png' },
+  { id: 'electric_rail', label: 'Éclair rail', src: '/assets/company_logos/electric_rail.png' },
+  { id: 'mountain_rail', label: 'Montagne', src: '/assets/company_logos/mountain_rail.png' },
+  { id: 'laurel_wheel', label: 'Laurier', src: '/assets/company_logos/laurel_wheel.png' },
+  { id: 'pantograph', label: 'Pantographe', src: '/assets/company_logos/pantograph.png' },
+  { id: 'conductor_cap', label: 'Casquette', src: '/assets/company_logos/conductor_cap.png' },
+  { id: 'grand_station', label: 'Grande gare', src: '/assets/company_logos/grand_station.png' },
+  { id: 'freight_wagon', label: 'Wagon fret', src: '/assets/company_logos/freight_wagon.png' },
+  { id: 'star_track', label: 'Étoile rail', src: '/assets/company_logos/star_track.png' },
+  { id: 'compass_rail', label: 'Boussole', src: '/assets/company_logos/compass_rail.png' },
+  { id: 'monogram_rail', label: 'Monogramme', src: '/assets/company_logos/monogram_rail.png' },
+  { id: 'bridge_truss', label: 'Pont', src: '/assets/company_logos/bridge_truss.png' },
+  { id: 'boiler_gauge', label: 'Chaudière', src: '/assets/company_logos/boiler_gauge.png' },
+  { id: 'gear_wheel', label: 'Engrenage', src: '/assets/company_logos/gear_wheel.png' },
+  { id: 'lantern_wings', label: 'Lanterne', src: '/assets/company_logos/lantern_wings.png' },
+  { id: 'switch_roundel', label: 'Aiguillage', src: '/assets/company_logos/switch_roundel.png' }
+];
+
+
+const app = {
+  playerId: localStorage.getItem('sillons.playerId') || '',
+  state: null,
+  activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
+  activeResearchTab: localStorage.getItem('sillons.researchTab') || 'traction',
+  researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
+  activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
+  activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
+  mapPref: 'show',
+  selectedStation: localStorage.getItem('sillons.selectedStation') || null,
+  hoverStation: null,
+  mapSprites: { trains: {}, stations: {} },
+  map: {
+    canvas: null,
+    ctx: null,
+    leaflet: null,
+    mapReady: false,
+    stationPlacement: false,
+    invalidatingSize: false,
+    dpr: 1,
+    width: 0,
+    height: 0,
+    stationHit: [],
+    frame: null,
+    navigating: false,
+    needsRouteReproject: false,
+    lastDrawAt: 0,
+    lastFullDrawAt: 0,
+    stationDrawCache: { key: '', items: [] },
+    visibleStationCache: { key: '', stations: [] },
+    routeDataSignature: '',
+    lastMoveEventAt: 0,
+    panOverlay: { active: false, anchorLatLng: null, anchorPoint: null, raf: false },
+    creatingCustomStation: false,
+    view: { zoom: 1, panX: 0, panY: 0 },
+    drag: { active: false, moved: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 }
+  },
+  routeCache: new Map(),
+  osmRouteCache: new Map(),
+  osmRoutePending: new Set(),
+  lineDraft: loadJson('sillons.lineDraft', {}),
+  stationSearch: { query: '', candidateId: '' },
+  stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
+  ownedStationsCollapsed: localStorage.getItem('sillons.ownedStationsCollapsed') === '1',
+  highlightResearchId: '',
+  highlightUiTarget: '',
+  dynamicBound: false,
+  uiInteractionUntil: 0,
+  pendingActions: new Set(),
+  refreshInFlight: false,
+  serverClockOffset: 0,
+  lastRenderKey: '',
+  lastNotificationKey: '',
+  stationListCache: { source: null, signature: '', deduped: [] },
+  selectedCompositionTrainId: localStorage.getItem('sillons.selectedCompositionTrainId') || '',
+  compositionEditorModes: loadJson('sillons.compositionEditorModes', {}),
+  compositionScrollState: loadJson('sillons.compositionScrollState', {}),
+  pendingCompositionScrollRestore: null,
+  researchProgressCache: {},
+  epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
+};
+
+const serviceLabels = {
+  passengers: 'Voyageurs',
+  freight: 'Fret',
+  mixed: 'Mixte'
+};
+
+const COMPOSITION_ART = {
+  coach: '/assets/composition/coach_passenger.png',
+  wagon: '/assets/composition/wagon_freight.png',
+  power: '/assets/composition/power_unit.png',
+  workshop: '/assets/composition/composition_workshop_bg.png'
+};
+
+const CLIENT_COMPOSITION_VARIANTS = {
+  passenger_loco: [
+    { id: 'standard', name: 'Standard', shortLabel: 'Standard', description: 'Voiture polyvalente équilibrée pour la majorité des lignes voyageurs.', asset: '/assets/composition/variants/passenger_standard.png', stats: { capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0, revenueMultiplier: 1 } },
+    { id: 'commuter', name: 'Banlieue dense', shortLabel: 'Banlieue', description: 'Plus de places debout et de portes, idéale pour les lignes tendues du quotidien.', asset: '/assets/composition/variants/passenger_commuter.png', stats: { capacityMultiplier: 1.18, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.05, reliabilityDelta: -0.008, comfortDelta: -0.1, revenueMultiplier: 1 } },
+    { id: 'comfort', name: 'Grand confort', shortLabel: 'Confort', description: 'Moins de sièges mais meilleure image, adaptée aux dessertes premium et longues.', asset: '/assets/composition/variants/passenger_comfort.png', stats: { capacityMultiplier: 0.88, speedMultiplier: 0.98, energyMultiplier: 1.05, maintenanceMultiplier: 1.08, reliabilityDelta: 0.008, comfortDelta: 0.14, revenueMultiplier: 1 } },
+    { id: 'sleeper', name: 'Couchettes', shortLabel: 'Couchettes', description: 'Voiture de nuit haut de gamme, capacité réduite mais très confortable.', asset: '/assets/composition/variants/passenger_sleeper.png', stats: { capacityMultiplier: 0.68, speedMultiplier: 0.94, energyMultiplier: 1.08, maintenanceMultiplier: 1.14, reliabilityDelta: -0.004, comfortDelta: 0.2, revenueMultiplier: 1 } },
+    { id: 'midi_standard', name: 'Voiture Midi standard', shortLabel: 'Midi std.', description: 'Voiture métallique moderne pour les premières locomotives électriques. Offre équilibrée et plus fiable.', asset: '/assets/composition/era2/passenger_midi_standard.png', stats: { capacityMultiplier: 1.06, speedMultiplier: 1.04, energyMultiplier: 0.98, maintenanceMultiplier: 0.94, reliabilityDelta: 0.018, comfortDelta: 0.04, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
+    { id: 'midi_commuter', name: 'Voiture Midi banlieue', shortLabel: 'Midi banlieue', description: 'Voiture dense à accès rapides, adaptée aux axes électrifiés à forte fréquence.', asset: '/assets/composition/era2/passenger_midi_commuter.png', stats: { capacityMultiplier: 1.26, speedMultiplier: 1.05, energyMultiplier: 1.02, maintenanceMultiplier: 0.98, reliabilityDelta: 0.01, comfortDelta: -0.05, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
+    { id: 'midi_express', name: 'Voiture Midi express', shortLabel: 'Midi express', description: 'Voiture plus confortable et rapide, pensée pour les services régionaux électrifiés de qualité.', asset: '/assets/composition/era2/passenger_midi_express.png', stats: { capacityMultiplier: 0.96, speedMultiplier: 1.08, energyMultiplier: 1.0, maintenanceMultiplier: 1.02, reliabilityDelta: 0.02, comfortDelta: 0.12, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
+    { id: 'midi_sleeper', name: 'Voiture Midi couchettes', shortLabel: 'Midi nuit', description: 'Voiture longue distance nocturne, coûteuse mais très attractive sur les liaisons de nuit.', asset: '/assets/composition/era2/passenger_midi_sleeper.png', stats: { capacityMultiplier: 0.72, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.10, reliabilityDelta: 0.005, comfortDelta: 0.24, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 }
+  ],
+  freight_loco: [
+    { id: 'covered', name: 'Wagon couvert', shortLabel: 'Couvert', description: 'Marchandises générales et palettes. Référence polyvalente.', cargoType: 'Marchandises générales', asset: '/assets/composition/variants/freight_covered.png', stats: { capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0, revenueMultiplier: 1 } },
+    { id: 'tank', name: 'Wagon citerne', shortLabel: 'Citerne', description: 'Liquides, carburants et produits chimiques à forte valeur.', cargoType: 'Liquides / carburants', asset: '/assets/composition/variants/freight_tank.png', stats: { capacityMultiplier: 0.92, speedMultiplier: 0.95, energyMultiplier: 1.08, maintenanceMultiplier: 1.09, reliabilityDelta: -0.01, comfortDelta: 0, revenueMultiplier: 1.18 } },
+    { id: 'hopper', name: 'Trémie vrac', shortLabel: 'Trémie', description: 'Vracs lourds : céréales, minerais, granulats. Très capacitaire.', cargoType: 'Vrac lourd', asset: '/assets/composition/variants/freight_hopper.png', stats: { capacityMultiplier: 1.22, speedMultiplier: 0.92, energyMultiplier: 1.11, maintenanceMultiplier: 1.07, reliabilityDelta: -0.016, comfortDelta: 0, revenueMultiplier: 0.94 } },
+    { id: 'flatbed', name: 'Plat / ranchers', shortLabel: 'Plat', description: 'Bois, acier, engins et charges longues.', cargoType: 'Charges longues', asset: '/assets/composition/variants/freight_flatbed.png', stats: { capacityMultiplier: 0.96, speedMultiplier: 0.98, energyMultiplier: 0.98, maintenanceMultiplier: 0.98, reliabilityDelta: 0.004, comfortDelta: 0, revenueMultiplier: 1.04 } },
+    { id: 'reefer', name: 'Frigorifique', shortLabel: 'Frigo', description: 'Produits frais à forte valeur, wagon plus coûteux à exploiter.', cargoType: 'Denrées fraîches', asset: '/assets/composition/variants/freight_reefer.png', stats: { capacityMultiplier: 0.82, speedMultiplier: 0.96, energyMultiplier: 1.12, maintenanceMultiplier: 1.12, reliabilityDelta: -0.004, comfortDelta: 0, revenueMultiplier: 1.25 } },
+    { id: 'container', name: 'Porte-conteneurs', shortLabel: 'Conteneurs', description: 'Flux intermodaux rapides, bien adaptés aux longues distances.', cargoType: 'Intermodal', asset: '/assets/composition/variants/freight_container.png', stats: { capacityMultiplier: 1.08, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.04, reliabilityDelta: 0.005, comfortDelta: 0, revenueMultiplier: 1.12 } },
+    { id: 'midi_covered', name: 'Couvert Midi métallique', shortLabel: 'Midi couvert', description: 'Wagon couvert renforcé pour marchandises générales sous caténaires pionnières.', cargoType: 'Marchandises générales', asset: '/assets/composition/era2/freight_midi_covered.png', stats: { capacityMultiplier: 1.12, speedMultiplier: 1.04, energyMultiplier: 0.98, maintenanceMultiplier: 0.96, reliabilityDelta: 0.014, comfortDelta: 0, revenueMultiplier: 1.04 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 },
+    { id: 'midi_tank', name: 'Citerne Midi', shortLabel: 'Midi citerne', description: 'Citerne moderne pour liquides industriels, plus rentable mais plus exigeante.', cargoType: 'Liquides / carburants', asset: '/assets/composition/era2/freight_midi_tank.png', stats: { capacityMultiplier: 1.00, speedMultiplier: 1.00, energyMultiplier: 1.04, maintenanceMultiplier: 1.06, reliabilityDelta: 0.002, comfortDelta: 0, revenueMultiplier: 1.22 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 },
+    { id: 'midi_hopper', name: 'Trémie Midi', shortLabel: 'Midi trémie', description: 'Trémie lourde pour minerais et vracs, très capacitaire sur les axes industriels.', cargoType: 'Vrac lourd', asset: '/assets/composition/era2/freight_midi_hopper.png', stats: { capacityMultiplier: 1.34, speedMultiplier: 0.96, energyMultiplier: 1.08, maintenanceMultiplier: 1.05, reliabilityDelta: -0.006, comfortDelta: 0, revenueMultiplier: 0.98 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 },
+    { id: 'midi_flatbed', name: 'Plat Midi ranchers', shortLabel: 'Midi plat', description: 'Wagon plat modernisé pour acier, bois et engins lourds.', cargoType: 'Charges longues', asset: '/assets/composition/era2/freight_midi_flatbed.png', stats: { capacityMultiplier: 1.05, speedMultiplier: 1.02, energyMultiplier: 0.98, maintenanceMultiplier: 0.96, reliabilityDelta: 0.012, comfortDelta: 0, revenueMultiplier: 1.08 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 },
+    { id: 'midi_reefer', name: 'Frigorifique Midi', shortLabel: 'Midi frigo', description: 'Fourgon frigorifique électrique, faible tonnage mais forte valeur transportée.', cargoType: 'Denrées fraîches', asset: '/assets/composition/era2/freight_midi_reefer.png', stats: { capacityMultiplier: 0.90, speedMultiplier: 1.03, energyMultiplier: 1.10, maintenanceMultiplier: 1.10, reliabilityDelta: 0.004, comfortDelta: 0, revenueMultiplier: 1.30 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 },
+    { id: 'midi_container', name: 'Porte-caisses Midi', shortLabel: 'Midi caisses', description: 'Précurseur intermodal pour caisses et conteneurs légers, performant sur longues distances.', cargoType: 'Intermodal', asset: '/assets/composition/era2/freight_midi_container.png', stats: { capacityMultiplier: 1.18, speedMultiplier: 1.06, energyMultiplier: 1.02, maintenanceMultiplier: 1.02, reliabilityDelta: 0.016, comfortDelta: 0, revenueMultiplier: 1.16 }, requiredEpoch: 1, requiredTech: 'midi_freight_stock', requiredModelEpoch: 1 }
+  ]
+};
+
+
+const energyLabels = {
+  coal: 'Charbon',
+  diesel: 'Diesel',
+  electricity: 'Électricité',
+  hydrogen: 'Hydrogène',
+  battery: 'Batterie'
+};
+const staffOrder = ['drivers', 'controllers', 'stationAgents', 'mechanics', 'dispatchers', 'engineers'];
+const techOrder = ['traction', 'energy', 'maintenance', 'operations', 'stations', 'social', 'freight'];
+const DEFAULT_PASSENGER_TARIFF = 0.08;
+const DEFAULT_TICKET_DISTANCE = 120;
+// Même plafond que côté serveur : prix billet maximum fixe.
+const TICKET_PRICE_CAP_ABSOLUTE = 50;
+const MAINTENANCE_COST_MULTIPLIER_CLIENT = 0.48;
+const STAFF_COST_DIVISOR_CLIENT = 82;
+
+
+const ART = {
+  map: '/assets/art/hero-france-map.png',
+  tabs: {
+    overview: '/assets/art/hero-overview-v12.png',
+    lines: '/assets/art/hero-lines-v12.png',
+    fleet: '/assets/art/hero-fleet-v12.png',
+    stations: '/assets/art/hero-stations-v12.png',
+    staff: '/assets/art/hero-staff-v12.png',
+    research: '/assets/art/hero-research-v12.png',
+    market: '/assets/art/hero-market-v12.png',
+    resources: '/assets/art/hero-market-v12.png'
+  },
+  researchGroups: {
+    traction: '/assets/art/board-traction.png',
+    energy: '/assets/art/board-energy.png',
+    maintenance: '/assets/art/board-maintenance.png',
+    operations: '/assets/art/board-operations.png',
+    stations: '/assets/art/board-transports.png',
+    freight: '/assets/art/board-freight.png',
+    social: '/assets/art/board-transports.png'
+  },
+  researchNodes: {}
+};
+
+const artImages = {};
+
+const MAP_ART_FRAME = { x: 0.177, y: 0.067, w: 0.58, h: 0.79 };
+const AUTO_MAP_TABS = new Set(['overview', 'lines', 'stations']);
+
+const TRAIN_MAP_SPRITES = {};
+
+const STATION_MAP_SPRITES = {
+  1: '/assets/map/stations/station_level_1.png',
+  2: '/assets/map/stations/station_level_2.png',
+  3: '/assets/map/stations/station_level_3.png',
+  4: '/assets/map/stations/station_level_4.png',
+  5: '/assets/map/stations/station_level_5.png',
+  6: '/assets/map/stations/station_level_6.png'
+};
+
+const MAP_CITY_ANCHORS = {
+  BRE: [0.177, 0.315], REN: [0.276, 0.365], NAN: [0.337, 0.418],
+  ROU: [0.425, 0.181], AMI: [0.500, 0.165], LIL: [0.571, 0.112],
+  PAR: [0.508, 0.276], REI: [0.580, 0.232], STR: [0.713, 0.302],
+  ORL: [0.505, 0.400], TOU2: [0.431, 0.421], BOR: [0.346, 0.609],
+  TOU: [0.431, 0.741], MON: [0.549, 0.784], MAR: [0.663, 0.785],
+  NIC: [0.774, 0.708], DIJ: [0.624, 0.431], LYO: [0.588, 0.548],
+  CLE: [0.504, 0.551], LEH: [0.396, 0.170], CAE: [0.339, 0.222],
+  CHB: [0.245, 0.164], QUI: [0.174, 0.428], LOR: [0.229, 0.411],
+  VAN: [0.266, 0.391], STB: [0.225, 0.332], ANG: [0.369, 0.400],
+  POI: [0.395, 0.520], LIM: [0.447, 0.592], LAR: [0.336, 0.528],
+  BIA: [0.299, 0.785], PAU: [0.343, 0.762], AGE: [0.409, 0.681],
+  STE: [0.565, 0.587], VAL: [0.601, 0.642], AVI: [0.626, 0.695],
+  TOU3: [0.714, 0.730], CAN: [0.745, 0.712], NIM: [0.592, 0.730],
+  BEZ: [0.518, 0.742], PER: [0.491, 0.808], CAR: [0.479, 0.703],
+  ALB: [0.453, 0.676], MET: [0.618, 0.215], NAN2: [0.641, 0.242],
+  MUL: [0.735, 0.347], BES: [0.634, 0.371], BEL: [0.690, 0.354],
+  MAC: [0.566, 0.502], AUX: [0.551, 0.358], TRO: [0.590, 0.276],
+  DUN: [0.553, 0.080], CAL: [0.517, 0.098], ARR: [0.527, 0.146],
+  LAV: [0.340, 0.370], LRS: [0.311, 0.488], NEV: [0.526, 0.488],
+  BOU: [0.492, 0.505], CHA2: [0.463, 0.545], BAY: [0.310, 0.243],
+  GRE: [0.617, 0.593], CHA: [0.639, 0.571], ANN: [0.661, 0.542]
+};
+
+const RAIL_SEGMENT_SHAPES = {
+  'PAR|LIL': [[0.535,0.235],[0.552,0.172]],
+  'PAR|AMI': [[0.483,0.225]], 'PAR|ROU': [[0.455,0.232]], 'PAR|CAE': [[0.420,0.246]],
+  'AMI|ARR': [[0.516,0.154]], 'AMI|ROU': [[0.464,0.182]], 'ROU|LEH': [[0.404,0.169]],
+  'ROU|CAE': [[0.387,0.205]], 'CAE|REN': [[0.306,0.272]], 'CAE|BAY': [[0.318,0.233]], 'BAY|CHB': [[0.273,0.202]],
+  'REN|NAN': [[0.301,0.392]], 'NAN|ANG': [[0.356,0.408]], 'ANG|TOU2': [[0.400,0.408]],
+  'PAR|REI': [[0.546,0.255]], 'REI|MET': [[0.602,0.225]], 'MET|NAN2': [[0.629,0.232]], 'NAN2|STR': [[0.684,0.264]],
+  'STR|MUL': [[0.725,0.328]], 'MUL|BEL': [[0.709,0.344]], 'BEL|BES': [[0.669,0.365]], 'BES|DIJ': [[0.628,0.395]],
+  'DIJ|PAR': [[0.602,0.388],[0.558,0.339]], 'PAR|AUX': [[0.551,0.321]], 'AUX|DIJ': [[0.592,0.378]],
+  'PAR|ORL': [[0.505,0.338]], 'ORL|TOU2': [[0.463,0.404]], 'TOU2|POI': [[0.420,0.470]],
+  'POI|BOR': [[0.370,0.575]], 'BOR|BIA': [[0.318,0.740]], 'BIA|PAU': [[0.323,0.774]],
+  'BOR|AGE': [[0.394,0.646]], 'AGE|TOU': [[0.417,0.704]], 'TOU|AGE': [[0.417,0.704]], 'TOU|ALB': [[0.444,0.692]],
+  'PAR|LEM': [[0.445,0.335]], 'LEM|LAV': [[0.360,0.366]], 'LAV|REN': [[0.320,0.358]],
+  'REN|STB': [[0.255,0.338]], 'STB|BRE': [[0.196,0.319]], 'BRE|QUI': [[0.170,0.382]], 'QUI|LOR': [[0.208,0.418]], 'LOR|VAN': [[0.248,0.404]], 'VAN|NAN': [[0.292,0.402]],
+  'NAN|LRS': [[0.317,0.470]], 'LRS|LAR': [[0.324,0.504]], 'LAR|BOR': [[0.337,0.563]],
+  'DIJ|MAC': [[0.593,0.472]], 'MAC|LYO': [[0.578,0.526]], 'LYO|STE': [[0.576,0.574]], 'LYO|VAL': [[0.594,0.605]], 'VAL|AVI': [[0.614,0.670]], 'AVI|MAR': [[0.648,0.748]],
+  'MAR|TOU3': [[0.688,0.749]], 'TOU3|CAN': [[0.726,0.719]], 'CAN|NIC': [[0.762,0.711]],
+  'AVI|NIM': [[0.607,0.709]], 'NIM|MON': [[0.566,0.756]], 'MON|BEZ': [[0.527,0.760]], 'BEZ|PER': [[0.499,0.793]], 'BEZ|CAR': [[0.492,0.726]], 'CAR|TOU': [[0.453,0.705]],
+  'PAR|NEV': [[0.515,0.432]], 'NEV|BOU': [[0.497,0.497]], 'BOU|CHA2': [[0.471,0.528]], 'CHA2|LIM': [[0.454,0.574]], 'LIM|POI': [[0.422,0.542]],
+  'LYO|GRE': [[0.609,0.578]], 'GRE|CHA': [[0.628,0.565]], 'CHA|ANN': [[0.649,0.544]],
+  'CLE|LYO': [[0.548,0.556]], 'CLE|NEV': [[0.515,0.511]], 'NIM|AVI': [[0.607,0.709]], 'MON|NIM': [[0.566,0.756]],
+  'PER|BEZ': [[0.499,0.793]], 'TOU|CAR': [[0.453,0.705]], 'MAR|AVI': [[0.648,0.748]], 'NIC|CAN': [[0.762,0.711]]
+};
+
+init();
+
+async function init() {
+  app.map.canvas = $('#map');
+  app.map.ctx = app.map.canvas.getContext('2d');
+  bindStaticEvents();
+  preloadArt();
+  preloadMapSprites();
+  initOsmMap();
+  await refreshState(true);
+  setInterval(() => refreshState(false), 2300);
+  startResearchAnimationLoop();
+  requestAnimationFrame(drawLoop);
+}
+
+function bindStaticEvents() {
+  $('#setupForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const payload = {
+      name: $('#companyName').value,
+      color: $('#companyColor').value,
+      logo: currentSetupLogoId()
+    };
+    const response = await post('/api/new-player', payload);
+    if (!response.ok) return toast(response.error || 'Création impossible.', 'error');
+    app.playerId = response.playerId;
+    localStorage.setItem('sillons.playerId', app.playerId);
+    app.state = response.state;
+    $('#setup').classList.add('hidden');
+    renderAll();
+    toast('Compagnie créée.', 'ok');
+  });
+
+  $('#tabs').addEventListener('click', event => {
+    const button = event.target.closest('button[data-tab]');
+    if (!button) return;
+    app.activeTab = button.dataset.tab;
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    renderAll();
+  });
+
+  $('#mapToggleBtn')?.addEventListener('click', toggleMapVisibility);
+  $('#zoomInBtn')?.addEventListener('click', () => app.map.leaflet?.zoomIn());
+  $('#zoomOutBtn')?.addEventListener('click', () => app.map.leaflet?.zoomOut());
+  $('#zoomResetBtn')?.addEventListener('click', fitFranceMap);
+  $('#addStopBtn')?.addEventListener('click', enableStationPlacement);
+  $('#cancelStopBtn')?.addEventListener('click', disableStationPlacement);
+  $('#renameBtn').addEventListener('click', openCompanyModal);
+  $('#resetBtn').addEventListener('click', openResetModal);
+
+  $('#logoPicker')?.addEventListener('click', event => {
+    const card = event.target.closest('[data-logo-id]');
+    if (!card) return;
+    selectSetupLogo(card.dataset.logoId);
+  });
+
+  document.addEventListener('focusin', markUiInteraction, true);
+  document.addEventListener('pointerdown', event => {
+    if (isInteractiveElement(event.target)) markUiInteraction();
+  }, true);
+  document.addEventListener('input', event => {
+  if (event.target.id === 'compPassengerCars') { const n = $('#compPassengerCarsValue'); if (n) n.value = event.target.value; }
+  if (event.target.id === 'compPassengerCarsValue') { const n = $('#compPassengerCars'); if (n) n.value = event.target.value; }
+  if (event.target.id === 'compFreightCars') { const n = $('#compFreightCarsValue'); if (n) n.value = event.target.value; }
+  if (event.target.id === 'compFreightCarsValue') { const n = $('#compFreightCars'); if (n) n.value = event.target.value; }
+  if (event.target.id === 'compPowerUnits') { const n = $('#compPowerUnitsValue'); if (n) n.value = event.target.value; }
+  if (event.target.id === 'compPowerUnitsValue') { const n = $('#compPowerUnits'); if (n) n.value = event.target.value; }
+    if (isInteractiveElement(event.target)) markUiInteraction();
+  }, true);
+  document.addEventListener('change', event => {
+    if (isInteractiveElement(event.target)) markUiInteraction();
+  }, true);
+
+  const tabContent = $('#tabContent');
+  tabContent.addEventListener('click', onTabContentClick);
+  tabContent.addEventListener('change', onTabContentChange);
+  tabContent.addEventListener('input', event => {
+    if (['lineFreq', 'lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
+      updateLineDraftFromForm(event.target.id);
+      updateLinePreview(event.target.id);
+    }
+    if (event.target.classList?.contains('station-search-input')) {
+      updateStationSearch(event.target.dataset.role, event.target.value);
+    }
+  });
+
+  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); });
+  bindGlobalTooltips();
+}
+
+
+function bindGlobalTooltips() {
+  document.addEventListener('pointerover', event => {
+    const target = event.target.closest?.('[data-tooltip]');
+    if (!target) return;
+    showGlobalTooltip(target);
+  });
+  document.addEventListener('pointerout', event => {
+    const target = event.target.closest?.('[data-tooltip]');
+    if (target) hideGlobalTooltip();
+  });
+  document.addEventListener('focusin', event => {
+    const target = event.target.closest?.('[data-tooltip]');
+    if (target) showGlobalTooltip(target);
+  });
+  document.addEventListener('focusout', event => {
+    if (event.target.closest?.('[data-tooltip]')) hideGlobalTooltip();
+  });
+  document.addEventListener('scroll', hideGlobalTooltip, true);
+  document.addEventListener('scroll', event => {
+    const editor = event.target?.closest?.('.composition-editor-card');
+    if (editor || event.target?.classList?.contains('composition-editor-card') || event.target?.classList?.contains('composition-strip')) {
+      captureCompositionScrollPosition();
+    }
+  }, true);
+}
+
+function tooltipLineClass(line) {
+  const text = String(line || '').trim().toLowerCase();
+  if (!text) return '';
+  if (text.startsWith('consommation')) return 'tooltip-line--consumption';
+  if (text.startsWith('production') || text.startsWith('stock disponible') || text.startsWith('commande producteur')) return 'tooltip-line--production';
+  if (text.startsWith('résultat net') || text.startsWith('resultat net')) {
+    const match = text.match(/([-+]?\d[\d\s.,]*)\s*€/);
+    if (match) return String(match[1]).trim().startsWith('-') ? 'tooltip-line--consumption' : 'tooltip-line--production';
+  }
+  if (/^-{4,}$/.test(text)) return 'tooltip-line--separator';
+  return '';
+}
+
+function renderTooltipLine(line) {
+  const cls = tooltipLineClass(line);
+  const row = document.createElement('div');
+  row.className = `tooltip-line ${cls}`.trim();
+  const valueSplit = String(line || '').split(/:(.+)/);
+  if (cls === 'tooltip-line--separator') {
+    row.textContent = '────────────────────────────';
+    return row;
+  }
+  if (valueSplit.length >= 3) {
+    const label = document.createElement('span');
+    label.className = 'tooltip-label';
+    label.textContent = `${valueSplit[0]} : `;
+    const value = document.createElement('b');
+    value.className = 'tooltip-value';
+    value.textContent = valueSplit[1].trim();
+    row.append(label, value);
+  } else {
+    row.textContent = line;
+  }
+  return row;
+}
+
+function showGlobalTooltip(target) {
+  const text = target.dataset.tooltip;
+  if (!text) return;
+  let tip = $('#globalTooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'globalTooltip';
+    tip.className = 'global-tooltip';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = '';
+  String(text).split('\n').forEach(line => tip.appendChild(renderTooltipLine(line)));
+  tip.classList.add('visible');
+
+  const rect = target.getBoundingClientRect();
+  const margin = 12;
+  const maxWidth = Math.min(460, window.innerWidth - margin * 2);
+  tip.style.maxWidth = `${maxWidth}px`;
+  tip.style.left = '0px';
+  tip.style.top = '0px';
+
+  const box = tip.getBoundingClientRect();
+  let left = rect.left + rect.width / 2 - box.width / 2;
+  left = Math.max(margin, Math.min(window.innerWidth - box.width - margin, left));
+
+  let top = rect.top - box.height - 12;
+  if (top < margin) top = rect.bottom + 12;
+  if (top + box.height > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - box.height - margin);
+
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
+}
+
+function hideGlobalTooltip() {
+  const tip = $('#globalTooltip');
+  if (tip) tip.classList.remove('visible');
+}
+
+
+function invalidateMapProjection(reason = 'projection') {
+  app.routeCache.clear();
+  app.map.needsRouteReproject = false;
+  app.map.stationDrawCache = { key: '', items: [] };
+  app.map.visibleStationCache = { key: '', stations: [] };
+}
+
+function markMapProjectionDirty() {
+  app.map.needsRouteReproject = true;
+  app.map.stationDrawCache.key = '';
+}
+
+function startPanOverlay() {
+  if (!app.map.leaflet || !app.map.canvas || app.map.panOverlay.active) return;
+  app.map.panOverlay.active = true;
+  app.map.panOverlay.anchorLatLng = app.map.leaflet.getCenter();
+  app.map.panOverlay.anchorPoint = app.map.leaflet.latLngToContainerPoint(app.map.panOverlay.anchorLatLng);
+  app.map.panOverlay.raf = false;
+  app.map.canvas.classList.add('map-pan-overlay');
+  app.map.canvas.style.willChange = 'transform';
+}
+
+function updatePanOverlay() {
+  const overlay = app.map.panOverlay;
+  if (!overlay.active || overlay.raf || !app.map.leaflet || !app.map.canvas || !overlay.anchorLatLng || !overlay.anchorPoint) return;
+  overlay.raf = true;
+  requestAnimationFrame(() => {
+    overlay.raf = false;
+    if (!overlay.active || !app.map.leaflet || !app.map.canvas) return;
+    const current = app.map.leaflet.latLngToContainerPoint(overlay.anchorLatLng);
+    const dx = current.x - overlay.anchorPoint.x;
+    const dy = current.y - overlay.anchorPoint.y;
+    app.map.canvas.style.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`;
+  });
+}
+
+function endPanOverlay() {
+  const overlay = app.map.panOverlay;
+  if (!overlay.active || !app.map.canvas) return;
+  overlay.active = false;
+  overlay.anchorLatLng = null;
+  overlay.anchorPoint = null;
+  overlay.raf = false;
+  app.map.canvas.style.transform = '';
+  app.map.canvas.style.willChange = '';
+  app.map.canvas.classList.remove('map-pan-overlay');
+}
+
+function worldRouteSignature(state = app.state) {
+  if (!state?.players || !state?.world) return '';
+  const playerSig = state.players.map(p => `${p.id}:${(p.lines || []).map(l => `${l.id}:${lineStopsOf(l).join('>')}:${l.trainId}:${l.active ? 1 : 0}:${l.electrified ? 1 : 0}`).join('|')}`).join('||');
+  const customCount = state.world.stations?.filter?.(s => s.custom)?.length || 0;
+  const communeStatus = state.world.communesStatus || {};
+  const stationSig = `${state.world.stations?.length || 0}:${communeStatus.status || ''}:${communeStatus.count || 0}:${communeStatus.updatedAt || ''}`;
+  return `${playerSig}::stations:${stationSig}::custom:${customCount}`;
+}
+
+function stateRenderSignature(state = app.state) {
+  if (!state?.game) return '';
+  const me = state.me;
+  const game = state.game;
+  const events = (game.events || []).map(e => `${e.kind}:${e.remaining}`).join('|');
+  const news = (game.news || []).map(n => `${n.day}:${n.text}`).join('|');
+  const world = state.world?.communesStatus;
+  const meSig = me ? [
+    me.id,
+    me.cash,
+    me.debt,
+    me.epoch,
+    Math.round(me.research * 100),
+    Math.round(me.reputation * 100),
+    me.stats?.lastRevenue,
+    me.stats?.lastExpenses,
+    me.stats?.lastProfit,
+    me.stats?.passengers,
+    me.stats?.freightTons,
+    epochTrafficTotalClient(me),
+    Object.values(me.staff || {}).join(','),
+    Object.keys(me.stations || {}).length,
+    (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? t.maintenance.daysLeft : 0}`).join('|'),
+    (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.trainId}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}`).join('|'),
+    Object.entries(me.techUnlocked || {}).sort().map(([id, level]) => `${id}:${level}`).join(','),
+    me.researchProject ? `${me.researchProject.nodeId}:${me.researchProject.targetLevel}:${me.researchProject.durationMs}:${me.researchProject.costMoney || 0}:${me.researchProject.startedAt || 0}` : '',
+    (me.researchQueue || []).map(item => `${item.nodeId}:${item.targetLevel}`).join('|')
+  ].join(';') : 'setup';
+  return [
+    game.day,
+    game.eraYear,
+    game.playerCount,
+    events,
+    news,
+    world?.status || '',
+    world?.count || 0,
+    worldRouteSignature(state),
+    meSig
+  ].join('::');
+}
+
+async function refreshState(first) {
+  if (app.refreshInFlight) return;
+  app.refreshInFlight = true;
+  try {
+    const response = await fetch(`/api/state?playerId=${encodeURIComponent(app.playerId)}`, { cache: 'no-store' });
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || 'État indisponible.');
+    app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
+    const previousSignature = app.routeDataSignature;
+    const previousCash = Number(app.state?.me?.cash);
+    app.state = data;
+    const nextSignature = worldRouteSignature(data);
+    if (nextSignature !== previousSignature) {
+      app.routeDataSignature = nextSignature;
+      invalidateMapProjection('state-change');
+    }
+    if (first) {
+      renderSetupLogoPicker();
+      if (!data.me) $('#setup').classList.remove('hidden');
+      resizeCanvas();
+    }
+    if (data.me) {
+      $('#setup').classList.add('hidden');
+      maybeNotify(data.me);
+      ensureSelectedStation();
+    }
+    const nextRenderKey = stateRenderSignature(data);
+    const shouldRender = first || nextRenderKey !== app.lastRenderKey;
+    if (!shouldRender) return;
+    if (!first && isInteractiveUiActive()) {
+      // Ne pas reconstruire l’onglet pendant une interaction utilisateur :
+      // menus déroulants, saisie, sliders, suggestions et formulaires restent ouverts.
+      renderTopbar();
+    } else {
+      renderAll();
+    }
+    const nextCash = Number(data.me?.cash);
+    if (!first && Number.isFinite(previousCash) && Number.isFinite(nextCash) && previousCash !== nextCash) {
+      animateCashDelta(nextCash - previousCash);
+    }
+  } catch (error) {
+    if (first) toast('Impossible de joindre le serveur local. Lance `node server.js` puis recharge la page.', 'error');
+    console.error(error);
+  } finally {
+    app.refreshInFlight = false;
+  }
+}
+
+
+function initOsmMap() {
+  const target = $('#osmMap');
+  if (!target) return;
+  if (!window.L) {
+    target.innerHTML = '<div class="osm-error">Leaflet/OpenStreetMap indisponible. Vérifie ta connexion internet.</div><canvas id="map" width="1200" height="820"></canvas>';
+    app.map.canvas = $('#map');
+    app.map.ctx = app.map.canvas?.getContext('2d');
+    resizeCanvas();
+    return;
+  }
+
+  app.map.leaflet = L.map(target, {
+    center: [46.75, 2.35],
+    zoom: 6,
+    minZoom: 5,
+    maxZoom: 13,
+    zoomControl: false,
+    attributionControl: true,
+    preferCanvas: true
+  });
+
+  addReliableFrenchTileLayer(app.map.leaflet);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
+
+  app.map.leaflet.on('zoomstart', () => {
+    app.map.navigating = true;
+    app.map.lastMoveEventAt = performance.now();
+    resizeCanvas();
+    markMapProjectionDirty();
+  });
+  app.map.leaflet.on('zoom', () => {
+    app.map.navigating = true;
+    app.map.lastMoveEventAt = performance.now();
+    markMapProjectionDirty();
+  });
+  app.map.leaflet.on('zoomend', () => {
+    app.map.navigating = false;
+    endPanOverlay();
+    resizeCanvas();
+    updateIsoClass();
+    invalidateMapProjection('zoom-end');
+  });
+
+  app.map.leaflet.on('movestart', () => {
+    app.map.navigating = true;
+    app.map.lastMoveEventAt = performance.now();
+    startPanOverlay();
+  });
+  app.map.leaflet.on('move', () => {
+    app.map.navigating = true;
+    app.map.lastMoveEventAt = performance.now();
+    updatePanOverlay();
+  });
+  app.map.leaflet.on('moveend resize', () => {
+    app.map.navigating = false;
+    endPanOverlay();
+    resizeCanvas();
+    updateIsoClass();
+    invalidateMapProjection('move-end');
+  });
+  app.map.leaflet.on('mousemove', onOsmMouseMove);
+  app.map.leaflet.on('mouseout', () => {
+    app.hoverStation = null;
+    app.map.leaflet.getContainer().style.cursor = app.map.stationPlacement ? 'crosshair' : '';
+  });
+  app.map.leaflet.on('click', onOsmClick);
+
+  // Filet de sécurité v43 : en mode création d’arrêt, on capte aussi le clic
+  // DOM du conteneur. Cela évite que les hitboxes canvas/Leaflet ou certains
+  // overlays empêchent la création sur une zone vide de la carte.
+  target.addEventListener('click', event => {
+    if (!app.map.stationPlacement || !app.map.leaflet || app.map.creatingCustomStation) return;
+    if (event.target.closest?.('.leaflet-control')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = app.map.leaflet.mouseEventToContainerPoint(event);
+    const latlng = app.map.leaflet.containerPointToLatLng(point);
+    createCustomStationFromLatLng(latlng);
+  }, true);
+
+  app.map.leaflet.whenReady(() => {
+    app.map.mapReady = true;
+    resizeCanvas();
+    fitFranceMap();
+    updateIsoClass();
+  });
+
+  if ('ResizeObserver' in window) {
+    const observer = new ResizeObserver(() => resizeCanvas());
+    observer.observe(target);
+  }
+}
+
+function addReliableFrenchTileLayer(map) {
+  const layers = [
+    {
+      name: 'OpenStreetMap standard',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 19,
+        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; OpenStreetMap contributors'
+      }
+    },
+    {
+      name: 'OSM France',
+      url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+      options: {
+        maxZoom: 20,
+        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; OpenStreetMap contributors · rendu OSM France'
+      }
+    },
+    {
+      name: 'CARTO Voyager',
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      options: {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      }
+    }
+  ];
+
+  let index = 0;
+  let current = null;
+  let errorCount = 0;
+
+  function installLayer(nextIndex) {
+    index = Math.min(nextIndex, layers.length - 1);
+    const def = layers[index];
+    errorCount = 0;
+    if (current) {
+      current.off('tileerror');
+      try { map.removeLayer(current); } catch {}
+    }
+    current = L.tileLayer(def.url, {
+      ...def.options,
+      crossOrigin: false,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 3
+    });
+    current.on('tileerror', () => {
+      errorCount += 1;
+      if (errorCount >= 4 && index < layers.length - 1) installLayer(index + 1);
+    });
+    current.addTo(map);
+    app.map.tileLayerName = def.name;
+  }
+
+  installLayer(0);
+}
+
+
+function fitFranceMap() {
+  if (!app.map.leaflet) return;
+  app.map.leaflet.fitBounds([[41.2, -5.3], [51.2, 9.7]], { padding: [20, 20] });
+}
+
+function updateIsoClass() {
+  const section = $('.map-section');
+  if (!section || !app.map.leaflet) return;
+  const iso = app.map.leaflet.getZoom() >= 9;
+  section.classList.toggle('osm-isometric', iso);
+}
+
+function enableStationPlacement() {
+  app.map.stationPlacement = true;
+  app.map.creatingCustomStation = false;
+  $('#addStopBtn')?.classList.add('hidden');
+  $('#cancelStopBtn')?.classList.remove('hidden');
+  $('#mapHint').textContent = 'Mode création : clique n’importe où sur la carte pour créer un nouvel arrêt jouable.';
+  const container = app.map.leaflet?.getContainer();
+  container?.classList.add('placing-stop');
+  app.map.leaflet?.dragging?.disable?.();
+}
+
+function disableStationPlacement() {
+  app.map.stationPlacement = false;
+  app.map.creatingCustomStation = false;
+  $('#addStopBtn')?.classList.remove('hidden');
+  $('#cancelStopBtn')?.classList.add('hidden');
+  $('#mapHint').textContent = 'Clique une gare, ou active “Créer arrêt” puis clique n’importe où en France.';
+  const container = app.map.leaflet?.getContainer();
+  container?.classList.remove('placing-stop');
+  app.map.leaflet?.dragging?.enable?.();
+}
+
+function validCustomStationLatLng(lat, lng) {
+  // Zone volontairement légèrement plus large que la France métropolitaine :
+  // elle couvre aussi la Corse et évite les faux refus près des frontières/côtes.
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 40.6 && lat <= 51.8 && lng >= -5.9 && lng <= 10.4;
+}
+
+async function createCustomStationFromLatLng(latlng) {
+  if (!app.map.stationPlacement || app.map.creatingCustomStation) return false;
+  const lat = Number(latlng?.lat);
+  const lng = Number(latlng?.lng);
+  if (!validCustomStationLatLng(lat, lng)) {
+    toast('Choisis un emplacement sur la zone de jeu France / Corse.', 'error');
+    return true;
+  }
+
+  const defaultName = `Arrêt ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+  const name = window.prompt('Nom du nouvel arrêt / gare :', defaultName);
+  if (!name) return true;
+
+  app.map.creatingCustomStation = true;
+  try {
+    await doAction('createCustomStation', { name, lat, lon: lng });
+  } finally {
+    disableStationPlacement();
+  }
+  return true;
+}
+
+function onOsmMouseMove(event) {
+  if (app.map.navigating) return;
+  const p = { x: event.containerPoint.x, y: event.containerPoint.y };
+  const hit = app.map.stationPlacement ? null : hitStationAt(p);
+  app.hoverStation = hit?.id || null;
+  const container = app.map.leaflet.getContainer();
+  container.style.cursor = app.map.stationPlacement ? 'crosshair' : hit ? 'pointer' : '';
+}
+
+async function onOsmClick(event) {
+  if (app.map.stationPlacement) {
+    await createCustomStationFromLatLng(event.latlng);
+    return;
+  }
+
+  const p = { x: event.containerPoint.x, y: event.containerPoint.y };
+  const hit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
+  if (hit) {
+    setSelectedStation(hit.id);
+    const selected = station(hit.id);
+    app.stationSearch.query = stationSearchLabel(selected);
+    app.stationSearch.candidateId = hit.id;
+    app.activeTab = 'stations';
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    renderAll();
+  }
+}
+
+function currentSetupLogoId() {
+  const hidden = $('#companyLogo');
+  const current = String(hidden?.value || '').trim();
+  return COMPANY_LOGOS.some(logo => logo.id === current) ? current : COMPANY_LOGOS[0].id;
+}
+
+function selectSetupLogo(logoId) {
+  const safe = COMPANY_LOGOS.some(logo => logo.id === logoId) ? logoId : COMPANY_LOGOS[0].id;
+  const hidden = $('#companyLogo');
+  if (hidden) hidden.value = safe;
+  $$('.logo-choice').forEach(card => card.classList.toggle('selected', card.dataset.logoId === safe));
+  const preview = $('#setupLogoPreview');
+  const item = COMPANY_LOGOS.find(logo => logo.id === safe) || COMPANY_LOGOS[0];
+  if (preview) {
+    preview.src = item.src;
+    preview.alt = item.label;
+  }
+  const label = $('#setupLogoLabel');
+  if (label) label.textContent = item.label;
+}
+
+function renderSetupLogoPicker() {
+  const picker = $('#logoPicker');
+  if (!picker) return;
+  picker.innerHTML = COMPANY_LOGOS.map(logo => `
+    <button class="logo-choice" type="button" data-logo-id="${logo.id}" title="${escapeAttr(logo.label)}">
+      <img src="${logo.src}" alt="${escapeAttr(logo.label)}">
+      <span>${escapeHtml(logo.label)}</span>
+    </button>
+  `).join('');
+  selectSetupLogo(currentSetupLogoId());
+}
+
+
+function maybeNotify(me) {
+  const first = me.notifications?.[0];
+  if (!first) return;
+  const key = `${first.day}:${first.text}`;
+  if (app.lastNotificationKey && app.lastNotificationKey !== key) toast(first.text, 'ok');
+  app.lastNotificationKey = key;
+}
+
+
+function currentCompositionScrollKey() {
+  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return null;
+  return app.selectedCompositionTrainId || 'default';
+}
+
+function captureCompositionScrollPosition() {
+  const key = currentCompositionScrollKey();
+  if (!key) return;
+  const editor = document.querySelector('.composition-editor-card');
+  if (!editor) return;
+  const strip = editor.querySelector('.composition-strip.large');
+  app.compositionScrollState[key] = {
+    top: editor.scrollTop || 0,
+    stripLeft: strip?.scrollLeft || 0
+  };
+  localStorage.setItem('sillons.compositionScrollState', JSON.stringify(app.compositionScrollState));
+}
+
+function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
+  if (!key) return;
+  const saved = app.compositionScrollState?.[key];
+  if (!saved) return;
+  const editor = document.querySelector('.composition-editor-card');
+  if (!editor) return;
+  const restore = () => {
+    editor.scrollTop = Number(saved.top || 0);
+    const strip = editor.querySelector('.composition-strip.large');
+    if (strip) strip.scrollLeft = Number(saved.stripLeft || 0);
+  };
+  requestAnimationFrame(() => {
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
+function renderAll() {
+  if (!app.state) return;
+  const compositionScrollKey = currentCompositionScrollKey();
+  captureCompositionScrollPosition();
+  renderTopbar();
+  renderTabs();
+  applyLayoutMode();
+  if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
+  app.lastRenderKey = stateRenderSignature();
+}
+
+function renderTopbar() {
+  const me = app.state.me;
+  $('#companySubtitle').textContent = me ? `${me.name} · ${me.eraName}` : 'Non connecté';
+  const logo = $('#companyLogoBadge');
+  const fallback = $('#companyLogoFallback');
+  if (logo) {
+    const selected = COMPANY_LOGOS.find(item => item.id === me?.logo) || COMPANY_LOGOS[0];
+    logo.src = selected.src;
+    logo.alt = selected.label;
+    logo.classList.toggle('hidden', !me);
+  }
+  if (fallback) fallback.classList.toggle('hidden', !!me);
+  const mapToggleBtn = $('#mapToggleBtn');
+  if (mapToggleBtn) mapToggleBtn.remove();
+  const topStats = $('#topStats');
+  if (!me) {
+    topStats.innerHTML = `<span class="stat-pill">Serveur <b>connecté</b></span>`;
+    return;
+  }
+  topStats.innerHTML = [
+    pill('Cash', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text'),
+    pill('Résultat/h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text', topResultTooltip(me)),
+    pill('Charbon', resourceStockLabel('coal'), '', resourceTopTooltip('coal')),
+    pill('Diesel', resourceStockLabel('diesel'), '', resourceTopTooltip('diesel')),
+    pill('Électricité', resourceStockLabel('electricity'), '', resourceTopTooltip('electricity')),
+    pill('Réputation', `${Math.round(me.reputation)}/100`),
+    pill('Ponctualité', `${Math.round(me.stats.punctuality)}%`)
+  ].join('');
+}
+
+
+function isMapVisible() {
+  return true;
+}
+
+function toggleMapVisibility() {
+  // Carte permanente : la navigation reste accessible sans masquer la carte.
+  app.mapPref = 'show';
+  localStorage.setItem('sillons.mapPref', app.mapPref);
+  applyLayoutMode();
+}
+
+function applyLayoutMode() {
+  const layout = $('.layout');
+  if (!layout) return;
+  layout.classList.remove('map-hidden');
+  layout.classList.add('map-visible');
+  $('.map-section')?.classList.remove('hidden-by-layout');
+  requestAnimationFrame(() => resizeCanvas());
+}
+
+
+
+function currentIsoFactor() {
+  return app.map.view.zoom <= 1.15 ? 0 : Math.min(1, (app.map.view.zoom - 1.15) / 0.95);
+}
+
+function getViewMatrix() {
+  const z = app.map.view.zoom;
+  const iso = currentIsoFactor();
+  const a = z;
+  const b = -0.08 * z * iso;
+  const c = 0.28 * z * iso;
+  const d = z * (1 - 0.2 * iso);
+  return { a, b, c, d };
+}
+
+function applyViewTransform(ctx) {
+  const cx = app.map.width / 2 + app.map.view.panX;
+  const cy = app.map.height / 2 + app.map.view.panY;
+  const { a, b, c, d } = getViewMatrix();
+  ctx.translate(cx, cy);
+  ctx.transform(a, b, c, d, 0, 0);
+  ctx.translate(-app.map.width / 2, -app.map.height / 2);
+}
+
+function toViewPoint(p) {
+  const { a, b, c, d } = getViewMatrix();
+  const ox = p.x - app.map.width / 2;
+  const oy = p.y - app.map.height / 2;
+  return {
+    x: app.map.width / 2 + app.map.view.panX + a * ox + c * oy,
+    y: app.map.height / 2 + app.map.view.panY + b * ox + d * oy
+  };
+}
+
+function fromViewPoint(p) {
+  const { a, b, c, d } = getViewMatrix();
+  const det = a * d - b * c || 1;
+  const vx = p.x - (app.map.width / 2 + app.map.view.panX);
+  const vy = p.y - (app.map.height / 2 + app.map.view.panY);
+  const ox = (d * vx - c * vy) / det;
+  const oy = (-b * vx + a * vy) / det;
+  return { x: app.map.width / 2 + ox, y: app.map.height / 2 + oy };
+}
+
+function setMapZoom(nextZoom, focusPoint = null) {
+  const previous = app.map.view.zoom;
+  const zoom = Math.max(1, Math.min(3.2, nextZoom));
+  if (Math.abs(zoom - previous) < 0.001) return;
+  if (focusPoint) {
+    const rawBefore = fromViewPoint(focusPoint);
+    app.map.view.zoom = zoom;
+    const screenAfter = toViewPoint(rawBefore);
+    app.map.view.panX += focusPoint.x - screenAfter.x;
+    app.map.view.panY += focusPoint.y - screenAfter.y;
+  } else {
+    app.map.view.zoom = zoom;
+  }
+}
+
+function resetMapView() {
+  app.map.view.zoom = 1;
+  app.map.view.panX = 0;
+  app.map.view.panY = 0;
+}
+
+function artPoint(nx, ny) {
+  const frame = app.map.frame?.image;
+  if (!frame) return { x: 0, y: 0 };
+  return { x: frame.x + frame.width * nx, y: frame.y + frame.height * ny };
+}
+
+function edgeKey(a, b) {
+  return [a, b].sort().join('|');
+}
+
+function pill(label, value, cls = '', tip = '') {
+  const isCash = label === 'Cash';
+  return `<span class="stat-pill ${isCash ? 'cash-pill' : ''}" ${isCash ? 'id="cashPill"' : ''} ${tooltipAttr(tip)}>${escapeHtml(label)} <b class="${cls}">${escapeHtml(value)}</b>${isCash ? '<span class="cash-fx-layer" id="cashFxLayer" aria-hidden="true"></span>' : ''}</span>`;
+}
+
+function formatSignedMoney(value) {
+  const n = Math.round(Number(value || 0));
+  return `${n > 0 ? '+' : ''}${formatInt(n)} €`;
+}
+
+function animateCashDelta(delta) {
+  const amount = Math.round(Number(delta || 0));
+  if (!amount) return;
+  const host = $('#cashFxLayer') || $('#cashPill');
+  if (!host) return;
+
+  const bubble = document.createElement('span');
+  bubble.className = `cash-fx ${amount > 0 ? 'gain' : 'loss'}`;
+  bubble.textContent = formatSignedMoney(amount);
+  host.appendChild(bubble);
+
+  requestAnimationFrame(() => bubble.classList.add('show'));
+
+  setTimeout(() => {
+    bubble.classList.remove('show');
+    bubble.classList.add('hide');
+    setTimeout(() => bubble.remove(), 420);
+  }, 1050);
+}
+
+
+function animateCashDeltaFromStates(previousState, nextState) {
+  const previousCash = Number(previousState?.me?.cash);
+  const nextCash = Number(nextState?.me?.cash);
+  if (Number.isFinite(previousCash) && Number.isFinite(nextCash) && previousCash !== nextCash) {
+    animateCashDelta(nextCash - previousCash);
+  }
+}
+
+function renderTabs() {
+  if (!app.state) return;
+  $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === app.activeTab));
+  const content = $('#tabContent');
+  const side = $('.side.panel');
+  const menuImage = ART.tabs[app.activeTab] || ART.tabs.overview;
+  if (side) {
+    side.dataset.menu = app.activeTab;
+    side.style.setProperty('--menu-bg', `url("${menuImage}")`);
+  }
+  content.dataset.tab = app.activeTab;
+  if (!app.state.me) {
+    if (side) side.style.setProperty('--menu-bg', `url("${ART.tabs.overview}")`);
+    content.innerHTML = `<div class="card"><h2>Créer une compagnie</h2><p class="muted">La partie commence après création de la compagnie.</p></div>`;
+    return;
+  }
+  const renderers = {
+    overview: renderOverview,
+    lines: renderLines,
+    fleet: renderFleet,
+    stations: renderStations,
+    staff: renderStaff,
+    research: renderResearch,
+    resources: renderResources,
+    market: renderMarket
+  };
+  content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
+  if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
+  if (app.activeTab === 'stations') refreshStationSearchWidgets();
+}
+
+function renderOverview() {
+  const me = app.state.me;
+  const activeLines = me.lines.filter(l => l.active).length;
+  const ranking = [...app.state.players].sort((a, b) => b.score - a.score);
+  const myRank = ranking.findIndex(p => p.id === me.id) + 1;
+  return `
+    ${renderSectionHero('POSTE DE COMMANDE', me.name, 'Pilote ton entreprise ferroviaire depuis un tableau de bord entièrement intégré à la direction artistique pixel-art du projet.', ART.tabs.overview, [me.eraName, `${activeLines} lignes actives`, `${me.trains.length} trains`])}
+
+    <div class="card">
+      <h2>${escapeHtml(me.name)}</h2>
+      <div class="card-grid">
+        ${metric('Score', formatInt(me.score))}
+        ${metric('Classement', `${myRank}/${ranking.length}`)}
+        ${metric('Voyageurs transportés', formatInt(me.stats.passengers))}
+        ${metric('Fret transporté', `${formatInt(me.stats.freightTons)} t`)}
+        ${metric('Dette', money(me.debt), me.debt > 0 ? 'warn-text' : '')}
+        ${metric('CO₂ cumulé', `${formatInt(me.co2)} t`, me.co2 > 5000 ? 'warn-text' : '')}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Réseau</h3>
+      <div class="card-grid">
+        ${metric('Lignes actives', activeLines)}
+        ${metric('Trains', me.trains.length)}
+        ${metric('Gares exploitées', Object.keys(me.stations).length)}
+        ${metric('Capacité R&D', `${round(researchWorkRateClient(me))}x`)}
+      </div>
+    </div>
+
+    ${renderFinanceSummary(me)}
+
+    <div class="card">
+      <h3>Événements en cours</h3>
+      <div class="list">
+        ${app.state.game.events.map(e => `
+          <div class="list-item">
+            <div class="item-title"><strong>${escapeHtml(e.title)}</strong><span class="tag">Temporaire</span></div>
+            <div class="kv"><span>Voyageurs</span><b>×${round(e.passenger || 1)}</b><span>Fret</span><b>×${round(e.freight || 1)}</b></div>
+          </div>
+        `).join('') || '<p class="muted">Aucun événement.</p>'}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Classement multijoueur</h3>
+      <div class="list">
+        ${ranking.slice(0, 8).map((p, i) => `
+          <div class="list-item">
+            <div class="item-title">
+              <strong><span style="color:${p.color}">●</span> #${i + 1} ${escapeHtml(p.name)}</strong>
+              <span class="tag">${formatInt(p.score)}</span>
+            </div>
+            <div class="kv"><span>Époque</span><b>${escapeHtml(p.eraName)}</b><span>Cash</span><b>${money(p.cash)}</b></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Journal</h3>
+      <div class="list">
+        ${app.state.game.news.map(n => `<div class="list-item">${escapeHtml(n.text)}</div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function metric(label, value, cls = '') {
+  return `<div class="metric"><span>${escapeHtml(label)}</span><b class="${cls}">${escapeHtml(String(value))}</b></div>`;
+}
+
+function renderFinanceSummary(me) {
+  const b = me.stats?.lastBreakdown || {};
+  const operatingMargin = me.stats.lastRevenue > 0 ? Math.round((me.stats.lastProfit / me.stats.lastRevenue) * 100) : 0;
+  return `
+    <div class="card">
+      <h3>Résultat d’exploitation</h3>
+      <div class="card-grid">
+        ${metric('Revenus lignes /h', moneyPerHour(b.lineRevenue || me.stats.lastRevenue))}
+        ${metric('Revenus gares /h', moneyPerHour(b.stationRevenue || 0), (b.stationRevenue || 0) > 0 ? 'good-text' : '')}
+        ${metric('Coûts variables /h', moneyPerHour(b.variableLineCost || 0), 'warn-text')}
+        ${metric('Charges fixes /h', moneyPerHour(b.sharedCosts || 0), 'warn-text')}
+        ${metric('Résultat net /h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text')}
+        ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text')}
+      </div>
+      <div class="kv finance-kv">
+        <span>Personnel</span><b>${moneyPerHour(b.staffCost || 0)}</b>
+        <span>Gares</span><b>${moneyPerHour(b.stationCost || 0)}</b>
+        <span>Dette</span><b>${moneyPerHour(b.debtCost || 0)}</b>
+        <span>Parc inutilisé</span><b>${moneyPerHour(b.idleTrainCost || 0)}</b>
+        <span>R&D</span><b>${moneyPerHour(b.researchCost || 0)}</b>
+      </div>
+    </div>
+  `;
+}
+
+function techLevel(nodeId) {
+  const value = app.state?.me?.techUnlocked?.[nodeId];
+  if (value === true) return 1;
+  return Math.max(0, Math.floor(Number(value || 0)));
+}
+
+function plannedTechLevel(nodeId) {
+  let level = techLevel(nodeId);
+  const project = app.state?.me?.researchProject;
+  if (project?.nodeId === nodeId) level = Math.max(level, Number(project.targetLevel || 0));
+  for (const item of app.state?.me?.researchQueue || []) {
+    if (item.nodeId === nodeId) level = Math.max(level, Number(item.targetLevel || 0));
+  }
+  return level;
+}
+
+function techMaxLevel(node) {
+  const raw = Number(node?.maxLevel);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : Number.POSITIVE_INFINITY;
+}
+
+function techMaxLevelLabel(node) {
+  return Number.isFinite(techMaxLevel(node)) ? String(techMaxLevel(node)) : '∞';
+}
+
+function nextTechLevel(node) {
+  const max = techMaxLevel(node);
+  const next = techLevel(node.id) + 1;
+  return Number.isFinite(max) ? Math.min(max, next) : next;
+}
+
+function boundedExponentialClient(base, growth, exponent, cap = Number.MAX_SAFE_INTEGER) {
+  const b = Math.max(0, Number(base || 0));
+  const g = Math.max(1.01, Number(growth || 1));
+  const e = Math.max(0, Number(exponent || 0));
+  if (!Number.isFinite(b) || b <= 0) return 0;
+  const logValue = Math.log(b) + Math.log(g) * e;
+  if (!Number.isFinite(logValue) || logValue >= Math.log(cap)) return cap;
+  return Math.min(cap, b * Math.exp(Math.log(g) * e));
+}
+
+function researchCostMoneyClient(node, targetLevel) {
+  const level = Math.min(RESEARCH_TECHNICAL_MAX_LEVEL, Math.max(1, Math.floor(Number(targetLevel || 1))));
+  const base = Number(node.baseCostMoney ?? node.costMoney ?? 50000);
+  const growth = Number(node.costGrowth ?? 1.62);
+  const epochFactor = 1 + Math.max(0, Number(node.requiredEpoch || 0)) * 0.22;
+  return Math.round(boundedExponentialClient(base * epochFactor, growth, level - 1));
+}
+
+function researchDurationClient(node, targetLevel) {
+  const level = Math.min(RESEARCH_TECHNICAL_MAX_LEVEL, Math.max(1, Math.floor(Number(targetLevel || 1))));
+  const base = Number(node.baseDurationSeconds ?? node.baseDuration ?? node.duration ?? 30);
+  const growth = Number(node.durationGrowth ?? 1.5);
+  return Math.max(15000, Math.round(boundedExponentialClient(base, growth, level - 1, 315360000) * 1000));
+}
+
+function researchWorkRateClient(me = app.state?.me) {
+  return me?.researchProject?.workRate || me?.research || 1;
+}
+
+function normalizeResearchPrereqItemClient(item) {
+  if (!item) return null;
+  if (typeof item === 'string') return { id: item, level: 1 };
+  if (Array.isArray(item.anyOf)) {
+    const anyOf = item.anyOf.map(normalizeResearchPrereqItemClient).filter(Boolean).filter(req => !req.anyOf);
+    return anyOf.length ? { anyOf } : null;
+  }
+  return { id: item.id, level: Math.max(1, Math.floor(Number(item.level || 1))) };
+}
+
+function researchPrereqsForLevelClient(node, targetLevel) {
+  const all = [...(node.prereq || [])];
+  for (const entry of node.levelPrereq || []) {
+    if (targetLevel >= Number(entry.level || 1)) all.push(...(entry.requires || []));
+  }
+  return all.map(normalizeResearchPrereqItemClient).filter(Boolean);
+}
+
+function researchPrereqSatisfiedClient(req) {
+  if (req.anyOf) return req.anyOf.some(researchPrereqSatisfiedClient);
+  return plannedTechLevel(req.id) >= req.level;
+}
+
+function researchPrereqLabelClient(req) {
+  if (req.anyOf) return req.anyOf.map(researchPrereqLabelClient).join(' ou ');
+  return `${techNodeTitle(req.id)} niv. ${req.level}`;
+}
+
+function researchGroupForNode(nodeId) {
+  const tree = app.state?.balance?.techTree || {};
+  for (const group of Object.values(tree)) {
+    if ((group.nodes || []).some(node => node.id === nodeId)) return group.id;
+  }
+  return '';
+}
+
+
+function researchEraStorageKey(groupId, bucket) {
+  const era = bucket?.era || 0;
+  const label = bucket?.label || 'Général';
+  return `${groupId || 'research'}::${era}::${label}`;
+}
+
+function researchEraBucketForNode(nodeId) {
+  const tree = app.state?.balance?.techTree || {};
+  for (const group of Object.values(tree)) {
+    const node = (group.nodes || []).find(item => item.id === nodeId);
+    if (node) {
+      return {
+        groupId: group.id,
+        bucket: { era: node.era || 0, label: node.eraLabel || group.label || 'Général' }
+      };
+    }
+  }
+  return null;
+}
+
+function isResearchEraCollapsed(groupId, bucket) {
+  return Boolean(app.researchEraCollapsed?.[researchEraStorageKey(groupId, bucket)]);
+}
+
+function setResearchEraCollapsed(groupId, bucket, collapsed) {
+  const key = researchEraStorageKey(groupId, bucket);
+  app.researchEraCollapsed = { ...(app.researchEraCollapsed || {}), [key]: Boolean(collapsed) };
+  if (!collapsed) delete app.researchEraCollapsed[key];
+  localStorage.setItem('sillons.researchEraCollapsed', JSON.stringify(app.researchEraCollapsed));
+}
+
+function toggleResearchEra(groupId, bucketKey) {
+  const tree = app.state?.balance?.techTree || {};
+  const group = tree[groupId];
+  if (!group) return;
+  const nodes = group.nodes || [];
+  const buckets = researchEraBucketsForGroup(group);
+  const bucket = buckets.find(item => item.key === bucketKey);
+  if (!bucket) return;
+  setResearchEraCollapsed(groupId, bucket, !isResearchEraCollapsed(groupId, bucket));
+  renderAll();
+}
+
+function focusResearchNode(nodeId) {
+  const groupId = researchGroupForNode(nodeId);
+  if (!groupId) return;
+  app.activeTab = 'research';
+  app.activeResearchTab = groupId;
+  app.highlightResearchId = nodeId;
+  const bucketInfo = researchEraBucketForNode(nodeId);
+  if (bucketInfo) setResearchEraCollapsed(bucketInfo.groupId, bucketInfo.bucket, false);
+  localStorage.setItem('sillons.activeTab', app.activeTab);
+  localStorage.setItem('sillons.researchTab', app.activeResearchTab);
+  renderAll();
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`.tech-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+  setTimeout(() => {
+    if (app.highlightResearchId === nodeId) {
+      app.highlightResearchId = '';
+      renderAll();
+    }
+  }, 2800);
+}
+
+function researchEffectTarget(effect, node) {
+  const text = `${effect || ''} ${node?.title || ''} ${node?.branch || ''}`.toLowerCase();
+  if (/rh|équipe|conducteur|agent|formation|salariale|recrutement/.test(text)) return { tab: 'staff', label: 'Ressources humaines' };
+  if (/gare|station|hub|quai|commerce|terminal voyageurs|flux voyageurs|bâtiment/.test(text)) return { tab: 'stations', label: 'Gares' };
+  if (/énergie|charbon|diesel|électr|batterie|hydrogène|caténaire|co2/.test(text)) return { tab: 'market', label: 'Énergie & contrats' };
+  if (/fret|wagon|conteneur|marchandises|vrac|logistique|portuaire/.test(text)) return { tab: 'lines', label: 'Lignes fret' };
+  if (/maintenance|atelier|dépôt|révision|usure|fiabilité/.test(text)) return { tab: 'fleet', fleetSubtab: 'maintenance', label: 'Maintenance du parc' };
+  if (/rame|locomotive|train|matériel|voiture|duplex|autorail|pacific|mountain|tgv|maglev/.test(text)) return { tab: 'fleet', fleetSubtab: 'catalog', label: 'Catalogue du parc' };
+  return { tab: 'overview', label: 'Tableau de bord' };
+}
+
+function focusUiTarget(tab, targetLabel = '', fleetSubtab = '') {
+  app.activeTab = tab || 'overview';
+  if (app.activeTab === 'fleet' && ['catalog', 'maintenance', 'composition'].includes(fleetSubtab)) {
+    app.activeFleetSubtab = fleetSubtab;
+    localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+  }
+  app.highlightUiTarget = targetLabel || app.activeTab;
+  localStorage.setItem('sillons.activeTab', app.activeTab);
+  renderAll();
+  requestAnimationFrame(() => {
+    const content = $('#tabContent');
+    content?.classList.add('ui-glow-target');
+    content?.scrollTo?.({ top: 0, behavior: 'smooth' });
+  });
+  setTimeout(() => {
+    $('#tabContent')?.classList.remove('ui-glow-target');
+    app.highlightUiTarget = '';
+  }, 2400);
+}
+
+function formatResearchTime(valueMs) {
+  const totalSeconds = Math.max(0, Math.ceil(Number(valueMs || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function formatCycles(value) {
+  const n = Math.max(0, Math.ceil(Number(value || 0)));
+  return n <= 1 ? '1 cycle' : `${n} cycles`;
+}
+
+function serverNow() {
+  return Date.now() + (app.serverClockOffset || 0);
+}
+
+function researchProjectKey(project) {
+  if (!project) return '';
+  return `${project.nodeId || ''}:${project.targetLevel || 0}:${project.startedAt || 0}:${project.durationMs || 0}`;
+}
+
+function researchProgressPercentFromData(endAt, durationMs, workRate) {
+  const now = serverNow();
+  const remainingRealMs = Math.max(0, Number(endAt || 0) - now);
+  const remainingWorkMs = remainingRealMs * Math.max(0.01, Number(workRate || 1));
+  return Math.max(0, Math.min(100, (1 - remainingWorkMs / Math.max(1, Number(durationMs || 1))) * 100));
+}
+
+function researchProgressPercent(project) {
+  if (!project) return 0;
+  return researchProgressPercentFromData(project.endAt, project.durationMs, project.workRate || 1);
+}
+
+function applyResearchProgress(el, rawProgress) {
+  const key = el.dataset.researchKey || '';
+  const last = key ? Number(app.researchProgressCache[key] ?? el.dataset.lastProgress ?? 0) : Number(el.dataset.lastProgress || 0);
+  // Évite le rollback visuel quand un refresh serveur reconstruit l'état avec quelques ms de décalage.
+  const progress = key ? Math.max(last, rawProgress) : rawProgress;
+  el.dataset.lastProgress = String(progress);
+  if (key) app.researchProgressCache[key] = progress;
+  el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+}
+
+function updateResearchTimers() {
+  const now = serverNow();
+  document.querySelectorAll('[data-research-timer]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+  });
+  document.querySelectorAll('[data-research-progress]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const workRate = Math.max(0.01, Number(el.dataset.workRate || 1));
+    const progress = researchProgressPercentFromData(endAt, durationMs, workRate);
+    applyResearchProgress(el, progress);
+  });
+}
+
+function startResearchAnimationLoop() {
+  const tick = () => {
+    updateResearchTimers();
+    updateEpochTrafficAnimation();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function compositionMetric(label, value, tooltip, cls = '') {
+  return `
+    <div class="metric composition-metric ${tooltip ? 'metric-has-tooltip' : ''}" ${tooltip ? `tabindex="0" ${tooltipAttr(tooltip)}` : ''}>
+      <div class="metric-label-row">
+        <span>${escapeHtml(label)}</span>
+        ${tooltip ? '<i class="metric-info" aria-hidden="true">i</i>' : ''}
+      </div>
+      <b class="${cls}">${escapeHtml(String(value))}</b>
+    </div>`;
+}
+
+function variantMetricValue(multiplier = 1, delta = 0, mode = 'multiplier') {
+  if (mode === 'delta') {
+    const pct = Math.round(Number(delta || 0) * 100);
+    return pct === 0 ? '0%' : `${pct > 0 ? '+' : ''}${pct}%`;
+  }
+  const pct = Math.round((Number(multiplier || 1) - 1) * 100);
+  return pct === 0 ? '0%' : `${pct > 0 ? '+' : ''}${pct}%`;
+}
+
+function renderVariantStatRow(label, value, cls = '') {
+  return `<div class="variant-stat-row"><span>${escapeHtml(label)}</span><b class="${cls}">${escapeHtml(String(value))}</b></div>`;
+}
+
+function tooltipAttr(text) {
+  const safe = escapeAttr(String(text || '').trim());
+  return safe ? ` aria-label="${safe}" data-tooltip="${safe}"` : '';
+}
+
+function lineElectrificationCost(line) {
+  const me = app.state.me;
+  const techDiscount = (1 - Math.min(0.2, (me.tech.energy || 0) * 0.03)) * (hasTech('electric_substations') ? 0.92 : 1);
+  return Math.round(lineDistance(line) * 125000 * techDiscount);
+}
+
+function lineElectrificationTooltip(line) {
+  const cost = lineElectrificationCost(line);
+  return `Électrifie cette ligne pour ${money(cost)}. Effets : toute la ligne et tous ses arrêts deviennent électrifiés ; les trains électriques peuvent y circuler ; la facture énergétique et le CO₂ baissent pour les matériels électriques.`;
+}
+
+function stationUpgradeTooltip(station, asset, upgrade) {
+  const effects = {
+    level: upgrade.label === 'Acheter'
+      ? 'achète la ville, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
+      : 'augmente la capacité et l’attractivité de la gare ; débloque une meilleure base pour les autres améliorations.',
+    commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.',
+    maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
+    depot: 'permet le stationnement et améliore la portée pratique des trains vapeur sur les itinéraires qui passent par cette gare.'
+  };
+  return `${upgrade.label} à ${station.name}. Coût : ${money(upgrade.cost)}. Effet : ${effects[upgrade.kind] || 'amélioration de la gare.'}`;
+}
+
+function staffActionTooltip(role, count, kind) {
+  const def = app.state.balance.staff[role];
+  if (kind === 'hire') return `Recrute ${count} ${def.label}(s). Coût immédiat : ${money(def.hireCost * count)}. Salaire ajouté : ${staffSalaryPerHour(def, count)}/h. Effet : réduit le sous-effectif et améliore ponctualité/fiabilité selon le métier.`;
+  return `Licencie ${count} ${def.label}(s). Effet : réduit les salaires, mais peut dégrader la qualité d’exploitation si l’équipe devient insuffisante.`;
+}
+
+function maintenancePolicyTooltip(policy) {
+  const sign = policy.reliabilityBonus >= 0 ? '+' : '';
+  return `${policy.name}. ${policy.description} Coût d’entretien ×${round(policy.costMultiplier)}, usure ×${round(policy.wearMultiplier)}, fiabilité ${sign}${Math.round(policy.reliabilityBonus * 100)} points.`;
+}
+
+function energyStrategyTooltip(id, strategy) {
+  return `${strategy.name}. ${energyStrategyDescription(id)} Effet : modifie les multiplicateurs de prix énergie dès le prochain calcul d’exploitation.`;
+}
+
+
+
+function preloadArt() {
+  const sources = new Set([
+    ART.map,
+    ...Object.values(ART.tabs),
+    ...Object.values(ART.researchGroups),
+    ...Object.values(ART.researchNodes)
+  ]);
+  sources.forEach(src => {
+    if (!src || artImages[src]) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+    artImages[src] = img;
+  });
+}
+
+
+function preloadMapSprites() {
+  Object.entries(TRAIN_MAP_SPRITES).forEach(([id, src]) => {
+    if (!src || app.mapSprites.trains[id]) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+    app.mapSprites.trains[id] = img;
+  });
+  Object.entries(STATION_MAP_SPRITES).forEach(([level, src]) => {
+    if (!src || app.mapSprites.stations[level]) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+    app.mapSprites.stations[level] = img;
+  });
+}
+
+function stationPrestigeStage(asset) {
+  if (!asset) return 1;
+  const score = Number(asset.level || 1)
+    + Math.floor(Number(asset.commerce || 0) / 2)
+    + Math.floor(Number(asset.maintenance || 0) / 2)
+    + (asset.depot ? 1 : 0);
+  return Math.max(1, Math.min(6, score));
+}
+
+function getTrainMapSprite(modelId) {
+  return app.mapSprites.trains[modelId] || null;
+}
+
+function getStationMapSprite(asset) {
+  return app.mapSprites.stations[String(stationPrestigeStage(asset))] || null;
+}
+
+function mapMaxZoomReached() {
+  const map = app.map.leaflet;
+  if (!map?.getZoom) return false;
+  const max = Number(map.getMaxZoom?.() || 13);
+  return Number(map.getZoom()) >= max;
+}
+
+function drawSmallMapMarker(ctx, p, radius, fill, selected = false) {
+  if (selected) {
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.26)';
+    ctx.fillRect(Math.round(p.x - 14), Math.round(p.y - 14), 28, 28);
+  }
+  ctx.fillStyle = 'rgba(8, 12, 18, 0.95)';
+  ctx.fillRect(Math.round(p.x - radius - 1), Math.round(p.y - radius - 1), radius * 2 + 2, radius * 2 + 2);
+  ctx.fillStyle = fill;
+  ctx.fillRect(Math.round(p.x - radius + 1), Math.round(p.y - radius + 1), radius * 2 - 2, radius * 2 - 2);
+}
+
+function artForResearchGroup(id) {
+  return ART.researchGroups[id] || ART.tabs.research;
+}
+
+function artForTechNode(id) {
+  return ART.researchNodes[id] || null;
+}
+
+function renderSectionHero(kicker, title, text, image, tags = []) {
+  return `
+    <div class="menu-context card">
+      <div class="menu-context__inner">
+        ${kicker ? `<div class="hero-kicker">${escapeHtml(kicker)}</div>` : ''}
+        <h2>${escapeHtml(title)}</h2>
+        ${text ? `<p>${escapeHtml(text)}</p>` : ''}
+        ${tags.length ? `<div class="hero-tags">${tags.map(tag => `<span class="tag">${escapeHtml(String(tag))}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+
+function renderStationSearchField(role, label, stationId, query = '') {
+  const selected = station(stationId);
+  const value = query || (selected ? stationSearchLabel(selected) : '');
+  return `
+    <label class="station-search-label">${escapeHtml(label)}
+      <div class="station-search" data-role="${role}">
+        <input id="line${capitalize(role)}Search" class="station-search-input" data-role="${role}" value="${escapeAttr(value)}" placeholder="Ex : Bayeux, Lille, Marseille..." autocomplete="off">
+        <input id="line${capitalize(role)}" type="hidden" value="${escapeAttr(stationId || '')}">
+        <div id="line${capitalize(role)}Suggestions" class="station-suggestions"></div>
+      </div>
+    </label>
+  `;
+}
+
+
+function renderLines() {
+  const me = app.state.me;
+  const status = app.state.world.communesStatus;
+  const communeTag = status ? `${formatInt(status.count || 0)} villes` : 'Villes';
+  const active = ['create', 'manage'].includes(app.activeLinesSubtab) ? app.activeLinesSubtab : 'create';
+
+  return `
+    ${renderSectionHero('LIGNES & GARES', 'Création et exploitation des dessertes', 'Crée une nouvelle ligne dans un espace dédié, puis gère et modifie tes lignes existantes dans un second sous-onglet.', ART.tabs.lines, ['OpenStreetMap', communeTag, 'Lignes multi-arrêts'])}
+
+    <div class="line-workspace">
+      <div class="line-subtabs" role="tablist" aria-label="Gestion des lignes">
+        <button type="button" data-lines-subtab="create" class="${active === 'create' ? 'active' : ''}">
+          <span>Créer</span>
+          <b>Nouvelle ligne</b>
+        </button>
+        <button type="button" data-lines-subtab="manage" class="${active === 'manage' ? 'active' : ''}">
+          <span>Modifier</span>
+          <b>${me.lines.filter(l => l.active).length} ligne(s)</b>
+        </button>
+      </div>
+
+      ${active === 'create' ? renderCreateLinePanel() : renderManageLinesPanel()}
+    </div>
+  `;
+}
+
+
+function lineDistanceCalculatorData(draft = app.lineDraft) {
+  const from = draft?.from;
+  const to = draft?.to;
+  if (!from || !to || from === to) return null;
+  const direct = getRouteForStops([from, to]);
+  const preparedStops = buildLineDraftStops();
+  const prepared = preparedStops.length >= 2 ? getRouteForStops(preparedStops) : direct;
+  return {
+    from,
+    to,
+    directDistance: Math.round(direct.distance || 0),
+    preparedDistance: Math.round(prepared.distance || 0),
+    maxSegment: Math.round(prepared.maxSegment || 0),
+    label: `${station(from)?.name || from} → ${station(to)?.name || to}`
+  };
+}
+
+function renderLineDistanceCalculator(draft = app.lineDraft) {
+  const data = lineDistanceCalculatorData(draft);
+  return `
+    <div id="lineDistanceCalculator" class="line-distance-calculator">
+      ${data ? renderLineDistanceCalculatorContent(data) : '<span>Calculateur de distance</span><b>Sélectionne un départ et un terminus pour calculer la distance sans acheter.</b>'}
+    </div>
+  `;
+}
+
+function renderLineDistanceCalculatorContent(data) {
+  const viaText = data.preparedDistance !== data.directDistance
+    ? ` · avec arrêts préparés : ${formatInt(data.preparedDistance)} km`
+    : '';
+  return `<span>Calculateur de distance</span><b>${escapeHtml(data.label)} : ${formatInt(data.directDistance)} km${viaText} · tronçon max ${formatInt(data.maxSegment)} km</b>`;
+}
+
+function updateLineDistanceCalculator() {
+  const box = $('#lineDistanceCalculator');
+  if (!box) return;
+  const data = lineDistanceCalculatorData(app.lineDraft);
+  box.innerHTML = data
+    ? renderLineDistanceCalculatorContent(data)
+    : '<span>Calculateur de distance</span><b>Sélectionne un départ et un terminus pour calculer la distance sans acheter.</b>';
+}
+
+function renderCreateLinePanel() {
+  const me = app.state.me;
+  const freeTrains = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && l.trainId === t.id));
+  const draft = normalizeLineDraft(freeTrains);
+  const trainOptions = freeTrains.map(t => {
+    const model = app.state.balance.trains[t.modelId];
+    const meta = model ? `${model.speed} km/h · ${model.capacity} voy. · état ${Math.round(t.condition * 100)}%` : `état ${Math.round(t.condition * 100)}%`;
+    return `<option value="${t.id}" ${t.id === draft.trainId ? 'selected' : ''}>${escapeHtml(trainName(t))} · ${escapeHtml(meta)}</option>`;
+  }).join('');
+  const ticketDistance = draftTicketDistance(draft);
+
+  return `
+    <div class="line-create-layout">
+      <div class="card line-builder-card">
+        <div class="line-card-heading">
+          <div>
+            <h2>Créer une ligne</h2>
+            <p class="muted small">Sélectionne un départ, un terminus, puis ajoute uniquement les arrêts utiles. Le parcours affiché se met à jour avant validation.</p>
+          </div>
+          <span class="tag good">Étape 1</span>
+        </div>
+
+        <div class="form-grid" id="lineForm">
+          <div class="route-choice-grid">
+            ${renderStationSearchField('from', 'Départ', draft.from, draft.fromQuery)}
+            ${renderStationSearchField('to', 'Terminus', draft.to, draft.toQuery)}
+          </div>
+
+          ${renderLineDistanceCalculator(draft)}
+
+          <div class="line-route-preview-card">
+            <div class="line-route-title">
+              <span>Parcours préparé</span>
+              <b>${buildLineDraftStops().length} arrêt(s)</b>
+            </div>
+            <div class="line-stop-strip">${renderDraftStopStrip(buildLineDraftStops(), draft.waypoints)}</div>
+          </div>
+
+          <details class="line-advanced-stop" ${draft.waypoints.length ? 'open' : ''}>
+            <summary>
+              <span>Arrêts intermédiaires</span>
+              <b>${draft.waypoints.length ? `${draft.waypoints.length} ajouté(s)` : 'Optionnel'}</b>
+            </summary>
+            <div class="line-advanced-body">
+              <p class="muted small">Ajoute une ville desservie entre le départ et le terminus. Le jeu la place à la meilleure position, puis tu peux corriger l’ordre dans l’onglet Modifier.</p>
+              ${renderStationSearchField('via', 'Ajouter une desserte', draft.viaCandidate, draft.viaQuery)}
+              <button type="button" id="addWaypointBtn" class="primary" ${tooltipAttr('Ajoute cette gare comme arrêt intermédiaire dans le parcours préparé.')}>Ajouter cette desserte</button>
+              ${draft.waypoints.length ? `<div class="line-waypoint-list">${draft.waypoints.map((id, index) => renderWaypointChip(id, index)).join('')}</div>` : '<p class="muted small">Aucune desserte intermédiaire ajoutée.</p>'}
+            </div>
+          </details>
+
+          <div class="line-service-grid">
+            <label>Matériel disponible
+              <select id="lineTrain">${trainOptions || '<option value="">Aucun train libre</option>'}</select>
+            </label>
+            <label>Service
+              <select id="lineService">${serviceOptions(draft.service)}</select>
+            </label>
+            <label>Fréquence d’exploitation
+              <input id="lineFreq" type="number" min="1" max="20" value="${escapeAttr(draft.frequency)}">
+            </label>
+            <label>Prix billet moyen
+              ${renderTicketPriceControl({
+                inputId: 'lineTicketPrice',
+                rangeId: 'lineTicketPriceRange',
+                hintId: 'lineTicketPriceHint',
+                price: draft.ticketPrice,
+                distance: ticketDistance
+              })}
+            </label>
+          </div>
+
+          <div id="linePreview" class="line-preview muted small">Choisis au moins un départ, une arrivée et un train.</div>
+
+          <div class="line-create-actions">
+            <button id="createLineBtn" class="primary big-action" ${tooltipAttr('Ouvre la ligne avec les arrêts, le train, la fréquence et le prix du billet choisis.')} ${freeTrains.length ? '' : 'disabled'}>
+              Ouvrir la ligne
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card line-help-card">
+        <h3>Lecture rapide</h3>
+        <div class="line-help-steps">
+          <div><b>1</b><span>Départ et terminus</span></div>
+          <div><b>2</b><span>Dessertes optionnelles</span></div>
+          <div><b>3</b><span>Train et fréquence</span></div>
+          <div><b>4</b><span>Validation</span></div>
+        </div>
+        <p class="muted small">Pour modifier l’ordre exact des gares, utilise ensuite l’onglet <strong>Modifier</strong> : il contient le glissé-déposé.</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderManageLinesPanel() {
+  const me = app.state.me;
+  const lines = me.lines.filter(l => l.active);
+  const activeLines = lines.length;
+  const totalProfit = lines.reduce((sum, l) => sum + Number(l.stats?.finance?.netProfit ?? l.stats?.profit ?? 0), 0);
+  const totalRevenue = lines.reduce((sum, l) => sum + Number(l.stats?.revenue || 0), 0);
+  const totalPassengers = lines.reduce((sum, l) => sum + Number(l.stats?.passengers || 0), 0);
+  return `
+    <div class="line-manage-layout">
+      <div class="line-management-summary">
+        ${metric('Lignes actives', `${activeLines}/${me.lines.length}`)}
+        ${metric('Recettes lignes /h', moneyPerHour(totalRevenue))}
+        ${metric('Net estimé /h', moneyPerHour(totalProfit), totalProfit >= 0 ? 'good-text' : 'bad-text')}
+        ${metric('Voyageurs J-1', formatInt(totalPassengers))}
+      </div>
+
+      <div class="card">
+        <div class="line-card-heading">
+          <div>
+            <h2>Modifier les lignes</h2>
+            <p class="muted small">Chaque ligne se modifie depuis une fiche claire : matériel, fréquence, prix du billet, arrêts, ordre des gares et électrification.</p>
+          </div>
+          <span class="tag">${activeLines} ligne(s)</span>
+        </div>
+
+        <div class="line-list-modern">
+          ${lines.length ? lines.map(renderLineItem).join('') : '<p class="muted">Aucune ligne active à modifier. Crée une ligne ou ouvre une nouvelle desserte dans le sous-onglet Créer.</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function lineMarketShareLabel(line) {
+  const market = line.stats?.market || {};
+  const parts = [];
+  if (Number.isFinite(market.passengerShare)) parts.push(`V ${round(market.passengerShare)}%`);
+  if (Number.isFinite(market.freightShare)) parts.push(`F ${round(market.freightShare)}%`);
+  return parts.length ? parts.join(' / ') : 'N/A';
+}
+
+function lineAttractivenessLabel(line) {
+  const passenger = line.stats?.attractiveness?.passenger?.score;
+  const freight = line.stats?.attractiveness?.freight?.score;
+  const scores = [passenger, freight].filter(Number.isFinite);
+  return scores.length ? round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 'N/A';
+}
+
+function lineRankLabel(market, key) {
+  const rank = market?.[`${key}Rank`];
+  const competitors = market?.[`${key}Competitors`] || 0;
+  if (!rank) return 'N/A';
+  return `#${rank} / ${competitors} conc.`;
+}
+
+function linePercent(value) {
+  return Number.isFinite(value) ? `${round(value)}%` : 'N/A';
+}
+
+function lineMoney(value) {
+  return moneyPerHour(Number(value || 0));
+}
+
+function renderLineInsightPanels(line) {
+  const stats = line.stats || {};
+  const finance = stats.finance || {};
+  const market = stats.market || {};
+  const capacity = stats.capacity || {};
+  const contribution = Number(finance.contribution ?? stats.profit ?? 0);
+  const netProfit = Number(finance.netProfit ?? stats.profit ?? 0);
+  const factorDetails = line.service === 'freight'
+    ? stats.attractiveness?.freight
+    : stats.attractiveness?.passenger || stats.attractiveness?.freight;
+
+  return `
+    <div class="line-insight-grid">
+      <section class="line-insight-panel">
+        <h4>Finance /h</h4>
+        <div class="line-kv">
+          <span>Recettes</span><b>${lineMoney(stats.revenue)}</b>
+          <span>Couts variables</span><b>${lineMoney(finance.variableExpenses ?? stats.expenses)}</b>
+          <span>Frais alloues</span><b>${lineMoney(finance.allocatedOverhead)}</b>
+          <span>Net estime</span><b class="${netProfit >= 0 ? 'good-text' : 'bad-text'}">${lineMoney(netProfit)}</b>
+        </div>
+        <div class="line-money-split">
+          <span>Billets ${lineMoney(finance.ticketRevenue)}</span>
+          <span>Services ${lineMoney(finance.ancillaryRevenue)}</span>
+          <span>Fret ${lineMoney(finance.freightRevenue)}</span>
+        </div>
+      </section>
+
+      <section class="line-insight-panel">
+        <h4>Demande & capacite</h4>
+        <div class="line-kv">
+          <span>Demande voy.</span><b>${formatInt(market.passengerDemand || 0)}</b>
+          <span>Transportes</span><b>${formatInt(stats.passengers || 0)}</b>
+          <span>Demande fret</span><b>${formatInt(market.freightDemand || 0)} t</b>
+          <span>Transporte</span><b>${formatInt(stats.freightTons || 0)} t</b>
+          <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
+          <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
+          <span>Composition</span><b>${escapeHtml(capacity.trainComposition || 'Standard')}</b>
+        </div>
+      </section>
+
+      <section class="line-insight-panel line-factor-panel">
+        <h4>Attractivite</h4>
+        ${renderLineFactorBars(factorDetails)}
+        <p class="small muted">Contribution avant frais fixes : <b class="${contribution >= 0 ? 'good-text' : 'bad-text'}">${lineMoney(contribution)}</b></p>
+      </section>
+    </div>
+  `;
+}
+
+function renderLineFactorBars(details) {
+  if (!details?.factors) return '<p class="small muted">Données disponibles après le prochain cycle simulé.</p>';
+  const labels = {
+    price: 'Prix',
+    frequency: 'Frequence',
+    speed: 'Vitesse',
+    comfortOrCapacity: details.market === 'freight' ? 'Capacite fret' : 'Confort/capacite',
+    reputation: 'Reputation',
+    condition: 'Etat train',
+    staff: 'RH',
+    stations: 'Gares',
+    operations: 'Exploitation'
+  };
+  return `
+    <div class="line-factor-list">
+      ${Object.entries(details.factors)
+        .filter(([, value]) => Number.isFinite(value))
+        .map(([key, value]) => {
+          const pct = Math.max(0, Math.min(125, Number(value || 0)));
+          return `
+            <div class="line-factor">
+              <span>${escapeHtml(labels[key] || key)}</span>
+              <b>${round(value)}%</b>
+              <i><em style="width:${Math.min(100, pct)}%"></em></i>
+            </div>
+          `;
+        }).join('')}
+    </div>
+  `;
+}
+
+function renderLineItem(line) {
+  const stops = lineStopsOf(line);
+  const train = app.state.me.trains.find(t => t.id === line.trainId);
+  const model = train ? app.state.balance.trains[train.modelId] : null;
+  const profit = Number(line.stats?.finance?.netProfit ?? line.stats?.profit ?? 0);
+  const profitCls = profit >= 0 ? 'good-text' : 'bad-text';
+  const ticketPrice = lineTicketPrice(line);
+  const electrifyCost = line.electrified ? 0 : lineElectrificationCost(line);
+  const canElectrify = !line.electrified && app.state.me.cash >= electrifyCost;
+  const shortStops = stops.length > 4
+    ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
+    : lineStopsLabel(stops);
+
+  return `
+    <article class="line-card-modern ${line.active ? '' : 'inactive'}">
+      <header class="line-card-modern-head">
+        <div>
+          <span class="line-code">${escapeHtml(line.code)}</span>
+          <h3>${escapeHtml(lineDisplayName(line))}</h3>
+          <p>${escapeHtml(shortStops)}</p>
+        </div>
+        <span class="tag ${line.active ? 'good' : 'bad'}">${line.active ? 'Active' : 'Fermée'}</span>
+      </header>
+
+      <div class="line-card-modern-route">
+        <span>${stops.map((id, index) => `<i title="${escapeAttr(station(id)?.name || id)}">${index + 1}</i>`).join('<b></b>')}</span>
+      </div>
+
+      <div class="line-card-modern-stats">
+        <div><span>Train</span><b>${escapeHtml(model?.name || 'Aucun')}</b></div>
+        <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
+        <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
+        <div><span>Fréq.</span><b>${line.frequency}</b></div>
+        <div><span>Billet moyen</span><b>${money(ticketPrice)}</b></div>
+        <div><span>Attractivite</span><b>${escapeHtml(String(lineAttractivenessLabel(line)))}</b></div>
+        <div><span>Net estimé /h</span><b class="${profitCls}">${moneyPerHour(profit)}</b></div>
+      </div>
+
+      ${renderLineInsightPanels(line)}
+
+      <div class="line-card-modern-actions">
+        <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : train, fréquence, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
+        <button data-action="electrify-line" data-id="${line.id}" ${tooltipAttr(line.electrified ? 'Cette ligne est déjà électrifiée.' : lineElectrificationTooltip(line))} ${line.electrified || !canElectrify ? 'disabled' : ''}>
+          ${line.electrified ? 'Électrifiée' : `Électrifier · ${money(electrifyCost)}`}
+        </button>
+        <button class="danger" data-action="close-line" data-id="${line.id}" ${tooltipAttr('Ferme la ligne. Le train est libéré et la ligne ne génère plus de revenus.')} ${line.active ? '' : 'disabled'}>Fermer</button>
+      </div>
+    </article>
+  `;
+}
+
+function trainEraLabel(epochId) {
+  return app.state.balance.epochs[epochId]?.name || `Époque ${Number(epochId) + 1}`;
+}
+
+function trainStrengths(model) {
+  const parts = [];
+  if (model.speed >= 250) parts.push('très grande vitesse');
+  else if (model.speed >= 160) parts.push('rapide');
+  if (model.capacity >= 700) parts.push('haute capacité');
+  else if (model.capacity >= 400) parts.push('capacité solide');
+  if (model.freight >= 1200) parts.push('fret lourd');
+  else if (model.freight >= 500) parts.push('fret polyvalent');
+  if (model.reliability >= 0.92) parts.push('fiabilité élevée');
+  if (model.maintenance <= 0.42) parts.push('maintenance légère');
+  if (model.comfort >= 0.82) parts.push('premium');
+  return parts.slice(0, 3).join(' · ') || 'polyvalent';
+}
+
+function renderTrainStat(label, value, ratio, cls = '') {
+  const pct = Math.max(4, Math.min(100, Math.round(ratio * 100)));
+  return `<div class="train-stat ${cls}"><span>${escapeHtml(label)}</span><b>${escapeHtml(String(value))}</b><i style="width:${pct}%"></i></div>`;
+}
+
+function renderTrainArt(model) {
+  return `<div class="train-art train-art-placeholder" aria-label="Visuel à refaire pour ${escapeAttr(model.name)}"><span>Visuel matériel</span><b>À refaire</b></div>`;
+}
+
+
+
+function trainRuntimeProfile(train, model = app.state.balance.trains[train.modelId]) {
+  const p = train?.profile || {};
+  return {
+    capacity: Number.isFinite(p.capacity) ? p.capacity : Number(model?.capacity || 0),
+    freight: Number.isFinite(p.freight) ? p.freight : Number(model?.freight || 0),
+    speed: Number.isFinite(p.speed) ? p.speed : Number(model?.speed || 0),
+    range: Number.isFinite(p.range) ? p.range : Number(model?.range || 0),
+    energy: Number.isFinite(p.energy) ? p.energy : Number(model?.energy || 0),
+    maintenance: Number.isFinite(p.maintenance) ? p.maintenance : Number(model?.maintenance || 0),
+    reliability: Number.isFinite(p.reliability) ? p.reliability : Number(model?.reliability || 0),
+    comfort: Number.isFinite(p.comfort) ? p.comfort : Number(model?.comfort || 0)
+  };
+}
+
+function compositionDefaultModeForModelClient(model) {
+  const label = `${model?.name || ''} ${model?.type || ''}`.toLowerCase();
+  const isMultipleUnit = /(autorail|rame|tgv|duplex|régio|ter|hydrogène|batterie|train de nuit|maglev|grande vitesse)/.test(label);
+  if (isMultipleUnit) return 'multiple_unit';
+  const passengerDominant = (model?.capacity || 0) >= Math.max(80, (model?.freight || 0) * 0.9);
+  return passengerDominant && (model?.capacity || 0) > 0 ? 'passenger_loco' : 'freight_loco';
+}
+
+function buildClientCompositionSpec(model, preferredMode = null) {
+  const defaultMode = compositionDefaultModeForModelClient(model);
+  if (defaultMode === 'multiple_unit') {
+    const defaultUnits = clamp(Math.round((model?.capacity || 180) / 220), 1, 5);
+    return {
+      mode: 'multiple_unit',
+      availableModes: ['multiple_unit'],
+      powerUnits: { min: 1, max: Math.max(defaultUnits + 2, 4), default: defaultUnits },
+      label: 'Engins moteurs',
+      variants: []
+    };
+  }
+  const availableModes = ['passenger_loco', 'freight_loco'];
+  const mode = availableModes.includes(preferredMode) ? preferredMode : defaultMode;
+  const passengerDefault = clamp(Math.round((Math.max(model?.capacity || 100, 100)) / 90), 1, 8);
+  const freightDefault = clamp(Math.round((Math.max(model?.freight || 200, 180)) / 180), 2, 14);
+  if (mode === 'passenger_loco') {
+    return {
+      mode,
+      availableModes,
+      passengerCars: { min: 1, max: Math.max(passengerDefault + 5, 8), default: passengerDefault },
+      label: 'Voitures voyageurs',
+      variants: CLIENT_COMPOSITION_VARIANTS?.passenger_loco || []
+    };
+  }
+  return {
+    mode,
+    availableModes,
+    freightCars: { min: 2, max: Math.max(freightDefault + 6, 12), default: freightDefault },
+    label: 'Wagons fret',
+    variants: CLIENT_COMPOSITION_VARIANTS?.freight_loco || []
+  };
+}
+
+function activeCompositionMode(train, model = app.state.balance.trains[train.modelId]) {
+  return app.compositionEditorModes?.[train.id] || train?.composition?.mode || train?.compositionMode || train?.compositionSpec?.mode || compositionDefaultModeForModelClient(model);
+}
+
+function trainCompositionSpec(train, model = app.state.balance.trains[train.modelId]) {
+  const mode = activeCompositionMode(train, model);
+  return buildClientCompositionSpec(model, mode);
+}
+
+function compositionVariantUnlockedForClient(variant, model) {
+  const me = app.state?.me;
+  if (!variant || !me) return false;
+  if ((variant.requiredEpoch || 0) > (me.epoch || 0)) return false;
+  if ((variant.requiredModelEpoch || 0) > (model?.unlockEpoch || 0)) return false;
+  if (variant.requiredTech && !me.techUnlocked?.[variant.requiredTech]) return false;
+  return true;
+}
+
+function trainCompositionVariants(train, model = app.state.balance.trains[train.modelId]) {
+  return (trainCompositionSpec(train, model)?.variants || []).filter(variant => compositionVariantUnlockedForClient(variant, model));
+}
+
+function selectedCompositionVariant(train, model = app.state.balance.trains[train.modelId]) {
+  const spec = trainCompositionSpec(train, model);
+  const variants = trainCompositionVariants(train, model);
+  if (!variants.length) return null;
+  const composition = train?.composition || {};
+  const selectedId = spec.mode === 'freight_loco' ? composition.freightVariant : composition.passengerVariant;
+  return variants.find(v => v.id === selectedId) || variants[0] || null;
+}
+
+function previewOperatingProfile(train, model = app.state.balance.trains[train.modelId]) {
+  const spec = trainCompositionSpec(train, model);
+  const c = train?.composition || {};
+  const profile = {
+    capacity: Number(model?.capacity || 0),
+    freight: Number(model?.freight || 0),
+    speed: Number(model?.speed || 0),
+    energy: Number(model?.energy || 0),
+    maintenance: Number(model?.maintenance || 0),
+    reliability: Number(model?.reliability || 0),
+    comfort: Number(model?.comfort || 0)
+  };
+  if (spec.mode === 'multiple_unit') {
+    const defaultUnits = spec.powerUnits.default;
+    const ratio = Number(c.powerUnits || defaultUnits) / Math.max(1, defaultUnits);
+    profile.capacity = Math.max(0, Math.round(profile.capacity * ratio));
+    profile.freight = Math.max(0, Math.round(profile.freight * ratio));
+    profile.speed = Math.max(35, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.015)));
+    profile.energy = round(profile.energy * ratio * (0.95 + ratio * 0.05));
+    profile.maintenance = round(profile.maintenance * ratio * (0.92 + ratio * 0.08));
+    profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.015, 0.45, 0.995);
+    profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.08, 1);
+    return profile;
+  }
+  if (spec.mode === 'passenger_loco') {
+    const variant = selectedCompositionVariant(train, model) || { stats: {}, capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0 };
+    const stats = variant.stats || variant;
+    const defaultCars = spec.passengerCars.default;
+    const ratio = Number(c.passengerCars || defaultCars) / Math.max(1, defaultCars);
+    profile.capacity = Math.max(0, Math.round(profile.capacity * ratio));
+    profile.freight = Math.max(0, Math.round((model?.freight || 0) * Math.min(1.2, 0.65 + Number(c.passengerCars || defaultCars) * 0.08)));
+    profile.speed = Math.max(30, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.03)));
+    profile.energy = round(profile.energy * (0.72 + ratio * 0.28 + Math.max(0, ratio - 1) * 0.08));
+    profile.maintenance = round(profile.maintenance * (0.76 + ratio * 0.24 + Math.max(0, ratio - 1) * 0.05));
+    profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.02, 0.45, 0.995);
+    profile.comfort = clamp(profile.comfort + Math.min(0.06, Math.max(0, ratio - 1) * 0.015), 0.08, 1);
+    profile.capacity = Math.max(0, Math.round(profile.capacity * (stats.capacityMultiplier || 1)));
+    profile.speed = Math.max(30, Math.round(profile.speed * (stats.speedMultiplier || 1)));
+    profile.energy = round(profile.energy * (stats.energyMultiplier || 1));
+    profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
+    profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
+    profile.comfort = clamp(profile.comfort + (stats.comfortDelta || 0), 0.08, 1);
+    return profile;
+  }
+  const variant = selectedCompositionVariant(train, model) || { stats: {} };
+  const stats = variant.stats || variant;
+  const defaultWagons = spec.freightCars.default;
+  const ratio = Number(c.freightCars || defaultWagons) / Math.max(1, defaultWagons);
+  profile.freight = Math.max(0, Math.round((model?.freight || 0) * ratio));
+  profile.capacity = Math.max(0, Math.round((model?.capacity || 0) * Math.max(0.4, 1 - Math.max(0, ratio - 1) * 0.18)));
+  profile.speed = Math.max(25, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.035)));
+  profile.energy = round(profile.energy * (0.7 + ratio * 0.3 + Math.max(0, ratio - 1) * 0.1));
+  profile.maintenance = round(profile.maintenance * (0.74 + ratio * 0.26 + Math.max(0, ratio - 1) * 0.06));
+  profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.022, 0.45, 0.995);
+  profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.05, 1);
+  profile.freight = Math.max(0, Math.round(profile.freight * (stats.capacityMultiplier || 1)));
+  profile.speed = Math.max(25, Math.round(profile.speed * (stats.speedMultiplier || 1)));
+  profile.energy = round(profile.energy * (stats.energyMultiplier || 1));
+  profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
+  profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
+  return profile;
+}
+
+function deriveCompositionSummary(train) {
+  const c = train?.composition || {};
+  const spec = trainCompositionSpec(train);
+  const variant = selectedCompositionVariant(train);
+  if (spec.mode === 'multiple_unit') return `${c.powerUnits || spec.powerUnits?.default || 1} engin(s) moteur(s)`;
+  if (spec.mode === 'freight_loco') return `${c.freightCars || spec.freightCars?.default || 0} wagon(s) · ${variant?.shortLabel || 'Fret'}`;
+  return `${c.passengerCars || spec.passengerCars?.default || 0} voiture(s) · ${variant?.shortLabel || 'Voyageurs'}`;
+}
+
+function renderCompositionPart(type, src, alt = '') {
+  return `<span class="composition-part composition-${type}"><img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy"></span>`;
+}
+
+function renderTrainCompositionStrip(train, model, size = 'large') {
+  const spec = trainCompositionSpec(train, model);
+  const c = train?.composition || {};
+  const variant = selectedCompositionVariant(train, model);
+  const parts = [];
+  if (spec.mode === 'multiple_unit') {
+    const count = Math.max(1, Number(c.powerUnits || 1));
+    for (let i = 0; i < count; i += 1) parts.push(renderCompositionPart('power', COMPOSITION_ART.power, model.name));
+  } else if (spec.mode === 'freight_loco') {
+    const wagonArt = variant?.asset || COMPOSITION_ART.wagon;
+    parts.push(renderCompositionPart('engine', COMPOSITION_ART.power, model.name));
+    const count = Math.max(1, Number(c.freightCars || spec.freightCars?.default || 2));
+    for (let i = 0; i < count; i += 1) parts.push(renderCompositionPart('wagon', wagonArt, variant?.name || 'Wagon fret'));
+  } else {
+    const coachArt = variant?.asset || COMPOSITION_ART.coach;
+    parts.push(renderCompositionPart('engine', COMPOSITION_ART.power, model.name));
+    const count = Math.max(1, Number(c.passengerCars || spec.passengerCars?.default || 1));
+    for (let i = 0; i < count; i += 1) parts.push(renderCompositionPart('coach', coachArt, variant?.name || 'Voiture voyageurs'));
+  }
+  return `<div class="composition-strip ${size}">${parts.join('')}</div>`;
+}
+
+function renderCompositionModeTabs(train, model) {
+  const spec = trainCompositionSpec(train, model);
+  if (!spec.availableModes || spec.availableModes.length <= 1) return '';
+  const labels = { passenger_loco: 'Voitures voyageurs', freight_loco: 'Wagons de marchandises' };
+  return `
+    <div class="composition-mode-tabs">
+      ${spec.availableModes.map(mode => `<button type="button" class="composition-mode-tab ${spec.mode === mode ? 'active' : ''}" data-comp-mode="${mode}" data-id="${train.id}">${labels[mode] || mode}</button>`).join('')}
+    </div>`;
+}
+
+function renderCompositionVariantPicker(train, model) {
+  const spec = trainCompositionSpec(train, model);
+  const variants = trainCompositionVariants(train, model);
+  if (!variants.length) return '';
+  const current = selectedCompositionVariant(train, model);
+  const inputName = spec.mode === 'freight_loco' ? 'compFreightVariant' : 'compPassengerVariant';
+  const heading = spec.mode === 'freight_loco' ? 'Type de wagon' : 'Type de voiture';
+  const intro = spec.mode === 'freight_loco'
+    ? 'Choisis la famille de wagons à exploiter. Chaque type détermine la marchandise prioritaire, la charge utile et la valeur de transport.'
+    : 'Choisis la famille de voitures à accrocher à la locomotive. Chaque variante modifie capacité, confort, vitesse commerciale et coût d’exploitation.';
+
+  return `
+    <div class="composition-variant-section">
+      <div class="composition-variant-heading">
+        <strong>${heading}</strong>
+        <span class="small muted">${intro}</span>
+        <span class="small muted">D’autres variantes apparaissent à l’époque suivante après les recherches dédiées.</span>
+      </div>
+      <div class="composition-variant-grid">
+        ${variants.map(variant => {
+          const selected = current?.id === variant.id;
+          const stats = variant.stats || {};
+          const statRows = spec.mode === 'freight_loco'
+            ? [
+                renderVariantStatRow('Charge utile', variantMetricValue(stats.capacityMultiplier || 1), (stats.capacityMultiplier || 1) >= 1 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Valeur transportée', variantMetricValue(stats.revenueMultiplier || 1), (stats.revenueMultiplier || 1) >= 1 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Vitesse', variantMetricValue(stats.speedMultiplier || 1), (stats.speedMultiplier || 1) >= 1 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Coût maintenance', variantMetricValue(stats.maintenanceMultiplier || 1), (stats.maintenanceMultiplier || 1) <= 1 ? 'good-text' : 'warn-text')
+              ].join('')
+            : [
+                renderVariantStatRow('Capacité', variantMetricValue(stats.capacityMultiplier || 1), (stats.capacityMultiplier || 1) >= 1 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Confort', variantMetricValue(1, stats.comfortDelta || 0, 'delta'), (stats.comfortDelta || 0) >= 0 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Vitesse', variantMetricValue(stats.speedMultiplier || 1), (stats.speedMultiplier || 1) >= 1 ? 'good-text' : 'warn-text'),
+                renderVariantStatRow('Coût maintenance', variantMetricValue(stats.maintenanceMultiplier || 1), (stats.maintenanceMultiplier || 1) <= 1 ? 'good-text' : 'warn-text')
+              ].join('');
+          return `
+            <label class="composition-variant-card">
+              <input type="radio" name="${escapeAttr(inputName)}" value="${escapeAttr(variant.id)}" ${selected ? 'checked' : ''}>
+              <div class="composition-variant-thumb">
+                <img src="${escapeAttr(variant.asset || '')}" alt="${escapeAttr(variant.name)}" loading="lazy">
+              </div>
+              <div class="composition-variant-copy">
+                <div class="composition-variant-title-row">
+                  <strong>${escapeHtml(variant.name)}</strong>
+                  ${variant.cargoType ? `<span class="tag">${escapeHtml(variant.cargoType)}</span>` : ''}
+                </div>
+                <p class="small muted">${escapeHtml(variant.description || '')}</p>
+                <div class="composition-variant-stats">${statRows}</div>
+              </div>
+            </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function trainCurrentLine(trainId) {
+
+  return app.state.me.lines.find(l => l.active && l.trainId === trainId) || null;
+}
+
+function renderCompositionTrainListItem(train) {
+  const model = app.state.balance.trains[train.modelId];
+  const profile = previewOperatingProfile(train, model);
+  const active = app.selectedCompositionTrainId === train.id;
+  const line = trainCurrentLine(train.id);
+  return `
+    <button type="button" class="composition-train-item ${active ? 'active' : ''}" data-action="select-composition-train" data-id="${train.id}">
+      <div class="composition-train-head">
+        <strong>${escapeHtml(model.name)}</strong>
+        <span class="tag">${line ? escapeHtml(line.code) : 'Libre'}</span>
+      </div>
+      <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
+      <div class="composition-mini-stats">
+        <b>${formatInt(profile.capacity)} voy.</b>
+        <b>${formatInt(profile.freight)} t</b>
+      </div>
+    </button>
+  `;
+}
+
+
+function compositionProfileWithChange(train, model, spec, key, value) {
+  const clone = {
+    ...train,
+    composition: {
+      ...(train.composition || {}),
+      mode: spec.mode,
+      [key]: value
+    }
+  };
+  return previewOperatingProfile(clone, model);
+}
+
+function profileDeltaValue(next, current, key) {
+  return Number(next?.[key] || 0) - Number(current?.[key] || 0);
+}
+
+function deltaSigned(value, suffix = '', decimals = 0) {
+  const n = Number(value || 0);
+  const abs = Math.abs(n);
+  const rounded = decimals ? round(abs) : Math.round(abs);
+  return `${n > 0 ? '+' : n < 0 ? '-' : '±'}${rounded}${suffix}`;
+}
+
+function compositionDeltaClass(value, positiveIsGood = true) {
+  const n = Number(value || 0);
+  if (Math.abs(n) < 0.0001) return '';
+  return (positiveIsGood ? n > 0 : n < 0) ? 'good-text' : 'warn-text';
+}
+
+function renderCompositionDeltaItem(label, value, suffix = '', positiveIsGood = true, decimals = 0) {
+  return `
+    <div class="composition-delta-item">
+      <span>${escapeHtml(label)}</span>
+      <b class="${compositionDeltaClass(value, positiveIsGood)}">${escapeHtml(deltaSigned(value, suffix, decimals))}</b>
+    </div>`;
+}
+
+function renderCompositionMarginalImpact(train, model, spec, profile) {
+  let key = '';
+  let label = '';
+  let current = 0;
+  let max = 0;
+
+  if (spec.mode === 'multiple_unit') {
+    key = 'powerUnits';
+    label = '+1 engin moteur';
+    current = Number(train.composition?.powerUnits || spec.powerUnits?.default || 1);
+    max = Number(spec.powerUnits?.max || current);
+  } else if (spec.mode === 'freight_loco') {
+    key = 'freightCars';
+    label = '+1 wagon fret';
+    current = Number(train.composition?.freightCars || spec.freightCars?.default || 0);
+    max = Number(spec.freightCars?.max || current);
+  } else {
+    key = 'passengerCars';
+    label = '+1 voiture voyageurs';
+    current = Number(train.composition?.passengerCars || spec.passengerCars?.default || 0);
+    max = Number(spec.passengerCars?.max || current);
+  }
+
+  if (!key || current >= max) {
+    return `
+      <div class="composition-delta-card">
+        <div>
+          <strong>Impact marginal</strong>
+          <p class="small muted">La composition est déjà au maximum autorisé pour ce matériel.</p>
+        </div>
+      </div>`;
+  }
+
+  const nextProfile = compositionProfileWithChange(train, model, spec, key, current + 1);
+  const capacityDelta = profileDeltaValue(nextProfile, profile, 'capacity');
+  const freightDelta = profileDeltaValue(nextProfile, profile, 'freight');
+  const speedDelta = profileDeltaValue(nextProfile, profile, 'speed');
+  const energyDelta = profileDeltaValue(nextProfile, profile, 'energy');
+  const maintenanceDelta = profileDeltaValue(nextProfile, profile, 'maintenance');
+  const reliabilityDelta = profileDeltaValue(nextProfile, profile, 'reliability') * 100;
+  const comfortDelta = profileDeltaValue(nextProfile, profile, 'comfort') * 100;
+
+  return `
+    <div class="composition-delta-card">
+      <div class="composition-delta-head">
+        <strong>Impact de ${escapeHtml(label)}</strong>
+        <span class="small muted">Comparaison immédiate avant enregistrement.</span>
+      </div>
+      <div class="composition-delta-grid">
+        ${renderCompositionDeltaItem('Voyageurs', capacityDelta, '', true)}
+        ${renderCompositionDeltaItem('Fret', freightDelta, ' t', true)}
+        ${renderCompositionDeltaItem('Vitesse', speedDelta, ' km/h', true)}
+        ${renderCompositionDeltaItem('Énergie', energyDelta, '', false, 1)}
+        ${renderCompositionDeltaItem('Maintenance', maintenanceDelta, '', false, 2)}
+        ${renderCompositionDeltaItem('Fiabilité', reliabilityDelta, '%', true, 1)}
+        ${renderCompositionDeltaItem('Confort', comfortDelta, '%', true, 1)}
+      </div>
+    </div>`;
+}
+
+function renderCompositionEditor(train) {
+  if (!train) return '<p class="muted">Sélectionne un train à configurer.</p>';
+  const model = app.state.balance.trains[train.modelId];
+  const spec = trainCompositionSpec(train, model);
+  const profile = previewOperatingProfile(train, model);
+  const composition = train.composition || {};
+  const line = trainCurrentLine(train.id);
+  const variant = selectedCompositionVariant(train, model);
+  let quantityControl = '';
+  let variantPanel = '';
+
+  if (spec.mode === 'multiple_unit') {
+    quantityControl = `
+      <div class="composition-control-box">
+        <div class="composition-control-head">
+          <strong>Nombre d'engins moteurs</strong>
+          <span class="small muted">Ajuste la longueur de rame.</span>
+        </div>
+        <div class="composition-control-row wide">
+          <input id="compPowerUnits" type="range" min="${spec.powerUnits.min}" max="${spec.powerUnits.max}" value="${composition.powerUnits || spec.powerUnits.default}">
+          <input id="compPowerUnitsValue" class="plain-input composition-number-input" type="number" min="${spec.powerUnits.min}" max="${spec.powerUnits.max}" value="${composition.powerUnits || spec.powerUnits.default}">
+        </div>
+      </div>`;
+  } else if (spec.mode === 'freight_loco') {
+    quantityControl = `
+      <div class="composition-control-box">
+        <div class="composition-control-head">
+          <strong>Nombre de wagons fret</strong>
+          <span class="small muted">Dose la capacité utile du convoi en fonction de la demande fret.</span>
+        </div>
+        <div class="composition-control-row wide">
+          <input id="compFreightCars" type="range" min="${spec.freightCars.min}" max="${spec.freightCars.max}" value="${composition.freightCars || spec.freightCars.default}">
+          <input id="compFreightCarsValue" class="plain-input composition-number-input" type="number" min="${spec.freightCars.min}" max="${spec.freightCars.max}" value="${composition.freightCars || spec.freightCars.default}">
+        </div>
+      </div>`;
+    variantPanel = renderCompositionVariantPicker(train, model);
+  } else {
+    quantityControl = `
+      <div class="composition-control-box">
+        <div class="composition-control-head">
+          <strong>Nombre de voitures voyageurs</strong>
+          <span class="small muted">Ajuste la capacité offerte sans surcadencer la ligne.</span>
+        </div>
+        <div class="composition-control-row wide">
+          <input id="compPassengerCars" type="range" min="${spec.passengerCars.min}" max="${spec.passengerCars.max}" value="${composition.passengerCars || spec.passengerCars.default}">
+          <input id="compPassengerCarsValue" class="plain-input composition-number-input" type="number" min="${spec.passengerCars.min}" max="${spec.passengerCars.max}" value="${composition.passengerCars || spec.passengerCars.default}">
+        </div>
+      </div>`;
+    variantPanel = renderCompositionVariantPicker(train, model);
+  }
+
+  return `
+    <div class="composition-workshop-shell" style="background-image: linear-gradient(180deg, rgba(4,10,22,.74), rgba(4,10,22,.92)), url('${COMPOSITION_ART.workshop}');">
+      <div class="fleet-card-heading">
+        <div>
+          <h2>Atelier de composition</h2>
+          <p class="muted small">Ajuste la longueur utile du train et sélectionne les voitures / wagons spécialisés pour façonner précisément les performances de la rame.</p>
+        </div>
+        <span class="tag">${line ? `Affecté à ${escapeHtml(line.code)}` : 'Train libre'}</span>
+      </div>
+
+      ${renderCompositionModeTabs(train, model)}
+
+      <div class="composition-editor-top">
+        <div class="composition-train-card">
+          ${renderTrainArt(model)}
+          <div>
+            <strong>${escapeHtml(model.name)}</strong>
+            <p class="small muted">${escapeHtml(deriveCompositionSummary(train))}</p>
+            <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'rame multiple' : spec.mode === 'freight_loco' ? 'locomotive + wagons' : 'locomotive + voitures'}</p>
+            ${variant ? `<p class="small muted">Variante active : <b>${escapeHtml(variant.name)}</b>${variant.cargoType ? ` · ${escapeHtml(variant.cargoType)}` : ''}</p>` : ''}
+          </div>
+        </div>
+        <div class="composition-capacity-card">
+          <b>Capacité réelle par train</b>
+          <span>${formatInt(profile.capacity)} voyageurs · ${formatInt(profile.freight)} t fret</span>
+          <span>${formatInt(profile.speed)} km/h · maintenance ${round(profile.maintenance)}</span>
+          <span>${Math.round(profile.reliability * 100)}% fiabilité · ${Math.round(profile.comfort * 100)}% confort</span>
+          ${variant ? `<span class="small muted">${escapeHtml(variant.description || '')}</span>` : ''}
+        </div>
+      </div>
+
+      ${renderTrainCompositionStrip(train, model, 'large')}
+
+      <div class="composition-stat-grid">
+        ${compositionMetric('Voyageurs / train', formatInt(profile.capacity), 'Nombre maximal de voyageurs transportés par train après prise en compte de la composition choisie.', profile.capacity >= (model.capacity || 0) ? 'good-text' : '')}
+        ${compositionMetric('Fret / train', `${formatInt(profile.freight)} t`, 'Tonnage maximal de fret transportable par train avec cette composition.', profile.freight >= (model.freight || 0) ? 'good-text' : '')}
+        ${compositionMetric('Vitesse commerciale', `${formatInt(profile.speed)} km/h`, 'Vitesse de référence retenue en exploitation. Elle influence le temps de rotation, la productivité et la capacité quotidienne.', '')}
+        ${compositionMetric('Fiabilité', `${Math.round(profile.reliability * 100)}%`, 'Probabilité de rouler sans incident majeur. Plus elle est basse, plus le risque de panne, retard et perte d’attractivité augmente.', profile.reliability >= 0.88 ? 'good-text' : '')}
+        ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, 'Qualité perçue du service par les voyageurs : agrément, image et standing. Le confort améliore l’attractivité des lignes voyageurs.', profile.comfort >= 0.75 ? 'good-text' : '')}
+        ${compositionMetric('Énergie', round(profile.energy), 'Consommation énergétique de référence pour cette composition. Une valeur plus élevée alourdit les coûts d’exploitation.', profile.energy <= (model.energy || 0) ? 'good-text' : 'warn-text')}
+      </div>
+
+      ${renderCompositionMarginalImpact(train, model, spec, profile)}
+
+      <div class="composition-controls refined-layout ${variantPanel ? 'has-variants' : ''}">
+        <div class="composition-controls-top">
+          ${quantityControl}
+          <div class="composition-save-box">
+            <p class="small muted">Impact ligne : capacité d’exploitation = composition × fréquence. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
+            <button class="primary" data-action="save-train-composition" data-id="${train.id}">Enregistrer la composition</button>
+          </div>
+        </div>
+        ${variantPanel ? `<div class="composition-variant-panel">${variantPanel}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderFleetCompositionPanel() {
+  const me = app.state.me;
+  if (!me.trains.length) {
+    return `<div class="card"><h2>Compositions</h2><p class="muted">Achète d’abord un train dans le catalogue pour accéder à l’atelier de composition.</p></div>`;
+  }
+  if (!me.trains.some(t => t.id === app.selectedCompositionTrainId)) {
+    app.selectedCompositionTrainId = me.trains[0].id;
+    localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+  }
+  const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || me.trains[0];
+  const configurable = me.trains.filter(t => !!t.compositionSpec).length;
+  const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
+
+  return `
+    <div class="fleet-composition-layout">
+      <div class="card fleet-kpi-card composition-kpi-card">
+        ${metric('Trains configurables', configurable)}
+        ${metric('Capacité moyenne', `${avgSeats} voy.`)}
+        ${metric('Sélection active', deriveCompositionSummary(selected), 'metric-value-selection')}
+        ${metric('Lignes actives', me.lines.filter(l => l.active).length)}
+      </div>
+
+      <div class="card composition-list-card">
+        <div class="fleet-card-heading">
+          <div>
+            <h2>Trains de la compagnie</h2>
+            <p class="muted small">Sélectionne un matériel pour ajuster sa composition visuelle et opérationnelle.</p>
+          </div>
+          <span class="tag">${me.trains.length} unité(s)</span>
+        </div>
+        <div class="composition-train-list">
+          ${me.trains.map(renderCompositionTrainListItem).join('')}
+        </div>
+      </div>
+
+      <div class="card composition-editor-card">
+        ${renderCompositionEditor(selected)}
+      </div>
+    </div>
+  `;
+}
+
+function renderFleet() {
+  const me = app.state.me;
+  const active = ['catalog', 'maintenance', 'composition'].includes(app.activeFleetSubtab) ? app.activeFleetSubtab : 'catalog';
+  const models = Object.values(app.state.balance.trains);
+  const available = models.filter(t => trainModelUnlocked(t));
+  const locked = models.filter(t => !trainModelUnlocked(t));
+  const inWorkshop = me.trains.filter(t => t.maintenance?.active).length;
+  const avgCondition = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + Number(t.condition || 0), 0) / me.trains.length * 100) : 0;
+  const heroTitle = active === 'catalog' ? 'Catalogue du matériel roulant' : active === 'maintenance' ? 'Maintenance du matériel' : 'Atelier de compositions';
+  const heroText = active === 'catalog'
+    ? 'Achète du matériel adapté à tes lignes : capacité, vitesse, énergie, confort, fret ou fiabilité.'
+    : active === 'maintenance'
+      ? 'Choisis une politique d’entretien et planifie les interventions pour éviter l’usure excessive du parc.'
+      : 'Allonge ou raccourcis les trains pour ajuster la capacité en plus de la fréquence : voitures voyageurs, wagons fret et engins moteurs.';
+
+  return `
+    ${renderSectionHero('PARC FERROVIAIRE', heroTitle, heroText, ART.tabs.fleet, ['Matériel', 'Atelier', 'Compositions'])}
+
+    <div class="fleet-workspace">
+      <div class="fleet-subtabs" role="tablist" aria-label="Parc ferroviaire">
+        <button type="button" data-fleet-subtab="catalog" class="${active === 'catalog' ? 'active' : ''}">
+          <span>Catalogue</span>
+          <b>${available.length} disponible(s)</b>
+        </button>
+        <button type="button" data-fleet-subtab="maintenance" class="${active === 'maintenance' ? 'active' : ''}">
+          <span>Maintenance</span>
+          <b>${inWorkshop} en atelier</b>
+        </button>
+        <button type="button" data-fleet-subtab="composition" class="${active === 'composition' ? 'active' : ''}">
+          <span>Compositions</span>
+          <b>${me.trains.length} train(s)</b>
+        </button>
+      </div>
+
+      ${active === 'catalog' ? renderFleetCatalogPanel(available, locked) : active === 'maintenance' ? renderFleetMaintenancePanel(avgCondition, inWorkshop) : renderFleetCompositionPanel()}
+    </div>
+  `;
+}
+
+function renderFleetCatalogPanel(available, locked) {
+  const me = app.state.me;
+  const models = Object.values(app.state.balance.trains);
+  const byEpoch = {};
+  for (const model of models) (byEpoch[model.unlockEpoch] ||= []).push(model);
+
+  return `
+    <div class="fleet-catalog-layout">
+      <div class="card fleet-kpi-card">
+        ${metric('Budget achat', money(me.cash))}
+        ${metric('Matériels achetables', available.length)}
+        ${metric('Matériels verrouillés', locked.length)}
+        ${metric('Époque actuelle', me.eraName)}
+      </div>
+
+      <div class="card rolling-stock-catalog fleet-catalog-card">
+        <div class="fleet-card-heading">
+          <div>
+            <h2>Catalogue de matériel roulant</h2>
+            <p class="muted small">Les cartes sont classées par époque. Utilise-les comme choix de stratégie : économique, grande capacité, fret, vitesse, confort ou énergie propre.</p>
+          </div>
+          <span class="tag">${models.length} modèles</span>
+        </div>
+
+        <div class="era-catalog">
+          ${Object.entries(byEpoch).map(([epoch, list]) => `
+            <section class="era-block fleet-era-block">
+              <div class="era-title">
+                <strong>${escapeHtml(trainEraLabel(Number(epoch)))}</strong>
+                <span class="tag">${list.length} matériels</span>
+              </div>
+              <div class="train-card-grid fleet-catalog-grid">
+                ${list.sort((a,b) => a.price - b.price).map(model => renderTrainCatalogItem(model, trainModelUnlocked(model))).join('')}
+              </div>
+            </section>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
+  const me = app.state.me;
+  const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && l.trainId === t.id)).length;
+  const assigned = me.trains.filter(t => me.lines.some(l => l.active && l.trainId === t.id)).length;
+
+  return `
+    <div class="fleet-maintenance-layout">
+      <div class="card fleet-kpi-card">
+        ${metric('État moyen', `${avgCondition}%`, avgCondition >= 70 ? 'good-text' : avgCondition >= 45 ? '' : 'bad-text')}
+        ${metric('En atelier', inWorkshop)}
+        ${metric('Affectés', assigned)}
+        ${metric('Libres', free)}
+      </div>
+
+      ${renderMaintenancePolicyCard()}
+
+      <div class="card fleet-owned-card">
+        <div class="fleet-card-heading">
+          <div>
+            <h2>Parc de la compagnie</h2>
+            <p class="muted small">Lance les interventions depuis les cartes de matériel. Un train en maintenance est immobilisé pendant la durée indiquée.</p>
+          </div>
+          <span class="tag">${me.trains.length} unité(s)</span>
+        </div>
+        <div class="owned-train-grid fleet-owned-grid">
+          ${me.trains.map(t => renderOwnedTrain(t)).join('') || '<p class="muted">Aucun matériel.</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMaintenancePolicyCard() {
+  const me = app.state.me;
+  const policies = app.state.balance.maintenancePolicies || {};
+  return `
+    <div class="card fleet-policy-card">
+      <div class="fleet-card-heading">
+        <div>
+          <h2>Politique de maintenance</h2>
+          <p class="muted small">La politique influence l’usure, les coûts récurrents et la fiabilité du parc en exploitation.</p>
+        </div>
+        <span class="tag good">${escapeHtml(policies[me.maintenancePolicy]?.name || 'Active')}</span>
+      </div>
+      <div class="maintenance-policy-grid">
+        ${Object.values(policies).map(policy => `
+          <article class="maintenance-policy-card ${me.maintenancePolicy === policy.id ? 'active' : ''}">
+            <div class="policy-head">
+              <strong>${escapeHtml(policy.name)}</strong>
+              <span class="tag ${me.maintenancePolicy === policy.id ? 'good' : ''}">${me.maintenancePolicy === policy.id ? 'Active' : 'Choix'}</span>
+            </div>
+            <p class="small muted">${escapeHtml(policy.description)}</p>
+            <div class="policy-stats">
+              <div><span>Coût</span><b>×${round(policy.costMultiplier)}</b></div>
+              <div><span>Usure</span><b>×${round(policy.wearMultiplier)}</b></div>
+              <div><span>Fiabilité</span><b>${policy.reliabilityBonus >= 0 ? '+' : ''}${Math.round(policy.reliabilityBonus * 100)} pts</b></div>
+            </div>
+            <button data-action="maintenance-policy" data-id="${policy.id}" ${tooltipAttr(maintenancePolicyTooltip(policy))} ${me.maintenancePolicy === policy.id ? 'disabled' : ''}>${me.maintenancePolicy === policy.id ? 'Politique active' : 'Appliquer'}</button>
+          </article>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function trainModelRequiredTechLevel(model) {
+  return Math.max(1, Math.floor(Number(model.requiredTechLevel || 1)));
+}
+
+function trainModelResearchRequirementLabel(model) {
+  if (!model.requiredTech) return 'Aucune recherche';
+  return `${techNodeTitle(model.requiredTech)} niv. ${trainModelRequiredTechLevel(model)}`;
+}
+
+function trainModelEpochRequirementChip(model) {
+  const requiredEpoch = Math.max(0, Number(model.unlockEpoch || 0));
+  const currentEpoch = Math.max(0, Number(app.state.me?.epoch || 0));
+  const ok = currentEpoch >= requiredEpoch;
+  const label = trainEraLabel(requiredEpoch);
+  const tip = ok
+    ? `Ère requise atteinte : ${label}.`
+    : `Ère requise : ${label}. Ère actuelle : ${trainEraLabel(currentEpoch)}.`;
+  return `<span class="research-prereq train-prereq-chip ${ok ? 'met' : 'missing'}" ${tooltipAttr(tip)}><small>Ère</small>${escapeHtml(label)}</span>`;
+}
+
+function trainModelResearchRequirementChip(model) {
+  if (!model.requiredTech) {
+    return '<span class="research-prereq train-prereq-chip met"><small>Recherche</small>Aucune</span>';
+  }
+  const requiredLevel = trainModelRequiredTechLevel(model);
+  const currentLevel = techLevel(model.requiredTech);
+  const ok = currentLevel >= requiredLevel;
+  const techTitle = techNodeTitle(model.requiredTech);
+  const label = `${techTitle} · niv. ${formatInt(currentLevel)}/${formatInt(requiredLevel)}`;
+  const tip = ok
+    ? `${techTitle} niveau ${requiredLevel} atteint.`
+    : `${techTitle} requis au niveau ${requiredLevel}. Niveau actuel : ${currentLevel}.`;
+  if (ok) {
+    return `<span class="research-prereq train-prereq-chip met" ${tooltipAttr(tip)}><small>Recherche</small>${escapeHtml(label)}</span>`;
+  }
+  return `<button type="button" class="research-prereq train-prereq-chip missing" data-action="focus-research" data-id="${escapeAttr(model.requiredTech)}" ${tooltipAttr(tip)}><small>Recherche</small>${escapeHtml(label)}</button>`;
+}
+
+
+function trainResearchEra(model) {
+  return Math.max(1, Number(model?.unlockEpoch || 0) + 1);
+}
+
+function normalizeResearchEffectTextClient(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseResearchNumericEffectsClient(effectText) {
+  const text = normalizeResearchEffectTextClient(effectText);
+  if (!text || text.includes('niveaux suivants') || text.includes('aucune fonctionnalite')) return [];
+  const regex = /([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(portee|autonomie|vitesse max|fiabilite|consommation|impact environnemental|rentabilite)/g;
+  const effects = [];
+  let match;
+  while ((match = regex.exec(text))) {
+    const sign = match[1] === '-' ? -1 : 1;
+    const rawValue = Number(String(match[2]).replace(',', '.')) / 100;
+    const label = match[3];
+    const kind = (
+      label === 'vitesse max' ? 'speed' :
+      label === 'fiabilite' ? 'reliability' :
+      label === 'consommation' ? 'energy' :
+      label === 'impact environnemental' ? 'environment' :
+      label === 'rentabilite' ? 'profitability' :
+      label === 'autonomie' ? 'autonomy' :
+      'range'
+    );
+    effects.push({ kind, value: sign * rawValue });
+  }
+  return effects;
+}
+
+function researchNodesForEraClient(era) {
+  const nodes = [];
+  for (const group of Object.values(app.state?.balance?.techTree || {})) {
+    for (const node of group.nodes || []) {
+      if (Number(node.era || 0) === Number(era)) nodes.push(node);
+    }
+  }
+  return nodes;
+}
+
+function trainInheritedResearchBonus(model) {
+  const modifiers = { speed: 1, range: 1, autonomy: 1, reliability: 1, energy: 1, environment: 1, profitability: 1 };
+  const sources = [];
+  for (const node of researchNodesForEraClient(trainResearchEra(model))) {
+    const level = techLevel(node.id);
+    if (level <= 0) continue;
+    const units = researchLevelEffectUnitsClient(level);
+    let nodeHasEffect = false;
+    for (const effectText of node.improves || []) {
+      for (const effect of parseResearchNumericEffectsClient(effectText)) {
+        modifiers[effect.kind] *= Math.max(0.08, 1 + effect.value * units);
+        nodeHasEffect = true;
+      }
+    }
+    if (nodeHasEffect) sources.push({ title: node.title, level });
+  }
+  return { modifiers, sources };
+}
+
+function signedPercentFromMultiplier(multiplier, inverse = false) {
+  const value = inverse ? (1 - multiplier) : (multiplier - 1);
+  const pct = Math.round(value * 1000) / 10;
+  if (Math.abs(pct) < 0.05) return '';
+  return `${pct > 0 ? '+' : ''}${pct.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}%`;
+}
+
+function trainEffectiveCatalogRange(model) {
+  const { modifiers } = trainInheritedResearchBonus(model);
+  const multiplier = model.energyType === 'battery'
+    ? modifiers.range * modifiers.autonomy
+    : modifiers.range;
+  return Math.max(1, Math.round(Number(model.range || 0) * multiplier));
+}
+
+function renderTrainInheritedResearchBonuses(model) {
+  const { modifiers, sources } = trainInheritedResearchBonus(model);
+  const autonomyOrRange = model.energyType === 'battery'
+    ? ['Autonomie', modifiers.autonomy * modifiers.range, false]
+    : ['Portée', modifiers.range, false];
+  const items = [
+    autonomyOrRange,
+    ['Vitesse max', modifiers.speed, false],
+    ['Fiabilité', modifiers.reliability, false],
+    ['Consommation', modifiers.energy, true],
+    ['Impact env.', modifiers.environment, true],
+    ['Rentabilité', modifiers.profitability, false]
+  ]
+    .map(([label, multiplier, inverse]) => ({ label, value: signedPercentFromMultiplier(multiplier, inverse) }))
+    .filter(item => item.value);
+
+  if (!items.length) {
+    return `
+      <div class="train-research-bonus-panel empty">
+        <div class="train-research-bonus-title">Bonus recherches hérités</div>
+        <span>Aucun bonus actif pour cette ère</span>
+      </div>
+    `;
+  }
+
+  const sourceLabel = sources.slice(0, 3).map(src => `${src.title} niv. ${src.level}`).join(' · ');
+  const more = sources.length > 3 ? ` · +${sources.length - 3}` : '';
+  return `
+    <div class="train-research-bonus-panel">
+      <div class="train-research-bonus-title">Bonus recherches hérités</div>
+      <div class="train-research-bonus-grid">
+        ${items.map(item => `<span><small>${escapeHtml(item.label)}</small><b>${escapeHtml(item.value)}</b></span>`).join('')}
+      </div>
+      <p>${escapeHtml(sourceLabel + more)}</p>
+    </div>
+  `;
+}
+
+function renderTrainRequirementPills(model) {
+  return `
+    <div class="train-prereq-panel">
+      <div class="train-prereq-title">Prérequis</div>
+      <div class="research-prereqs train-requirements compact">
+        ${trainModelEpochRequirementChip(model)}
+        ${trainModelResearchRequirementChip(model)}
+      </div>
+    </div>
+  `;
+}
+
+function renderTrainCatalogItem(model, buyable) {
+  const reason = trainModelLockedReason(model);
+  const effectiveRange = trainEffectiveCatalogRange(model);
+  return `
+    <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
+      ${renderTrainArt(model)}
+      <div class="train-card-body">
+        <div class="item-title">
+          <strong>${escapeHtml(model.name)}</strong>
+          <span class="tag ${buyable ? 'good' : 'warn'}">${buyable ? money(model.price) : 'À débloquer'}</span>
+        </div>
+        <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
+        <div class="train-stat-grid">
+          ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '')}
+          ${renderTrainStat('Portée', `${formatInt(effectiveRange)} km`, effectiveRange / 1400, effectiveRange >= 900 ? 'good' : '')}
+          ${renderTrainStat('Voyageurs', `${model.capacity}`, model.capacity / 1100, model.capacity >= 650 ? 'good' : '')}
+          ${renderTrainStat('Fret', `${model.freight} t`, model.freight / 2200, model.freight >= 900 ? 'good' : '')}
+          ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, model.reliability >= 0.92 ? 'good' : '')}
+          ${renderTrainStat('Confort', `${Math.round(model.comfort * 100)}%`, model.comfort, model.comfort >= 0.8 ? 'good' : '')}
+          ${renderTrainStat('Maint./h', maintenanceHourlyRange(model), 1 - Math.min(1, model.maintenance / 1.3), model.maintenance <= 0.45 ? 'good' : 'warn')}
+        </div>
+        ${renderTrainRequirementPills(model)}
+        ${renderTrainInheritedResearchBonuses(model)}
+        <div class="actions">
+          <button class="primary" data-action="buy-train" data-id="${model.id}" ${tooltipAttr(`Achète ${model.name}. Coût : ${money(model.price)}. ${model.description || ''} Vitesse : ${model.speed} km/h. Capacité : ${model.capacity} voyageurs. Fret : ${model.freight} t. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+
+function renderOwnedTrain(train) {
+  const model = app.state.balance.trains[train.modelId];
+  const line = app.state.me.lines.find(l => l.active && l.trainId === train.id);
+  const maint = train.maintenance || {};
+  const inMaint = !!maint.active;
+  const actions = app.state.balance.maintenanceActions || {};
+  const condition = Math.round((train.condition || 0) * 100);
+  const conditionClass = condition > 70 ? 'good' : condition > 40 ? 'warn' : 'bad';
+  const profile = previewOperatingProfile(train, model);
+  const sellTip = line
+    ? 'Impossible de vendre : ce train est affecté à une ligne active.'
+    : inMaint
+      ? 'Impossible de vendre : ce train est en maintenance.'
+      : `Vend ce train d’occasion. Valeur influencée par son état (${condition}%).`;
+
+  return `
+    <div class="list-item owned-train-card">
+      ${renderTrainArt(model)}
+      <div class="owned-train-body">
+        <div class="item-title">
+          <strong>${escapeHtml(model.name)}</strong>
+          <span class="tag ${inMaint ? 'warn' : conditionClass}">${inMaint ? `Atelier ${formatCycles(maint.daysLeft)}` : `État ${condition}%`}</span>
+        </div>
+        <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
+        <div class="progress"><i style="width:${condition}%"></i></div>
+        <div class="kv" style="margin-top:8px">
+          <span>Affectation</span><b>${line ? escapeHtml(line.code) : 'Libre'}</b>
+          <span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b>
+          <span>Usure historique</span><b>${formatInt(train.age)} cycles</b>
+          <span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b>
+          <span>Capacité</span><b>${formatInt(profile.capacity)} voy. / ${formatInt(profile.freight)} t</b>
+          <span>Portée</span><b>${formatInt(profile.range)} km</b>
+          <span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, line ? line.frequency : 1, train.condition)}</b>
+          <span>Dernier service</span><b>${maint.lastServiceDay || train.acquiredDay ? 'Effectué' : '-'}</b>
+        </div>
+        ${renderTrainInheritedResearchBonuses(model)}
+        <div class="owned-train-composition-preview">
+          ${renderTrainCompositionStrip(train, model, 'mini')}
+        </div>
+        ${inMaint ? `
+          <p class="small muted">Le train est immobilisé. Toute ligne qui l’utilise reste ouverte mais ne produit rien jusqu’à la fin de l’intervention.</p>
+        ` : `
+          <div class="maintenance-actions">
+            ${Object.values(actions).map(action => renderMaintenanceButton(train, model, action)).join('')}
+          </div>
+        `}
+        <div class="actions">
+          <button data-action="open-composition" data-id="${train.id}">Composition</button>
+          <button class="danger" data-action="sell-train" data-id="${train.id}" ${tooltipAttr(sellTip)} ${line || inMaint ? 'disabled' : ''}>Vendre</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMaintenanceButton(train, model, action) {
+  const locked = maintenanceActionLockedReason(action);
+  const preview = maintenancePreview(train, model, action);
+  const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
+  const disabled = locked || targetCondition <= train.condition + 0.005;
+  return `
+    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : immobilise le train pendant l’intervention, puis remonte son état et réduit les risques de retard/panne.`)} ${disabled ? 'disabled' : ''}>
+      <strong>${escapeHtml(action.name)}</strong>
+      <span>${preview}</span>
+      ${locked ? `<em>${escapeHtml(locked)}</em>` : ''}
+    </button>
+  `;
+}
+
+function renderStations() {
+  const me = app.state.me;
+  const selected = app.selectedStation ? station(app.selectedStation) : null;
+  const stationSearchValue = stationSearchDisplayValue(selected);
+  const ownedEntries = Object.entries(me.stations || {});
+  const collapsed = app.ownedStationsCollapsed;
+  return `
+    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs, les ateliers et les dépôts tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Ateliers'])}
+
+    <div class="card">
+      <h2>Gare sélectionnée</h2>
+      <div class="station-management-search">
+        <div class="station-search-header">
+          <label class="station-search-label">Rechercher une gare à améliorer
+            <div class="station-search" data-role="station">
+              <input id="lineStationSearch" class="station-search-input" data-role="station" value="${escapeAttr(stationSearchValue)}" placeholder="Ex : Caen, Bayeux, Lisieux..." autocomplete="off">
+              <input id="lineStation" type="hidden" value="${escapeAttr(app.stationSearch.candidateId || app.selectedStation || '')}">
+              <div id="lineStationSuggestions" class="station-suggestions" role="listbox"></div>
+            </div>
+          </label>
+          <label class="station-sort-inline">Tri des villes
+            <select id="stationSort">
+              ${stationSortOptions(app.stationSortMode)}
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="selectedStationPanel" style="margin-top:10px">
+        ${renderSelectedStationPanel()}
+      </div>
+    </div>
+
+    <div class="card station-owned-card ${collapsed ? 'collapsed' : ''}">
+      <button type="button" class="research-era-heading station-owned-heading" data-action="toggle-owned-stations" aria-expanded="${collapsed ? 'false' : 'true'}">
+        <span class="research-era-title">
+          <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          <span>Gares exploitées</span>
+        </span>
+        <span class="research-era-meta">${ownedEntries.length} gare${ownedEntries.length > 1 ? 's' : ''} · ${collapsed ? 'Déplier' : 'Réduire'}</span>
+      </button>
+      ${collapsed ? '' : `<div class="list station-owned-list">
+        ${ownedEntries.map(([id, asset]) => renderStationAsset(station(id), asset)).join('') || '<p class="muted">Aucune gare exploitée.</p>'}
+      </div>`}
+    </div>
+  `;
+}
+
+function renderSelectedStationPanel() {
+  const selected = app.selectedStation ? station(app.selectedStation) : null;
+  if (!selected) return '<p class="muted">Écris le nom d’une gare pour l’afficher, ou clique une gare sur la carte.</p>';
+  return renderSelectedStation(selected);
+}
+
+function updateSelectedStationPanel() {
+  const panel = $('#selectedStationPanel');
+  if (panel) panel.innerHTML = renderSelectedStationPanel();
+}
+
+function renderSelectedStation(s) {
+  const owner = stationOwnerClient(s.id);
+  const ownedByMe = owner?.player?.id === app.state.me.id;
+  const asset = ownedByMe ? app.state.me.stations[s.id] : owner?.asset || null;
+  const preview = asset || { level: 1, commerce: 0, maintenance: 0, depot: false, electrified: false };
+  const cash = app.state.me.cash;
+  const lockedByOwner = owner && !ownedByMe;
+  const unowned = !owner;
+  const acquisitionCost = stationAcquisitionCost(s);
+  const upgrades = [
+    { kind: 'level', label: asset ? `Niveau +1` : 'Acheter', maxed: asset ? preview.level >= 5 : false, cost: asset ? stationUpgradeCost(s, preview, 'level') : acquisitionCost },
+    { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') },
+    { kind: 'maintenance', label: 'Atelier', maxed: unowned || preview.maintenance >= 4, cost: stationUpgradeCost(s, preview, 'maintenance') },
+    { kind: 'depot', label: 'Dépôt', maxed: unowned || !!preview.depot, cost: stationUpgradeCost(s, preview, 'depot') }
+  ];
+  return `
+    <div class="list-item selected-station-card">
+      <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag">${owner ? `Propriétaire : ${escapeHtml(owner.player.name)}` : 'Ville libre'}</span></div>
+      <div class="kv">
+        <span>Demande voyageurs</span><b>${formatInt(s.baseDemand)}</b>
+        <span>Demande fret</span><b>${formatInt(s.freight)}</b>
+        <span>Population</span><b>${s.population ? formatInt(s.population) : '—'}</b>
+        <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
+        <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
+        <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
+        <span>Dépôt</span><b>${asset?.depot ? 'Oui' : 'Non'}</b>
+        <span>Électrifiée</span><b>${asset?.electrified ? 'Oui' : 'Non'}</b>
+      </div>
+      <div class="actions station-upgrades">
+        ${upgrades.map(up => `
+          <button data-action="upgrade-station" data-kind="${up.kind}" data-id="${s.id}" ${tooltipAttr(lockedByOwner ? `Cette ville appartient déjà à ${owner.player.name}.` : stationUpgradeTooltip(s, preview, up))} ${lockedByOwner || up.maxed || cash < up.cost ? 'disabled' : ''}>
+            ${escapeHtml(up.label)} <span>${!asset && up.kind !== 'level' ? 'Verrouillé' : up.maxed ? 'Max' : money(up.cost)}</span>
+          </button>
+        `).join('')}
+      </div>
+      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser uniquement si ton itinéraire paie des droits de passage.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront des droits de passage s’ils l’empruntent.</p>' : '<p class="muted small">Première action : acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+    </div>
+  `;
+}
+
+function stationAcquisitionCost(s) {
+  if (s?.custom) return Math.round(65000 * app.state.game.market.steel);
+  const population = Number(s?.population || 0);
+  if (population > 0) {
+    return Math.round((120000 + population * 3.2 + Math.pow(population, 1.12) * 0.9) * app.state.game.market.steel);
+  }
+  const demand = Number(s?.baseDemand || 80);
+  return Math.round((75000 + Math.pow(demand, 1.18) * 1050) * app.state.game.market.steel);
+}
+
+function stationSortOptions(selected = 'alpha') {
+  const options = [
+    ['alpha', 'Alphabétique'],
+    ['priceAsc', 'Prix croissant'],
+    ['priceDesc', 'Prix décroissant'],
+    ['demandDesc', 'Demande voyageurs']
+  ];
+  return options.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+}
+
+function stationSortPrice(s) {
+  return stationAcquisitionCost(s);
+}
+
+function sortStationsForPurchase(list, mode = app.stationSortMode) {
+  const stations = [...(list || [])];
+  const collator = new Intl.Collator('fr', { sensitivity: 'base' });
+  const byName = (a, b) => collator.compare(a.name || '', b.name || '');
+  const byPrice = (a, b) => stationSortPrice(a) - stationSortPrice(b);
+  const byDemand = (a, b) => Number(b.baseDemand || 0) - Number(a.baseDemand || 0) || byName(a, b);
+
+  if (mode === 'priceAsc') return stations.sort((a, b) => byPrice(a, b) || byName(a, b));
+  if (mode === 'priceDesc') return stations.sort((a, b) => byPrice(b, a) || byName(a, b));
+  if (mode === 'demandDesc') return stations.sort(byDemand);
+  return stations.sort(byName);
+}
+
+function stationPurchaseStatusLabel(s) {
+  const owner = stationOwnerClient(s.id);
+  if (!owner) return 'Libre';
+  if (owner.player.id === app.state?.me?.id) return 'À toi';
+  return `Possédée par ${owner.player.name}`;
+}
+
+function stationPurchaseMetaLabel(s) {
+  return `${stationMetaLabel(s)} · Achat ${money(stationSortPrice(s))} · ${stationPurchaseStatusLabel(s)}`;
+}
+
+function stationUpgradeCost(s, asset, kind) {
+  if (kind === 'level') return Math.round((85000 + s.baseDemand * 55) * asset.level * app.state.game.market.steel);
+  if (kind === 'commerce') return Math.round(50000 * (asset.commerce + 1) * asset.level);
+  if (kind === 'maintenance') return Math.round(90000 * (asset.maintenance + 1) * asset.level);
+  if (kind === 'depot') return 180000;
+  return 0;
+}
+
+function renderStationAsset(s, asset) {
+  const lines = app.state.me.lines.filter(l => lineStopsOf(l).includes(s.id)).length;
+  return `
+    <div class="list-item">
+      <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag">${lines} ligne${lines > 1 ? 's' : ''}</span></div>
+      <div class="kv">
+        <span>Niveau</span><b>${asset.level}</b>
+        <span>Commerces</span><b>${asset.commerce}</b>
+        <span>Atelier</span><b>${asset.maintenance}</b>
+        <span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b>
+        <span>Électrifiée</span><b>${asset.electrified ? 'Oui' : 'Non'}</b>
+      </div>
+      <div class="actions"><button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir sur carte</button></div>
+    </div>
+  `;
+}
+
+
+function computeStaffNeedsClient() {
+  const me = app.state.me;
+  if (me.staffNeeds) return me.staffNeeds;
+  const activeLines = me.lines.filter(l => l.active);
+  const stationCount = Object.keys(me.stations || {}).length;
+  let drivers = 0;
+  let controllers = 0;
+  let dispatchers = 0;
+  let dailyKm = 0;
+
+  for (const line of activeLines) {
+    const train = me.trains.find(t => t.id === line.trainId);
+    const model = train ? app.state.balance.trains[train.modelId] : null;
+    const dist = distance(line.from, line.to);
+    const longLineFactor = 1 + Math.max(0, dist - 180) / 420;
+    drivers += Math.ceil((line.frequency / 2) * longLineFactor);
+    if (line.service === 'passengers' || line.service === 'mixed') {
+      controllers += Math.ceil((line.frequency / 3.2) * Math.min(1.8, longLineFactor));
+    }
+    dispatchers += line.frequency / 18;
+    dailyKm += dist * line.frequency;
+  }
+
+  return {
+    drivers: Math.max(1, drivers),
+    controllers: Math.max(1, controllers),
+    stationAgents: Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12)),
+    mechanics: Math.max(1, Math.ceil(me.trains.length * 0.55 + dailyKm / 1800)),
+    dispatchers: Math.max(1, Math.ceil(activeLines.length / 3 + dispatchers)),
+    engineers: Math.max(1, Math.ceil(me.epoch + 1 + Object.keys(me.techUnlocked || {}).length / 10))
+  };
+}
+
+function staffNeed(role) {
+  return computeStaffNeedsClient()[role] || 1;
+}
+
+function staffRatio(role, count) {
+  return Math.min(1.25, Math.max(0.25, (Number(count || 0) + 0.4) / staffNeed(role)));
+}
+
+function staffStatus(role, count) {
+  const r = staffRatio(role, count);
+  if (r >= 1.05) return { label: 'Confortable', cls: 'good', pct: 100 };
+  if (r >= 0.85) return { label: 'Correct', cls: 'warn', pct: Math.round(r * 100) };
+  return { label: 'Sous-effectif', cls: 'bad', pct: Math.round(r * 100) };
+}
+
+function staffRoleImpact(role) {
+  return {
+    drivers: {
+      title: 'Capacité réelle des trains',
+      effects: ['Plus de conducteurs = plus de fréquences exploitables sans pénalité.', 'Sous-effectif : capacité réduite, ponctualité et attractivité en baisse.']
+    },
+    controllers: {
+      title: 'Service à bord et recettes',
+      effects: ['Améliore la qualité voyageurs et limite la fraude.', 'Sous-effectif : satisfaction et part de marché plus faibles.']
+    },
+    stationAgents: {
+      title: 'Fluidité des gares',
+      effects: ['Augmente la capacité pratique des gares exploitées.', 'Sous-effectif : embarquement plus lent et satisfaction en baisse.']
+    },
+    mechanics: {
+      title: 'Fiabilité du parc',
+      effects: ['Augmente la capacité de maintenance et ralentit la dégradation.', 'Sous-effectif : trains plus usés, coûts et retards plus élevés.']
+    },
+    dispatchers: {
+      title: 'Régulation du réseau',
+      effects: ['Améliore ponctualité, attractivité et stabilité des lignes.', 'Sous-effectif : retards et concurrence plus difficiles à absorber.']
+    },
+    engineers: {
+      title: 'Recherche et montée en époque',
+      effects: ['Soutient la progression technologique et les époques avancées.', 'Sous-effectif : compagnie moins préparée aux technologies modernes.']
+    }
+  }[role] || { title: 'Effet opérationnel', effects: ['Améliore la robustesse de la compagnie.'] };
+}
+
+function staffRoleTooltip(role, count) {
+  const def = app.state.balance.staff[role];
+  const impact = staffRoleImpact(role);
+  const need = Math.ceil(staffNeed(role));
+  const ratio = staffStatus(role, count);
+  return `${def.label}. Besoin estimé actuel : ${need}. Statut : ${ratio.label}. Apport : ${impact.title}. ${impact.effects.join(' ')}`;
+}
+
+
+function renderStaff() {
+  const me = app.state.me;
+  return `
+    ${renderSectionHero('RESSOURCES HUMAINES', 'Gestion des équipes', 'Recrute, spécialise et stabilise tes effectifs pour soutenir la ponctualité, la sécurité et la qualité de service.', ART.tabs.staff, ['Conducteurs', 'Mainteneurs', 'Régulation'])}
+
+    <div class="card">
+      <h2>Ressources humaines</h2>
+      <p class="muted small">Chaque métier agit sur une partie précise du moteur : capacité réelle, ponctualité, satisfaction, maintenance, régulation ou progression technologique.</p>
+      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : fréquence, distance de ligne, vitesse du train, parc et gares exploitées. Une ligne courte à 8 circulations demande environ 4 conducteurs ; une longue relation en demande davantage.</p>
+      <div class="list">
+        ${staffOrder.map(role => renderStaffRole(role, me.staff[role] || 0)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderStaffRole(role, count) {
+  const def = app.state.balance.staff[role];
+  const need = Math.ceil(staffNeed(role));
+  const status = staffStatus(role, count);
+  const impact = staffRoleImpact(role);
+  const progress = Math.min(100, Math.round((count / Math.max(1, need)) * 100));
+  return `
+    <div class="list-item staff-card ${status.cls}">
+      <div class="item-title">
+        <strong>${escapeHtml(def.label)}</strong>
+        <span class="tag ${status.cls}">${count}/${need} · ${escapeHtml(status.label)}</span>
+      </div>
+      <p class="staff-impact"><b>${escapeHtml(impact.title)}</b></p>
+      <ul class="staff-effects">
+        ${impact.effects.map(effect => `<li>${escapeHtml(effect)}</li>`).join('')}
+      </ul>
+      <div class="staff-meter"><i style="width:${progress}%"></i></div>
+      <div class="kv">
+        <span>Salaire /h</span><b>${staffSalaryPerHour(def)}</b>
+        <span>Coût recrutement</span><b>${money(def.hireCost)}</b>
+        <span>Besoin estimé</span><b>${need}</b>
+        <span>Couverture</span><b>${Math.round(staffRatio(role, count) * 100)}%</b>
+      </div>
+      <div class="actions">
+        <button data-action="hire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'hire') + ' ' + staffRoleTooltip(role, count))}>+1</button>
+        <button data-action="hire-staff" data-role="${role}" data-count="5" ${tooltipAttr(staffActionTooltip(role, 5, 'hire') + ' ' + staffRoleTooltip(role, count))}>+5</button>
+        <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire') + ' ' + staffRoleTooltip(role, count))} ${count <= 0 ? 'disabled' : ''}>-1</button>
+      </div>
+    </div>
+  `;
+}
+
+
+function prepareEpochTrafficAnimation(target) {
+  const anim = app.epochTrafficAnimation || (app.epochTrafficAnimation = {});
+  const now = performance.now();
+  const nextTarget = Math.max(0, Number(target || 0));
+
+  if (anim.displayed == null || anim.target == null) {
+    anim.displayed = nextTarget;
+    anim.target = nextTarget;
+    anim.lastTarget = nextTarget;
+    anim.lastTargetAt = now;
+    anim.lastFrameAt = now;
+    anim.rate = 0;
+    return anim.displayed;
+  }
+
+  if (nextTarget !== anim.target) {
+    const elapsedSeconds = Math.max(0.25, (now - (anim.lastTargetAt || now)) / 1000);
+    const observedRate = Math.max(0, (nextTarget - anim.target) / elapsedSeconds);
+    anim.rate = observedRate > 0
+      ? (anim.rate > 0 ? anim.rate * 0.65 + observedRate * 0.35 : observedRate)
+      : anim.rate * 0.75;
+    anim.lastTarget = anim.target;
+    anim.target = nextTarget;
+    anim.lastTargetAt = now;
+  }
+
+  return anim.displayed;
+}
+
+function formatAnimatedTraffic(value) {
+  return formatInt(Math.max(0, Math.round(Number(value || 0))));
+}
+
+function updateEpochTrafficAnimation() {
+  const valueEl = document.querySelector('[data-epoch-traffic-value]');
+  const barEl = document.querySelector('[data-epoch-traffic-progress]');
+  if (!valueEl || !barEl) return;
+
+  const anim = app.epochTrafficAnimation || (app.epochTrafficAnimation = {});
+  const target = Math.max(0, Number(valueEl.dataset.target || 0));
+  const required = Math.max(1, Number(valueEl.dataset.required || 1));
+  const now = performance.now();
+
+  if (anim.displayed == null || anim.target == null) {
+    anim.displayed = target;
+    anim.target = target;
+    anim.lastFrameAt = now;
+  }
+
+  if (target !== anim.target) prepareEpochTrafficAnimation(target);
+
+  const dt = Math.min(0.08, Math.max(0.001, (now - (anim.lastFrameAt || now)) / 1000));
+  anim.lastFrameAt = now;
+
+  if (anim.displayed < anim.target) {
+    const remaining = anim.target - anim.displayed;
+    const averagedRate = Math.max(1, Number(anim.rate || 0));
+    const easingStep = remaining * 0.035;
+    const rateStep = averagedRate * dt;
+    anim.displayed = Math.min(anim.target, anim.displayed + Math.max(easingStep, rateStep));
+  } else if (anim.displayed > anim.target) {
+    // En cas de reset ou de nouvelle partie, on redescend sans inertie.
+    anim.displayed = anim.target;
+  }
+
+  const shown = Math.round(anim.displayed);
+  valueEl.textContent = `${formatAnimatedTraffic(shown)} / ${formatInt(required)}`;
+  const pct = Math.max(0, Math.min(100, shown / required * 100));
+  barEl.style.width = `${pct}%`;
+}
+
+function epochTrafficTotalClient(me = app.state?.me) {
+  return Math.max(0, Math.round(Number(me?.stats?.passengers || 0) + Number(me?.stats?.freightTons || 0)));
+}
+
+function renderResearch() {
+  const me = app.state.me;
+  const next = app.state.balance.epochs[me.epoch + 1];
+  const totalTech = Object.values(me.tech).reduce((a, b) => a + b, 0);
+  const trafficTotal = epochTrafficTotalClient(me);
+  const techProgress = next ? Math.min(100, totalTech / Math.max(1, next.requiredTech) * 100) : 100;
+  const trafficProgress = next ? Math.min(100, trafficTotal / Math.max(1, next.requiredTraffic) * 100) : 100;
+  const displayedTraffic = next ? prepareEpochTrafficAnimation(trafficTotal) : trafficTotal;
+  const displayedTrafficProgress = next ? Math.min(100, displayedTraffic / Math.max(1, next.requiredTraffic) * 100) : 100;
+  const progress = next ? Math.min(techProgress, trafficProgress) : 100;
+  const tree = app.state.balance.techTree || {};
+  const tabs = Object.values(tree);
+  if (!tree[app.activeResearchTab]) app.activeResearchTab = tabs[0]?.id || 'traction';
+  const active = tree[app.activeResearchTab] || tabs[0];
+  const project = me.researchProject;
+  return `
+    ${renderSectionHero('R&D FERROVIAIRE', active?.label || 'Recherche', active?.description || 'Débloque concrètement de nouveaux matériels, process et infrastructures.', artForResearchGroup(active?.id), [me.eraName, `${round(researchWorkRateClient(me))}x capacité`, `${Object.keys(me.techUnlocked || {}).length} axes engagés`])}
+
+    <div class="card">
+      <h2>Recherche & époques</h2>
+      <div class="card-grid">
+        ${metric('Époque actuelle', me.eraName)}
+        ${metric('Capacité laboratoire', `${round(researchWorkRateClient(me))}x`)}
+        ${metric('Axes engagés', Object.keys(me.techUnlocked || {}).length)}
+        ${metric('Niveaux cumulés', totalTech)}
+      </div>
+      ${project ? `
+        <hr>
+        <div class="research-active">
+          <div class="item-title">
+            <strong>${escapeHtml(project.title)} niv. ${project.targetLevel}</strong>
+            <span class="tag warn research-clock" data-research-timer data-end-at="${Math.round(project.endAt || 0)}">${formatResearchTime(project.realRemainingMs ?? project.remainingMs)}</span>
+          </div>
+          <div class="progress research-progress"><i data-research-progress data-research-key="${escapeAttr(researchProjectKey(project))}" data-end-at="${Math.round(project.endAt || 0)}" data-duration-ms="${Math.round(project.durationMs || 1)}" data-work-rate="${Number(project.workRate || 1)}" data-last-progress="${round(researchProgressPercent(project))}" style="width:${round(researchProgressPercent(project))}%"></i></div>
+          <div class="research-project-footer">
+            <p class="small muted">Projet en cours. Coût engagé : ${money(project.costMoney || 0)}. Les ingénieurs et la formation accélèrent le laboratoire.</p>
+            <button class="danger research-cancel-btn" data-action="cancel-research" data-source="active" data-id="${escapeAttr(project.nodeId)}" data-level="${Number(project.targetLevel || 1)}" ${tooltipAttr(`Annule ${project.title || project.nodeId} et rembourse ${money(project.costMoney || 0)}. Les recherches en file qui dépendaient de ce projet seront aussi annulées et remboursées.`)}>Annuler</button>
+          </div>
+        </div>
+      ` : '<p class="small muted">Aucun projet actif. Lance une recherche pour engager le laboratoire.</p>'}
+      ${renderResearchQueue(me)}
+      <hr>
+      ${next ? `
+        <div class="epoch-requirements">
+          <div class="item-title">
+            <strong>Prochaine époque : ${escapeHtml(next.name)}</strong>
+            <span class="tag ${progress >= 100 ? 'good' : 'warn'}">${round(progress)}%</span>
+          </div>
+          <div class="epoch-requirement-row">
+            <div>
+              <span>Technologie</span>
+              <b class="${totalTech >= next.requiredTech ? 'good-text' : ''}">${formatInt(totalTech)} / ${formatInt(next.requiredTech)}</b>
+            </div>
+            <div class="progress"><i style="width:${techProgress}%"></i></div>
+          </div>
+          <div class="epoch-requirement-row">
+            <div>
+              <span>Trafic cumulé</span>
+              <b class="${trafficTotal >= next.requiredTraffic ? 'good-text' : ''}" data-epoch-traffic-value data-target="${trafficTotal}" data-required="${next.requiredTraffic}">${formatAnimatedTraffic(displayedTraffic)} / ${formatInt(next.requiredTraffic)}</b>
+            </div>
+            <div class="progress epoch-traffic-progress"><i data-epoch-traffic-progress style="width:${displayedTrafficProgress}%"></i></div>
+          </div>
+          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie.</p>
+        </div>
+      ` : '<p class="muted">Toutes les époques sont débloquées.</p>'}
+    </div>
+
+    <div class="card">
+      <h2>Arbre technologique</h2>
+      <div class="research-tabs">
+        ${tabs.map(group => `<button data-action="research-tab" data-id="${group.id}" class="${group.id === active.id ? 'active' : ''}">${escapeHtml(group.label)}</button>`).join('')}
+      </div>
+      <p class="small muted">${escapeHtml(active.description || '')}</p>
+      ${renderResearchNodeGrid(active)}
+    </div>
+  `;
+}
+
+function renderResearchPrereqChip(req) {
+  if (req.anyOf) {
+    const ok = researchPrereqSatisfiedClient(req);
+    const label = researchPrereqLabelClient(req);
+    if (ok) return `<span class="research-prereq met">${escapeHtml(label)}</span>`;
+    return `<span class="research-prereq missing">${escapeHtml(label)}</span>`;
+  }
+  const ok = techLevel(req.id) >= req.level;
+  return ok
+    ? `<span class="research-prereq met">${escapeHtml(techNodeTitle(req.id))} niv. ${req.level}</span>`
+    : `<button type="button" class="research-prereq missing" data-action="focus-research" data-id="${escapeAttr(req.id)}">${escapeHtml(techNodeTitle(req.id))} niv. ${req.level}</button>`;
+}
+
+function renderTechNode(node) {
+  const level = plannedTechLevel(node.id);
+  const acquiredLevel = techLevel(node.id);
+  const maxLevel = techMaxLevel(node);
+  const unlimited = !Number.isFinite(maxLevel);
+  const complete = !unlimited && level >= maxLevel;
+  const targetLevel = complete ? maxLevel : (unlimited ? level + 1 : Math.min(maxLevel, level + 1));
+  const locked = complete ? '' : techLockedReason(node, targetLevel);
+  const costMoney = researchCostMoneyClient(node, targetLevel);
+  const durationMs = researchDurationClient(node, targetLevel);
+  const busy = Boolean(app.state.me.researchProject);
+  const affordable = app.state.me.cash >= costMoney;
+  const image = artForTechNode(node.id);
+  const prereqs = researchPrereqsForLevelClient(node, targetLevel);
+  const visibleImproves = (node.improves || []).filter(effect => !String(effect || '').toLowerCase().startsWith('niveaux suivants'));
+  const highlighted = app.highlightResearchId === node.id;
+  return `
+    <div class="tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${highlighted ? 'research-glow' : ''}" data-node-id="${escapeAttr(node.id)}">
+      ${image
+        ? `<div class="tech-node-media" style="--node-image: url('${escapeAttr(image)}');"></div>`
+        : `<div class="tech-node-media tech-node-placeholder"><span>Visuel à intégrer</span></div>`}
+      <div class="tech-node-body">
+        <div class="item-title">
+          <strong>${escapeHtml(node.title)}</strong>
+          <span class="tag ${complete ? 'good' : locked ? 'bad' : affordable ? 'warn' : ''}">
+            ${complete ? 'Max' : `Niv. ${acquiredLevel}${level > acquiredLevel ? ` · prévu ${level}` : ''}`}
+          </span>
+        </div>
+        <div class="kv">
+          <span>Prochain niveau</span><b>${complete ? 'Terminé' : `Niv. ${targetLevel}`}</b>
+          <span>Coût</span><b>${complete ? '-' : money(costMoney)}</b>
+          <span>Durée estimée</span><b>${complete ? '-' : formatResearchTime(durationMs)}</b>
+        </div>
+        <div class="research-prereqs">
+          ${researchEpochPrereqPill(node)}
+          ${prereqs.length ? prereqs.map(req => renderResearchPrereqChip(req)).join('') : '<span class="research-prereq met">Aucun prérequis recherche</span>'}
+        </div>
+        <div class="research-info-grid">
+          <div>
+            <h4>Débloque</h4>
+            ${(node.unlocks || []).length ? node.unlocks.map(effect => renderResearchEffectChip(effect, node)).join('') : '<span>Aucune fonctionnalité immédiate</span>'}
+          </div>
+          <div>
+            <h4>Améliore</h4>
+            ${visibleImproves.length ? visibleImproves.map(effect => renderResearchEffectChip(effect, node)).join('') : '<span>Contribution au niveau de branche</span>'}
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" data-action="research-node" data-id="${node.id}" ${tooltipAttr(`Recherche : ${node.title}. Budget : ${money(costMoney)}. Durée estimée : ${formatResearchTime(durationMs)}. Débloque : ${(node.unlocks || []).join(', ') || 'aucune fonctionnalité immédiate'}. Améliore : ${(node.improves || []).join(', ') || 'niveau de branche.'}`)} ${complete || locked || !affordable ? 'disabled' : ''}>
+            ${complete ? 'Maximum' : busy ? `Ajouter à la file niv. ${targetLevel}` : affordable ? `Lancer niv. ${targetLevel}` : 'Budget insuffisant'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function researchEraBucketsForGroup(group) {
+  const nodes = group?.nodes || [];
+  const buckets = [];
+  for (const node of nodes) {
+    const key = `${node.era || 0}:${node.eraLabel || group?.label || 'Général'}`;
+    let bucket = buckets.find(item => item.key === key);
+    if (!bucket) {
+      bucket = { key, era: node.era || 0, label: node.eraLabel || group?.label || 'Général', nodes: [] };
+      buckets.push(bucket);
+    }
+    bucket.nodes.push(node);
+  }
+  return buckets;
+}
+
+function renderResearchNodeGrid(group) {
+  const nodes = group?.nodes || [];
+  const hasEraBuckets = nodes.some(node => node.era || node.eraLabel);
+  if (!hasEraBuckets) {
+    return `<div class="tech-tree">${nodes.map(node => renderTechNode(node)).join('')}</div>`;
+  }
+  const buckets = researchEraBucketsForGroup(group);
+  return `<div class="research-era-list">${buckets.map(bucket => {
+    const collapsed = isResearchEraCollapsed(group.id, bucket);
+    const title = `${bucket.era ? `${bucket.era}. ` : ''}${escapeHtml(bucket.label)}`;
+    const buttonLabel = collapsed ? 'Déplier' : 'Réduire';
+    return `
+      <section class="research-era-section ${collapsed ? 'collapsed' : ''}">
+        <button type="button" class="research-era-heading" data-action="toggle-research-era" data-group="${escapeAttr(group.id)}" data-bucket="${escapeAttr(bucket.key)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+          <span class="research-era-title">
+            <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+            <span>${title}</span>
+          </span>
+          <span class="research-era-meta">${bucket.nodes.length} recherches · ${buttonLabel}</span>
+        </button>
+        ${collapsed ? '' : `<div class="tech-tree">${bucket.nodes.map(node => renderTechNode(node)).join('')}</div>`}
+      </section>
+    `;
+  }).join('')}</div>`;
+}
+
+function renderResearchQueue(me) {
+  const queue = me.researchQueue || [];
+  if (!queue.length) return '';
+  return `
+    <hr>
+    <div class="research-queue">
+      <div class="item-title">
+        <strong>File d’attente R&D</strong>
+        <span class="tag">${queue.length}/12</span>
+      </div>
+      <div class="research-queue-list">
+        ${queue.map((item, index) => `
+          <div class="research-queue-item" data-action="focus-research" data-id="${escapeAttr(item.nodeId)}">
+            <span class="queue-rank">${index + 1}</span>
+            <div>
+              <strong>${escapeHtml(item.title || item.nodeId)} niv. ${item.targetLevel}</strong>
+              <span>${formatResearchTime(item.durationMs)} · ${money(item.costMoney || 0)}</span>
+            </div>
+            <button class="danger research-cancel-btn" data-action="cancel-research" data-source="queue" data-index="${index}" data-id="${escapeAttr(item.nodeId)}" data-level="${Number(item.targetLevel || 1)}" ${tooltipAttr(`Retire cette recherche de la file et rembourse ${money(item.costMoney || 0)}. Toute recherche suivante qui en dépend serait aussi annulée et remboursée.`)}>Annuler</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+
+function researchLevelEffectUnitsClient(level) {
+  const n = Math.max(0, Math.floor(Number(level || 0)));
+  if (n <= 5) return n;
+  return 5 + 2 * (1 - Math.pow(0.75, n - 5));
+}
+
+function researchLevelNextIncrementUnitsClient(currentLevel) {
+  const n = Math.max(0, Math.floor(Number(currentLevel || 0)));
+  return Math.max(0, researchLevelEffectUnitsClient(n + 1) - researchLevelEffectUnitsClient(n));
+}
+
+function formatResearchEffectPercentClient(value) {
+  const pct = Math.round(value * 1000) / 10;
+  if (Math.abs(pct) < 0.05) return '0%';
+  return `${pct > 0 ? '+' : ''}${pct.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}%`;
+}
+
+function researchEffectLabelClient(kind) {
+  return {
+    speed: 'Vitesse max',
+    reliability: 'Fiabilité',
+    energy: 'Consommation',
+    environment: 'Impact env.',
+    profitability: 'Rentabilité',
+    autonomy: 'Autonomie',
+    range: 'Portée'
+  }[kind] || 'Bonus';
+}
+
+function renderResearchNumericEffectChip(effect, parsed, node) {
+  const target = researchEffectTarget(effect, node);
+  const currentLevel = techLevel(node.id);
+  const currentUnits = researchLevelEffectUnitsClient(currentLevel);
+  const nextUnits = researchLevelNextIncrementUnitsClient(currentLevel);
+  const currentValue = parsed.value * currentUnits;
+  const nextValue = parsed.value * nextUnits;
+  return `
+    <button type="button" class="research-effect-chip research-effect-chip--numeric" data-action="focus-effect" data-tab="${escapeAttr(target.tab)}" data-subtab="${escapeAttr(target.fleetSubtab || '')}" data-label="${escapeAttr(target.label)}">
+      <span>${escapeHtml(researchEffectLabelClient(parsed.kind))}</span>
+      <small>Actuel ${escapeHtml(formatResearchEffectPercentClient(currentValue))} · Prochain ${escapeHtml(formatResearchEffectPercentClient(nextValue))}</small>
+    </button>
+  `;
+}
+
+function renderResearchEffectChip(effect, node) {
+  const parsed = parseResearchNumericEffectsClient(effect)[0];
+  if (parsed) return renderResearchNumericEffectChip(effect, parsed, node);
+  const target = researchEffectTarget(effect, node);
+  return `
+    <button type="button" class="research-effect-chip" data-action="focus-effect" data-tab="${escapeAttr(target.tab)}" data-subtab="${escapeAttr(target.fleetSubtab || '')}" data-label="${escapeAttr(target.label)}">
+      <span>${escapeHtml(effect)}</span>
+    </button>
+  `;
+}
+
+
+function resourcePurchaseCost(type, quantity) {
+  const price = Number(app.state?.game?.market?.[type] || 1) * 100;
+  return Math.round(Number(quantity || 0) * price);
+}
+
+function renderResourceSourceList(type) {
+  const flow = app.state.me.resourceFlow || {};
+  const sources = flow.sources?.[type] || [];
+  const unit = type === 'electricity' ? 'MW/h' : 'u/h';
+  if (!sources.length) return '<p class="muted small">Aucune consommation active.</p>';
+  return `<div class="resource-source-list">${sources.map(s => `
+    <div class="resource-source-row">
+      <span>🟥 ${escapeHtml(s.lineCode || 'Ligne')} · ${escapeHtml(s.trainName || 'Train')}</span>
+      <b>${round(s.amountPerHour)} ${unit}</b>
+    </div>
+  `).join('')}</div>`;
+}
+
+function renderResourceCard(type, cfg) {
+  const me = app.state.me;
+  const flow = me.resourceFlow || {};
+  const locked = cfg.requiredEpoch > me.epoch;
+  const stock = type === 'electricity' ? Number(me.resources?.electricityOrder || 0) : Number(me.resources?.[type] || 0);
+  const consumption = Number(flow.consumption?.[type] || 0);
+  const unit = type === 'electricity' ? 'MW/h' : 'unités';
+  const buyQty = type === 'coal' ? 500 : 300;
+  return `
+    <div class="card resource-card ${locked ? 'locked' : ''}">
+      <div class="item-title">
+        <strong>${escapeHtml(cfg.label)}</strong>
+        <span class="tag ${locked ? 'bad' : 'good'}">${locked ? `Verrouillé · ${escapeHtml(trainEraLabel(cfg.requiredEpoch))}` : 'Disponible'}</span>
+      </div>
+      <p class="small muted">${escapeHtml(cfg.description)}</p>
+      <div class="card-grid">
+        ${metric(type === 'electricity' ? 'Commande actuelle' : 'Stock actuel', `${round(stock)} ${unit}`)}
+        ${metric('Consommation /h', `${round(consumption)} ${type === 'electricity' ? 'MW/h' : 'u/h'}`, consumption > 0 ? 'warn-text' : '')}
+        ${metric('Solde /h', type === 'electricity' ? `${round((flow.production?.electricity || 0) - consumption)} MW/h` : `${round(stock)} u`, type === 'electricity' && (flow.production?.electricity || 0) < consumption ? 'bad-text' : 'good-text')}
+      </div>
+      ${renderResourceSourceList(type)}
+      ${type === 'electricity' ? `
+        <label class="resource-control">Commande producteur
+          <input id="electricityOrderInput" type="number" min="0" step="10" value="${round(stock)}" ${locked ? 'disabled' : ''}>
+        </label>
+        <button class="primary" data-action="set-electricity-order" ${locked ? 'disabled' : ''}>Enregistrer la commande</button>
+      ` : ['coal', 'diesel'].includes(type) ? `
+        <div class="resource-buy-row">
+          <span>Achat rapide : ${formatInt(buyQty)} u · ${money(resourcePurchaseCost(type, buyQty))}</span>
+          <button class="primary" data-action="buy-resource" data-type="${escapeAttr(type)}" data-quantity="${buyQty}" ${locked ? 'disabled' : ''}>Acheter</button>
+        </div>
+      ` : `
+        <div class="resource-buy-row">
+          <span>Fonction prévue pour une prochaine ère.</span>
+          <button disabled>Verrouillé</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderResources() {
+  const me = app.state.me;
+  return `
+    ${renderSectionHero('ÉNERGIE & CARBURANTS', 'Approvisionnement', 'Stocke le charbon et le diesel, puis commande la puissance électrique nécessaire aux trains modernes.', ART.tabs.resources, ['Charbon', 'Diesel', 'Électricité'])}
+    <div class="card">
+      <h2>Vue d’ensemble</h2>
+      <p class="muted small">Les trains vapeur et diesel consomment un stock acheté. Les trains électriques et batteries utilisent une commande producteur exprimée en MW/h. Si l’approvisionnement est insuffisant, les lignes concernées ne circulent pas.</p>
+      <div class="card-grid">
+        ${metric('Charbon', resourceStockLabel('coal'))}
+        ${metric('Diesel', resourceStockLabel('diesel'))}
+        ${metric('Électricité', resourceStockLabel('electricity'))}
+        ${metric('Résultat /h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text')}
+      </div>
+    </div>
+    <div class="resource-grid">
+      ${renderResourceCard('coal', { label: 'Charbon', requiredEpoch: 0, description: 'Stock consommé par les locomotives vapeur en fonction de leur poids, de la distance et de la fréquence.' })}
+      ${renderResourceCard('diesel', { label: 'Diesel', requiredEpoch: 1, description: 'Stock consommé par les matériels diesel. Verrouillé tant que l’ère diesel n’est pas atteinte.' })}
+      ${renderResourceCard('electricity', { label: 'Électricité', requiredEpoch: 2, description: 'Commande de puissance auprès du producteur. Les trains électriques et batteries ne circulent que si la commande couvre la demande.' })}
+      ${renderResourceCard('hydrogen', { label: 'Hydrogène', requiredEpoch: 4, description: 'Prévu pour les futures rames hydrogène. Fonction grisée tant que cette ère n’est pas atteinte.' })}
+    </div>
+  `;
+}
+
+
+function renderMarket() {
+  const me = app.state.me;
+  const market = app.state.game.market;
+  return `
+    ${renderSectionHero('ÉNERGIE & FINANCE', 'Marché et contrats', 'Ajuste ta stratégie énergétique, contracte des financements et prépare l’arrivée des technologies avancées.', ART.tabs.market, ['Électricité', 'Hydrogène', 'Financement'])}
+
+    <div class="card">
+      <h2>Marché énergie</h2>
+      <div class="card-grid">
+        ${metric('Charbon', `${round(market.coal)} €/u`)}
+        ${metric('Diesel', `${round(market.diesel)} €/u`)}
+        ${metric('Électricité', `${round(market.electricity)} €/u`)}
+        ${metric('Hydrogène', `${round(market.hydrogen)} €/u`)}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Contrat énergie</h2>
+      <div class="list">
+        ${Object.entries(app.state.balance.energyStrategies).map(([id, s]) => `
+          <div class="list-item">
+            <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag ${me.energyStrategy === id ? 'good' : ''}">${me.energyStrategy === id ? 'Actif' : 'Disponible'}</span></div>
+            <p class="small muted">${energyStrategyDescription(id)}</p>
+            <div class="actions"><button data-action="energy-strategy" data-id="${id}" ${tooltipAttr(energyStrategyTooltip(id, s))} ${me.energyStrategy === id ? 'disabled' : ''}>Choisir</button></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Financement</h2>
+      <div class="actions">
+        <button data-action="loan" data-amount="100000" ${tooltipAttr('Ajoute immédiatement 100 000 € de trésorerie et augmente la dette. Effet : plus de marge d’investissement, mais des remboursements/intérêts pèseront sur la compagnie.')}>Emprunter 100 000 €</button>
+        <button data-action="loan" data-amount="500000" ${tooltipAttr('Ajoute immédiatement 500 000 € de trésorerie et augmente fortement la dette. À utiliser pour gros investissements : matériel, gares, électrification.')}>Emprunter 500 000 €</button>
+        <button data-action="repay" data-amount="100000" ${tooltipAttr('Rembourse 100 000 € de dette si la trésorerie le permet. Effet : diminue l’endettement et améliore la solidité financière.')}>Rembourser 100 000 €</button>
+      </div>
+    </div>
+  `;
+}
+
+function energyStrategyDescription(id) {
+  return {
+    spot: 'Prix normal, exposition complète aux variations.',
+    stable: 'Un peu plus cher, mais moins brutal sur la durée.',
+    cheap: 'Moins cher, adapté aux compagnies fragiles mais moins vertueux.',
+    green: 'Plus cher, meilleur pour une stratégie bas carbone.'
+  }[id] || '';
+}
+
+function onTabContentClick(event) {
+  markUiInteraction();
+  const suggestion = event.target.closest('[data-station-choice]');
+  if (suggestion) {
+    chooseStationSuggestion(suggestion.dataset.role, suggestion.dataset.stationChoice);
+    return;
+  }
+
+  const lineSubtab = event.target.closest('[data-lines-subtab]');
+  if (lineSubtab) {
+    app.activeLinesSubtab = lineSubtab.dataset.linesSubtab;
+    localStorage.setItem('sillons.linesSubtab', app.activeLinesSubtab);
+    renderAll();
+    return;
+  }
+
+  const fleetSubtab = event.target.closest('[data-fleet-subtab]');
+  if (fleetSubtab) {
+    app.activeFleetSubtab = fleetSubtab.dataset.fleetSubtab;
+    localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+    renderAll();
+    return;
+  }
+
+
+  const compositionModeTab = event.target.closest('[data-comp-mode]');
+  if (compositionModeTab) {
+    app.compositionEditorModes[compositionModeTab.dataset.id] = compositionModeTab.dataset.compMode;
+    localStorage.setItem('sillons.compositionEditorModes', JSON.stringify(app.compositionEditorModes));
+    renderAll();
+    return;
+  }
+
+  const button = event.target.closest('[data-action], #createLineBtn, #addWaypointBtn');
+  if (!button) return;
+  if (button.id === 'createLineBtn') {
+    updateLineDraftFromForm(document.activeElement?.id || '');
+    const draft = app.lineDraft;
+    doAction('createLine', {
+      from: draft.from,
+      to: draft.to,
+      stops: buildLineDraftStops(),
+      preserveOrder: true,
+      trainId: draft.trainId,
+      service: draft.service,
+      frequency: Number(draft.frequency),
+      ticketPrice: Number(draft.ticketPrice),
+      tariff: Number(draft.tariff)
+    });
+    return;
+  }
+  if (button.id === 'addWaypointBtn') {
+    addDraftWaypoint();
+    return;
+  }
+  const action = button.dataset.action;
+  if (action === 'focus-research') return focusResearchNode(button.dataset.id);
+  if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
+if (action === 'select-composition-train') {
+  app.selectedCompositionTrainId = button.dataset.id || '';
+  localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+  renderAll();
+  return;
+}
+if (action === 'open-composition') {
+  app.activeTab = 'fleet';
+  app.activeFleetSubtab = 'composition';
+  app.selectedCompositionTrainId = button.dataset.id || '';
+  localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+  localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+  renderAll();
+  return;
+}
+if (action === 'save-train-composition') {
+  const trainId = button.dataset.id;
+  const train = app.state.me.trains.find(t => t.id === trainId);
+  if (!train) return;
+  const spec = trainCompositionSpec(train);
+  const payload = { trainId, mode: spec.mode };
+  if (spec.mode === 'multiple_unit') payload.powerUnits = Number($('#compPowerUnitsValue')?.value || $('#compPowerUnits')?.value || 1);
+  else if (spec.mode === 'freight_loco') {
+    payload.freightCars = Number($('#compFreightCarsValue')?.value || $('#compFreightCars')?.value || 2);
+    payload.freightVariant = document.querySelector('input[name="compFreightVariant"]:checked')?.value || '';
+  } else {
+    payload.passengerCars = Number($('#compPassengerCarsValue')?.value || $('#compPassengerCars')?.value || 1);
+    payload.passengerVariant = document.querySelector('input[name="compPassengerVariant"]:checked')?.value || '';
+  }
+  return doAction('updateTrainComposition', payload);
+}
+    if (action === 'buy-train') return doAction('buyTrain', { modelId: button.dataset.id });
+  if (action === 'sell-train') return doAction('sellTrain', { trainId: button.dataset.id });
+  if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
+  if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
+  if (action === 'close-line') return doAction('closeLine', { lineId: button.dataset.id });
+  if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
+  if (action === 'edit-line') return openLineModal(button.dataset.id);
+  if (action === 'remove-waypoint') { removeDraftWaypoint(button.dataset.index); return; }
+  if (action === 'upgrade-station') return doAction('upgradeStation', { stationId: button.dataset.id, kind: button.dataset.kind });
+  if (action === 'select-station') {
+    setSelectedStation(button.dataset.id);
+    const selected = station(button.dataset.id);
+    app.stationSearch.query = stationSearchLabel(selected);
+    app.stationSearch.candidateId = button.dataset.id || '';
+    app.activeTab = 'stations';
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    renderAll();
+    return;
+  }
+  if (action === 'hire-staff') return doAction('hireStaff', { role: button.dataset.role, count: Number(button.dataset.count) });
+  if (action === 'fire-staff') return doAction('fireStaff', { role: button.dataset.role, count: Number(button.dataset.count) });
+  if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
+  if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
+  if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }
+  if (action === 'toggle-owned-stations') { app.ownedStationsCollapsed = !app.ownedStationsCollapsed; localStorage.setItem('sillons.ownedStationsCollapsed', app.ownedStationsCollapsed ? '1' : '0'); renderAll(); return; }
+  if (action === 'research') return doAction('research', { branch: button.dataset.branch });
+  if (action === 'energy-strategy') return doAction('energyStrategy', { strategy: button.dataset.id });
+  if (action === 'buy-resource') return doAction('buyResource', { type: button.dataset.type, quantity: Number(button.dataset.quantity) });
+  if (action === 'set-electricity-order') return doAction('setElectricityOrder', { amount: Number($('#electricityOrderInput')?.value || 0) });
+  if (action === 'loan') return doAction('takeLoan', { amount: Number(button.dataset.amount) });
+  if (action === 'repay') return doAction('repayLoan', { amount: Number(button.dataset.amount) });
+}
+
+function onTabContentChange(event) {
+  markUiInteraction();
+  if (event.target.id === 'stationSort') {
+    app.stationSortMode = event.target.value || 'alpha';
+    localStorage.setItem('sillons.stationSortMode', app.stationSortMode);
+    if ($('#lineStationSearch')?.value) updateStationSearch('station', $('#lineStationSearch').value);
+    return;
+  }
+  if (['lineTicketPrice', 'lineTicketPriceRange', 'lineFreq'].includes(event.target.id)) {
+    updateLineDraftFromForm(event.target.id);
+    updateLinePreview(event.target.id);
+    return;
+  }
+  if (['lineTrain', 'lineService'].includes(event.target.id)) {
+    updateLineDraftFromForm(event.target.id);
+    updateLinePreview(event.target.id);
+  }
+}
+
+async function performAction(type, payload) {
+  const actionKey = `${type}:${JSON.stringify(payload || {})}`;
+  if (app.pendingActions.has(actionKey)) return null;
+  app.pendingActions.add(actionKey);
+  document.body.classList.add('is-busy');
+  try {
+    const response = await post('/api/action', { playerId: app.playerId, type, payload });
+    if (response.state?.serverTime) app.serverClockOffset = Number(response.state.serverTime || Date.now()) - Date.now();
+    app.state = response.state || app.state;
+    invalidateMapProjection('action');
+    if (app.state?.me) ensureSelectedStation();
+    if (!response.ok) {
+      toast([response.error, response.hint].filter(Boolean).join(' ' ) || 'Action refusée.', 'error');
+    } else {
+      if (type === 'createLine') {
+        app.lineDraft.trainId = '';
+        app.lineDraft.waypoints = [];
+        app.lineDraft.viaCandidate = '';
+        app.lineDraft.viaQuery = '';
+        saveLineDraft();
+      }
+      toast(response.message || 'Action réalisée.', 'ok');
+    }
+    renderAll(true);
+    const actionCashDelta = Number(response.cashDelta);
+    if (Number.isFinite(actionCashDelta) && actionCashDelta !== 0) {
+      animateCashDelta(actionCashDelta);
+    }
+    return response;
+  } catch (error) {
+    toast(error.message || 'Erreur réseau.', 'error');
+    return { ok: false, error: error.message || 'Erreur réseau.' };
+  } finally {
+    app.pendingActions.delete(actionKey);
+    if (!app.pendingActions.size) document.body.classList.remove('is-busy');
+  }
+}
+
+
+async function doAction(type, payload) {
+  await performAction(type, payload);
+}
+
+async function post(url, payload) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return response.json();
+}
+
+
+function openLineModal(lineId) {
+  const line = app.state.me.lines.find(l => l.id === lineId);
+  if (!line) return;
+  const stops = lineStopsOf(line);
+  const freeOrCurrent = app.state.me.trains.filter(t => t.id === line.trainId || !app.state.me.lines.some(l => l.active && l.trainId === t.id));
+  app.lineEditor = {
+    lineId,
+    stops: [...stops],
+    trainId: line.trainId,
+    frequency: line.frequency,
+    tariff: line.tariff,
+    ticketPrice: lineTicketPrice(line),
+    candidateId: '',
+    candidateQuery: '',
+    insertAfter: 'auto',
+    draggingIndex: null
+  };
+
+  const renderEditorStopRow = (id, index) => {
+    const s = station(id);
+    const canRemove = app.lineEditor.stops.length > 2;
+    return `
+      <div class="editor-stop-row" draggable="true" data-editor-stop-index="${index}">
+        <div class="drag-handle" title="Glisser pour changer l’ordre">☰</div>
+        <div class="editor-stop-main">
+          <strong>${index + 1}. ${escapeHtml(s?.name || id)}</strong>
+          <span>${index === 0 ? 'Départ' : index === app.lineEditor.stops.length - 1 ? 'Terminus' : 'Arrêt intermédiaire'}</span>
+        </div>
+        <div class="editor-stop-actions">
+          <button type="button" data-editor-move="${index}" data-direction="-1" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" data-editor-move="${index}" data-direction="1" ${index === app.lineEditor.stops.length - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" class="danger ghost" data-editor-remove="${index}" ${canRemove ? '' : 'disabled'}>Retirer</button>
+        </div>
+      </div>
+    `;
+  };
+
+  const renderEditorHtml = () => {
+    const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
+    app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
+    app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
+    return `
+    <div class="form-grid line-editor">
+      <label>Train
+        <select id="editLineTrain">${freeOrCurrent.map(t => `<option value="${t.id}" ${t.id === app.lineEditor.trainId ? 'selected' : ''}>${escapeHtml(trainName(t))}</option>`).join('')}</select>
+      </label>
+      <div class="two form-grid">
+        <label>Fréquence d’exploitation <input id="editLineFreq" type="number" min="1" max="20" value="${app.lineEditor.frequency}"></label>
+        <label>Prix billet moyen
+          ${renderTicketPriceControl({
+            inputId: 'editLineTicketPrice',
+            rangeId: 'editLineTicketPriceRange',
+            hintId: 'editLineTicketPriceHint',
+            price: app.lineEditor.ticketPrice,
+            distance: editorDistance
+          })}
+        </label>
+      </div>
+
+      <div class="card inset-card line-editor-card">
+        <h3>Parcours de la ligne</h3>
+        <p class="muted small">Glisse-dépose les arrêts pour modifier l’ordre. Le premier arrêt devient le départ, le dernier devient le terminus et le nom de ligne est recalculé.</p>
+        <div class="line-stop-strip">${renderDraftStopStrip(app.lineEditor.stops)}</div>
+        <div class="editor-stop-list drag-list">
+          ${app.lineEditor.stops.map(renderEditorStopRow).join('')}
+        </div>
+        <div class="form-grid">
+          <label>Position d’insertion
+            <select id="lineEditorInsertPos">
+              <option value="auto" ${app.lineEditor.insertAfter === 'auto' ? 'selected' : ''}>Meilleure position entre deux arrêts</option>
+              ${app.lineEditor.stops.map((id, index) => `<option value="${index}" ${String(index) === String(app.lineEditor.insertAfter) ? 'selected' : ''}>${index === app.lineEditor.stops.length - 1 ? `Prolonger après ${station(id)?.name || id}` : `Après ${station(id)?.name || id}`}</option>`).join('')}
+            </select>
+          </label>
+          <label>Ajouter un arrêt
+            <div class="station-search-wrap">
+              <input id="editorStopSearch" class="station-search-input" value="${escapeAttr(app.lineEditor.candidateQuery)}" placeholder="Ex : Bayeux, Caen, Paris..." autocomplete="off">
+              <input id="editorStopId" type="hidden" value="${escapeAttr(app.lineEditor.candidateId)}">
+              <div id="editorStopSuggestions" class="station-suggestions"></div>
+            </div>
+          </label>
+          <button id="addEditorStopBtn" type="button" class="primary">Ajouter à la ligne</button>
+        </div>
+      </div>
+
+      <button id="saveLineBtn" type="button" class="primary">Enregistrer</button>
+    </div>
+  `;
+  };
+
+  openModal('Modifier la ligne', renderEditorHtml());
+
+  const rerenderBody = () => {
+    $('#modalBody').innerHTML = renderEditorHtml();
+    bindEditor();
+  };
+
+  const moveStop = (fromIndex, toIndex) => {
+    const stops = app.lineEditor.stops;
+    if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return;
+    if (fromIndex < 0 || fromIndex >= stops.length || toIndex < 0 || toIndex >= stops.length || fromIndex === toIndex) return;
+    const [item] = stops.splice(fromIndex, 1);
+    stops.splice(toIndex, 0, item);
+    app.lineEditor.insertAfter = 'auto';
+    rerenderBody();
+  };
+
+  const bindEditor = () => {
+    const syncEditorTicketControls = sourceId => {
+      const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
+      const control = sourceId === 'editLineTicketPriceRange' ? $('#editLineTicketPriceRange') : $('#editLineTicketPrice');
+      app.lineEditor.ticketPrice = normalizeTicketPrice(control?.value, app.lineEditor.ticketPrice, editorDistance);
+      app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
+      refreshTicketPriceControl('editLineTicketPrice', 'editLineTicketPriceRange', 'editLineTicketPriceHint', editorDistance, app.lineEditor.ticketPrice, sourceId);
+    };
+    $('#editLineTrain').addEventListener('change', e => app.lineEditor.trainId = e.target.value);
+    $('#editLineFreq').addEventListener('input', e => app.lineEditor.frequency = Number(e.target.value));
+    $('#editLineTicketPrice').addEventListener('input', () => syncEditorTicketControls('editLineTicketPrice'));
+    $('#editLineTicketPrice').addEventListener('change', () => syncEditorTicketControls('editLineTicketPrice'));
+    $('#editLineTicketPriceRange').addEventListener('input', () => syncEditorTicketControls('editLineTicketPriceRange'));
+    $('#editLineTicketPriceRange').addEventListener('change', () => syncEditorTicketControls('editLineTicketPriceRange'));
+    $('#lineEditorInsertPos').addEventListener('change', e => app.lineEditor.insertAfter = e.target.value);
+    $('#editorStopSearch').addEventListener('input', e => {
+      app.lineEditor.candidateQuery = e.target.value;
+      const matches = findStationMatches(e.target.value, 10);
+      const box = $('#editorStopSuggestions');
+      box.innerHTML = matches.length ? matches.map(s => `
+        <button type="button" class="station-suggest-item" data-role="editor" data-station-choice="${escapeAttr(s.id)}">
+          <strong>${escapeHtml(s.name)}</strong>
+          <span>${stationMetaLabel(s)}</span>
+        </button>
+      `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
+    });
+    $('#editorStopSuggestions').addEventListener('click', event => {
+      const btn = event.target.closest('[data-station-choice]');
+      if (!btn) return;
+      chooseStationSuggestion('editor', btn.dataset.stationChoice);
+    });
+    $('#addEditorStopBtn').addEventListener('click', () => {
+      const stopId = app.lineEditor.candidateId || $('#editorStopId').value;
+      if (!stopId || !station(stopId)) return toast('Choisis un arrêt valide.', 'error');
+      if (app.lineEditor.stops.includes(stopId)) return toast('Cet arrêt est déjà présent sur la ligne.', 'error');
+
+      if (app.lineEditor.insertAfter === 'auto') {
+        app.lineEditor.stops = insertStopAtBestIntermediatePosition(app.lineEditor.stops, stopId);
+      } else {
+        const afterIndex = Number(app.lineEditor.insertAfter);
+        app.lineEditor.stops.splice(afterIndex + 1, 0, stopId);
+      }
+
+      app.lineEditor.candidateId = '';
+      app.lineEditor.candidateQuery = '';
+      app.lineEditor.insertAfter = 'auto';
+      rerenderBody();
+    });
+
+    document.querySelectorAll('[data-editor-remove]').forEach(btn => btn.addEventListener('click', () => {
+      if (app.lineEditor.stops.length <= 2) return;
+      app.lineEditor.stops.splice(Number(btn.dataset.editorRemove), 1);
+      app.lineEditor.insertAfter = 'auto';
+      rerenderBody();
+    }));
+
+    document.querySelectorAll('[data-editor-move]').forEach(btn => btn.addEventListener('click', () => {
+      moveStop(Number(btn.dataset.editorMove), Number(btn.dataset.editorMove) + Number(btn.dataset.direction));
+    }));
+
+    document.querySelectorAll('.editor-stop-row').forEach(row => {
+      row.addEventListener('dragstart', event => {
+        app.lineEditor.draggingIndex = Number(row.dataset.editorStopIndex);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(app.lineEditor.draggingIndex));
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        app.lineEditor.draggingIndex = null;
+      });
+      row.addEventListener('dragover', event => {
+        event.preventDefault();
+        row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+      row.addEventListener('drop', event => {
+        event.preventDefault();
+        row.classList.remove('drag-over');
+        const from = Number(event.dataTransfer.getData('text/plain'));
+        const to = Number(row.dataset.editorStopIndex);
+        moveStop(from, to);
+      });
+    });
+
+    $('#saveLineBtn').addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
+      const input = $('#editLineTicketPrice');
+      const ticketPrice = normalizeTicketPrice(input?.value, app.lineEditor.ticketPrice, editorDistance);
+      app.lineEditor.ticketPrice = ticketPrice;
+      app.lineEditor.tariff = ticketPriceToTariff(ticketPrice, editorDistance);
+      if (input) input.value = String(ticketPrice);
+      refreshTicketPriceControl('editLineTicketPrice', 'editLineTicketPriceRange', 'editLineTicketPriceHint', editorDistance, ticketPrice, 'editLineTicketPrice');
+
+      const response = await performAction('updateLine', {
+        lineId,
+        trainId: $('#editLineTrain').value,
+        frequency: Number($('#editLineFreq').value),
+        ticketPrice,
+        stops: [...app.lineEditor.stops],
+        preserveOrder: true
+      });
+
+      if (response?.ok) {
+        const modal = $('#modal');
+        if (modal?.open) modal.close();
+        app.lineEditor = null;
+      }
+    });
+  };
+
+  bindEditor();
+}
+
+function openCompanyModal() {
+  if (!app.state?.me) return;
+  openModal('Compagnie', `
+    <div class="form-grid">
+      <label>Nom <input id="renameName" maxlength="28" value="${escapeAttr(app.state.me.name)}"></label>
+      <label>Couleur <input id="renameColor" type="color" value="${escapeAttr(app.state.me.color)}"></label>
+      <button id="saveCompanyBtn" class="primary" value="close">Enregistrer</button>
+    </div>
+  `);
+  $('#saveCompanyBtn').addEventListener('click', () => doAction('rename', { name: $('#renameName').value, color: $('#renameColor').value }));
+}
+
+function openResetModal() {
+  if (!app.state?.me) return;
+  openModal('Réinitialiser la compagnie', `
+    <p>Cette action supprime ta compagnie de cette sauvegarde serveur.</p>
+    <p class="muted small">Tape <code>RESET</code> pour confirmer.</p>
+    <div class="form-grid">
+      <input id="resetConfirm" placeholder="RESET">
+      <button id="confirmResetBtn" class="danger" value="close">Supprimer</button>
+    </div>
+  `);
+  $('#confirmResetBtn').addEventListener('click', async () => {
+    const confirm = $('#resetConfirm').value;
+    await doAction('resetCompany', { confirm });
+    if (confirm === 'RESET') {
+      localStorage.removeItem('sillons.playerId');
+      app.playerId = '';
+      $('#setup').classList.remove('hidden');
+    }
+  });
+}
+
+function openModal(title, html) {
+  $('#modalTitle').textContent = title;
+  $('#modalBody').innerHTML = html;
+  $('#modal').showModal();
+}
+
+function resizeCanvas() {
+  if (!app.map.canvas || !app.map.ctx) return;
+  const holder = $('#osmMap') || app.map.canvas;
+  const rect = holder.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  const width = Math.max(400, Math.ceil(rect.width));
+  const height = Math.max(300, Math.ceil(rect.height));
+  const dpr = window.devicePixelRatio || 1;
+  const pixelWidth = Math.floor(width * dpr);
+  const pixelHeight = Math.floor(height * dpr);
+  const sizeChanged = app.map.canvas.width !== pixelWidth || app.map.canvas.height !== pixelHeight || app.map.width !== width || app.map.height !== height || app.map.dpr !== dpr;
+
+  app.map.dpr = dpr;
+  app.map.width = width;
+  app.map.height = height;
+
+  if (app.map.canvas.width !== pixelWidth || app.map.canvas.height !== pixelHeight) {
+    app.map.canvas.width = pixelWidth;
+    app.map.canvas.height = pixelHeight;
+  }
+  app.map.canvas.style.width = '100%';
+  app.map.canvas.style.height = '100%';
+  app.map.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (sizeChanged) {
+    invalidateMapProjection('canvas-resize');
+    scheduleLeafletInvalidateSize();
+  }
+}
+
+function scheduleLeafletInvalidateSize() {
+  if (!app.map.leaflet || app.map.invalidatingSize) return;
+  app.map.invalidatingSize = true;
+  requestAnimationFrame(() => {
+    try {
+      app.map.leaflet.invalidateSize({ pan: false, animate: false });
+    } finally {
+      app.map.invalidatingSize = false;
+    }
+  });
+}
+
+function hasPixelMapArt() {
+  const img = artImages[ART.map];
+  return !!(img && img.complete && img.naturalWidth);
+}
+
+function updateMapFrame() {
+  const w = app.map.width;
+  const h = app.map.height;
+  if (!w || !h) return;
+  const img = artImages[ART.map];
+  const iw = img?.naturalWidth || 1672;
+  const ih = img?.naturalHeight || 1024;
+  const scale = Math.min(w / iw, h / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  const dx = (w - dw) / 2;
+  const dy = (h - dh) / 2;
+  app.map.frame = {
+    image: { x: dx, y: dy, width: dw, height: dh },
+    france: {
+      x: dx + dw * MAP_ART_FRAME.x,
+      y: dy + dh * MAP_ART_FRAME.y,
+      width: dw * MAP_ART_FRAME.w,
+      height: dh * MAP_ART_FRAME.h
+    }
+  };
+}
+
+
+function drawLoop(timestamp = performance.now()) {
+  if (document.hidden) {
+    app.map.lastDrawAt = timestamp;
+    requestAnimationFrame(drawLoop);
+    return;
+  }
+
+  if (app.map.panOverlay.active) {
+    // Pendant le déplacement Leaflet, on ne redessine plus le canvas :
+    // il est simplement translaté par GPU, puis recalculé au moveend.
+    requestAnimationFrame(drawLoop);
+    return;
+  }
+
+  const moving = app.map.navigating;
+  const delay = moving ? 84 : 33; // ~12 fps pendant le zoom, ~30 fps le reste.
+  if (timestamp - app.map.lastDrawAt >= delay) {
+    drawMap({ lite: moving });
+    app.map.lastDrawAt = timestamp;
+    if (!moving) app.map.lastFullDrawAt = timestamp;
+  }
+  requestAnimationFrame(drawLoop);
+}
+
+function drawMap(options = {}) {
+  if (!app.state?.world || !app.map.ctx) return;
+  const ctx = app.map.ctx;
+  const w = app.map.width;
+  const h = app.map.height;
+  if (!w || !h) return;
+
+  if (app.map.needsRouteReproject) invalidateMapProjection('dirty-projection');
+
+  const lite = !!options.lite;
+  ctx.clearRect(0, 0, w, h);
+  drawAllLines(ctx, lite);
+  drawStations(ctx, lite);
+  if (!lite) drawMapHud(ctx);
+  if (!lite) drawTooltip(ctx);
+}
+
+
+
+function drawMapHud(ctx) {
+  if (!app.map.leaflet) return;
+  ctx.save();
+  const zoom = app.map.leaflet.getZoom();
+  const label = zoom >= 9 ? `OSM · zoom ${zoom} · vue isométrique visuelle` : `OpenStreetMap · zoom ${zoom}`;
+  ctx.font = '12px "Trebuchet MS", system-ui';
+  const width = ctx.measureText(label).width + 18;
+  const x = app.map.width - width - 18;
+  const y = app.map.height - 34;
+  ctx.fillStyle = 'rgba(7, 12, 22, 0.82)';
+  ctx.strokeStyle = 'rgba(217, 168, 82, 0.25)';
+  roundRect(ctx, x, y, width, 22, 10);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f0dfb8';
+  ctx.fillText(label, x + 9, y + 15);
+  ctx.restore();
+}
+
+function drawBackdropArt(ctx, w, h) {
+  const img = artImages[ART.map];
+  if (!img || !img.complete || !img.naturalWidth) return;
+  updateMapFrame();
+  const frame = app.map.frame?.image;
+  if (!frame) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, frame.x, frame.y, frame.width, frame.height);
+  ctx.restore();
+}
+
+function drawSea(ctx, w, h) {
+  ctx.save();
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, '#0a2340');
+  gradient.addColorStop(0.55, '#0c355a');
+  gradient.addColorStop(1, '#07182d');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, w, h);
+
+  const shimmer = ctx.createRadialGradient(w * 0.22, h * 0.16, 10, w * 0.22, h * 0.16, w * 0.75);
+  shimmer.addColorStop(0, 'rgba(147, 197, 253, 0.16)');
+  shimmer.addColorStop(1, 'rgba(147, 197, 253, 0)');
+  ctx.fillStyle = shimmer;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+function drawGrid(ctx, w, h) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(191, 219, 254, 0.045)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += 64) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y < h; y += 64) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFrance(ctx) {
+  const outlines = app.state.world.outlines || [app.state.world.outline || []];
+  ctx.save();
+  const land = ctx.createLinearGradient(0, 0, app.map.width, app.map.height);
+  land.addColorStop(0, '#1f5f4a');
+  land.addColorStop(0.45, '#2f7c5f');
+  land.addColorStop(1, '#8aa163');
+
+  const relief = ctx.createLinearGradient(app.map.width * 0.2, 0, app.map.width * 0.8, app.map.height);
+  relief.addColorStop(0, 'rgba(255,255,255,0.16)');
+  relief.addColorStop(0.5, 'rgba(255,255,255,0.02)');
+  relief.addColorStop(1, 'rgba(0,0,0,0.12)');
+
+  ctx.shadowColor = 'rgba(2, 6, 23, 0.42)';
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 8;
+  for (const outline of outlines) {
+    if (!outline?.length) continue;
+    pathFromLonLat(ctx, outline);
+    ctx.fillStyle = land;
+    ctx.fill();
+    pathFromLonLat(ctx, outline);
+    ctx.fillStyle = relief;
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  for (const outline of outlines) {
+    if (!outline?.length) continue;
+    pathFromLonLat(ctx, outline);
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.9)';
+    ctx.lineWidth = 2.3;
+    ctx.stroke();
+    pathFromLonLat(ctx, outline);
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+  }
+
+  // subtle internal texture clipped to land
+  ctx.save();
+  for (const outline of outlines) {
+    if (!outline?.length) continue;
+    pathFromLonLat(ctx, outline);
+  }
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+  ctx.lineWidth = 1;
+  for (let i = -app.map.height; i < app.map.width; i += 18) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + app.map.height * 0.5, app.map.height);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+function pathFromLonLat(ctx, coords) {
+  ctx.beginPath();
+  coords.forEach(([lon, lat], i) => {
+    const p = project(lon, lat);
+    if (i) ctx.lineTo(p.x, p.y);
+    else ctx.moveTo(p.x, p.y);
+  });
+  ctx.closePath();
+}
+
+function drawBaseRailNetwork(ctx) {
+  const graph = app.state.world.railGraph || [];
+  if (!graph.length) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.16)';
+  ctx.lineWidth = 1.25;
+  ctx.setLineDash([]);
+  for (const [from, to] of graph) {
+    const aStation = station(from);
+    const bStation = station(to);
+    if (!aStation || !bStation) continue;
+    const a = project(aStation.lon, aStation.lat);
+    const b = project(bStation.lon, bStation.lat);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAllLines(ctx, lite = false) {
+  const players = app.state.players || [];
+  for (const player of players) {
+    for (const line of player.lines || []) {
+      if (!line.active) continue;
+      const route = getRouteForStops(lineStopsOf(line));
+      if (!route.points.length) continue;
+      const own = app.state.me && player.id === app.state.me.id;
+      drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
+      if (lite) continue;
+      const train = (player.trains || []).find(t => t.id === line.trainId);
+      if (!train || train.maintenance?.active) continue;
+      if (line.stats?.status === 'resource-shortage') continue;
+      const model = app.state.balance.trains[train.modelId];
+      drawTrainSprite(ctx, route.points, player.color, line, model, own, train);
+    }
+  }
+}
+
+function drawRailLine(ctx, points, color, own, electrified, lite = false) {
+  if (!points?.length) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = own ? 0.96 : 0.68;
+  ctx.lineJoin = 'miter';
+  ctx.lineCap = 'butt';
+  ctx.setLineDash([]);
+
+  // sleeper/shadow pass
+  ctx.strokeStyle = 'rgba(10, 15, 24, 0.85)';
+  ctx.lineWidth = own ? 8 : 6;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+
+  // main rail pass
+  ctx.strokeStyle = own ? color : 'rgba(208, 196, 150, 0.85)';
+  ctx.lineWidth = own ? 4 : 2.5;
+  ctx.shadowColor = own ? color : 'rgba(236, 205, 127, 0.25)';
+  ctx.shadowBlur = lite ? 0 : (own ? 8 : 2);
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+
+  if (electrified) {
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(160, 220, 255, 0.85)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y - 2);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y - 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function trainVisualAverageSpeedKmH(train, model, line) {
+  const profile = train ? trainRuntimeProfile(train, model) : {};
+  const maxSpeed = Number(profile.speed || model?.speed || 90);
+  const condition = Math.max(0.35, Math.min(1, Number(train?.condition ?? 0.9)));
+  const stopCount = Math.max(2, lineStopsOf(line).length);
+  const stopPenalty = Math.max(0.58, 1 - Math.max(0, stopCount - 2) * 0.045);
+  const servicePenalty = line?.service === 'freight' ? 0.62 : line?.service === 'mixed' ? 0.68 : 0.74;
+  const conditionPenalty = 0.72 + condition * 0.28;
+  return Math.max(18, maxSpeed * servicePenalty * stopPenalty * conditionPenalty);
+}
+
+function trainVisualOneWaySeconds(line, train, model) {
+  const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
+  const averageSpeed = trainVisualAverageSpeedKmH(train, model, line);
+  const travelHours = distanceKm / Math.max(1, averageSpeed);
+  const secondsPerTravelHour = 18;
+  return Math.max(5.5, Math.min(55, travelHours * secondsPerTravelHour));
+}
+
+function trainVisualInstanceCount(line) {
+  const frequency = Number(line?.frequency || 1);
+  if (frequency >= 9) return 4;
+  if (frequency >= 5) return 3;
+  if (frequency >= 3) return 2;
+  return 1;
+}
+
+function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount = 1) {
+  const oneWaySeconds = trainVisualOneWaySeconds(line, train, model);
+  const roundTripMs = oneWaySeconds * 2 * 1000;
+  const seed = (hashCode(`${line.id}:${train?.id || ''}`) % 10000) / 10000;
+  const offset = instanceCount > 1 ? instanceIndex / instanceCount : 0;
+  return ((Date.now() / roundTripMs) + seed + offset) % 2;
+}
+
+function drawOneTrainSprite(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
+  const phase = trainVisualPhase(line, train, model, instanceIndex, instanceCount);
+  const reverse = phase > 1;
+  const progress = reverse ? 2 - phase : phase;
+  const t = Math.max(0.001, Math.min(0.999, progress));
+  const pose = pointAndAngleAlongPolyline(points, t);
+  ctx.save();
+  ctx.translate(pose.x, pose.y);
+  ctx.rotate(reverse ? pose.angle + Math.PI : pose.angle);
+  ctx.imageSmoothingEnabled = false;
+  ctx.shadowColor = own ? color : 'rgba(240, 206, 128, 0.25)';
+  ctx.shadowBlur = own ? 10 : 5;
+
+  const size = own ? 1.15 : 1.0;
+  ctx.scale(size, size);
+  drawPixelTrainBody(ctx, color, model);
+
+  if (model?.energyType === 'coal') drawSteamPuffs(ctx, t);
+  if (model?.energyType === 'electricity') drawPantographSpark(ctx, t);
+  if (model?.energyType === 'diesel') drawDieselExhaust(ctx, t);
+  ctx.restore();
+}
+
+function drawTrainSprite(ctx, points, color, line, model, own, train = null) {
+  if (!points?.length) return;
+  const count = trainVisualInstanceCount(line);
+  for (let i = 0; i < count; i += 1) {
+    drawOneTrainSprite(ctx, points, color, line, model, own, train, i, count);
+  }
+}
+
+function drawPixelTrainBody(ctx, color, model) {
+  ctx.fillStyle = 'rgba(8, 12, 18, 0.95)';
+  ctx.fillRect(-14, -7, 28, 14);
+  ctx.fillStyle = color;
+  ctx.fillRect(-12, -5, 22, 10);
+  ctx.fillStyle = '#f3d48a';
+  ctx.fillRect(10, -2, 4, 4);
+  ctx.fillStyle = '#dbeafe';
+  ctx.fillRect(-8, -4, 4, 3);
+  ctx.fillRect(-3, -4, 4, 3);
+  if ((model?.capacity || 0) > 100 || model?.type?.toLowerCase().includes('tgv')) {
+    ctx.fillStyle = 'rgba(8, 12, 18, 0.95)';
+    ctx.fillRect(14, -5, 10, 10);
+    ctx.fillStyle = color;
+    ctx.fillRect(15, -4, 8, 8);
+    ctx.fillStyle = '#dbeafe';
+    ctx.fillRect(17, -3, 4, 2);
+  }
+  // rails
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#2c3647';
+  ctx.fillRect(-15, 7, 12, 2);
+  ctx.fillRect(2, 7, 12, 2);
+}
+
+function drawSteamPuffs(ctx, t) {
+  const phase = (t * 8) % 1;
+  ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
+  ctx.fillRect(-15 - phase * 8, -10, 4, 4);
+  ctx.fillStyle = 'rgba(220, 225, 235, 0.65)';
+  ctx.fillRect(-19 - phase * 10, -14, 5, 5);
+}
+
+function drawDieselExhaust(ctx, t) {
+  const phase = (t * 7) % 1;
+  ctx.fillStyle = 'rgba(170, 180, 190, 0.55)';
+  ctx.fillRect(-16 - phase * 9, -11, 4, 4);
+}
+
+function drawPantographSpark(ctx, t) {
+  if ((t * 10) % 1 > 0.55) return;
+  ctx.fillStyle = 'rgba(125, 211, 252, 0.9)';
+  ctx.fillRect(-2, -10, 5, 2);
+  ctx.fillRect(0, -12, 2, 2);
+}
+
+function pointAndAngleAlongPolyline(points, t) {
+  const p = pointAlongPolyline(points, t);
+  const p2 = pointAlongPolyline(points, Math.min(0.999, t + 0.01));
+  return { x: p.x, y: p.y, angle: Math.atan2(p2.y - p.y, p2.x - p.x) };
+}
+
+function polylineMetrics(points) {
+  if (points._metrics) return points._metrics;
+  const segments = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    total += len;
+    segments.push({ len, total });
+  }
+  points._metrics = { segments, total };
+  return points._metrics;
+}
+
+function pointAlongPolyline(points, t) {
+  if (points.length === 1) return points[0];
+  const { segments, total } = polylineMetrics(points);
+  let target = total * t;
+  for (let i = 1; i < points.length; i++) {
+    const len = segments[i - 1]?.len || 0;
+    if (target <= len) {
+      const r = len ? target / len : 0;
+      return {
+        x: points[i - 1].x + (points[i].x - points[i - 1].x) * r,
+        y: points[i - 1].y + (points[i].y - points[i - 1].y) * r
+      };
+    }
+    target -= len;
+  }
+  return points[points.length - 1];
+}
+
+
+function shouldDrawStation(s, asset, selected) {
+  if (selected || asset) return true;
+  const zoom = app.map.leaflet?.getZoom?.() || 6;
+  const pop = Number(s.population || s.baseDemand * 450 || 0);
+  if (s.custom) return zoom >= 8;
+  if (zoom < 6) return pop >= 200000 || s.id === 'PAR';
+  if (zoom < 7) return pop >= 100000;
+  if (zoom < 10) return pop >= 40000;
+  if (!mapMaxZoomReached()) return pop >= 15000 || !s.commune;
+  return pop >= 5000 || !s.commune;
+}
+
+function stationViewportCacheKey(lite = false) {
+  const map = app.map.leaflet;
+  const zoom = map?.getZoom?.() || 6;
+  let boundsKey = 'static';
+  if (map?.getBounds) {
+    const b = map.getBounds();
+    const round = v => Math.round(v * 20) / 20;
+    boundsKey = `${round(b.getWest())},${round(b.getSouth())},${round(b.getEast())},${round(b.getNorth())}`;
+  }
+  const owned = Object.keys(app.state?.me?.stations || {}).sort().join(',');
+  const stations = app.state?.world?.stations || [];
+  const stationSignature = stationListSignature(stations);
+  const collisionRadius = stationCollisionRadiusForZoom();
+  return `${lite ? 'lite' : 'full'}:${Math.round(zoom * 2) / 2}:${collisionRadius}:${boundsKey}:${stationSignature}:${app.selectedStation || ''}:${owned}`;
+}
+
+function stationMapPriority(s, asset, selected, served) {
+  const pop = Number(s.population || s.baseDemand * 450 || 0);
+  if (selected) return 1_000_000_000;
+  if (asset) return 900_000_000 + (asset.level || 1) * 100_000 + pop;
+  if (served) return 800_000_000 + pop;
+  if (!s.commune) return 700_000_000 + pop;
+  if (s.custom) return 650_000_000 + pop;
+  return pop;
+}
+
+function stationCollisionRadiusForZoom() {
+  const zoom = Number(app.map.leaflet?.getZoom?.() || 6);
+  const max = Number(app.map.leaflet?.getMaxZoom?.() || 13);
+  if (zoom >= max) return 13;
+  if (zoom >= max - 1) return 16;
+  if (zoom >= 10) return 19;
+  if (zoom >= 8) return 22;
+  return 26;
+}
+
+function stationMarkerRadiusForItem(item) {
+  if (item.selected) return 9;
+  if (item.asset) return 7;
+  if (item.custom) return 5.8;
+  return 5;
+}
+
+function stationMarkerMinDistance(a, b, baseRadius) {
+  return Math.max(baseRadius, stationMarkerRadiusForItem(a) + stationMarkerRadiusForItem(b) + 5);
+}
+
+function stationItemOverlaps(item, kept, baseRadius) {
+  for (const other of kept) {
+    const minDistance = stationMarkerMinDistance(item, other, baseRadius);
+    if (Math.hypot(item.p.x - other.p.x, item.p.y - other.p.y) < minDistance) return true;
+  }
+  return false;
+}
+
+function drawableStations(lite = false) {
+  const key = stationViewportCacheKey(lite);
+  if (app.map.stationDrawCache.key === key) return app.map.stationDrawCache.items;
+
+  const me = app.state.me;
+  const servedStationIds = new Set((me?.lines || [])
+    .filter(line => line.active)
+    .flatMap(line => lineStopsOf(line)));
+  const candidates = [];
+
+  for (const s of dedupedStations(app.state.world.stations)) {
+    const asset = me?.stations?.[s.id];
+    const selected = app.selectedStation === s.id;
+    const served = servedStationIds.has(s.id);
+    if (lite && !selected && !asset && !s.custom) continue;
+    if (!shouldDrawStation(s, asset, selected)) continue;
+    const p = project(s.lon, s.lat);
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (p.x < -40 || p.x > app.map.width + 40 || p.y < -40 || p.y > app.map.height + 40) continue;
+    candidates.push({
+      s,
+      p,
+      asset,
+      selected,
+      served,
+      custom: !!s.custom,
+      priority: stationMapPriority(s, asset, selected, served)
+    });
+  }
+
+  const baseRadius = stationCollisionRadiusForZoom();
+  const protectedItems = [];
+  const normalItems = [];
+
+  candidates
+    .sort((a, b) => b.priority - a.priority || String(a.s.name || '').localeCompare(String(b.s.name || ''), 'fr'))
+    .forEach(item => {
+      if (item.selected || item.asset) protectedItems.push(item);
+      else normalItems.push(item);
+    });
+
+  const kept = [];
+  for (const item of protectedItems) {
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      const other = kept[i];
+      if (!other.selected && !other.asset && stationItemOverlaps(item, [other], baseRadius)) kept.splice(i, 1);
+    }
+    if (!stationItemOverlaps(item, kept.filter(other => other.selected || other.asset), baseRadius)) kept.push(item);
+  }
+
+  for (const item of normalItems) {
+    if (!stationItemOverlaps(item, kept, baseRadius)) kept.push(item);
+  }
+
+  kept.sort((a, b) => a.priority - b.priority);
+  app.map.stationDrawCache = { key, items: kept };
+  return kept;
+}
+
+function drawStations(ctx, lite = false) {
+  if (!lite) app.map.stationHit = [];
+  const items = drawableStations(lite);
+  const zoomMax = mapMaxZoomReached();
+  const myLines = app.state?.me?.lines || [];
+
+  for (const item of items) {
+    const { s, p, asset, selected, custom } = item;
+    const hover = !lite && app.hoverStation === s.id;
+    const served = myLines.some(line => line.active && lineStopsOf(line).includes(s.id));
+    const stage = stationPrestigeStage(asset);
+    const sprite = asset ? getStationMapSprite(asset) : null;
+    const showSprite = !!(zoomMax && sprite?.complete && sprite.naturalWidth && asset);
+    const markerR = selected ? 9 : asset ? 7 : custom ? 5.8 : 5;
+
+    if (!lite) app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: showSprite ? 30 : (selected ? 24 : asset ? 20 : 16) });
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+
+    if (showSprite) {
+      const scale = (selected || hover ? 0.34 : 0.30) + stage * 0.014;
+      const w = sprite.naturalWidth * scale;
+      const h = sprite.naturalHeight * scale;
+      const drawX = p.x - w / 2;
+      const drawY = p.y - h - 8;
+
+      roundRect(ctx, drawX - 4, drawY - 4, w + 8, h + 8, 9);
+      ctx.fillStyle = 'rgba(4, 10, 18, 0.68)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = selected ? 'rgba(240,200,117,0.62)' : hover ? 'rgba(147,197,253,0.50)' : 'rgba(217,168,82,0.22)';
+      ctx.stroke();
+
+      ctx.drawImage(sprite, drawX, drawY, w, h);
+
+      drawSmallMapMarker(ctx, p, 4, app.state.me?.color || '#d9a852', selected);
+
+      if (!lite) {
+        app.map.stationHit.push({ id: s.id, x: drawX, y: drawY, width: w, height: h, r: 0 });
+      }
+    } else {
+      const fill = asset ? app.state.me.color : custom ? '#e0b34f' : 'rgba(238, 232, 210, 0.95)';
+      drawSmallMapMarker(ctx, p, markerR, fill, selected);
+      if (asset) {
+        ctx.fillStyle = '#f5d07f';
+        ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - markerR - 5), 2, 4);
+      }
+    }
+
+    const shouldLabel = !lite && (selected || hover || served || asset?.level >= 3 || (custom && app.map.leaflet?.getZoom() >= 8));
+    if (shouldLabel) {
+      ctx.font = '12px "Trebuchet MS", system-ui';
+      const label = shortStationName(s.name);
+      const labelW = Math.min(170, ctx.measureText(label).width + 12);
+      const lx = Math.round(p.x + 12);
+      const ly = Math.round(showSprite ? p.y + 8 : p.y - 24);
+      roundRect(ctx, lx, ly, labelW, 17, 7);
+      ctx.fillStyle = hover ? 'rgba(2,6,23,.92)' : 'rgba(2,6,23,.82)';
+      ctx.fill();
+      ctx.strokeStyle = asset ? 'rgba(217,168,82,0.26)' : 'rgba(255,255,255,0.10)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(246,236,214,.98)';
+      ctx.fillText(label, lx + 6, ly + 12);
+      app.map.stationHit.push({ id: s.id, x: lx, y: ly, width: labelW, height: 17, r: 0 });
+    }
+
+    ctx.restore();
+  }
+}
+
+function shortStationName(name) {
+  return String(name).replace(' Saint-Charles', '').replace(' Saint-Roch', '').replace(' Part-Dieu', '').replace(' Rive-Droite', '').replace(' Flandres', '').replace(' Matabiau', '').replace('-Ville', '').replace('-Jean', '');
+}
+
+function drawTooltip(ctx) {
+  if (!app.hoverStation) return;
+  const s = station(app.hoverStation);
+  const hit = app.map.stationHit.find(h => h.id === app.hoverStation);
+  if (!s || !hit) return;
+
+  const owner = stationOwnerClient(s.id);
+  const ownedByMe = owner?.player?.id === app.state?.me?.id;
+  const asset = owner?.asset || null;
+  const sprite = asset ? getStationMapSprite(asset) : null;
+  const hasSprite = Boolean(asset && sprite?.complete && sprite.naturalWidth);
+
+  const lines = (app.state.players || [])
+    .flatMap(player => (player.lines || []).map(line => ({ ...line, owner: player })))
+    .filter(line => line.active && lineStopsOf(line).includes(s.id));
+
+  const stage = stationPrestigeStage(asset);
+  const level = Number(asset?.level || 0);
+  const commerce = Number(asset?.commerce || 0);
+  const maintenance = Number(asset?.maintenance || 0);
+
+  const margin = 12;
+  const width = Math.min(hasSprite ? 386 : 286, Math.max(220, app.map.width - margin * 2));
+  const height = Math.min(hasSprite ? 226 : 190, Math.max(150, app.map.height - margin * 2));
+  const anchorX = Number.isFinite(hit.width) ? hit.x + hit.width : hit.x;
+  const anchorY = Number.isFinite(hit.height) ? hit.y : hit.y;
+
+  let x = anchorX + 18;
+  if (x + width > app.map.width - margin) x = anchorX - width - 18;
+  x = Math.max(margin, Math.min(app.map.width - width - margin, x));
+
+  let y = anchorY - Math.round(height * 0.48);
+  y = Math.max(margin, Math.min(app.map.height - height - margin, y));
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  // Lien visuel entre le marqueur et la fiche, toujours borné dans le canvas.
+  ctx.strokeStyle = 'rgba(217,168,82,.42)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(hit.x, hit.y);
+  ctx.lineTo(x > anchorX ? x : x + width, y + height * 0.5);
+  ctx.stroke();
+
+  // Fond principal.
+  ctx.shadowColor = 'rgba(0,0,0,.42)';
+  ctx.shadowBlur = 24;
+  roundRect(ctx, x, y, width, height, 16);
+  const panel = ctx.createLinearGradient(x, y, x + width, y + height);
+  panel.addColorStop(0, 'rgba(6,13,26,.98)');
+  panel.addColorStop(0.58, 'rgba(12,24,43,.97)');
+  panel.addColorStop(1, 'rgba(24,32,47,.98)');
+  ctx.fillStyle = panel;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(217,168,82,.40)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Bandeau haut.
+  roundRect(ctx, x + 1, y + 1, width - 2, 46, 15);
+  ctx.fillStyle = 'rgba(18,32,58,.88)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(81,142,205,.28)';
+  ctx.beginPath();
+  ctx.moveTo(x + 14, y + 47);
+  ctx.lineTo(x + width - 14, y + 47);
+  ctx.stroke();
+
+  function fitTooltipText(text, maxWidth) {
+    let value = String(text || '');
+    if (ctx.measureText(value).width <= maxWidth) return value;
+    while (value.length > 1 && ctx.measureText(`${value}…`).width > maxWidth) value = value.slice(0, -1);
+    return `${value}…`;
+  }
+
+  // Badge statut. Calculé avant les textes pour réserver l'espace à droite.
+  const badgeText = owner ? `Niv. ${level || 1}` : 'Libre';
+  ctx.font = '700 11px "Trebuchet MS", system-ui';
+  const badgeW = Math.min(96, Math.ceil(ctx.measureText(badgeText).width) + 20);
+  const reservedRight = badgeW + 24;
+  const textMaxW = Math.max(96, width - reservedRight - 24);
+
+  ctx.font = '700 15px "Trebuchet MS", system-ui';
+  ctx.fillStyle = '#f6e8c9';
+  ctx.fillText(fitTooltipText(shortStationName(s.name), textMaxW), x + 16, y + 20);
+
+  ctx.font = '12px "Trebuchet MS", system-ui';
+  ctx.fillStyle = '#b8aa84';
+  const subtitle = owner
+    ? `${ownedByMe ? 'Ta ville' : `Propriétaire : ${owner.player.name}`}`
+    : 'Achat requis pour ouvrir une ligne';
+  ctx.fillText(fitTooltipText(subtitle, textMaxW), x + 16, y + 38);
+
+  roundRect(ctx, x + width - badgeW - 14, y + 11, badgeW, 23, 11);
+  ctx.fillStyle = owner ? 'rgba(217,168,82,.18)' : 'rgba(148,163,184,.14)';
+  ctx.fill();
+  ctx.strokeStyle = owner ? 'rgba(217,168,82,.35)' : 'rgba(148,163,184,.22)';
+  ctx.stroke();
+  ctx.font = '700 11px "Trebuchet MS", system-ui';
+  ctx.fillStyle = owner ? '#f0c875' : '#d1d5db';
+  ctx.fillText(badgeText, x + width - badgeW - 4, y + 26);
+
+  const contentY = y + 60;
+
+  if (hasSprite) {
+    const artX = x + 14;
+    const artY = contentY;
+    const artW = 154;
+    const artH = 128;
+
+    roundRect(ctx, artX, artY, artW, artH, 14);
+    ctx.fillStyle = 'rgba(4,10,18,.78)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(217,168,82,.24)';
+    ctx.stroke();
+
+    roundRect(ctx, artX + 14, artY + artH - 26, artW - 28, 12, 6);
+    ctx.fillStyle = 'rgba(17,24,39,.84)';
+    ctx.fill();
+
+    const maxW = artW - 22;
+    const maxH = artH - 30;
+    const scale = Math.min(maxW / sprite.naturalWidth, maxH / sprite.naturalHeight) * 1.12;
+    const sw = Math.round(sprite.naturalWidth * scale);
+    const sh = Math.round(sprite.naturalHeight * scale);
+    const sx = artX + Math.round((artW - sw) / 2);
+    const sy = artY + Math.round((artH - sh) / 2) - 2;
+
+    ctx.shadowColor = 'rgba(0,0,0,.34)';
+    ctx.shadowBlur = 10;
+    ctx.drawImage(sprite, sx, sy, sw, sh);
+    ctx.shadowBlur = 0;
+
+    ctx.font = '700 11px "Trebuchet MS", system-ui';
+    ctx.fillStyle = '#f0c875';
+    ctx.fillText('Aperçu gare', artX + 14, artY + 19);
+  }
+
+  const infoX = hasSprite ? x + 184 : x + 16;
+  const infoW = hasSprite ? width - 198 : width - 32;
+  const chipW = Math.floor((infoW - 8) / 2);
+
+  function chip(cx, cy, cw, label, value, accent = '#f6e8c9') {
+    roundRect(ctx, cx, cy, cw, 40, 11);
+    ctx.fillStyle = 'rgba(8,15,29,.58)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(81,142,205,.16)';
+    ctx.stroke();
+
+    ctx.font = '11px "Trebuchet MS", system-ui';
+    ctx.fillStyle = '#b8aa84';
+    ctx.fillText(label, cx + 9, cy + 15);
+
+    ctx.font = '700 13px "Trebuchet MS", system-ui';
+    ctx.fillStyle = accent;
+    ctx.fillText(String(value), cx + 9, cy + 31);
+  }
+
+  chip(infoX, contentY, chipW, 'Dessertes', lines.length);
+  chip(infoX + chipW + 8, contentY, chipW, 'Niveau', level || 0, '#f0c875');
+  chip(infoX, contentY + 48, chipW, 'Commerce', commerce);
+  chip(infoX + chipW + 8, contentY + 48, chipW, 'Atelier', maintenance);
+
+  const footerY = y + height - 32;
+  roundRect(ctx, x + 14, footerY, width - 28, 21, 10);
+  ctx.fillStyle = owner ? (ownedByMe ? 'rgba(76,175,80,.16)' : 'rgba(217,168,82,.13)') : 'rgba(255,255,255,.055)';
+  ctx.fill();
+  ctx.strokeStyle = owner ? 'rgba(217,168,82,.22)' : 'rgba(255,255,255,.08)';
+  ctx.stroke();
+
+  ctx.font = '12px "Trebuchet MS", system-ui';
+  ctx.fillStyle = owner ? (ownedByMe ? '#9be7a2' : '#f0c875') : '#d3c7ac';
+  const footerText = owner
+    ? (ownedByMe ? 'Droits perçus sur les concurrents' : 'Droits de passage dus si desservie')
+    : 'Non utilisable tant qu’elle est libre';
+  ctx.fillText(footerText, x + 25, footerY + 14);
+
+  ctx.restore();
+}
+
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
+}
+
+function projectBaseSimple(lon, lat) {
+  const b = app.state.world.bounds;
+  const lat0 = ((b.minLat + b.maxLat) / 2) * Math.PI / 180;
+  const minX = b.minLon * Math.cos(lat0);
+  const maxX = b.maxLon * Math.cos(lat0);
+  const xRaw = lon * Math.cos(lat0);
+
+  if (app.map.frame?.france) {
+    const frame = app.map.frame.france;
+    const padX = frame.width * 0.04;
+    const padY = frame.height * 0.04;
+    const x = frame.x + padX + ((xRaw - minX) / (maxX - minX)) * (frame.width - padX * 2);
+    const y = frame.y + padY + (1 - ((lat - b.minLat) / (b.maxLat - b.minLat))) * (frame.height - padY * 2);
+    return { x, y };
+  }
+
+  const pad = Math.min(app.map.width, app.map.height) * 0.075;
+  const x = pad + ((xRaw - minX) / (maxX - minX)) * (app.map.width - pad * 2);
+  const y = pad + (1 - ((lat - b.minLat) / (b.maxLat - b.minLat))) * (app.map.height - pad * 2);
+  return { x, y };
+}
+
+function correctedProjection(base) {
+  if (!app.state?.world?.stations?.length || !app.map.frame?.image) return base;
+  let sumW = 0, dx = 0, dy = 0;
+  for (const [id, anchor] of Object.entries(MAP_CITY_ANCHORS)) {
+    const s = station(id);
+    if (!s) continue;
+    const ref = projectBaseSimple(s.lon, s.lat);
+    const target = artPoint(anchor[0], anchor[1]);
+    const dist = Math.max(18, Math.hypot(base.x - ref.x, base.y - ref.y));
+    const w = 1 / (dist * dist);
+    sumW += w;
+    dx += (target.x - ref.x) * w;
+    dy += (target.y - ref.y) * w;
+  }
+  return sumW ? { x: base.x + dx / sumW, y: base.y + dy / sumW } : base;
+}
+
+function project(lon, lat) {
+  if (app.map.leaflet && app.map.mapReady) {
+    const p = app.map.leaflet.latLngToContainerPoint([lat, lon]);
+    return { x: p.x, y: p.y };
+  }
+  return projectBaseSimple(lon, lat);
+}
+
+
+function hitStationAt(p) {
+  return app.map.stationHit
+    .map(h => {
+      if (Number.isFinite(h.width) && Number.isFinite(h.height)) {
+        const inside = p.x >= h.x && p.x <= h.x + h.width && p.y >= h.y && p.y <= h.y + h.height;
+        return { ...h, d: inside ? 0 : Number.POSITIVE_INFINITY };
+      }
+      return { ...h, d: Math.hypot(h.x - p.x, h.y - p.y) };
+    })
+    .filter(h => h.d <= (h.r || 0))
+    .sort((a, b) => a.d - b.d)[0] || null;
+}
+
+function onMapDown(event) {
+  if (event.button !== 0) return;
+  const p = pointer(event);
+  app.map.drag.active = true;
+  app.map.drag.moved = false;
+  app.map.drag.startX = p.x;
+  app.map.drag.startY = p.y;
+  app.map.drag.startPanX = app.map.view.panX;
+  app.map.drag.startPanY = app.map.view.panY;
+  document.body.classList.add('dragging-map');
+}
+
+function onWindowMapDrag(event) {
+  if (!app.map.drag.active) return;
+  const p = pointer(event, app.map.canvas);
+  const dx = p.x - app.map.drag.startX;
+  const dy = p.y - app.map.drag.startY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) app.map.drag.moved = true;
+  if (app.map.view.zoom > 1 || app.map.drag.moved) {
+    app.map.view.panX = app.map.drag.startPanX + dx;
+    app.map.view.panY = app.map.drag.startPanY + dy;
+  }
+}
+
+function onMapUp() {
+  if (!app.map.drag.active) return;
+  app.map.drag.active = false;
+  document.body.classList.remove('dragging-map');
+}
+
+function onMapWheel(event) {
+  event.preventDefault();
+  const p = pointer(event);
+  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+  setMapZoom(app.map.view.zoom * factor, p);
+}
+
+function onMapMove(event) {
+  const p = pointer(event);
+  const hit = hitStationAt(p);
+  app.hoverStation = hit?.id || null;
+  app.map.canvas.style.cursor = hit ? 'pointer' : 'crosshair';
+}
+
+function onMapClick(event) {
+  if (app.map.drag.moved) { app.map.drag.moved = false; return; }
+  const p = pointer(event);
+  const hit = hitStationAt(p) || nearestStationAt(p, 24);
+  if (hit) {
+    setSelectedStation(hit.id);
+    app.activeTab = 'stations';
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    renderAll();
+  }
+}
+
+function nearestStationAt(p, maxDistance = 20) {
+  return app.map.stationHit
+    .map(h => ({ ...h, d: Math.hypot(h.x - p.x, h.y - p.y) }))
+    .filter(h => h.d <= maxDistance)
+    .sort((a, b) => a.d - b.d)[0] || null;
+}
+
+function nearestProjectedStationAt(p, maxDistance = 28) {
+  const stations = dedupedStations(app.state?.world?.stations || []);
+  let best = null;
+  for (const s of stations) {
+    const sp = project(s.lon, s.lat);
+    if (!Number.isFinite(sp.x) || !Number.isFinite(sp.y)) continue;
+    if (sp.x < -80 || sp.x > app.map.width + 80 || sp.y < -80 || sp.y > app.map.height + 80) continue;
+    const d = Math.hypot(sp.x - p.x, sp.y - p.y);
+    if (d <= maxDistance && (!best || d < best.d)) best = { id: s.id, x: sp.x, y: sp.y, r: maxDistance, d };
+  }
+  return best;
+}
+
+function setSelectedStation(stationId) {
+  if (!stationId || !station(stationId)) {
+    app.selectedStation = null;
+    localStorage.removeItem('sillons.selectedStation');
+    return;
+  }
+  app.selectedStation = stationId;
+  localStorage.setItem('sillons.selectedStation', stationId);
+}
+
+function pointer(event, sourceCanvas = app.map.canvas) {
+  const rect = sourceCanvas.getBoundingClientRect();
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  };
+}
+
+function stationListSignature(list) {
+  const stations = Array.isArray(list) ? list : [];
+  const ids = stations.map(s => `${s?.id || ''}:${s?.code || s?.communeCode || ''}:${s?.population || 0}`).join('|');
+  let hash = 0;
+  for (let i = 0; i < ids.length; i += 1) hash = ((hash << 5) - hash + ids.charCodeAt(i)) | 0;
+  const customCount = stations.reduce((count, s) => count + (s?.custom ? 1 : 0), 0);
+  const communes = app.state?.world?.communesStatus || {};
+  return `${stations.length}:${hash}:${ids.length}:${customCount}:${communes.status || ''}:${communes.updatedAt || ''}:${communes.count || 0}`;
+}
+
+function dedupedStations(list = app.state?.world?.stations || []) {
+  if (app.stationListCache.source === list) return app.stationListCache.deduped;
+  const signature = stationListSignature(list);
+  if (app.stationListCache.signature === signature) {
+    app.stationListCache.source = list;
+    return app.stationListCache.deduped;
+  }
+
+  const out = [];
+  for (const s of list) {
+    if (!s) continue;
+    const dup = out.find(existing => isStationDuplicateClient(s, existing));
+    if (!dup) out.push(s);
+  }
+  app.stationListCache = { source: list, signature, deduped: out };
+  return out;
+}
+
+function stationCommuneCodeClient(station) {
+  return String(station?.code || station?.communeCode || '').trim();
+}
+
+function isStationDuplicateClient(a, b) {
+  if (!a || !b || a.id === b.id) return false;
+  const acode = stationCommuneCodeClient(a);
+  const bcode = stationCommuneCodeClient(b);
+  if (acode && bcode && acode === bcode) return true;
+
+  const an = stationDedupNameClient(a.name);
+  const bn = stationDedupNameClient(b.name);
+  const exactSameName = an && bn && an === bn;
+  const close = Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(b.lat) && Number.isFinite(b.lon)
+    ? haversineClient(a.lat, a.lon, b.lat, b.lon) <= 1.25
+    : false;
+  return Boolean(exactSameName && close);
+}
+
+function stationDedupNameClient(name) {
+  return String(name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/gare|station|sncf|saint|sainte|st\.?|ste\.?/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function haversineClient(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const a1 = lat1 * Math.PI / 180, a2 = lat2 * Math.PI / 180;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a1) * Math.cos(a2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function stationOptions(selectedId = '') {
+  const selected = station(selectedId);
+  const candidates = sortStationsForPurchase(dedupedStations(app.state.world.stations), app.stationSortMode);
+  if (selected && !candidates.some(s => s.id === selected.id)) candidates.unshift(selected);
+  return candidates
+    .map(s => {
+      const owner = stationOwnerClient(s.id);
+      const status = owner ? owner.player.id === app.state?.me?.id ? 'à toi' : `possédée: ${owner.player.name}` : 'libre';
+      return `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.name)} · ${money(stationSortPrice(s))} · demande ${formatInt(s.baseDemand)} · ${escapeHtml(status)}</option>`;
+    })
+    .join('');
+}
+
+
+function station(id) {
+  return app.state.world.stationIndex[id] || dedupedStations(app.state.world.stations).find(s => s.id === id);
+}
+
+function trainName(train) {
+  const model = app.state.balance.trains[train.modelId];
+  return model ? model.name : train.modelId;
+}
+
+function distance(a, b) {
+  const route = getRoute(a, b);
+  return route.distance || 0;
+}
+
+
+function routeGeometryKey(a, b) {
+  return `${a}->${b}`;
+}
+
+function geometryForRoute(a, b) {
+  const direct = app.osmRouteCache.get(routeGeometryKey(a, b));
+  if (direct) return direct;
+  const reverse = app.osmRouteCache.get(routeGeometryKey(b, a));
+  if (reverse) return [...reverse].reverse();
+  ensureOsmRouteGeometry(a, b);
+  return null;
+}
+
+async function ensureOsmRouteGeometry(a, b) {
+  if (!app.map.leaflet || app.osmRoutePending.has(routeGeometryKey(a, b))) return;
+  const sa = station(a), sb = station(b);
+  if (!sa || !sb) return;
+  const key = routeGeometryKey(a, b);
+  app.osmRoutePending.add(key);
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${sa.lon},${sa.lat};${sb.lon},${sb.lat}?overview=full&geometries=geojson`;
+    const response = await fetch(url, { cache: 'force-cache' });
+    if (!response.ok) throw new Error(`OSRM ${response.status}`);
+    const data = await response.json();
+    const coords = data.routes?.[0]?.geometry?.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+      app.osmRouteCache.set(key, coords.map(([lon, lat]) => [Number(lon), Number(lat)]).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1])));
+      app.routeCache.clear();
+    }
+  } catch (error) {
+    // Pas bloquant : on conserve le tracé de secours.
+  } finally {
+    app.osmRoutePending.delete(key);
+  }
+}
+
+function getRoute(a, b) {
+  const key = `${a}::${b}`;
+  if (app.routeCache.has(key)) return app.routeCache.get(key);
+  const reverseKey = `${b}::${a}`;
+  if (app.routeCache.has(reverseKey)) {
+    const reverse = app.routeCache.get(reverseKey);
+    const route = {
+      ...reverse,
+      ids: [...reverse.ids].reverse(),
+      points: [...(reverse.points || [])].reverse()
+    };
+    app.routeCache.set(key, route);
+    return route;
+  }
+  const world = app.state.world;
+  const adjacency = world.railAdjacency || {};
+  const nodes = new Set([...Object.keys(adjacency), a, b]);
+  const dist = {};
+  const prev = {};
+  const unvisited = new Set(nodes);
+  for (const n of nodes) dist[n] = Number.POSITIVE_INFINITY;
+  dist[a] = 0;
+
+  while (unvisited.size) {
+    let u = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const n of unvisited) {
+      if (dist[n] < best) { best = dist[n]; u = n; }
+    }
+    if (!u || u === b || !Number.isFinite(best)) break;
+    unvisited.delete(u);
+    for (const v of adjacency[u] || []) {
+      if (!unvisited.has(v)) continue;
+      const alt = dist[u] + directRailDistance(u, v);
+      if (alt < dist[v]) {
+        dist[v] = alt;
+        prev[v] = u;
+      }
+    }
+  }
+
+  let ids = [];
+  if (Number.isFinite(dist[b])) {
+    let cur = b;
+    ids.push(cur);
+    while (prev[cur]) { cur = prev[cur]; ids.push(cur); }
+    ids.reverse();
+  } else {
+    ids = [a, b];
+    dist[b] = directRailDistance(a, b);
+  }
+  let maxSegment = 0;
+  let points = [];
+  for (let i = 1; i < ids.length; i++) {
+    maxSegment = Math.max(maxSegment, directRailDistance(ids[i - 1], ids[i]));
+    const segment = resolveSegmentPath(ids[i - 1], ids[i]);
+    if (!points.length) points.push(...segment);
+    else points.push(...segment.slice(1));
+  }
+  if (!points.length && ids.length) points = ids.map(id => station(id)).filter(Boolean).map(s => project(s.lon, s.lat));
+  const route = {
+    ids,
+    distance: Math.round(dist[b] || 0),
+    maxSegment: Math.round(maxSegment || 0),
+    points
+  };
+  app.routeCache.set(key, route);
+  return route;
+}
+
+function resolveSegmentPath(a, b) {
+  const sa = station(a), sb = station(b);
+  if (!sa || !sb) return [];
+
+  const geometry = geometryForRoute(a, b);
+  if (geometry?.length >= 2) {
+    return geometry.map(([lon, lat]) => project(lon, lat)).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+  }
+
+  const start = project(sa.lon, sa.lat);
+  const end = project(sb.lon, sb.lat);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const offset = Math.max(-90, Math.min(90, (hashCode(`${a}-${b}`) % 120) - 60)) * Math.min(1, dist / 360);
+  const nx = -dy / dist;
+  const ny = dx / dist;
+  const steps = Math.max(5, Math.min(18, Math.ceil(dist / 70)));
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const bend = Math.sin(Math.PI * t) * offset;
+    points.push({
+      x: start.x + dx * t + nx * bend,
+      y: start.y + dy * t + ny * bend
+    });
+  }
+  return points;
+}
+
+function directRailDistance(a, b) {
+  const sa = station(a), sb = station(b);
+  if (!sa || !sb) return 0;
+  return haversineClient(sa.lat, sa.lon, sb.lat, sb.lon);
+}
+
+function ensureSelectedStation() {
+  const current = app.selectedStation || localStorage.getItem('sillons.selectedStation') || '';
+  if (current && station(current)) {
+    app.selectedStation = current;
+    localStorage.setItem('sillons.selectedStation', current);
+    return;
+  }
+  const owned = app.state?.me ? Object.keys(app.state.me.stations || {}) : [];
+  if (owned.length) {
+    setSelectedStation(owned[0]);
+  }
+}
+
+
+
+
+function lineStopsOf(line) {
+  const raw = Array.isArray(line?.stops) && line.stops.length ? line.stops : [line?.from, line?.to];
+  return raw.map(id => String(id || '').trim()).filter(Boolean);
+}
+
+function stationOwnerClient(stationId) {
+  for (const player of app.state?.players || []) {
+    if (player?.stations?.[stationId]) return { player, asset: player.stations[stationId] };
+  }
+  return null;
+}
+
+function lineOwnershipProblemClient(stops) {
+  const ids = Array.isArray(stops) ? stops : [];
+  for (const stopId of ids) {
+    const s = station(stopId);
+    if (!s) return `Arrêt invalide : ${stopId}.`;
+    if (!stationOwnerClient(stopId)) return `${s.name} n’appartient à aucune compagnie. Achète d’abord cette ville dans l’onglet Gares.`;
+  }
+  return '';
+}
+
+function lineExternalRightsLabel(stops) {
+  const ids = Array.isArray(stops) ? stops : [];
+  const owners = new Map();
+  for (const stopId of ids) {
+    const owner = stationOwnerClient(stopId);
+    if (owner && owner.player.id !== app.state?.me?.id) owners.set(owner.player.id, owner.player.name);
+  }
+  if (!owners.size) return '';
+  return `Droits de passage dus à : ${[...owners.values()].join(', ')}.`;
+}
+
+function lineStopsLabel(stops) {
+  return stops.map(id => station(id)?.name || id).join(' → ');
+}
+
+function lineDisplayName(line) {
+  const stops = lineStopsOf(line);
+  if (line.name) return line.name;
+  if (stops.length < 2) return lineStopsLabel(stops);
+  return `${station(stops[0])?.name || stops[0]} → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`;
+}
+
+function routeDistanceForStopOrder(stops) {
+  const ids = stops.filter(Boolean);
+  let total = 0;
+  for (let i = 1; i < ids.length; i++) total += distance(ids[i - 1], ids[i]);
+  return total;
+}
+
+function bestIntermediateInsertIndex(stops, stopId) {
+  const ids = stops.filter(Boolean);
+  if (ids.length < 2) return Math.max(0, ids.length - 1);
+  let bestIndex = 0;
+  let bestCost = Number.POSITIVE_INFINITY;
+
+  // Pour une desserte intermédiaire, on teste entre deux arrêts existants.
+  // On évite donc l'ajout automatique après le terminus, source des demi-tours visuels.
+  for (let i = 0; i < ids.length - 1; i++) {
+    const before = ids[i];
+    const after = ids[i + 1];
+    const added = distance(before, stopId) + distance(stopId, after) - distance(before, after);
+    if (added < bestCost) {
+      bestCost = added;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
+function insertStopAtBestIntermediatePosition(stops, stopId) {
+  const ids = stops.filter(Boolean);
+  if (ids.includes(stopId)) return ids;
+  if (ids.length < 2) return [...ids, stopId];
+  const index = bestIntermediateInsertIndex(ids, stopId);
+  return [...ids.slice(0, index + 1), stopId, ...ids.slice(index + 1)];
+}
+
+function coherentStopOrder(stops) {
+  const ids = stops.filter(Boolean);
+  if (ids.length <= 2) return ids;
+
+  const originalDistance = routeDistanceForStopOrder(ids);
+  let best = ids;
+  let bestDistance = originalDistance;
+
+  function visit(prefix, remaining) {
+    if (!remaining.length) {
+      const d = routeDistanceForStopOrder(prefix);
+      if (d > 0 && d < bestDistance) {
+        bestDistance = d;
+        best = [...prefix];
+      }
+      return;
+    }
+    for (let i = 0; i < remaining.length; i++) {
+      visit([...prefix, remaining[i]], [...remaining.slice(0, i), ...remaining.slice(i + 1)]);
+    }
+  }
+
+  if (ids.length <= 7) {
+    // On garde le premier arrêt puis on évite les ordres qui forcent un demi-tour.
+    visit([ids[0]], ids.slice(1));
+  } else {
+    let ordered = [ids[0]];
+    const remaining = ids.slice(1);
+    while (remaining.length) {
+      let bestIndex = 0;
+      let bestCost = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = distance(ordered[ordered.length - 1], remaining[i]);
+        if (d < bestCost) {
+          bestCost = d;
+          bestIndex = i;
+        }
+      }
+      ordered.push(remaining.splice(bestIndex, 1)[0]);
+    }
+    const d = routeDistanceForStopOrder(ordered);
+    if (d > 0 && d < bestDistance) {
+      bestDistance = d;
+      best = ordered;
+    }
+  }
+
+  return bestDistance < originalDistance * 0.96 ? best : ids;
+}
+
+function buildLineDraftStops() {
+  return stopsFromLineDraft(app.lineDraft || {});
+}
+
+function renderDraftStopStrip(stops, waypoints = []) {
+  if (!stops.length) return '<span class="muted small">Aucun arrêt sélectionné.</span>';
+  return stops.map((id, index) => {
+    const s = station(id);
+    const cls = index === 0 ? 'origin' : index === stops.length - 1 ? 'terminal' : 'via';
+    const label = index === 0 ? 'Départ' : index === stops.length - 1 ? 'Arrivée' : 'Intermédiaire';
+    return `<span class="line-stop-pill ${cls}"><b>${escapeHtml(label)}</b> ${escapeHtml(s?.name || id)}</span>`;
+  }).join('<span class="line-stop-arrow">→</span>');
+}
+
+function renderWaypointChip(id, index) {
+  const s = station(id);
+  return `<div class="line-waypoint-chip"><span>${index + 1}. ${escapeHtml(s?.name || id)}</span><button type="button" data-action="remove-waypoint" data-index="${index}">Retirer</button></div>`;
+}
+
+function addDraftWaypoint() {
+  updateLineDraftFromForm();
+  const draft = app.lineDraft;
+  const stopId = draft.viaCandidate;
+  if (!stopId || !station(stopId)) {
+    toast('Choisis d’abord une suggestion pour l’arrêt intermédiaire.', 'error');
+    return;
+  }
+  const currentStops = buildLineDraftStops();
+  if (currentStops.includes(stopId)) {
+    toast('Cet arrêt est déjà présent sur la ligne.', 'error');
+    return;
+  }
+
+  const newStops = insertStopAtBestIntermediatePosition(currentStops, stopId);
+  draft.waypoints = newStops.slice(1, -1);
+  draft.viaCandidate = '';
+  draft.viaQuery = '';
+  saveLineDraft();
+  renderAll();
+}
+
+function removeDraftWaypoint(index) {
+  const draft = app.lineDraft || {};
+  draft.waypoints = (draft.waypoints || []).filter((_, i) => i !== Number(index));
+  saveLineDraft();
+  renderAll();
+}
+
+function geometryKeyForStops(ids) {
+  return `stops::${ids.join('>')}`;
+}
+
+function geometryForStopSequence(ids) {
+  const key = geometryKeyForStops(ids);
+  const direct = app.osmRouteCache.get(key);
+  if (direct) return direct;
+  ensureOsmRouteGeometryForStops(ids);
+  return null;
+}
+
+async function ensureOsmRouteGeometryForStops(ids) {
+  if (!app.map.leaflet || !Array.isArray(ids) || ids.length < 2) return;
+  const key = geometryKeyForStops(ids);
+  if (app.osmRoutePending.has(key)) return;
+  const stations = ids.map(id => station(id)).filter(Boolean);
+  if (stations.length !== ids.length) return;
+  app.osmRoutePending.add(key);
+  try {
+    const coords = stations.map(s => `${s.lon},${s.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&continue_straight=true`;
+    const response = await fetch(url, { cache: 'force-cache' });
+    if (!response.ok) throw new Error(`OSRM ${response.status}`);
+    const data = await response.json();
+    const routeCoords = data.routes?.[0]?.geometry?.coordinates;
+    if (Array.isArray(routeCoords) && routeCoords.length >= 2) {
+      app.osmRouteCache.set(key, routeCoords.map(([lon, lat]) => [Number(lon), Number(lat)]).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1])));
+      app.routeCache.delete(`multi::${ids.join('::')}`);
+    }
+  } catch (error) {
+    // Non bloquant : on garde l'itinéraire ferroviaire de secours.
+  } finally {
+    app.osmRoutePending.delete(key);
+  }
+}
+
+function cleanRoutePoints(points) {
+  if (!Array.isArray(points) || points.length < 3) return points || [];
+  const deduped = [];
+  for (const p of points) {
+    const last = deduped[deduped.length - 1];
+    if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 2) deduped.push(p);
+  }
+
+  const cleaned = [deduped[0]];
+  for (let i = 1; i < deduped.length - 1; i++) {
+    const a = cleaned[cleaned.length - 1];
+    const b = deduped[i];
+    const c = deduped[i + 1];
+    const ab = Math.hypot(b.x - a.x, b.y - a.y);
+    const bc = Math.hypot(c.x - b.x, c.y - b.y);
+    const ac = Math.hypot(c.x - a.x, c.y - a.y);
+    // Supprime les micro-retours visuels quand un point fait un crochet quasi demi-tour.
+    if (ab < 16 && bc < 16 && ac < Math.max(ab, bc) * 0.58) continue;
+    cleaned.push(b);
+  }
+  cleaned.push(deduped[deduped.length - 1]);
+  return cleaned;
+}
+
+function pointFromStationId(id) {
+  const s = station(id);
+  if (!s) return null;
+  const p = project(s.lon, s.lat);
+  return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+}
+
+function deterministicUnit(seed) {
+  const n = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+function sampleCatmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+    y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+  };
+}
+
+const COASTAL_VISUAL_WAYPOINTS = {
+  // Correction visuelle : la liaison La Roche-sur-Yon → La Rochelle ne doit
+  // jamais couper la baie / l’océan. Ces points suivent l’intérieur des terres
+  // autour de Luçon / Marans, uniquement pour le rendu carte.
+  'LRS|LAR': [
+    { lon: -1.245, lat: 46.515 },
+    { lon: -1.140, lat: 46.395 },
+    { lon: -1.015, lat: 46.290 }
+  ]
+};
+
+function visualGuidePointFromEntry(entry) {
+  if (typeof entry === 'string') return pointFromStationId(entry);
+  if (entry && Number.isFinite(entry.lon) && Number.isFinite(entry.lat)) {
+    const p = project(entry.lon, entry.lat);
+    return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+  }
+  return null;
+}
+
+function expandVisualRouteEntries(ids) {
+  const entries = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (!entries.length || entries[entries.length - 1] !== ids[i]) entries.push(ids[i]);
+    if (i >= ids.length - 1) continue;
+
+    const a = ids[i];
+    const b = ids[i + 1];
+    const direct = COASTAL_VISUAL_WAYPOINTS[`${a}|${b}`];
+    const reverse = COASTAL_VISUAL_WAYPOINTS[`${b}|${a}`];
+    const waypoints = direct || (reverse ? [...reverse].reverse() : null);
+    if (waypoints) entries.push(...waypoints);
+  }
+  return entries;
+}
+
+function organicRailSplineThroughStops(ids) {
+  const entries = expandVisualRouteEntries(ids);
+  const anchors = entries.map(visualGuidePointFromEntry).filter(Boolean);
+  if (anchors.length < 2) return anchors;
+
+  const points = [];
+  const routeSeed = hashCode(ids.join('>'));
+
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const p0 = anchors[Math.max(0, i - 1)];
+    const p1 = anchors[i];
+    const p2 = anchors[i + 1];
+    const p3 = anchors[Math.min(anchors.length - 1, i + 2)];
+    const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const steps = Math.max(22, Math.min(62, Math.round(chord / 13)));
+    const seed = routeSeed + hashCode(`${i}:${Math.round(p1.x)}:${Math.round(p1.y)}:${Math.round(p2.x)}:${Math.round(p2.y)}`);
+
+    for (let step = 0; step < steps; step++) {
+      const t = step / steps;
+      const base = sampleCatmullRom(p0, p1, p2, p3, t);
+      const ahead = sampleCatmullRom(p0, p1, p2, p3, Math.min(1, t + 0.025));
+      const dx = ahead.x - base.x;
+      const dy = ahead.y - base.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      const envelope = Math.sin(Math.PI * t);
+      const wave1 = Math.sin((t * 2.1 + deterministicUnit(seed)) * Math.PI * 2);
+      const wave2 = Math.sin((t * 4.0 + deterministicUnit(seed + 17)) * Math.PI * 2) * 0.36;
+
+      // Les segments côtiers reçoivent une ondulation plus faible pour éviter
+      // qu’une courbe décorative ne reparte vers l’océan.
+      const isCoastalGuided = entries.some(e => typeof e !== 'string');
+      const maxAmp = isCoastalGuided ? 26 : 42;
+      const amplitude = Math.min(maxAmp, Math.max(8, chord * 0.035));
+      const offset = envelope * amplitude * (wave1 + wave2);
+
+      points.push({
+        x: base.x + nx * offset,
+        y: base.y + ny * offset
+      });
+    }
+  }
+
+  points.push(anchors[anchors.length - 1]);
+  return cleanRoutePoints(smoothPolyline(points, 2));
+}
+
+function smoothPolyline(points, passes = 1) {
+  let out = points || [];
+  for (let pass = 0; pass < passes; pass++) {
+    if (out.length < 4) return out;
+    const next = [out[0]];
+    for (let i = 1; i < out.length - 1; i++) {
+      const a = out[i - 1];
+      const b = out[i];
+      const c = out[i + 1];
+      next.push({
+        x: a.x * 0.18 + b.x * 0.64 + c.x * 0.18,
+        y: a.y * 0.18 + b.y * 0.64 + c.y * 0.18
+      });
+    }
+    next.push(out[out.length - 1]);
+    out = next;
+  }
+  return out;
+}
+
+function routeHasVisualBacktrack(points) {
+  if (!Array.isArray(points) || points.length < 8) return false;
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  }
+  const direct = Math.hypot(points[points.length - 1].x - points[0].x, points[points.length - 1].y - points[0].y);
+  if (direct > 0 && total > direct * 2.9) return true;
+
+  let reversals = 0;
+  for (let i = 2; i < points.length; i++) {
+    const ax = points[i - 1].x - points[i - 2].x;
+    const ay = points[i - 1].y - points[i - 2].y;
+    const bx = points[i].x - points[i - 1].x;
+    const by = points[i].y - points[i - 1].y;
+    const al = Math.hypot(ax, ay);
+    const bl = Math.hypot(bx, by);
+    if (al < 8 || bl < 8) continue;
+    const dot = (ax * bx + ay * by) / (al * bl);
+    if (dot < -0.70) reversals++;
+  }
+  return reversals >= 4;
+}
+
+function getRouteForStops(stops) {
+  const ids = Array.isArray(stops) ? stops.filter(Boolean) : lineStopsOf(stops);
+  const key = `multi::${ids.join('::')}`;
+  if (app.routeCache.has(key)) return app.routeCache.get(key);
+  if (ids.length < 2) {
+    const single = { ids, distance: 0, maxSegment: 0, points: [] };
+    app.routeCache.set(key, single);
+    return single;
+  }
+
+  let mergedIds = [ids[0]];
+  let distanceTotal = 0;
+  let maxSegment = 0;
+  let points = [];
+
+  for (let i = 1; i < ids.length; i++) {
+    const segment = getRoute(ids[i - 1], ids[i]);
+    mergedIds.push(...segment.ids.slice(1));
+    distanceTotal += segment.distance || 0;
+    maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
+
+    if (ids.length === 2) {
+      if (!points.length) points.push(...segment.points);
+      else points.push(...segment.points.slice(1));
+    }
+  }
+
+  if (ids.length > 2) {
+    // Rendu multi-arrêts : on s’appuie sur les points du réseau ferroviaire
+    // résolus par getRoute(), puis on applique une sinuosité douce.
+    // Cela évite les grandes courbes libres qui peuvent couper l’océan.
+    const visualIds = [...new Set(mergedIds)];
+    points = organicRailSplineThroughStops(visualIds);
+  } else {
+    points = cleanRoutePoints(points);
+    if (routeHasVisualBacktrack(points)) points = organicRailSplineThroughStops(ids);
+  }
+
+  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points };
+  app.routeCache.set(key, route);
+  return route;
+}
+
+function lineDistance(line) {
+  return getRouteForStops(lineStopsOf(line)).distance || 0;
+}
+
+function normalizedTicketDistance(distance) {
+  const value = Number(distance);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_TICKET_DISTANCE;
+}
+
+function suggestedTicketPrice(distance) {
+  const km = normalizedTicketDistance(distance);
+  return Math.max(1, Math.round(km * DEFAULT_PASSENGER_TARIFF));
+}
+
+function ticketPriceCeiling(distance) {
+  const km = normalizedTicketDistance(distance);
+  return Math.round(Math.min(TICKET_PRICE_CAP_ABSOLUTE, Math.max(8, 6 + km * 0.32)));
+}
+
+function normalizeTicketPrice(value, fallback = suggestedTicketPrice(DEFAULT_TICKET_DISTANCE), distance = DEFAULT_TICKET_DISTANCE) {
+  const hasValue = value !== undefined && value !== null && String(value).trim() !== '';
+  const price = hasValue ? Number(value) : Number.NaN;
+  const base = Number.isFinite(price) ? price : Number(fallback);
+  const normalized = Math.max(0, Math.round(Number.isFinite(base) ? base : suggestedTicketPrice(distance)));
+  return Math.min(ticketPriceCeiling(distance), normalized);
+}
+
+function ticketPriceToTariff(ticketPrice, distance) {
+  const km = normalizedTicketDistance(distance);
+  const price = normalizeTicketPrice(ticketPrice, suggestedTicketPrice(distance), distance);
+  return price / km;
+}
+
+function tariffToTicketPrice(tariff, distance) {
+  const km = normalizedTicketDistance(distance);
+  const rate = Number(tariff);
+  const value = Number.isFinite(rate) ? Math.max(0, rate) * km : suggestedTicketPrice(distance);
+  return normalizeTicketPrice(value, suggestedTicketPrice(distance), distance);
+}
+
+function ticketSliderMax(distance, ticketPrice) {
+  return ticketPriceCeiling(distance);
+}
+
+function renderTicketPriceControl({ inputId, rangeId, hintId, price, distance }) {
+  const cap = ticketPriceCeiling(distance);
+  const ticketPrice = normalizeTicketPrice(price, suggestedTicketPrice(distance), distance);
+  return `
+    <div class="ticket-price-control" data-ticket-control="${escapeAttr(inputId)}">
+      <div class="ticket-price-row">
+        <input id="${escapeAttr(rangeId)}" class="ticket-price-range" type="range" min="0" max="${cap}" step="1" value="${ticketPrice}" data-ticket-input-id="${escapeAttr(inputId)}">
+        <div class="ticket-price-entry">
+          <input id="${escapeAttr(inputId)}" class="ticket-price-input" type="number" min="0" max="${cap}" step="1" inputmode="numeric" value="${escapeAttr(ticketPrice)}" data-ticket-range-id="${escapeAttr(rangeId)}">
+          <span>€</span>
+        </div>
+      </div>
+      <span id="${escapeAttr(hintId)}" class="input-hint">${escapeHtml(ticketPriceHint(distance, ticketPrice))}</span>
+    </div>
+  `;
+}
+
+function stopsFromLineDraft(draft = app.lineDraft || {}) {
+  return [draft.from, ...((draft.waypoints || []).filter(Boolean)), draft.to].filter(Boolean);
+}
+
+function draftTicketDistance(draft = app.lineDraft || {}) {
+  const stops = stopsFromLineDraft(draft);
+  return stops.length >= 2 ? getRouteForStops(stops).distance || 0 : 0;
+}
+
+function lineTicketPrice(line) {
+  const stored = Number(line?.ticketPrice);
+  if (Number.isFinite(stored)) return normalizeTicketPrice(stored, tariffToTicketPrice(line.tariff, lineDistance(line)), lineDistance(line));
+  return tariffToTicketPrice(line.tariff, lineDistance(line));
+}
+
+function ticketPriceHint(distance, ticketPrice) {
+  const km = normalizedTicketDistance(distance);
+  const cap = ticketPriceCeiling(distance);
+  const normalized = normalizeTicketPrice(ticketPrice, suggestedTicketPrice(distance), distance);
+  const tariffPer100Km = round(ticketPriceToTariff(normalized, distance) * 100);
+  if (!Number.isFinite(Number(distance)) || Number(distance) <= 0) {
+    return `Ajuste au curseur ou tape le montant. Plafond provisoire : ${money(cap)}. Equivalent ${tariffPer100Km} EUR / 100 km.`;
+  }
+  return `${formatInt(km)} km. Plafond billet : ${money(cap)}. Equivalent ${tariffPer100Km} EUR / 100 km.`;
+}
+
+function syncLineDraftTicket(distance = draftTicketDistance()) {
+  const draft = app.lineDraft || {};
+  const price = normalizeTicketPrice(draft.ticketPrice, tariffToTicketPrice(draft.tariff, distance), distance);
+  draft.ticketPrice = price;
+  draft.tariff = ticketPriceToTariff(price, distance);
+  return price;
+}
+
+function refreshLineTicketInput(distance, ticketPrice, sourceId = '') {
+  refreshTicketPriceControl('lineTicketPrice', 'lineTicketPriceRange', 'lineTicketPriceHint', distance, ticketPrice, sourceId);
+}
+
+function refreshTicketPriceControl(inputId, rangeId, hintId, distance, ticketPrice, sourceId = '') {
+  const input = $(`#${inputId}`);
+  const range = $(`#${rangeId}`);
+  const normalized = normalizeTicketPrice(ticketPrice, suggestedTicketPrice(distance), distance);
+  const cap = ticketPriceCeiling(distance);
+
+  if (range) {
+    range.max = String(cap);
+    if (sourceId !== rangeId) range.value = String(normalized);
+  }
+
+  if (input) {
+    input.max = String(cap);
+    const inputIsSource = sourceId === inputId;
+    const inputHasFocus = document.activeElement === input;
+    const inputValueTooHigh = Number(input.value) > cap;
+    if (!inputIsSource || !inputHasFocus || inputValueTooHigh) input.value = String(normalized);
+  }
+
+  const hint = $(`#${hintId}`);
+  if (hint) hint.textContent = ticketPriceHint(distance, normalized);
+}
+
+
+function normalizeLineDraft(freeTrains = []) {
+  const draft = { ...app.lineDraft };
+  draft.from = draft.from || '';
+  draft.to = draft.to || '';
+  draft.fromQuery = draft.fromQuery || stationSearchLabel(station(draft.from));
+  draft.toQuery = draft.toQuery || stationSearchLabel(station(draft.to));
+  draft.waypoints = Array.isArray(draft.waypoints) ? draft.waypoints.filter(Boolean) : [];
+  draft.viaCandidate = draft.viaCandidate || '';
+  draft.viaQuery = draft.viaQuery || '';
+  draft.trainId = draft.trainId || freeTrains[0]?.id || '';
+  draft.service = draft.service || 'passengers';
+  draft.frequency = clampNumber(draft.frequency, 1, 20, 4);
+  const ticketDistance = draftTicketDistance(draft);
+  draft.ticketPrice = normalizeTicketPrice(draft.ticketPrice, tariffToTicketPrice(draft.tariff, ticketDistance), ticketDistance);
+  draft.tariff = ticketPriceToTariff(draft.ticketPrice, ticketDistance);
+  app.lineDraft = draft;
+  saveLineDraft();
+  return draft;
+}
+
+function updateLineDraftFromForm(sourceId = '') {
+  if (!$('#lineForm')) return app.lineDraft;
+  const nextDraft = {
+    from: $('#lineFrom')?.value || app.lineDraft.from || '',
+    to: $('#lineTo')?.value || app.lineDraft.to || '',
+    fromQuery: $('#lineFromSearch')?.value || app.lineDraft.fromQuery || '',
+    toQuery: $('#lineToSearch')?.value || app.lineDraft.toQuery || '',
+    waypoints: Array.isArray(app.lineDraft.waypoints) ? app.lineDraft.waypoints : [],
+    viaCandidate: $('#lineVia')?.value || app.lineDraft.viaCandidate || '',
+    viaQuery: $('#lineViaSearch')?.value || app.lineDraft.viaQuery || '',
+    trainId: $('#lineTrain')?.value || app.lineDraft.trainId || '',
+    service: $('#lineService')?.value || app.lineDraft.service || 'passengers',
+    frequency: $('#lineFreq')?.value || app.lineDraft.frequency || 4
+  };
+  const ticketDistance = draftTicketDistance(nextDraft);
+  const priceControl = sourceId === 'lineTicketPriceRange' ? $('#lineTicketPriceRange') : $('#lineTicketPrice');
+  const rawTicketPrice = priceControl?.value;
+  nextDraft.ticketPrice = normalizeTicketPrice(
+    rawTicketPrice !== undefined && rawTicketPrice !== '' ? rawTicketPrice : app.lineDraft.ticketPrice,
+    tariffToTicketPrice(app.lineDraft.tariff, ticketDistance),
+    ticketDistance
+  );
+  nextDraft.tariff = ticketPriceToTariff(nextDraft.ticketPrice, ticketDistance);
+  app.lineDraft = nextDraft;
+  saveLineDraft();
+  return app.lineDraft;
+}
+
+
+function updateStationSearch(role, rawValue) {
+  if (role === 'station') {
+    app.stationSearch.query = rawValue;
+    const query = String(rawValue || '').trim();
+    if (!query) {
+      app.stationSearch.candidateId = '';
+      setSelectedStation(null);
+      const hidden = $('#lineStation');
+      if (hidden) hidden.value = '';
+      renderStationSuggestions('station', [], rawValue);
+      updateSelectedStationPanel();
+      return;
+    }
+
+    const matches = findStationMatches(rawValue, 10, app.stationSortMode);
+    const best = matches[0] || null;
+    app.stationSearch.candidateId = best?.id || '';
+    if (best) setSelectedStation(best.id);
+    else setSelectedStation(null);
+    const hidden = $('#lineStation');
+    if (hidden) hidden.value = app.stationSearch.candidateId;
+    renderStationSuggestions('station', matches, rawValue);
+    updateSelectedStationPanel();
+    return;
+  }
+
+  const key = role === 'to' ? 'to' : role === 'via' ? 'viaCandidate' : 'from';
+  const queryKey = role === 'to' ? 'toQuery' : role === 'via' ? 'viaQuery' : 'fromQuery';
+  app.lineDraft[queryKey] = rawValue;
+  const matches = findStationMatches(rawValue, 10);
+  const best = matches[0];
+  if (best) app.lineDraft[key] = best.id;
+  const hidden = $(`#line${capitalize(role)}${role === 'via' ? '' : ''}`);
+  if (hidden) hidden.value = app.lineDraft[key] || '';
+  renderStationSuggestions(role, matches, rawValue);
+  saveLineDraft();
+  updateLinePreview();
+}
+
+function chooseStationSuggestion(role, stationId) {
+  const s = station(stationId);
+  if (!s) return;
+  if (role === 'station') {
+    setSelectedStation(s.id);
+    app.stationSearch.query = stationSearchLabel(s);
+    app.stationSearch.candidateId = s.id;
+    const input = $('#lineStationSearch');
+    const hidden = $('#lineStation');
+    const box = $('#lineStationSuggestions');
+    if (input) input.value = app.stationSearch.query;
+    if (hidden) hidden.value = s.id;
+    if (box) box.innerHTML = '';
+    if (app.map.leaflet) app.map.leaflet.setView([s.lat, s.lon], Math.max(app.map.leaflet.getZoom(), 9), { animate: true });
+    app.activeTab = 'stations';
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    renderAll();
+    return;
+  }
+  if (role === 'from' || role === 'to') {
+    const key = role;
+    app.lineDraft[key] = s.id;
+    app.lineDraft[`${key}Query`] = stationSearchLabel(s);
+  } else if (role === 'via') {
+    app.lineDraft.viaCandidate = s.id;
+    app.lineDraft.viaQuery = stationSearchLabel(s);
+  } else if (role === 'editor') {
+    if (!app.lineEditor) return;
+    app.lineEditor.candidateId = s.id;
+    app.lineEditor.candidateQuery = stationSearchLabel(s);
+    const input = $('#editorStopSearch');
+    const hidden = $('#editorStopId');
+    if (input) input.value = app.lineEditor.candidateQuery;
+    if (hidden) hidden.value = s.id;
+    const box = $('#editorStopSuggestions');
+    if (box) box.innerHTML = '';
+    return;
+  }
+  const input = $(`#line${capitalize(role)}Search`);
+  const hidden = $(`#line${capitalize(role)}`);
+  if (input) input.value = role === 'via' ? app.lineDraft.viaQuery : app.lineDraft[`${role}Query`];
+  if (hidden) hidden.value = role === 'via' ? app.lineDraft.viaCandidate : s.id;
+  const box = $(`#line${capitalize(role)}Suggestions`);
+  if (box) box.innerHTML = '';
+  saveLineDraft();
+  updateLinePreview();
+  if (app.map.leaflet) app.map.leaflet.setView([s.lat, s.lon], Math.max(app.map.leaflet.getZoom(), 8), { animate: true });
+}
+
+function refreshLineSearchWidgets() {
+  if (!$('#lineForm')) return;
+  for (const role of ['from', 'to']) {
+    const value = app.lineDraft[`${role}Query`] || stationSearchLabel(station(app.lineDraft[role]));
+    const input = $(`#line${capitalize(role)}Search`);
+    if (input && document.activeElement !== input) input.value = value || '';
+    const hidden = $(`#line${capitalize(role)}`);
+    if (hidden) hidden.value = app.lineDraft[role] || '';
+  }
+  const viaInput = $('#lineViaSearch');
+  if (viaInput && document.activeElement !== viaInput) viaInput.value = app.lineDraft.viaQuery || '';
+  const viaHidden = $('#lineVia');
+  if (viaHidden) viaHidden.value = app.lineDraft.viaCandidate || '';
+}
+
+
+function renderStationSearchResults(rawValue = '', sortMode = app.stationSortMode) {
+  const query = String(rawValue || '').trim();
+  if (!query) return '<p class="muted small">Saisis le nom d’une gare pour afficher les résultats ici.</p>';
+  const matches = findStationMatches(query, 8, sortMode);
+  if (!matches.length) return '<p class="muted small">Aucune gare trouvée.</p>';
+  return matches.map(s => `
+    <button type="button" class="station-result-card" data-role="station" data-station-choice="${escapeAttr(s.id)}">
+      <strong>${escapeHtml(s.name)}</strong>
+      <span>${escapeHtml(stationPurchaseMetaLabel(s))}</span>
+    </button>
+  `).join('');
+}
+
+function updateStationSearchResults() {
+  const box = $('#stationSearchResults');
+  if (!box) return;
+  box.innerHTML = renderStationSearchResults(app.stationSearch.query, app.stationSortMode);
+}
+
+function renderStationSuggestions(role, matches, rawValue) {
+  const box = $(`#line${capitalize(role)}Suggestions`);
+  if (!box) return;
+  if (!String(rawValue || '').trim()) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = matches.length ? matches.map(s => `
+    <button type="button" class="station-suggest-item" data-role="${role}" data-station-choice="${escapeAttr(s.id)}">
+      <strong>${escapeHtml(s.name)}</strong>
+      <span>${role === 'station' ? stationPurchaseMetaLabel(s) : stationMetaLabel(s)}</span>
+    </button>
+  `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
+}
+
+function findStationMatches(query, limit = 12, sortMode = '') {
+  const q = normalizeSearchText(query || '');
+  const all = dedupedStations(app.state?.world?.stations || []);
+  if (!q) {
+    const candidates = sortMode ? sortStationsForPurchase(all, sortMode) : topStationCandidates(limit);
+    return candidates.slice(0, limit);
+  }
+  const matches = all
+    .map(s => {
+      const name = normalizeSearchText(s.name);
+      const postal = (s.codesPostaux || []).join(' ');
+      const starts = name.startsWith(q) ? 1200 : 0;
+      const exact = name === q ? 3000 : 0;
+      const includes = name.includes(q) ? 450 : 0;
+      const postalScore = postal.includes(q) ? 800 : 0;
+      const owned = app.state.me?.stations?.[s.id] ? 500 : 0;
+      const pop = Number(s.population || s.baseDemand * 450 || 10000);
+      return { s, score: exact + starts + includes + postalScore + owned + Math.log10(pop) * 12 };
+    })
+    .filter(x => x.score > 0);
+
+  const collator = new Intl.Collator('fr', { sensitivity: 'base' });
+  const ordered = matches
+    .sort((a, b) => b.score - a.score || collator.compare(a.s.name || '', b.s.name || ''))
+    .map(x => x.s);
+
+  return ordered.slice(0, limit);
+}
+
+function topStationCandidates(limit = 12) {
+  return dedupedStations(app.state?.world?.stations || [])
+    .sort((a, b) => Number(b.population || b.baseDemand * 450 || 0) - Number(a.population || a.baseDemand * 450 || 0))
+    .slice(0, limit);
+}
+
+function stationSearchLabel(s) {
+  if (!s) return '';
+  const pop = s.population ? ` · ${formatInt(s.population)} hab.` : '';
+  return `${s.name}${pop}`;
+}
+
+function stationMetaLabel(s) {
+  if (!s) return '';
+  if (s.population) return `${formatInt(s.population)} hab. · ${s.codesPostaux?.[0] || s.codeDepartement || 'France'}`;
+  if (s.custom) return 'Arrêt personnalisé';
+  return s.region || 'Gare principale';
+}
+
+function normalizeSearchText(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function capitalize(value) {
+  return String(value || '').charAt(0).toUpperCase() + String(value || '').slice(1);
+}
+
+function saveLineDraft() {
+  localStorage.setItem('sillons.lineDraft', JSON.stringify(app.lineDraft || {}));
+}
+
+function serviceOptions(selected = 'passengers') {
+  return Object.entries(serviceLabels)
+    .map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+    .join('');
+}
+
+function isInteractiveElement(target) {
+  const el = target?.closest?.('input, select, textarea, button, [contenteditable="true"], .station-suggest-item, .logo-choice, .line-waypoint-chip, .modal, details, summary');
+  if (!el) return false;
+  if (el.closest('#topStats')) return false;
+  return Boolean(el.closest('#tabContent, #setup, .modal, #logoPicker'));
+}
+
+function markUiInteraction(duration = 1800) {
+  app.uiInteractionUntil = Math.max(app.uiInteractionUntil || 0, performance.now() + duration);
+}
+
+function isInteractiveUiActive() {
+  if (performance.now() < (app.uiInteractionUntil || 0)) return true;
+  const active = document.activeElement;
+  if (!active || active === document.body) return false;
+  if (active.matches?.('input, select, textarea, button, [contenteditable="true"]')) {
+    return Boolean(active.closest('#tabContent, #setup, .modal'));
+  }
+  return Boolean(active.closest?.('.station-suggestions, .modal'));
+}
+
+function isStationSearchFocused() {
+  const active = document.activeElement;
+  return !!(active && active.id === 'lineStationSearch');
+}
+
+function stationSearchDisplayValue(selected) {
+  if (isStationSearchFocused()) return $('#lineStationSearch')?.value || app.stationSearch.query || '';
+  if (app.stationSearch.query && app.stationSearch.candidateId && app.stationSearch.candidateId === app.selectedStation) return app.stationSearch.query;
+  return stationSearchLabel(selected);
+}
+
+function refreshStationSearchWidgets() {
+  if (!$('#lineStationSearch')) return;
+  const selected = station(app.selectedStation);
+  const input = $('#lineStationSearch');
+  const hidden = $('#lineStation');
+  if (input && document.activeElement !== input) input.value = stationSearchDisplayValue(selected) || '';
+  if (hidden) hidden.value = app.stationSearch.candidateId || app.selectedStation || '';
+  if (input && document.activeElement !== input) {
+    const box = $('#lineStationSuggestions');
+    if (box) box.innerHTML = '';
+  }
+}
+
+function isLineFormFocused() {
+  const active = document.activeElement;
+  return !!(active && $('#lineForm')?.contains(active));
+}
+
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+
+function hasTech(nodeId, level = 1) {
+  return techLevel(nodeId) >= level;
+}
+
+function techNodeTitle(nodeId) {
+  const node = techNodeById(nodeId);
+  return node ? node.title : nodeId;
+}
+
+function techNodeById(nodeId) {
+  const tree = app.state?.balance?.techTree || {};
+  for (const group of Object.values(tree)) {
+    const found = (group.nodes || []).find(n => n.id === nodeId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function researchPrereqLabel(node, targetLevel) {
+  const prereqs = researchPrereqsForLevelClient(node, targetLevel);
+  return prereqs.length ? prereqs.map(researchPrereqLabelClient).join(', ') : 'Aucun';
+}
+
+function researchEpochPrereqPill(node) {
+  const requiredEpoch = Math.max(0, Number(node.requiredEpoch || 0));
+  const epoch = app.state.balance.epochs?.[requiredEpoch];
+  const ok = (app.state.me?.epoch || 0) >= requiredEpoch;
+  const label = epoch?.name || `Époque ${requiredEpoch + 1}`;
+  return `<span class="research-prereq ${ok ? 'met' : 'missing'}">Époque : ${escapeHtml(label)}</span>`;
+}
+
+function techLockedReason(node, targetLevel = 1) {
+  const me = app.state.me;
+  if (me.epoch < (node.requiredEpoch || 0)) return `Époque requise : ${app.state.balance.epochs[node.requiredEpoch]?.name || node.requiredEpoch + 1}.`;
+  const missing = researchPrereqsForLevelClient(node, targetLevel).filter(req => !researchPrereqSatisfiedClient(req));
+  if (missing.length) return `Prérequis : ${missing.map(researchPrereqLabelClient).join(', ')}.`;
+  return '';
+}
+
+function trainModelUnlocked(model) {
+  return !trainModelLockedReason(model);
+}
+
+function trainModelLockedReason(model) {
+  const me = app.state.me;
+  if (model.unlockEpoch > me.epoch) return app.state.balance.epochs[model.unlockEpoch]?.name || `Époque ${model.unlockEpoch + 1}`;
+  const requiredTechLevel = trainModelRequiredTechLevel(model);
+  if (model.requiredTech && !hasTech(model.requiredTech, requiredTechLevel)) return `${techNodeTitle(model.requiredTech)} niv. ${requiredTechLevel}`;
+  return '';
+}
+
+function maintenanceActionLockedReason(action) {
+  if (action.requiredTech && !hasTech(action.requiredTech)) return `Recherche : ${techNodeTitle(action.requiredTech)}`;
+  if (action.requiresDepot && !Object.values(app.state.me.stations || {}).some(a => a.depot || (a.maintenance || 0) > 0)) return 'Atelier ou dépôt requis';
+  return '';
+}
+
+function maintenancePreview(train, model, action) {
+  const missing = Math.max(0.02, 1 - train.condition);
+  const totalWorkshop = Object.values(app.state.me.stations || {}).reduce((s, a) => s + (a.maintenance || 0), 0);
+  const workshopDiscount = Math.min(0.18, totalWorkshop * 0.025);
+  const techDiscount = (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
+  const cost = Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
+  const workshopBonus = Math.min(0.35, totalWorkshop * 0.035 + (app.state.me.staff.mechanics || 0) * 0.012);
+  const techBonus = (hasTech('steam_workshops') ? 0.22 : 0) + (hasTech('electric_standardized_maintenance') ? 0.08 : 0);
+  const days = Math.max(1, Math.ceil(action.days * (1 - workshopBonus - techBonus)));
+  const target = Math.round(Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore)) * 100);
+  return `${money(cost)} · ${formatCycles(days)} · vers ${target}%`;
+}
+
+
+function updateLinePreview(sourceId = '') {
+  updateLineDistanceCalculator();
+  const box = $('#linePreview');
+  if (!box || !app.state?.me) return;
+  const stops = buildLineDraftStops();
+  const trainId = $('#lineTrain')?.value;
+  const train = app.state.me.trains.find(t => t.id === trainId);
+  const model = train ? app.state.balance.trains[train.modelId] : null;
+  const button = $('#createLineBtn');
+
+  if (stops.length < 2 || !model) {
+    box.className = 'line-preview muted small';
+    box.textContent = 'Choisis au moins un départ, une arrivée et un train.';
+    if (button) button.disabled = !model;
+    return;
+  }
+  if (train.maintenance?.active) {
+    box.className = 'line-preview bad small';
+    box.textContent = `Train indisponible : maintenance en cours, ${formatCycles(train.maintenance.daysLeft)} restant(s).`;
+    if (button) button.disabled = true;
+    return;
+  }
+  if (new Set(stops).size !== stops.length) {
+    box.className = 'line-preview bad small';
+    box.textContent = 'La ligne contient un arrêt en doublon. Chaque arrêt ne doit apparaître qu’une seule fois.';
+    if (button) button.disabled = true;
+    return;
+  }
+
+  const route = getRouteForStops(stops);
+  const ticketPrice = syncLineDraftTicket(route.distance);
+  refreshLineTicketInput(route.distance, ticketPrice, sourceId);
+
+  const ownershipProblem = lineOwnershipProblemClient(stops);
+  if (ownershipProblem) {
+    box.className = 'line-preview bad small';
+    box.textContent = ownershipProblem;
+    if (button) button.disabled = true;
+    return;
+  }
+  const routeText = stops.map(id => station(id)?.name || id).join(' → ');
+  const rightsText = lineExternalRightsLabel(stops);
+  const base = `Distance réseau : ${formatInt(route.distance)} km · Billet moyen : ${money(ticketPrice)} · Tronçon le plus long : ${formatInt(route.maxSegment)} km · ${stops.length} arrêt(s).${rightsText ? ` ${rightsText}` : ''}`;
+  const effective = effectiveTrainRangeClient(train, model);
+  const ok = route.distance <= effective;
+  const detail = ok
+    ? ` Compatible : portée ${formatInt(effective)} km. Itinéraire : ${routeText}.`
+    : ` Incompatible : portée ${formatInt(effective)} km. La distance totale de ligne dépasse la portée du matériel. Itinéraire : ${routeText}.`;
+
+  box.className = `line-preview ${ok ? 'good' : 'bad'} small`;
+  box.textContent = base + detail;
+  if (button) button.disabled = !ok;
+}
+
+function effectiveTrainRangeClient(train, model) {
+  const profileRange = Number(train?.profile?.range);
+  if (Number.isFinite(profileRange) && profileRange > 0) return Math.round(profileRange);
+  return trainEffectiveCatalogRange(model);
+}
+
+function toast(message, type = 'ok') {
+  const host = $('#toastHost');
+  const div = document.createElement('div');
+  div.className = `toast ${type}`;
+  div.textContent = message;
+  host.appendChild(div);
+  setTimeout(() => div.remove(), 4200);
+}
+
+function formatInt(value) {
+  return Math.round(Number(value || 0)).toLocaleString('fr-FR');
+}
+
+function money(value) {
+  return `${formatInt(value)} €`;
+}
+
+function ticksPerRealHour() {
+  return 3600000 / Math.max(250, Number(app.state?.game?.tickMs || 4500));
+}
+
+function moneyPerHour(value) {
+  return `${money(Number(value || 0) * ticksPerRealHour())}/h`;
+}
+
+function topResultTooltip(me) {
+  const b = me.stats?.lastBreakdown || {};
+  const production = Number(b.lineRevenue || me.stats.lastRevenue || 0) + Number(b.stationRevenue || 0);
+  const consumption = Number(b.variableLineCost || 0) + Number(b.sharedCosts || 0);
+  return [
+    `Production totale : ${moneyPerHour(production)}`,
+    `Consommation totale : ${moneyPerHour(consumption)}`,
+    `Résultat net : ${moneyPerHour(me.stats.lastProfit)}`,
+    '---------------------------------------------',
+    `Production lignes : ${moneyPerHour(b.lineRevenue || me.stats.lastRevenue)}`,
+    `Production gares : ${moneyPerHour(b.stationRevenue || 0)}`,
+    `Consommation coûts variables : ${moneyPerHour(b.variableLineCost || 0)}`,
+    `Consommation charges fixes : ${moneyPerHour(b.sharedCosts || 0)}`
+  ].join('\n');
+}
+
+function resourceTopTooltip(type) {
+  const flow = app.state?.me?.resourceFlow || {};
+  const sources = flow.sources?.[type] || [];
+  const consumption = Number(flow.consumption?.[type] || 0);
+  const production = type === 'electricity' ? Number(flow.production?.electricity || 0) : 0;
+  const stock = Number(flow.stocks?.[type] || 0);
+  const label = { coal: 'Charbon', diesel: 'Diesel', electricity: 'Électricité' }[type] || type;
+  const unit = type === 'electricity' ? 'MW/h' : 'u/h';
+  const stockLine = type === 'electricity'
+    ? `Commande producteur : ${round(production)} MW/h`
+    : `Stock disponible : ${round(stock)} u`;
+  const lines = [
+    label,
+    stockLine,
+    `Consommation totale : ${round(consumption)} ${unit}`,
+    `Production totale : ${round(production)} ${unit}`,
+    '---------------------------------------------',
+    ...(sources.length
+      ? sources.slice(0, 10).map(s => `Consommation train ${s.lineCode || 'Ligne'} · ${s.trainName || 'Train'} : ${round(s.amountPerHour)} ${unit}`)
+      : ['Aucune consommation active'])
+  ];
+  return lines.join('\n');
+}
+
+function resourceStockLabel(type) {
+  const me = app.state?.me;
+  const flow = me?.resourceFlow || {};
+  if (type === 'electricity') return `${round(flow.consumption?.electricity || 0)}/${round(flow.production?.electricity || 0)} MW/h`;
+  return `${round(me?.resources?.[type] || 0)} u`;
+}
+
+function maintenanceHourlyRange(model, distance = 100, frequency = 1, condition = null) {
+  const base = Number(model?.maintenance || 0) * Math.max(1, Number(distance || 100)) * Math.max(1, Number(frequency || 1)) * MAINTENANCE_COST_MULTIPLIER_CLIENT;
+  const toHourly = value => money(value * ticksPerRealHour());
+  const min = base;
+  const max = base * 2.5;
+  if (Number.isFinite(condition)) {
+    const current = base * (1 + (1 - Math.max(0, Math.min(1, condition))) * 1.5);
+    return `${toHourly(current)}/h actuel · ${toHourly(min)}–${toHourly(max)}/h`;
+  }
+  return `${toHourly(min)}–${toHourly(max)}/h`;
+}
+
+function staffSalaryPerHour(def, count = 1) {
+  return moneyPerHour((Number(def?.salary || 0) * Number(count || 1)) / STAFF_COST_DIVISOR_CLIENT);
+}
+
+function round(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, Number(value)));
+}
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  return Math.abs(hash);
+}
+
+
+function loadJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#096;');
+}
