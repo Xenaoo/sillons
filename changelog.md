@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Version v60.45.1 — correction du clic sur le badge de version
+
+- correction du bug empêchant l’ouverture du popup changelog au clic sur le badge de version ;
+- cause corrigée : le script initialisait l’écouteur avant que le bouton `#versionBadge` soit présent dans le DOM ;
+- remplacement de l’écoute directe par une écoute déléguée au document, afin que le clic fonctionne même si le badge est injecté ou placé après le script ;
+- mise à jour du badge interface en `v60.45.1` et du package en `0.4.35` ;
+- aucun changement du schéma de sauvegarde, car la correction ne modifie pas les données serveur.
+
 ## Version v60.45.0 — badge de version cliquable et popup changelog
 
 - adoption du format de version complet `XX.YY.ZZ` demandé : badge interface `v60.45.0`, package `0.4.34` et schéma d’état serveur `47` ;
