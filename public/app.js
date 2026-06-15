@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.48.0';
+const PROJECT_VERSION = 'v60.48.1';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -752,7 +752,7 @@ function enableStationPlacement() {
   app.map.creatingCustomStation = false;
   $('#addStopBtn')?.classList.add('hidden');
   $('#cancelStopBtn')?.classList.remove('hidden');
-  $('#mapHint').textContent = 'Mode création : clique n’importe où sur la carte pour créer un nouvel arrêt jouable.';
+  $('#mapHint').textContent = 'Mode création : Clique n’importe où sur la carte pour créer un nouvel arrêt jouable.';
   const container = app.map.leaflet?.getContainer();
   container?.classList.add('placing-stop');
   app.map.leaflet?.dragging?.disable?.();
@@ -837,7 +837,7 @@ function setAuthMode(mode) {
   if (password) password.autocomplete = app.authMode === 'register' ? 'new-password' : 'current-password';
   const hint = $('#authModeHint');
   if (hint) hint.textContent = app.authMode === 'register'
-    ? 'Crée un compte joueur : une compagnie neuve sera liée à cet identifiant.'
+    ? 'Crée un compte joueur : Une compagnie neuve sera liée à cet identifiant.'
     : 'Entre ton identifiant et ton mot de passe pour reprendre ta compagnie.';
 }
 
@@ -1576,7 +1576,7 @@ function lineElectrificationCost(line) {
 
 function lineElectrificationTooltip(line) {
   const cost = lineElectrificationCost(line);
-  return `Électrifie cette ligne pour ${money(cost)}. Effets : toute la ligne et tous ses arrêts deviennent électrifiés ; les trains électriques peuvent y circuler ; la facture énergétique et le CO₂ baissent pour les matériels électriques.`;
+  return `Électrifie cette ligne pour ${money(cost)}. Effets : Toute la ligne et tous ses arrêts deviennent électrifiés ; les trains électriques peuvent y circuler ; la facture énergétique et le CO₂ baissent pour les matériels électriques.`;
 }
 
 function stationUpgradeTooltip(station, asset, upgrade) {
@@ -1588,13 +1588,26 @@ function stationUpgradeTooltip(station, asset, upgrade) {
     maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
     depot: 'permet le stationnement et améliore la portée pratique des trains vapeur sur les itinéraires qui passent par cette gare.'
   };
-  return `${upgrade.label} à ${station.name}. Coût : ${money(upgrade.cost)}. Effet : ${effects[upgrade.kind] || 'amélioration de la gare.'}`;
+  return `${upgrade.label} à ${station.name}. Coût : ${money(upgrade.cost)}. Effet : ${effects[upgrade.kind] || 'Amélioration de la gare.'}`;
+}
+
+function staffRoleLabel(label, count = 1) {
+  const singular = String(label || 'Métier');
+  if (Number(count || 0) <= 1) return singular;
+  return {
+    Conducteur: 'Conducteurs',
+    Contrôleur: 'Contrôleurs',
+    'Agent de gare': 'Agents de gare',
+    Mainteneur: 'Mainteneurs',
+    Régulateur: 'Régulateurs',
+    'Agent de l’infra': 'Agents de l’infra'
+  }[singular] || `${singular}s`;
 }
 
 function staffActionTooltip(role, count, kind) {
   const def = app.state.balance.staff[role];
-  if (kind === 'hire') return `Recrute ${count} ${def.label}(s). Coût immédiat : ${money(def.hireCost * count)}. Salaire ajouté : ${staffSalaryPerHour(def, count)}/h. Effet : réduit le sous-effectif et améliore ponctualité/fiabilité selon le métier.`;
-  return `Licencie ${count} ${def.label}(s). Effet : réduit les salaires, mais peut dégrader la qualité d’exploitation si l’équipe devient insuffisante.`;
+  if (kind === 'hire') return `Recrute ${count} ${staffRoleLabel(def.label, count)}. Coût immédiat : ${money(def.hireCost * count)}. Salaire ajouté : ${staffSalaryPerHour(def, count)}/h. Effet : Réduit le sous-effectif et améliore la ponctualité/fiabilité selon le métier.`;
+  return `Licencie ${count} ${staffRoleLabel(def.label, count)}. Effet : Réduit les salaires, mais peut dégrader la qualité d’exploitation si l’équipe devient insuffisante.`;
 }
 
 function maintenancePolicyTooltip(policy) {
@@ -1603,7 +1616,7 @@ function maintenancePolicyTooltip(policy) {
 }
 
 function energyStrategyTooltip(id, strategy) {
-  return `${strategy.name}. ${energyStrategyDescription(id)} Effet : modifie les multiplicateurs de prix énergie dès le prochain calcul d’exploitation.`;
+  return `${strategy.name}. ${energyStrategyDescription(id)} Effet : Modifie les multiplicateurs de prix énergie dès le prochain calcul d’exploitation.`;
 }
 
 
@@ -1899,7 +1912,7 @@ function renderManageLinesPanel() {
         <div class="line-card-heading">
           <div>
             <h2>Modifier les lignes</h2>
-            <p class="muted small">Chaque ligne se modifie depuis une fiche claire : matériel, fréquence, prix du billet, arrêts, ordre des gares et électrification.</p>
+            <p class="muted small">Chaque ligne se modifie depuis une fiche claire : Matériel, fréquence, prix du billet, arrêts, ordre des gares et électrification.</p>
           </div>
           <span class="tag">${activeLines} ligne(s)</span>
         </div>
@@ -2031,8 +2044,8 @@ function renderLineStaffNeedsCard(line, options = {}) {
       <h4>Salariés nécessaires</h4>
       <div class="line-staff-bars">${roleBars}</div>
       ${Number.isFinite(effectiveFrequency) && Number.isFinite(Number(requestedFrequency)) && Number(effectiveFrequency) < Number(requestedFrequency)
-        ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de conducteurs.</p>`
-        : '<p class="small muted">Conducteurs suffisants : exploitation nominale.</p>'}
+        ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de Conducteurs.</p>`
+        : '<p class="small muted">Conducteurs suffisants : Exploitation nominale.</p>'}
     </section>
   `;
 }
@@ -2141,7 +2154,7 @@ function renderLineItem(line) {
       ${renderLineInsightPanels(line)}
 
       <div class="line-card-modern-actions">
-        <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : train, fréquence, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
+        <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : Train, fréquence, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
         <button data-action="electrify-line" data-id="${line.id}" ${tooltipAttr(line.electrified ? 'Cette ligne est déjà électrifiée.' : lineElectrificationTooltip(line))} ${line.electrified || !canElectrify ? 'disabled' : ''}>
           ${line.electrified ? 'Électrifiée' : `Électrifier · ${money(electrifyCost)}`}
         </button>
@@ -2622,14 +2635,14 @@ function renderCompositionEditor(train) {
           <div>
             <strong>${escapeHtml(model.name)}</strong>
             <p class="small muted">${escapeHtml(deriveCompositionSummary(train))}</p>
-            <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'rame multiple' : spec.mode === 'freight_loco' ? 'locomotive + wagons' : 'locomotive + voitures'}</p>
+            <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'Rame multiple' : spec.mode === 'freight_loco' ? 'Locomotive + wagons' : 'Locomotive + voitures'}</p>
             ${variant ? `<p class="small muted">Variante active : <b>${escapeHtml(variant.name)}</b>${variant.cargoType ? ` · ${escapeHtml(variant.cargoType)}` : ''}</p>` : ''}
           </div>
         </div>
         <div class="composition-capacity-card">
           <b>Capacité réelle par train</b>
           <span>${formatInt(profile.capacity)} voyageurs · ${formatInt(profile.freight)} t fret</span>
-          <span>${formatInt(profile.speed)} km/h · maintenance ${round(profile.maintenance)}</span>
+          <span>${formatInt(profile.speed)} km/h · Maintenance ${round(profile.maintenance)}</span>
           <span>${Math.round(profile.reliability * 100)}% fiabilité · ${Math.round(profile.comfort * 100)}% confort</span>
           ${variant ? `<span class="small muted">${escapeHtml(variant.description || '')}</span>` : ''}
         </div>
@@ -2642,7 +2655,7 @@ function renderCompositionEditor(train) {
         ${compositionMetric('Fret / train', `${formatInt(profile.freight)} t`, 'Tonnage maximal de fret transportable par train avec cette composition.', profile.freight >= (model.freight || 0) ? 'good-text' : '')}
         ${compositionMetric('Vitesse commerciale', `${formatInt(profile.speed)} km/h`, 'Vitesse de référence retenue en exploitation. Elle influence le temps de rotation, la productivité et la capacité quotidienne.', '')}
         ${compositionMetric('Fiabilité', `${Math.round(profile.reliability * 100)}%`, 'Probabilité de rouler sans incident majeur. Plus elle est basse, plus le risque de panne, retard et perte d’attractivité augmente.', profile.reliability >= 0.88 ? 'good-text' : '')}
-        ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, 'Qualité perçue du service par les voyageurs : agrément, image et standing. Le confort améliore l’attractivité des lignes voyageurs.', profile.comfort >= 0.75 ? 'good-text' : '')}
+        ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, 'Qualité perçue du service par les voyageurs : Agrément, image et standing. Le confort améliore l’attractivité des lignes voyageurs.', profile.comfort >= 0.75 ? 'good-text' : '')}
         ${compositionMetric('Énergie', round(profile.energy), 'Consommation énergétique de référence pour cette composition. Une valeur plus élevée alourdit les coûts d’exploitation.', profile.energy <= (model.energy || 0) ? 'good-text' : 'warn-text')}
       </div>
 
@@ -2652,7 +2665,7 @@ function renderCompositionEditor(train) {
         <div class="composition-controls-top">
           ${quantityControl}
           <div class="composition-save-box">
-            <p class="small muted">Impact ligne : capacité d’exploitation = composition × fréquence. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
+            <p class="small muted">Impact ligne : Capacité d’exploitation = composition × fréquence. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
             <button class="primary" data-action="save-train-composition" data-id="${train.id}">Enregistrer la composition</button>
           </div>
         </div>
@@ -2714,10 +2727,10 @@ function renderFleet() {
   const avgCondition = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + Number(t.condition || 0), 0) / me.trains.length * 100) : 0;
   const heroTitle = active === 'catalog' ? 'Catalogue du matériel roulant' : active === 'maintenance' ? 'Maintenance du matériel' : 'Atelier de compositions';
   const heroText = active === 'catalog'
-    ? 'Achète du matériel adapté à tes lignes : capacité, vitesse, énergie, confort, fret ou fiabilité.'
+    ? 'Achète du matériel adapté à tes lignes : Capacité, vitesse, énergie, confort, fret ou fiabilité.'
     : active === 'maintenance'
       ? 'Choisis une politique d’entretien et planifie les interventions pour éviter l’usure excessive du parc.'
-      : 'Allonge ou raccourcis les trains pour ajuster la capacité en plus de la fréquence : voitures voyageurs, wagons fret et engins moteurs.';
+      : 'Allonge ou raccourcis les trains pour ajuster la capacité en plus de la fréquence : Voitures voyageurs, wagons fret et engins moteurs.';
 
   return `
     ${renderSectionHero('PARC FERROVIAIRE', heroTitle, heroText, ART.tabs.fleet, ['Matériel', 'Atelier', 'Compositions'])}
@@ -2762,7 +2775,7 @@ function renderFleetCatalogPanel(available, locked) {
         <div class="fleet-card-heading">
           <div>
             <h2>Catalogue de matériel roulant</h2>
-            <p class="muted small">Les cartes sont classées par époque. Utilise-les comme choix de stratégie : économique, grande capacité, fret, vitesse, confort ou énergie propre.</p>
+            <p class="muted small">Les cartes sont classées par époque. Utilise-les comme choix de stratégie : Économique, grande capacité, Fret, Vitesse, Confort ou Énergie propre.</p>
           </div>
           <span class="tag">${models.length} modèles</span>
         </div>
@@ -3064,9 +3077,9 @@ function renderOwnedTrain(train) {
   const conditionClass = condition > 70 ? 'good' : condition > 40 ? 'warn' : 'bad';
   const profile = previewOperatingProfile(train, model);
   const sellTip = line
-    ? 'Impossible de vendre : ce train est affecté à une ligne active.'
+    ? 'Impossible de vendre : Ce train est affecté à une ligne active.'
     : inMaint
-      ? 'Impossible de vendre : ce train est en maintenance.'
+      ? 'Impossible de vendre : Ce train est en maintenance.'
       : `Vend ce train d’occasion. Valeur influencée par son état (${condition}%).`;
 
   return `
@@ -3115,7 +3128,7 @@ function renderMaintenanceButton(train, model, action) {
   const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
   const disabled = locked || targetCondition <= train.condition + 0.005;
   return `
-    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : immobilise le train pendant l’intervention, puis remonte son état et réduit les risques de retard/panne.`)} ${disabled ? 'disabled' : ''}>
+    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : Immobilise le train pendant l’intervention, puis remonte son état et réduit les risques de retard/panne.`)} ${disabled ? 'disabled' : ''}>
       <strong>${escapeHtml(action.name)}</strong>
       <span>${preview}</span>
       ${locked ? `<em>${escapeHtml(locked)}</em>` : ''}
@@ -3186,7 +3199,7 @@ function renderStationAgentsCard() {
   return `
     <div class="card station-agents-card ${status}">
       <h2>Agents de gare</h2>
-      <p class="muted small">Les agents de gare ne sont plus affichés dans les besoins propres à chaque ligne. Ils sont dimensionnés ici, selon les gares exploitées, les lignes actives et les arrêts intermédiaires.</p>
+      <p class="muted small">Les Agents de gare ne sont plus affichés dans les besoins propres à chaque ligne. Ils sont dimensionnés ici, selon les gares exploitées, les lignes actives et les arrêts intermédiaires.</p>
       <div class="line-role-bar ${status}">
         <div class="line-role-bar-head">
           <span>Agents de gare ${formatInt(owned)} / ${formatInt(need)}</span>
@@ -3250,7 +3263,7 @@ function renderSelectedStation(s) {
           </button>
         `).join('')}
       </div>
-      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser uniquement si ton itinéraire paie des droits de passage.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront des droits de passage s’ils l’empruntent.</p>' : '<p class="muted small">Première action : acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser uniquement si ton itinéraire paie des droits de passage.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront des droits de passage s’ils l’empruntent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
     </div>
   `;
 }
@@ -3410,27 +3423,27 @@ function staffRoleImpact(role) {
   return {
     drivers: {
       title: 'Capacité réelle des trains',
-      effects: ['Plus de conducteurs = plus de fréquences exploitables sans pénalité.', 'Sous-effectif : capacité réduite, ponctualité et attractivité en baisse.']
+      effects: ['Plus de Conducteurs = plus de fréquences exploitables sans pénalité.', 'Sous-effectif : Capacité réduite, ponctualité et attractivité en baisse.']
     },
     controllers: {
       title: 'Service à bord et recettes',
-      effects: ['Améliore la qualité voyageurs et limite la fraude.', 'Sous-effectif : satisfaction et part de marché plus faibles.']
+      effects: ['Améliore la qualité voyageurs et limite la fraude.', 'Sous-effectif : Satisfaction et part de marché plus faibles.']
     },
     stationAgents: {
       title: 'Accueil et flux voyageurs',
-      effects: ['Augmente la satisfaction et le flux de voyageurs sur les lignes.', 'Sous-effectif : demande passagers et qualité de service plus faibles.']
+      effects: ['Augmente la satisfaction et le flux de voyageurs sur les lignes.', 'Sous-effectif : Demande passagers et qualité de service plus faibles.']
     },
     mechanics: {
       title: 'Maintenance du parc',
-      effects: ['Ralentit la vitesse à laquelle les trains réclament une maintenance.', 'Sous-effectif : usure accélérée, immobilisations plus fréquentes et coûts plus lourds.']
+      effects: ['Ralentit la vitesse à laquelle les trains réclament une maintenance.', 'Sous-effectif : Usure accélérée, immobilisations plus fréquentes et coûts plus lourds.']
     },
     dispatchers: {
       title: 'Régularité et recettes',
-      effects: ['Améliore la régularité et ajoute un bonus direct aux revenus des lignes.', 'Sous-effectif : ponctualité et rendement commercial reculent.']
+      effects: ['Améliore la régularité et ajoute un bonus direct aux revenus des lignes.', 'Sous-effectif : Ponctualité et rendement commercial reculent.']
     },
     engineers: {
       title: 'Entretien de l’infrastructure',
-      effects: ['Réduit les coûts d’entretien des lignes au kilomètre.', 'Sous-effectif : la maintenance de l’infrastructure pèse davantage sur chaque ligne.']
+      effects: ['Réduit les coûts d’entretien des lignes au kilomètre.', 'Sous-effectif : La maintenance de l’infrastructure pèse davantage sur chaque ligne.']
     }
   }[role] || { title: 'Effet opérationnel', effects: ['Améliore la robustesse de la compagnie.'] };
 }
@@ -3451,8 +3464,8 @@ function renderStaff() {
 
     <div class="card">
       <h2>Ressources humaines</h2>
-      <p class="muted small">Chaque métier agit sur une partie précise du moteur : capacité réelle, recettes, satisfaction, maintenance, régularité ou coûts d’infrastructure.</p>
-      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : fréquence, distance de ligne, vitesse du train, parc et gares exploitées. Les agents de l’infra sont désormais dimensionnés selon les kilomètres de lignes à entretenir.</p>
+      <p class="muted small">Chaque métier agit sur une partie précise du moteur : Capacité réelle, Recettes, Satisfaction, Maintenance, Régularité ou Coûts d’infrastructure.</p>
+      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : Fréquence, Distance de ligne, Vitesse du train, Parc et Gares exploitées. Les Agents de l’infra sont désormais dimensionnés selon les kilomètres de lignes à entretenir.</p>
       <div class="list">
         ${staffOrder.map(role => renderStaffRole(role, me.staff[role] || 0)).join('')}
       </div>
@@ -3603,7 +3616,7 @@ function renderResearch() {
           </div>
           <div class="progress research-progress"><i data-research-progress data-research-key="${escapeAttr(researchProjectKey(project))}" data-end-at="${Math.round(project.endAt || 0)}" data-duration-ms="${Math.round(project.durationMs || 1)}" data-work-rate="${Number(project.workRate || 1)}" data-last-progress="${round(researchProgressPercent(project))}" style="width:${round(researchProgressPercent(project))}%"></i></div>
           <div class="research-project-footer">
-            <p class="small muted">Projet en cours. Coût engagé : ${money(project.costMoney || 0)}. Les ingénieurs et la formation accélèrent le laboratoire.</p>
+            <p class="small muted">Projet en cours. Coût engagé : ${money(project.costMoney || 0)}. La formation et les technologies d’exploitation accélèrent le laboratoire.</p>
             <button class="danger research-cancel-btn" data-action="cancel-research" data-source="active" data-id="${escapeAttr(project.nodeId)}" data-level="${Number(project.targetLevel || 1)}" ${tooltipAttr(`Annule ${project.title || project.nodeId} et rembourse ${money(project.costMoney || 0)}. Les recherches en file qui dépendaient de ce projet seront aussi annulées et remboursées.`)}>Annuler</button>
           </div>
         </div>
@@ -4017,36 +4030,36 @@ function renderBudget() {
     </div>
 
     ${budgetSection('revenues', 'Recettes', `
-      ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'prix des billets encaissés')}
-      ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'commerces et services associés')}
-      ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'tonnage transporté')}
-      ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'effet des régulateurs')}
-      ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'gares possédées')}
+      ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Prix des billets encaissés')}
+      ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'Commerces et services associés')}
+      ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
+      ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
+      ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
       ${otherRevenue > 0 ? budgetRow('Autres recettes', otherRevenue, 'revenue') : ''}
       ${budgetRow('Total recettes', revenueTotal, 'revenue')}
     `, moneyPerHour(revenueTotal))}
 
     ${budgetSection('variable-costs', 'Dépenses variables d’exploitation', `
-      ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'électricité ou ressources consommées')}
-      ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'usure liée aux circulations')}
-      ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'coût proportionnel aux kilomètres exploités')}
-      ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'accès au réseau')}
+      ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
+      ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
+      ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Coût proportionnel aux kilomètres exploités')}
+      ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'Accès au réseau')}
       ${otherVariable > 0 ? budgetRow('Autres coûts variables', otherVariable, 'expense') : ''}
       ${budgetRow('Total variable', variable, 'expense')}
     `, moneyPerHour(variable))}
 
     ${budgetSection('fixed-costs', 'Charges fixes', `
-      ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'salaires')}
-      ${budgetRow('Gares', b.stationCost || 0, 'expense', 'niveaux, commerces, ateliers, dépôts')}
-      ${budgetRow('Dette', b.debtCost || 0, 'expense', 'intérêts et charge financière')}
-      ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'stockage du matériel non affecté')}
-      ${budgetRow('R&D', b.researchCost || 0, 'expense', 'projet de recherche actif')}
+      ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
+      ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
+      ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
+      ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
+      ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Projet de recherche actif')}
       ${otherShared > 0 ? budgetRow('Autres charges fixes', otherShared, 'expense') : ''}
       ${budgetRow('Total charges fixes', shared, 'expense')}
     `, moneyPerHour(shared))}
 
     ${budgetSection('result', 'Résultat et structure financière', `
-      ${budgetRow('Résultat net courant', net, 'net', 'recettes - dépenses')}
+      ${budgetRow('Résultat net courant', net, 'net', 'Recettes - dépenses')}
       ${budgetRawRow('Trésorerie disponible', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}
       ${budgetRawRow('Dette totale', money(me.debt), me.debt > 0 ? 'bad-text' : 'good-text')}
       ${budgetRawRow('Recettes cumulées', money(me.stats.revenue), 'good-text')}
@@ -4088,9 +4101,9 @@ function renderMarket() {
     <div class="card">
       <h2>Financement</h2>
       <div class="actions">
-        <button data-action="loan" data-amount="100000" ${tooltipAttr('Ajoute immédiatement 100 000 € de trésorerie et augmente la dette. Effet : plus de marge d’investissement, mais des remboursements/intérêts pèseront sur la compagnie.')}>Emprunter 100 000 €</button>
-        <button data-action="loan" data-amount="500000" ${tooltipAttr('Ajoute immédiatement 500 000 € de trésorerie et augmente fortement la dette. À utiliser pour gros investissements : matériel, gares, électrification.')}>Emprunter 500 000 €</button>
-        <button data-action="repay" data-amount="100000" ${tooltipAttr('Rembourse 100 000 € de dette si la trésorerie le permet. Effet : diminue l’endettement et améliore la solidité financière.')}>Rembourser 100 000 €</button>
+        <button data-action="loan" data-amount="100000" ${tooltipAttr('Ajoute immédiatement 100 000 € de trésorerie et augmente la dette. Effet : Plus de marge d’investissement, mais des remboursements/intérêts pèseront sur la compagnie.')}>Emprunter 100 000 €</button>
+        <button data-action="loan" data-amount="500000" ${tooltipAttr('Ajoute immédiatement 500 000 € de trésorerie et augmente fortement la dette. À utiliser pour gros investissements : Matériel, gares, électrification.')}>Emprunter 500 000 €</button>
+        <button data-action="repay" data-amount="100000" ${tooltipAttr('Rembourse 100 000 € de dette si la trésorerie le permet. Effet : Diminue l’endettement et améliore la solidité financière.')}>Rembourser 100 000 €</button>
       </div>
     </div>
   `;
@@ -6941,7 +6954,7 @@ function updateLinePreview(sourceId = '') {
   }
   if (train.maintenance?.active) {
     box.className = 'line-preview bad small';
-    box.textContent = `Train indisponible : maintenance en cours, ${formatCycles(train.maintenance.daysLeft)} restant(s).`;
+    box.textContent = `Train indisponible : Maintenance en cours, ${formatCycles(train.maintenance.daysLeft)} restant(s).`;
     if (button) button.disabled = true;
     return;
   }
@@ -6969,8 +6982,8 @@ function updateLinePreview(sourceId = '') {
   const effective = effectiveTrainRangeClient(train, model);
   const ok = route.distance <= effective;
   const detail = ok
-    ? ` Compatible : portée ${formatInt(effective)} km. Itinéraire : ${routeText}.`
-    : ` Incompatible : portée ${formatInt(effective)} km. La distance totale de ligne dépasse la portée du matériel. Itinéraire : ${routeText}.`;
+    ? ` Compatible : Portée ${formatInt(effective)} km. Itinéraire : ${routeText}.`
+    : ` Incompatible : Portée ${formatInt(effective)} km. La distance totale de ligne dépasse la portée du matériel. Itinéraire : ${routeText}.`;
 
   box.className = `line-preview ${ok ? 'good' : 'bad'} small`;
   box.textContent = base + detail;

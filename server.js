@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.48.0';
-const STATE_SCHEMA_VERSION = 50;
+const PROJECT_VERSION = 'v60.48.1';
+const STATE_SCHEMA_VERSION = 51;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -230,7 +230,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/new-player') {
     if (Object.keys(state.users || {}).length) {
-      sendJson(res, 401, { ok: false, error: 'Création directe désactivée : crée un compte ou connecte-toi.' });
+      sendJson(res, 401, { ok: false, error: 'Création directe désactivée : Crée un compte ou connecte-toi.' });
       return;
     }
     const body = await readBody(req);
@@ -482,7 +482,7 @@ function updateClaimedPlayerIdentity(player, body = {}) {
   player.color = nextColor;
   player.logo = sanitizeCompanyLogo(body.logo || player.logo);
   player.lastSeen = Date.now();
-  notify(player, 'Compte joueur créé : cette compagnie est maintenant liée à ton identifiant.');
+  notify(player, 'Compte joueur créé : Cette compagnie est maintenant liée à ton identifiant.');
   return player;
 }
 
@@ -1569,7 +1569,7 @@ function actionUpgradeStation(player, payload) {
 
   player.cash -= cost;
   if (wasUnowned) {
-    notify(player, `${station.name} acquise pour ${money(cost)} : les autres compagnies devront payer des droits de passage pour l’utiliser.`);
+    notify(player, `${station.name} acquise pour ${money(cost)} : Les autres compagnies devront payer des droits de passage pour l’utiliser.`);
     return ok('Ville achetée.');
   }
 
@@ -1684,7 +1684,7 @@ function actionHireStaff(player, payload) {
   const count = clamp(Math.floor(Number(payload.count || 1)), 1, 50);
   const def = BALANCE.staff[role];
   if (!def) return fail('Métier inconnu.');
-  const cost = Math.round(def.hireCost * count * state.market.labor);
+  const cost = Math.round(def.hireCost * count);
   if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût: ${money(cost)}.`);
   player.cash -= cost;
   player.staff[role] = (player.staff[role] || 0) + count;
@@ -1892,7 +1892,7 @@ function processTrainMaintenance(player) {
       const model = BALANCE.trains[train.modelId];
       train.condition = clamp(train.maintenance.targetCondition || Math.max(train.condition, 0.9), 0.1, 1);
       train.maintenance = { active: false, mode: null, daysLeft: 0, duration: 0, targetCondition: 0, lastServiceDay: state.day };
-      notify(player, `${model?.name || 'Train'} ressort d’atelier : état ${Math.round(train.condition * 100)}%.`);
+      notify(player, `${model?.name || 'Train'} ressort d’atelier : État ${Math.round(train.condition * 100)}%.`);
     }
   }
 }
@@ -2410,7 +2410,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     weight += Math.max(1, linePax + lineFreight * 0.5);
   }
 
-  const staffCost = Object.entries(player.staff).reduce((sum, [role, count]) => sum + (BALANCE.staff[role]?.salary || 0) * count / ECONOMY.staffCostDivisor * state.market.labor, 0) * (1 - Math.min(0.1, techLevel(player, 'crew_training') * 0.018));
+  const staffCost = Object.entries(player.staff).reduce((sum, [role, count]) => sum + (BALANCE.staff[role]?.salary || 0) * count / ECONOMY.staffCostDivisor, 0) * (1 - Math.min(0.1, techLevel(player, 'crew_training') * 0.018));
   const stationCost = Object.values(player.stations).reduce((sum, a) => sum + (a.level * ECONOMY.stationLevelCost + a.commerce * ECONOMY.stationCommerceCost + a.maintenance * ECONOMY.stationMaintenanceCost + (a.depot ? ECONOMY.stationDepotCost : 0)), 0);
   const debtCost = player.debt * ECONOMY.debtInterestPerTick;
   const idleTrainCost = player.trains.reduce((sum, train) => {
@@ -2957,12 +2957,12 @@ function currentEventFactor() {
 
 function createEvent(forcedKind, duration) {
   const events = [
-    { kind: 'tourism', title: 'Vacances scolaires : forte demande voyageurs sur les axes touristiques.', passenger: 1.18, freight: 0.98 },
-    { kind: 'energy', title: 'Tension sur les marchés de l’énergie : les coûts de traction augmentent.', passenger: 1.0, freight: 0.96 },
-    { kind: 'weather', title: 'Météo difficile : la ponctualité devient plus fragile.', passenger: 0.94, freight: 0.92 },
-    { kind: 'freight', title: 'Rebond industriel : les contrats fret sont plus nombreux.', passenger: 1.0, freight: 1.2 },
-    { kind: 'expo', title: 'Grand événement national : hausse temporaire des déplacements longue distance.', passenger: 1.14, freight: 1.02 },
-    { kind: 'social', title: 'Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées.', passenger: 0.97, freight: 0.97 }
+    { kind: 'tourism', title: 'Vacances scolaires : Forte demande voyageurs sur les axes touristiques.', passenger: 1.18, freight: 0.98 },
+    { kind: 'energy', title: 'Tension sur les marchés de l’énergie : Les coûts de traction augmentent.', passenger: 1.0, freight: 0.96 },
+    { kind: 'weather', title: 'Météo difficile : La ponctualité devient plus fragile.', passenger: 0.94, freight: 0.92 },
+    { kind: 'freight', title: 'Rebond industriel : Les contrats fret sont plus nombreux.', passenger: 1.0, freight: 1.2 },
+    { kind: 'expo', title: 'Grand événement national : Hausse temporaire des déplacements longue distance.', passenger: 1.14, freight: 1.02 },
+    { kind: 'social', title: 'Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées.', passenger: 0.97, freight: 0.97 }
   ];
   const event = forcedKind ? events.find(e => e.kind === forcedKind) || events[0] : events[Math.floor(Math.random() * events.length)];
   return { ...event, remaining: duration };
@@ -3860,12 +3860,12 @@ function buildBalance() {
     maglev_next_gen_unit: { id: 'maglev_next_gen_unit', name: 'Maglev nouvelle génération', unlockEpoch: 6, type: 'Maglev nouvelle génération', speed: 600, capacity: 820, freight: 60, energyType: 'electricity', energy: 10.9, maintenance: 0.78, price: 92000000, reliability: 0.97, comfort: 0.95, range: 1500, description: 'Matériel ultime de très late game : vitesse extrême, confort et fiabilité.', requiredTech: 'maglev_next_generation', requiredTechLevel: 8 }
   };
   const staff = {
-    drivers: { label: 'conducteur', salary: 4300, hireCost: 9000 },
-    controllers: { label: 'contrôleur', salary: 3300, hireCost: 6500 },
-    stationAgents: { label: 'agent de gare', salary: 3100, hireCost: 5200 },
-    mechanics: { label: 'mainteneur', salary: 3700, hireCost: 7200 },
-    dispatchers: { label: 'régulateur', salary: 4600, hireCost: 10500 },
-    engineers: { label: 'agent de l’infra', salary: 5600, hireCost: 14000 }
+    drivers: { label: 'Conducteur', salary: 4300, hireCost: 9000 },
+    controllers: { label: 'Contrôleur', salary: 3300, hireCost: 6500 },
+    stationAgents: { label: 'Agent de gare', salary: 3100, hireCost: 5200 },
+    mechanics: { label: 'Mainteneur', salary: 3700, hireCost: 7200 },
+    dispatchers: { label: 'Régulateur', salary: 4600, hireCost: 10500 },
+    engineers: { label: 'Agent de l’infra', salary: 5600, hireCost: 14000 }
   };
   const energyStrategies = {
     spot: { name: 'Marché spot', defaultMultiplier: 1, multiplier: {} },
@@ -4033,7 +4033,7 @@ function buildTechTree() {
   add('maintenance', "battery_modular", "Batteries modulaires", "Ère 6 — Train à batterie. Effets : +8% fiabilité, +6% rentabilité.", 5, [{"id": "battery_thermal_management", "level": 5}], ["Rame batterie modulaire"], ["+8% fiabilité", "+6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
   add('energy', "battery_auto_charge_optimization", "Optimisation automatique de charge", "Ère 6 — Train à batterie. Effets : -10% consommation, +8% autonomie.", 5, [{"id": "battery_modular", "level": 5}, {"id": "electric_electronic_control", "level": 8}], [], ["-10% consommation", "+8% autonomie", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
   add('energy', "battery_high_density", "Batteries haute densité", "Ère 6 — Train à batterie. Effets : +20% autonomie, +6% vitesse max.", 5, [{"id": "battery_long_range", "level": 8}, {"id": "battery_thermal_management", "level": 8}], ["Rame batterie haute densité"], ["+20% autonomie", "+6% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
-  add('traction', "maglev_levitation", "Sustentation magnétique", "Ère 7 — Train à sustentation magnétique. Effets : +20% vitesse max, -8% consommation. Note : si le moteur du jeu ne permet pas de dépendre d’une recherche située plus bas, remplacer par : Rames à grande vitesse niveau 8 + Caténaire haute vitesse niveau 8.", 6, [{"id": "hsv_trainsets", "level": 8}, {"id": "maglev_high_power_energy", "level": 1}], ["Navette maglev pionnière"], ["+20% vitesse max", "-8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_levitation", "Sustentation magnétique", "Ère 7 — Train à sustentation magnétique. Effets : +20% vitesse max, -8% consommation. Note : Si le moteur du jeu ne permet pas de dépendre d’une recherche située plus bas, remplacer par : Rames à grande vitesse niveau 8 + Caténaire haute vitesse niveau 8.", 6, [{"id": "hsv_trainsets", "level": 8}, {"id": "maglev_high_power_energy", "level": 1}], ["Navette maglev pionnière"], ["+20% vitesse max", "-8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
   add('traction', "maglev_guidance", "Guidage magnétique", "Ère 7 — Train à sustentation magnétique. Effets : +12% fiabilité, +8% vitesse max.", 6, [{"id": "maglev_levitation", "level": 3}], ["Rame maglev guidée"], ["+12% fiabilité", "+8% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
   add('traction', "maglev_linear_propulsion", "Propulsion linéaire", "Ère 7 — Train à sustentation magnétique. Effets : +18% vitesse max, -6% consommation.", 6, [{"id": "maglev_levitation", "level": 5}, {"id": "maglev_guidance", "level": 3}], ["Maglev express linéaire"], ["+18% vitesse max", "-6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
   add('traction', "maglev_special_tracks", "Voies magnétiques spéciales", "Ère 7 — Train à sustentation magnétique. Effets : +15% vitesse max, +8% fiabilité.", 6, [{"id": "maglev_guidance", "level": 5}], [], ["+15% vitesse max", "+8% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
@@ -4087,11 +4087,11 @@ function buildTechTree() {
   add('freight', 'freight_marketplace', 'Bourse contrats fret', 'Met en concurrence les flux et améliore le remplissage.', 5, ['automated_freight_ops'], [], ['Taux de chargement fret par niveau']);
 
   add('social', 'crew_training', 'Formation polyvalente', 'Améliore la productivité des équipes de circulation.', 0, [], [], ['Efficacité RH et masse salariale par niveau']);
-  add('social', 'safety_training', 'Culture sécurité', 'Réduit les erreurs d’exploitation et améliore la fiabilité perçue.', 1, ['crew_training'], [], ['Fiabilité et agents de gare plus efficaces']);
+  add('social', 'safety_training', 'Culture sécurité', 'Réduit les erreurs d’exploitation et améliore la fiabilité perçue.', 1, ['crew_training'], [], ['Fiabilité et Agents de gare plus efficaces']);
   add('social', 'apprenticeship_tracks', 'Écoles métiers ferroviaires', 'Réduit le coût des recrutements futurs.', 0, ['crew_training'], [], ['Recrutement moins coûteux par niveau']);
-  add('social', 'driver_rosters', 'Roulements conducteurs', 'Stabilise les lignes à forte fréquence.', 1, ['crew_training'], [], ['Besoin conducteur mieux couvert']);
+  add('social', 'driver_rosters', 'Roulements Conducteurs', 'Stabilise les lignes à forte fréquence.', 1, ['crew_training'], [], ['Besoin Conducteur mieux couvert']);
   add('social', 'controller_service', 'Service commercial embarqué', 'Améliore satisfaction et revenus annexes.', 1, ['safety_training'], [], ['Satisfaction voyageurs par niveau']);
-  add('social', 'mechanic_certification', 'Certification mainteneurs', 'Améliore la qualité des interventions atelier.', 1, ['crew_training'], [], ['Maintenance plus efficace par niveau']);
+  add('social', 'mechanic_certification', 'Certification Mainteneurs', 'Améliore la qualité des interventions atelier.', 1, ['crew_training'], [], ['Maintenance plus efficace par niveau']);
   add('social', 'dispatcher_school', 'École de régulation', 'Renforce la ponctualité des réseaux complexes.', 2, ['driver_rosters', 'manual_dispatch'], [], ['Régulation et ponctualité par niveau']);
   add('social', 'social_dialogue', 'Dialogue social structuré', 'Réduit l’impact des tensions sociales.', 2, ['safety_training'], [], ['Résilience sociale par niveau']);
   add('social', 'engineering_office', 'Bureau d’études interne', 'Accélère légèrement les projets R&D complexes.', 2, ['apprenticeship_tracks'], [], ['Vitesse de recherche par niveau']);
@@ -4170,13 +4170,13 @@ function researchLevelEffectText(node) {
   };
   if (byId[node.id]) return byId[node.id];
   const byBranch = {
-    traction: '+1 niveau de branche Traction : meilleure portée, vitesse commerciale ou confort selon le matériel concerné.',
-    energy: '+1 niveau de branche Énergie : coûts de traction plus stables et meilleure efficacité énergétique.',
-    maintenance: '+1 niveau de branche Maintenance : moins d’usure, moins d’immobilisation ou moins de coût atelier.',
-    operations: '+1 niveau de branche Exploitation : meilleure ponctualité, débit ou robustesse des fréquences.',
-    stations: '+1 niveau de branche Gares : plus de capacité, satisfaction ou revenus annexes.',
-    freight: '+1 niveau de branche Fret : meilleure capture de demande, taux de chargement ou revenu par tonne.',
-    social: '+1 niveau de branche RH : meilleure productivité, sécurité ou vitesse de recherche.'
+    traction: '+1 niveau de branche Traction : Meilleure portée, vitesse commerciale ou confort selon le matériel concerné.',
+    energy: '+1 niveau de branche Énergie : Coûts de traction plus stables et meilleure efficacité énergétique.',
+    maintenance: '+1 niveau de branche Maintenance : Moins d’usure, moins d’immobilisation ou moins de coût atelier.',
+    operations: '+1 niveau de branche Exploitation : Meilleure ponctualité, débit ou robustesse des fréquences.',
+    stations: '+1 niveau de branche Gares : Plus de capacité, satisfaction ou revenus annexes.',
+    freight: '+1 niveau de branche Fret : Meilleure capture de demande, taux de chargement ou revenu par tonne.',
+    social: '+1 niveau de branche RH : Meilleure productivité, sécurité ou vitesse de recherche.'
   };
   return byBranch[node.branch] || byBranch[node.group] || '';
 }

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Version v60.48.1 — capitalisation UI et salaires RH stables
+
+- incrément de version de cette passe : badge interface `v60.48.1`, package `0.4.39` et schéma d’état serveur `51` ;
+- passe de capitalisation sur les textes visibles ajoutés/modifiés récemment : débuts de phrases après deux-points, infobulles, détails de budget et messages RH ;
+- capitalisation des noms de métiers exposés par l’équilibrage serveur : `Conducteur`, `Contrôleur`, `Agent de gare`, `Mainteneur`, `Régulateur` et `Agent de l’infra` ;
+- correction de la fluctuation des salaires RH à chaque tick serveur ;
+- cause corrigée : les salaires étaient multipliés par `state.market.labor`, qui dérive légèrement à chaque mise à jour du marché même quand aucun effectif ne change ;
+- les salaires et coûts de recrutement sont maintenant fixes tant que le nombre de salariés et les éventuels bonus de recherche ne changent pas ;
+- conservation du marché du travail dans l’état de marché, mais il n’est plus appliqué aux salaires RH récurrents.
+
 ## Version v60.48.0 — onglet Budget et réorganisation des besoins RH
 
 - incrément de version de cette passe : badge interface `v60.48.0`, package `0.4.38` et schéma d’état serveur `50` ;
