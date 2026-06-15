@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.48.1';
+const PROJECT_VERSION = 'v60.49.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -63,6 +63,7 @@ const app = {
     stationDrawCache: { key: '', items: [] },
     visibleStationCache: { key: '', stations: [] },
     routeDataSignature: '',
+    trainMotion: {},
     lastMoveEventAt: 0,
     panOverlay: { active: false, anchorLatLng: null, anchorPoint: null, raf: false },
     creatingCustomStation: false,
@@ -584,7 +585,7 @@ function initOsmMap() {
   const target = $('#osmMap');
   if (!target) return;
   if (!window.L) {
-    target.innerHTML = '<div class="osm-error">Leaflet/OpenStreetMap indisponible. Vérifie ta connexion internet.</div><canvas id="map" width="1200" height="820"></canvas>';
+    target.innerHTML = '<div class="osm-error">Carte indisponible. Vérifie ta connexion internet.</div><canvas id="map" width="1200" height="820"></canvas>';
     app.map.canvas = $('#map');
     app.map.ctx = app.map.canvas?.getContext('2d');
     resizeCanvas();
@@ -677,29 +678,29 @@ function initOsmMap() {
 function addReliableFrenchTileLayer(map) {
   const layers = [
     {
-      name: 'OpenStreetMap standard',
+      name: 'Carte standard',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       options: {
         maxZoom: 19,
         subdomains: ['a', 'b', 'c'],
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: 'Cartographie'
       }
     },
     {
-      name: 'OSM France',
+      name: 'Carte France',
       url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
       options: {
         maxZoom: 20,
         subdomains: ['a', 'b', 'c'],
-        attribution: '&copy; OpenStreetMap contributors · rendu OSM France'
+        attribution: 'Cartographie · rendu Carte France'
       }
     },
     {
-      name: 'CARTO Voyager',
+      name: 'Carte secours',
       url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       options: {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        attribution: 'Cartographie'
       }
     }
   ];
@@ -1734,7 +1735,7 @@ function renderLines() {
   const active = ['create', 'manage'].includes(app.activeLinesSubtab) ? app.activeLinesSubtab : 'create';
 
   return `
-    ${renderSectionHero('LIGNES & GARES', 'Création et exploitation des dessertes', 'Crée une nouvelle ligne dans un espace dédié, puis gère et modifie tes lignes existantes dans un second sous-onglet.', ART.tabs.lines, ['OpenStreetMap', communeTag, 'Lignes multi-arrêts'])}
+    ${renderSectionHero('LIGNES & GARES', 'Création et exploitation des dessertes', 'Crée une nouvelle ligne dans un espace dédié, puis gère et modifie tes lignes existantes dans un second sous-onglet.', ART.tabs.lines, ['Carte interactive', communeTag, 'Lignes multi-arrêts'])}
 
     <div class="line-workspace">
       <div class="line-subtabs" role="tablist" aria-label="Gestion des lignes">
@@ -2130,8 +2131,10 @@ function renderLineItem(line) {
     <article class="line-card-modern ${line.active ? '' : 'inactive'}">
       <header class="line-card-modern-head">
         <div>
-          <span class="line-code">${escapeHtml(line.code)}</span>
-          <h3>${escapeHtml(lineDisplayName(line))}</h3>
+          <div class="line-title-row">
+            <h3>${escapeHtml(linePublicName(line))}</h3>
+            ${renderLineServicePill(line, train, model)}
+          </div>
           <p>${escapeHtml(shortStops)}</p>
         </div>
         <span class="tag ${operationalStatus.cls}">${escapeHtml(operationalStatus.label)}</span>
@@ -2457,7 +2460,7 @@ function renderCompositionTrainListItem(train) {
     <button type="button" class="composition-train-item ${active ? 'active' : ''}" data-action="select-composition-train" data-id="${train.id}">
       <div class="composition-train-head">
         <strong>${escapeHtml(model.name)}</strong>
-        <span class="tag">${line ? escapeHtml(line.code) : 'Libre'}</span>
+        <span class="tag">${line ? escapeHtml(linePublicName(line)) : 'Libre'}</span>
       </div>
       <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
       <div class="composition-mini-stats">
@@ -2624,7 +2627,7 @@ function renderCompositionEditor(train) {
           <h2>Atelier de composition</h2>
           <p class="muted small">Ajuste la longueur utile du train et sélectionne les voitures / wagons spécialisés pour façonner précisément les performances de la rame.</p>
         </div>
-        <span class="tag">${line ? `Affecté à ${escapeHtml(line.code)}` : 'Train libre'}</span>
+        <span class="tag">${line ? `Affecté à ${escapeHtml(linePublicName(line))}` : 'Train libre'}</span>
       </div>
 
       ${renderCompositionModeTabs(train, model)}
@@ -3093,7 +3096,7 @@ function renderOwnedTrain(train) {
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
         <div class="progress"><i style="width:${condition}%"></i></div>
         <div class="kv" style="margin-top:8px">
-          <span>Affectation</span><b>${line ? escapeHtml(line.code) : 'Libre'}</b>
+          <span>Affectation</span><b>${line ? escapeHtml(linePublicName(line)) : 'Libre'}</b>
           <span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b>
           <span>Usure historique</span><b>${formatInt(train.age)} cycles</b>
           <span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b>
@@ -3460,13 +3463,17 @@ function staffRoleTooltip(role, count) {
 function renderStaff() {
   const me = app.state.me;
   return `
-    ${renderSectionHero('RESSOURCES HUMAINES', 'Gestion des équipes', 'Recrute, spécialise et stabilise tes effectifs pour soutenir la ponctualité, la sécurité et la qualité de service.', ART.tabs.staff, ['Conducteurs', 'Mainteneurs', 'Régulation'])}
+    ${renderSectionHero('RESSOURCES HUMAINES', 'Gestion des équipes', 'Pilote les métiers essentiels : conduite, contrôle, maintenance, régulation, gares et infrastructure.', ART.tabs.staff, ['3 par rangée', 'Couverture', 'Coût fixe'])}
 
-    <div class="card">
-      <h2>Ressources humaines</h2>
-      <p class="muted small">Chaque métier agit sur une partie précise du moteur : Capacité réelle, Recettes, Satisfaction, Maintenance, Régularité ou Coûts d’infrastructure.</p>
-      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : Fréquence, Distance de ligne, Vitesse du train, Parc et Gares exploitées. Les Agents de l’infra sont désormais dimensionnés selon les kilomètres de lignes à entretenir.</p>
-      <div class="list">
+    <div class="card staff-dashboard-card">
+      <div class="staff-dashboard-head">
+        <div>
+          <h2>Ressources humaines</h2>
+          <p class="muted small">Les besoins sont calculés selon les lignes actives, les gares exploitées, le parc et les kilomètres à entretenir.</p>
+        </div>
+        <span class="tag">${staffOrder.length} métiers</span>
+      </div>
+      <div class="staff-grid-compact">
         ${staffOrder.map(role => renderStaffRole(role, me.staff[role] || 0)).join('')}
       </div>
     </div>
@@ -3480,23 +3487,19 @@ function renderStaffRole(role, count) {
   const impact = staffRoleImpact(role);
   const progress = Math.min(100, Math.round((count / Math.max(1, need)) * 100));
   return `
-    <div class="list-item staff-card ${status.cls}">
-      <div class="item-title">
+    <div class="list-item staff-card staff-card-compact ${status.cls}">
+      <div class="item-title staff-compact-title">
         <strong>${escapeHtml(def.label)}</strong>
-        <span class="tag ${status.cls}">${count}/${need} · ${escapeHtml(status.label)}</span>
+        <span class="tag ${status.cls}">${count}/${need}</span>
       </div>
       <p class="staff-impact"><b>${escapeHtml(impact.title)}</b></p>
-      <ul class="staff-effects">
-        ${impact.effects.map(effect => `<li>${escapeHtml(effect)}</li>`).join('')}
-      </ul>
       <div class="staff-meter"><i style="width:${progress}%"></i></div>
-      <div class="kv">
-        <span>Salaire /h</span><b>${staffSalaryPerHour(def)}</b>
-        <span>Coût recrutement</span><b>${money(def.hireCost)}</b>
-        <span>Besoin estimé</span><b>${need}</b>
+      <div class="staff-compact-kv">
+        <span>Salaire</span><b>${staffSalaryPerHour(def)}</b>
+        <span>Recrutement</span><b>${money(def.hireCost)}</b>
         <span>Couverture</span><b>${Math.round(staffRatio(role, count) * 100)}%</b>
       </div>
-      <div class="actions">
+      <div class="actions staff-compact-actions">
         <button data-action="hire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'hire') + ' ' + staffRoleTooltip(role, count))}>+1</button>
         <button data-action="hire-staff" data-role="${role}" data-count="5" ${tooltipAttr(staffActionTooltip(role, 5, 'hire') + ' ' + staffRoleTooltip(role, count))}>+5</button>
         <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire') + ' ' + staffRoleTooltip(role, count))} ${count <= 0 ? 'disabled' : ''}>-1</button>
@@ -3865,7 +3868,7 @@ function renderResourceSourceList(type) {
   if (!sources.length) return '<p class="muted small">Aucune consommation active.</p>';
   return `<div class="resource-source-list">${sources.map(s => `
     <div class="resource-source-row">
-      <span>🟥 ${escapeHtml(s.lineCode || 'Ligne')} · ${escapeHtml(s.trainName || 'Train')}</span>
+      <span>🟥 ${escapeHtml(s.lineName || s.lineCode || 'Ligne')} · ${escapeHtml(s.trainName || 'Train')}</span>
       <b>${round(s.amountPerHour)} ${unit}</b>
     </div>
   `).join('')}</div>`;
@@ -3984,7 +3987,7 @@ function renderBudgetLineDetail() {
   return lines.map((line, index) => {
     const stats = line.stats || {};
     const finance = stats.finance || {};
-    const name = line.code || line.name || `Ligne ${index + 1}`;
+    const name = linePublicName(line) || `Ligne ${index + 1}`;
     const net = Number(finance.netProfit ?? stats.profit ?? 0);
     return `
       <div class="budget-line-card">
@@ -4837,7 +4840,7 @@ function drawMapHud(ctx) {
   if (!app.map.leaflet) return;
   ctx.save();
   const zoom = app.map.leaflet.getZoom();
-  const label = zoom >= 9 ? `OSM · zoom ${zoom} · vue isométrique visuelle` : `OpenStreetMap · zoom ${zoom}`;
+  const label = zoom >= 9 ? `Carte · zoom ${zoom} · vue isométrique visuelle` : `Carte · zoom ${zoom}`;
   ctx.font = '12px "Trebuchet MS", system-ui';
   const width = ctx.measureText(label).width + 18;
   const x = app.map.width - width - 18;
@@ -5079,9 +5082,21 @@ function trainVisualInstanceCount(line) {
 function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount = 1) {
   const oneWaySeconds = trainVisualOneWaySeconds(line, train, model);
   const roundTripMs = oneWaySeconds * 2 * 1000;
-  const seed = (hashCode(`${line.id}:${train?.id || ''}`) % 10000) / 10000;
-  const offset = instanceCount > 1 ? instanceIndex / instanceCount : 0;
-  return ((Date.now() / roundTripMs) + seed + offset) % 2;
+  const key = `${line.id}:${train?.id || 'train'}:${instanceIndex}`;
+  const now = performance.now();
+  const motion = app.map.trainMotion || (app.map.trainMotion = {});
+  let entry = motion[key];
+  if (!entry) {
+    const seed = (hashCode(`${line.id}:${train?.id || ''}`) % 10000) / 10000;
+    const offset = instanceCount > 1 ? instanceIndex / instanceCount : 0;
+    entry = motion[key] = { phase: (seed + offset) % 2, lastAt: now };
+  } else {
+    const elapsed = Math.max(0, Math.min(250, now - Number(entry.lastAt || now)));
+    const phaseDelta = elapsed * 2 / Math.max(1000, roundTripMs);
+    entry.phase = (Number(entry.phase || 0) + phaseDelta) % 2;
+    entry.lastAt = now;
+  }
+  return entry.phase;
 }
 
 function drawOneTrainSprite(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
@@ -6043,6 +6058,29 @@ function lineDisplayName(line) {
   if (line.name) return line.name;
   if (stops.length < 2) return lineStopsLabel(stops);
   return `${station(stops[0])?.name || stops[0]} → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`;
+}
+
+function linePublicName(line) {
+  const stops = lineStopsOf(line);
+  if (stops.length >= 2) {
+    return `${station(stops[0])?.name || stops[0]} → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`;
+  }
+  return lineDisplayName(line);
+}
+
+function lineCompositionService(line, train = null, model = null) {
+  const candidateTrain = train || app.state?.me?.trains?.find(t => t.id === line?.trainId);
+  const candidateModel = model || (candidateTrain ? app.state?.balance?.trains?.[candidateTrain.modelId] : null);
+  const profile = candidateTrain && candidateModel ? previewOperatingProfile(candidateTrain, candidateModel) : candidateModel;
+  const pax = Number(profile?.capacity ?? candidateModel?.capacity ?? 0);
+  const freight = Number(profile?.freight ?? candidateModel?.freight ?? 0);
+  if (freight > pax * 0.35 && freight >= 80) return { key: 'freight', label: 'Fret' };
+  return { key: 'passengers', label: 'Voyageur' };
+}
+
+function renderLineServicePill(line, train = null, model = null) {
+  const svc = lineCompositionService(line, train, model);
+  return `<span class="tag line-service-pill ${escapeAttr(svc.key)}">${escapeHtml(svc.label)}</span>`;
 }
 
 function routeDistanceForStopOrder(stops) {
@@ -7055,7 +7093,7 @@ function resourceTopTooltip(type) {
     `Production totale : ${round(production)} ${unit}`,
     '---------------------------------------------',
     ...(sources.length
-      ? sources.slice(0, 10).map(s => `Consommation train ${s.lineCode || 'Ligne'} · ${s.trainName || 'Train'} : ${round(s.amountPerHour)} ${unit}`)
+      ? sources.slice(0, 10).map(s => `Consommation train ${s.lineName || s.lineCode || 'Ligne'} · ${s.trainName || 'Train'} : ${round(s.amountPerHour)} ${unit}`)
       : ['Aucune consommation active'])
   ];
   return lines.join('\n');

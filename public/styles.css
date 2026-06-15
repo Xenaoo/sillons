@@ -5528,3 +5528,106 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== v60.49.0 — RH compacte trois colonnes ===== */
+.staff-dashboard-card {
+  padding: 12px !important;
+}
+.staff-dashboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.staff-dashboard-head h2 {
+  margin-bottom: 4px;
+}
+.staff-grid-compact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.staff-card-compact {
+  gap: 6px !important;
+  padding: 9px !important;
+  min-height: 0;
+}
+.staff-compact-title {
+  gap: 6px;
+}
+.staff-card-compact .staff-impact {
+  font-size: 12px;
+  line-height: 1.2;
+  min-height: 15px;
+}
+.staff-card-compact .staff-meter {
+  height: 6px;
+}
+.staff-compact-kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  font-size: 11px;
+}
+.staff-compact-kv span {
+  color: #b8aa84;
+  white-space: nowrap;
+}
+.staff-compact-kv b {
+  color: #f4e3bd;
+  text-align: right;
+  white-space: nowrap;
+}
+.staff-compact-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px !important;
+}
+.staff-compact-actions button {
+  min-height: 28px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+.line-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.line-title-row h3 {
+  margin: 0;
+}
+.line-service-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(217,168,82,.22);
+  background: rgba(7,13,24,.58);
+}
+.line-service-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d9a852;
+  box-shadow: 0 0 8px rgba(217,168,82,.42);
+}
+.line-service-pill.freight::before {
+  background: #9ca3af;
+  box-shadow: 0 0 8px rgba(156,163,175,.42);
+}
+.line-service-pill.passengers::before {
+  background: #6ac58f;
+  box-shadow: 0 0 8px rgba(106,197,143,.42);
+}
+@media (max-width: 1180px) {
+  .staff-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .staff-grid-compact {
+    grid-template-columns: 1fr;
+  }
+}

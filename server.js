@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.48.1';
-const STATE_SCHEMA_VERSION = 51;
+const PROJECT_VERSION = 'v60.49.0';
+const STATE_SCHEMA_VERSION = 52;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -1444,7 +1444,7 @@ function actionCloseLine(player, payload) {
   const line = player.lines.find(l => l.id === payload.lineId);
   if (!line) return fail('Ligne introuvable.');
   line.active = false;
-  notify(player, `Ligne ${line.code} fermée.`);
+  notify(player, `${lineRouteName(lineStops(line))} fermée.`);
   return ok();
 }
 
@@ -1530,7 +1530,7 @@ function actionUpdateLine(player, payload) {
       if (player.stations?.[stopId]) normalizeStationAsset(player, stopId).electrified = true;
     }
     changedOperationalData = true;
-    notify(player, `Électrification terminée sur ${line.code} pour ${money(cost)}.`);
+    notify(player, `Électrification terminée sur ${lineRouteName(lineStops(line))} pour ${money(cost)}.`);
   }
   if (changedOperationalData) refreshPlayerLineStatsNow(player);
   return ok(`Ligne modifiée. Billet moyen : ${money(lineTicketPrice(line))}.`);
@@ -1615,7 +1615,7 @@ function actionCreateCustomStation(player, payload) {
   const lat = Number(payload.lat);
   const lon = Number(payload.lon);
   const name = cleanText(payload.name || 'Nouvel arrêt', 38);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return fail('Coordonnées OSM invalides.');
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return fail('Coordonnées invalides.');
   if (!isInFranceBounds(lat, lon)) return fail('Point hors zone.', 'Choisis un emplacement situé en France métropolitaine ou en Corse.');
   if (name.length < 2) return fail('Nom trop court.');
 
@@ -1645,9 +1645,9 @@ function actionCreateCustomStation(player, payload) {
   player.stations[id] = { level: 1, depot: false, commerce: 0, maintenance: 0, electrified: false };
   _routeCache.clear();
   invalidatePublicWorldCache();
-  notify(player, `Nouvel arrêt OSM créé : ${name}.`);
+  notify(player, `Nouvel arrêt personnalisé créé : ${name}.`);
   state.news.push({ day: state.day, text: `${player.name} ouvre un nouvel arrêt à ${name}.` });
-  return ok('Arrêt OSM créé.');
+  return ok('Arrêt personnalisé créé.');
 }
 
 function estimateDemandFromLocation(lat, lon) {
@@ -2549,7 +2549,7 @@ function buildLineMarkets() {
           playerId: player.id,
           companyName: player.name,
           lineId: line.id,
-          lineCode: line.code,
+          lineCode: lineRouteName(lineStops(line)),
           market,
           score: details.score
         });
@@ -2727,7 +2727,7 @@ function computePlayerResourceFlow(player) {
     consumption[type] += perHour;
     sources[type].push({
       lineId: line.id,
-      lineCode: line.code,
+      lineCode: lineRouteName(lineStops(line)),
       lineName: lineRouteName(lineStops(line)),
       trainName: model.name,
       amountPerHour: round2(perHour)

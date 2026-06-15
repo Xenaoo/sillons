@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Version v60.49.0 — RH compacte, carte neutralisée, animation trains et noms de lignes
+
+- incrément de version de cette passe : badge interface `v60.49.0`, package `0.4.40` et schéma d’état serveur `52` ;
+- réorganisation de l’onglet `RH` avec des vignettes compactes affichées trois par rangée sur écran large ;
+- réduction de la hauteur des cartes RH : résumé du rôle, couverture, salaire, coût de recrutement et actions restent visibles sans déroulé excessif ;
+- retrait des mentions cartographiques techniques visibles par le joueur dans l’interface et dans le changelog affiché par le popup ;
+- correction de l’animation des trains : la phase de déplacement est maintenant conservée côté client entre deux états serveur, ce qui évite les sauts/téléportations lors des ticks ;
+- l’adaptation de la vitesse aux statistiques du matériel est conservée, mais les variations d’état ou de fréquence ne réinitialisent plus la position visuelle ;
+- les cartes de lignes n’affichent plus le code interne `COM-001` comme nom visible ;
+- les lignes sont présentées sous la forme `Gare d’origine → Gare de destination` ;
+- ajout d’une pastille de type à côté du nom de ligne, déterminée depuis la composition effective du matériel roulant : `Voyageur` ou `Fret` ;
+- remplacement des affichages secondaires utilisant encore le code interne de ligne dans les affectations de trains, les ressources et le budget.
+
 ## Version v60.48.1 — capitalisation UI et salaires RH stables
 
 - incrément de version de cette passe : badge interface `v60.48.1`, package `0.4.39` et schéma d’état serveur `51` ;
@@ -87,19 +100,19 @@ Ajouts principaux :
 - bascule progressive vers une vue isométrique quand le zoom augmente ;
 - commandes de zoom intégrées à l'interface.
 
-## Version v10 — OpenStreetMap
+## Version v10 — Carte interactive
 
-- Carte principale remplacée par une carte OpenStreetMap via Leaflet.
+- Carte principale remplacée par une carte Carte interactive via moteur cartographique.
 - Ajout d'une surcouche canvas pour les gares, lignes et trains animés.
 - Possibilité de créer un arrêt personnalisé n'importe où en France via le bouton **Créer arrêt**.
 - Les arrêts personnalisés sont sauvegardés dans `data/save.json`.
-- Les lignes peuvent être créées entre gares de base et arrêts OSM personnalisés.
+- Les lignes peuvent être créées entre gares de base et arrêts Carte personnalisés.
 - Le moteur économique existant reste utilisé : demande, fret, tourisme, coût de ligne, maintenance, trains, énergie, salariés et recherche.
 - Les trains restent animés sur la surcouche de carte.
-- Le zoom et le déplacement sont gérés par Leaflet/OpenStreetMap.
+- Le zoom et le déplacement sont gérés par moteur cartographique/Carte interactive.
 - À fort zoom, l'interface indique une vue isométrique visuelle pour les circulations et les sprites.
 
-Note : cette version utilise les tuiles publiques OpenStreetMap depuis Internet. Sans connexion, la carte OSM ne pourra pas charger ses tuiles.
+Note : cette version utilise les fonds cartographiques Carte interactive depuis Internet. Sans connexion, la carte Carte ne pourra pas charger ses fonds cartographiques.
 
 ## Version v11 — Villes population réelle et recherche textuelle
 
@@ -110,12 +123,12 @@ Note : cette version utilise les tuiles publiques OpenStreetMap depuis Internet.
 - Le formulaire de création de ligne utilise maintenant une recherche textuelle avec suggestions au lieu de longs menus déroulants.
 - Les gares principales, communes ≥population réelle et arrêts personnalisés sont recherchables.
 
-Note : le premier chargement complet des communes nécessite une connexion Internet, comme la carte OpenStreetMap. Si le téléchargement échoue, le jeu reste jouable avec les gares de base et les arrêts OSM personnalisés.
+Note : le premier chargement complet des communes nécessite une connexion Internet, comme la carte Carte interactive. Si le téléchargement échoue, le jeu reste jouable avec les gares de base et les arrêts Carte personnalisés.
 
 ## Version v12
 
 - suppression de la catégorie `communes ≥population réelle` dans le choix de région de départ ;
-- thème de la carte OpenStreetMap recoloré pour s'aligner sur l'interface sombre bleu nuit / laiton ;
+- thème de la carte Carte interactive recoloré pour s'aligner sur l'interface sombre bleu nuit / laiton ;
 - nouveaux bandeaux d'illustration pour tous les menus principaux, au bon format, sans rognage, dans la même DA pixel-art ;
 - carte désormais conservée à l'écran en permanence, avec interface élargie pour rendre tous les menus utilisables sans masquer la carte.
 
@@ -127,8 +140,8 @@ Cette version corrige réellement les points demandés après la v12 :
 - le bouton de masquage de carte est retiré : la carte reste visible en permanence ;
 - la mise en page est reconstruite avec une carte permanente à gauche et des menus utilisables à droite ;
 - les onglets sont accessibles via une barre horizontale défilable si nécessaire ;
-- la carte utilise désormais un fond sombre basé sur les données OpenStreetMap/CARTO, plus proche de la charte graphique ;
-- les tuiles sont recolorées dans une ambiance bleu nuit / laiton ;
+- la carte utilise désormais un fond sombre basé sur les données Carte interactive/style cartographique, plus proche de la charte graphique ;
+- les fonds cartographiques sont recolorées dans une ambiance bleu nuit / laiton ;
 - les bandeaux des menus sont intégrés avec de vraies balises image en `object-fit: contain`, afin d'éviter le rognage ;
 - les images générées pour les menus principaux sont intégrées dans `public/assets/art/`.
 
@@ -148,7 +161,7 @@ Note : le message serveur `Chargement communes ≥population impossible: fetch f
 
 Correctifs carte :
 
-- correction du canvas de surcouche qui gardait des dimensions CSS héritées (`height: calc(...)`) au lieu d'occuper tout le conteneur Leaflet ;
+- correction du canvas de surcouche qui gardait des dimensions CSS héritées (`height: calc(...)`) au lieu d'occuper tout le conteneur moteur cartographique ;
 - ajout d'un recalcul fiable de la taille du canvas ;
 - ajout d'un `ResizeObserver` sur la carte ;
 - appel sécurisé à `leaflet.invalidateSize()` après changements de layout/zoom/déplacement ;
@@ -172,7 +185,7 @@ Ajouts UX :
 
 - les tooltips sont maintenant rendus dans une infobulle globale en position fixe ;
 - les infobulles sont automatiquement contraintes à l'intérieur de la fenêtre ;
-- remplacement du fond OSM sombre trop noir par des tuiles CARTO Voyager recolorées bleu nuit / doré ;
+- remplacement du fond Carte sombre trop noir par des fonds cartographiques style cartographique Voyager recolorées bleu nuit / doré ;
 - détails de carte beaucoup plus lisibles tout en restant dans la DA ;
 - onglet RH enrichi : chaque métier affiche son besoin estimé, son taux de couverture, son statut et ses effets concrets ;
 - les fonds de menus sont rendus plus visibles via une baisse d'opacité des cartes et un fond illustré plus clair.
@@ -186,7 +199,7 @@ Ajouts UX :
 - les contrôleurs, régulateurs, mécaniciens et agents de gare utilisent aussi une logique plus liée à l'exploitation réelle ;
 - les besoins calculés sont exposés dans l'API via `staffNeeds` ;
 - les tracés de lignes ne sont plus de simples segments droits :
-  - le client tente de récupérer une géométrie OSRM/OpenStreetMap entre les deux points ;
+  - le client tente de récupérer une géométrie calcul d’itinéraire/Carte interactive entre les deux points ;
   - si l'API externe est indisponible, un tracé courbe de secours est utilisé ;
 - l'opacité des menus a encore été abaissée pour mieux voir les images de fond.
 
@@ -222,7 +235,7 @@ Corrections :
   exemple `Paris → Rouen` devient `Paris → Le Havre` après ajout de Le Havre derrière Rouen ;
 - `from` et `to` suivent toujours le premier et le dernier arrêt du parcours ;
 - le train animé utilise le parcours complet de la première à la dernière gare ;
-- le tracé multi-arrêts tente maintenant une géométrie OSRM globale avec tous les arrêts, afin de limiter les retours et demi-tours visuels ;
+- le tracé multi-arrêts tente maintenant une géométrie calcul d’itinéraire globale avec tous les arrêts, afin de limiter les retours et demi-tours visuels ;
 - nettoyage visuel des micro-retours de tracé ;
 - refonte du rendu des cartes du menu Parc :
   images mieux contenues ;
@@ -281,7 +294,7 @@ Correction ciblée :
 
 - lors de l’ajout d’un arrêt intermédiaire, le tracé visuel est recalculé sur toute la ligne ;
 - le rendu n’ajoute plus une simple bifurcation locale vers l’arrêt ;
-- le jeu tente d’utiliser une géométrie complète OSRM `départ → arrêts → terminus` quand elle est disponible ;
+- le jeu tente d’utiliser une géométrie complète calcul d’itinéraire `départ → arrêts → terminus` quand elle est disponible ;
 - sinon, il génère un corridor complet organique et sinueux, avec points intermédiaires déterministes sur toute la longueur ;
 - l’objectif est d’obtenir une ligne globalement redessinée, plus naturelle, plutôt qu’un tracé droit ou une courbe artificielle uniquement autour de l’arrêt.
 
@@ -289,7 +302,7 @@ Correction ciblée :
 
 Correction ciblée :
 
-- suppression de l’usage OSRM pour le rendu visuel des lignes multi-arrêts, car il recréait une branche rigide vers la gare intermédiaire ;
+- suppression de l’usage calcul d’itinéraire pour le rendu visuel des lignes multi-arrêts, car il recréait une branche rigide vers la gare intermédiaire ;
 - le tracé est maintenant recalculé intégralement en corridor ferroviaire organique :
   départ → arrêts intermédiaires → terminus ;
 - la sinuosité est appliquée sur toute la longueur, pas uniquement autour de la gare ajoutée ;
@@ -337,7 +350,7 @@ Refonte ciblée de l’onglet Parc :
 Optimisation ciblée, sans changement fonctionnel :
 
 - réduction du rendu canvas pendant le déplacement et le zoom de la carte ;
-- suppression des recalculs de routes à chaque événement `move` / `zoom` Leaflet ;
+- suppression des recalculs de routes à chaque événement `move` / `zoom` moteur cartographique ;
 - recalcul des projections groupé et différé ;
 - rendu léger pendant la navigation : lignes conservées, trains et labels secondaires temporairement allégés ;
 - cache des gares visibles selon zoom et viewport ;
@@ -346,7 +359,7 @@ Optimisation ciblée, sans changement fonctionnel :
 
 ## Version v32 — optimisation spécifique du déplacement de carte
 
-Optimisation ciblée du pan Leaflet :
+Optimisation ciblée du pan moteur cartographique :
 
 - pendant le déplacement de la carte, le canvas des lignes/gares n’est plus redessiné en continu ;
 - le canvas est déplacé par transformation GPU `translate3d`, puis recalculé proprement à la fin du mouvement ;
@@ -389,7 +402,7 @@ Ajustement visuel ciblé de la carte :
 
 Correction visuelle ciblée de la carte :
 
-- les sprites de gare ne s’affichent directement sur la carte que lorsque le zoom Leaflet est au maximum ;
+- les sprites de gare ne s’affichent directement sur la carte que lorsque le zoom moteur cartographique est au maximum ;
 - hors zoom maximal, les gares restent en marqueurs simples pour garder une carte lisible ;
 - le visuel de prestige de la gare est affiché dans le tooltip au survol, avec un panneau sombre cohérent avec l’interface ;
 - le tooltip affiche aussi niveau, prestige, nombre de lignes, commerces, atelier et dépôt ;
@@ -477,7 +490,7 @@ Correction création de gare / arrêt sur la carte :
 
 - refonte du mode `Créer arrêt` ;
 - en mode création, le clic sur la carte crée toujours un nouvel arrêt à l’endroit cliqué au lieu de sélectionner une gare existante ;
-- ajout d’un gestionnaire de clic de secours directement sur le conteneur Leaflet ;
+- ajout d’un gestionnaire de clic de secours directement sur le conteneur moteur cartographique ;
 - désactivation temporaire du déplacement de carte pendant la pose d’un arrêt pour éviter les clics perdus ;
 - zone de validité légèrement élargie pour couvrir correctement France, Corse, frontières et côtes ;
 - création d’arrêt personnalisée retestée côté API ;
@@ -578,7 +591,7 @@ Correctif après audit de la v47 :
 - aucun retour du libellé visible supprimé précédemment ;
 - conservation du départ sans salarié et sans dépense passive.
 
-## Version v48 — tooltips bornés, propriété des villes, carte OSM FR
+## Version v48 — tooltips bornés, propriété des villes, carte Carte FR
 
 Carte et tooltips :
 
@@ -588,9 +601,9 @@ Carte et tooltips :
 - affichage du propriétaire de la ville dans le tooltip ;
 - indication claire si une ville est libre, possédée par le joueur ou possédée par un concurrent.
 
-Carte OpenStreetMap :
+Carte Carte interactive :
 
-- remplacement du rendu Carto Voyager par les tuiles OSM France ;
+- remplacement du rendu Carto Voyager par les fonds cartographiques Carte France ;
 - objectif : libellés de carte plus adaptés au français.
 
 Propriété des villes et lignes :
@@ -608,9 +621,9 @@ Propriété des villes et lignes :
 Correctif de la v48 :
 
 - réparation de l’affichage de la carte de fond ;
-- remplacement du chargement direct OSM France par un chargeur de tuiles plus robuste ;
-- rendu principal : OpenStreetMap standard, dont les libellés français sont conservés sur la France ;
-- fallback automatique vers OSM France puis CARTO Voyager si les tuiles échouent ;
+- remplacement du chargement direct Carte France par un chargeur de fonds cartographiques plus robuste ;
+- rendu principal : Carte interactive standard, dont les libellés français sont conservés sur la France ;
+- fallback automatique vers Carte France puis style cartographique Voyager si les fonds cartographiques échouent ;
 - correction du refresh automatique qui reconstruisait les formulaires pendant une interaction joueur ;
 - les menus déroulants, champs texte, sliders, suggestions et formulaires ne sont plus détruits pendant qu’ils sont utilisés ;
 - correction appliquée globalement, pas seulement au sélecteur de gare ;
