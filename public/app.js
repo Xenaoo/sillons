@@ -30,7 +30,9 @@ const COMPANY_LOGOS = [
 
 
 const app = {
-  playerId: localStorage.getItem('sillons.playerId') || '',
+  authToken: localStorage.getItem('sillons.authToken') || '',
+  playerId: localStorage.getItem('sillons.authToken') ? (localStorage.getItem('sillons.playerId') || '') : '',
+  authMode: 'login',
   state: null,
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
   activeResearchTab: localStorage.getItem('sillons.researchTab') || 'traction',
@@ -253,22 +255,10 @@ async function init() {
 }
 
 function bindStaticEvents() {
-  $('#setupForm').addEventListener('submit', async event => {
-    event.preventDefault();
-    const payload = {
-      name: $('#companyName').value,
-      color: $('#companyColor').value,
-      logo: currentSetupLogoId()
-    };
-    const response = await post('/api/new-player', payload);
-    if (!response.ok) return toast(response.error || 'Création impossible.', 'error');
-    app.playerId = response.playerId;
-    localStorage.setItem('sillons.playerId', app.playerId);
-    app.state = response.state;
-    $('#setup').classList.add('hidden');
-    renderAll();
-    toast('Compagnie créée.', 'ok');
-  });
+  $('#setupForm').addEventListener('submit', handleAuthSubmit);
+  $('#authLoginTab')?.addEventListener('click', () => setAuthMode('login'));
+  $('#authRegisterTab')?.addEventListener('click', () => setAuthMode('register'));
+  $('#logoutBtn')?.addEventListener('click', logoutAccount);
 
   $('#tabs').addEventListener('click', event => {
     const button = event.target.closest('button[data-tab]');
@@ -531,8 +521,12 @@ async function refreshState(first) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
   try {
-    const response = await fetch(`/api/state?playerId=${encodeURIComponent(app.playerId)}`, { cache: 'no-store' });
+    const response = await fetch('/api/state', { cache: 'no-store', headers: authHeaders() });
     const data = await response.json();
+    if (response.status === 401) {
+      clearAuthState();
+      $('#setup')?.classList.remove('hidden');
+    }
     if (!data.ok) throw new Error(data.error || 'État indisponible.');
     app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
     const previousSignature = app.routeDataSignature;
@@ -545,9 +539,10 @@ async function refreshState(first) {
     }
     if (first) {
       renderSetupLogoPicker();
-      if (!data.me) $('#setup').classList.remove('hidden');
+      if (!data.me) { $('#setup').classList.remove('hidden'); setAuthMode(app.authMode || 'login'); }
       resizeCanvas();
     }
+    if (data.auth?.playerId) { app.playerId = data.auth.playerId; localStorage.setItem('sillons.playerId', app.playerId); }
     if (data.me) {
       $('#setup').classList.add('hidden');
       maybeNotify(data.me);
@@ -821,6 +816,72 @@ async function onOsmClick(event) {
   }
 }
 
+
+function setAuthMode(mode) {
+  app.authMode = mode === 'register' ? 'register' : 'login';
+  $('#authLoginTab')?.classList.toggle('active', app.authMode === 'login');
+  $('#authRegisterTab')?.classList.toggle('active', app.authMode === 'register');
+  $('#registerFields')?.classList.toggle('hidden', app.authMode !== 'register');
+  const submit = $('#authSubmitBtn');
+  if (submit) submit.textContent = app.authMode === 'register' ? 'Créer le compte' : 'Se connecter';
+  const password = $('#authPassword');
+  if (password) password.autocomplete = app.authMode === 'register' ? 'new-password' : 'current-password';
+  const hint = $('#authModeHint');
+  if (hint) hint.textContent = app.authMode === 'register'
+    ? 'Crée un compte joueur : une compagnie neuve sera liée à cet identifiant.'
+    : 'Entre ton identifiant et ton mot de passe pour reprendre ta compagnie.';
+}
+
+function authHeaders() {
+  return app.authToken ? { Authorization: `Bearer ${app.authToken}` } : {};
+}
+
+function clearAuthState() {
+  app.authToken = '';
+  app.playerId = '';
+  localStorage.removeItem('sillons.authToken');
+  localStorage.removeItem('sillons.playerId');
+}
+
+function applyAuthResponse(response) {
+  if (!response?.ok || !response.auth?.token) return false;
+  app.authToken = response.auth.token;
+  app.playerId = response.auth.playerId || response.playerId || '';
+  localStorage.setItem('sillons.authToken', app.authToken);
+  localStorage.setItem('sillons.playerId', app.playerId);
+  app.state = response.state || app.state;
+  $('#setup')?.classList.add('hidden');
+  renderAll(true);
+  return true;
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const username = $('#authUsername')?.value || '';
+  const password = $('#authPassword')?.value || '';
+  const payload = { username, password };
+  if (app.authMode === 'register') {
+    payload.companyName = $('#companyName')?.value || '';
+    payload.color = $('#companyColor')?.value || '#60a5fa';
+    payload.logo = currentSetupLogoId();
+  }
+  const url = app.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+  const response = await post(url, payload, { auth: false });
+  if (!response.ok) return toast(response.error || 'Connexion impossible.', 'error');
+  applyAuthResponse(response);
+  toast(app.authMode === 'register' ? 'Compte créé et connecté.' : 'Connexion réussie.', 'ok');
+}
+
+async function logoutAccount() {
+  if (app.authToken) await post('/api/auth/logout', {}, { auth: true }).catch(() => null);
+  clearAuthState();
+  app.state = null;
+  $('#setup')?.classList.remove('hidden');
+  setAuthMode('login');
+  await refreshState(true);
+  toast('Déconnecté.', 'ok');
+}
+
 function currentSetupLogoId() {
   const hidden = $('#companyLogo');
   const current = String(hidden?.value || '').trim();
@@ -922,6 +983,8 @@ function renderTopbar() {
     logo.classList.toggle('hidden', !me);
   }
   if (fallback) fallback.classList.toggle('hidden', !!me);
+  const logoutBtn = $('#logoutBtn');
+  if (logoutBtn) logoutBtn.classList.toggle('hidden', !app.authToken);
   const mapToggleBtn = $('#mapToggleBtn');
   if (mapToggleBtn) mapToggleBtn.remove();
   const topStats = $('#topStats');
@@ -3942,13 +4005,19 @@ async function doAction(type, payload) {
   await performAction(type, payload);
 }
 
-async function post(url, payload) {
+async function post(url, payload, options = {}) {
+  const useAuth = options.auth !== false;
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(useAuth ? authHeaders() : {}) },
     body: JSON.stringify(payload)
   });
-  return response.json();
+  const data = await response.json();
+  if (response.status === 401) {
+    clearAuthState();
+    $('#setup')?.classList.remove('hidden');
+  }
+  return data;
 }
 
 
@@ -4201,9 +4270,7 @@ function openResetModal() {
     const confirm = $('#resetConfirm').value;
     await doAction('resetCompany', { confirm });
     if (confirm === 'RESET') {
-      localStorage.removeItem('sillons.playerId');
-      app.playerId = '';
-      $('#setup').classList.remove('hidden');
+      await logoutAccount();
     }
   });
 }

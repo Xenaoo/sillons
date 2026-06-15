@@ -23,6 +23,9 @@ const COMMUNE_DEPARTMENTS = [
 const TICK_MS = 2000;
 const SAVE_EVERY_TICKS = 15;
 const DEFAULT_PASSENGER_TARIFF = 0.08;
+const AUTH_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
+const AUTH_PASSWORD_MIN_LENGTH = 6;
+const STARTER_PLAYER_ID = '4c7dfa51-225a-487a-aa42-1b0776c4e1d5';
 // Plafond global du billet : volontairement haut pour laisser le joueur arbitrer
 // entre revenus et attractivité. À 50 €, les petites lignes deviennent très peu attractives.
 const TICKET_PRICE_CAP_ABSOLUTE = 50;
@@ -180,31 +183,64 @@ server.listen(PORT, () => {
 });
 
 async function handleApi(req, res, url) {
+  if (req.method === 'POST' && url.pathname === '/api/auth/register') {
+    const body = await readBody(req);
+    const result = registerAccount(body);
+    sendJson(res, result.ok ? 200 : 400, result);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+    const body = await readBody(req);
+    const result = loginAccount(body);
+    sendJson(res, result.ok ? 200 : 401, result);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
+    const auth = authenticateRequest(req, url, {});
+    if (auth) revokeSession(auth.user, auth.token);
+    saveState();
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/state') {
-    const playerId = url.searchParams.get('playerId') || '';
+    const auth = authenticateRequest(req, url, {});
+    const playerId = auth?.user?.playerId || '';
     await waitForCommuneCache(3500);
-    sendJson(res, 200, publicState(playerId));
+    sendJson(res, 200, publicState(playerId, auth?.user || null));
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/new-player') {
+    if (Object.keys(state.users || {}).length) {
+      sendJson(res, 401, { ok: false, error: 'Création directe désactivée : crée un compte ou connecte-toi.' });
+      return;
+    }
     const body = await readBody(req);
     const player = createPlayer(body);
-    sendJson(res, 200, { ok: true, playerId: player.id, state: publicState(player.id) });
+    sendJson(res, 200, { ok: true, playerId: player.id, state: publicState(player.id, null) });
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action') {
     const body = await readBody(req);
-    const playerBefore = state.players?.[body.playerId] || null;
+    const auth = authenticateRequest(req, url, body);
+    if (Object.keys(state.users || {}).length && !auth) {
+      sendJson(res, 401, { ok: false, error: 'Connexion requise.' });
+      return;
+    }
+    const playerId = auth?.user?.playerId || body.playerId || '';
+    const playerBefore = state.players?.[playerId] || null;
     const cashBefore = Number(playerBefore?.cash);
-    const result = applyAction(body.playerId, body.type, body.payload || {});
-    const playerAfter = state.players?.[body.playerId] || null;
+    const result = applyAction(playerId, body.type, body.payload || {});
+    const playerAfter = state.players?.[playerId] || null;
     const cashAfter = Number(playerAfter?.cash);
     const cashDelta = Number.isFinite(cashBefore) && Number.isFinite(cashAfter)
       ? Math.round(cashAfter - cashBefore)
       : 0;
-    sendJson(res, result.ok ? 200 : 400, { ...result, cashDelta, state: publicState(body.playerId) });
+    sendJson(res, result.ok ? 200 : 400, { ...result, cashDelta, state: publicState(playerId, auth?.user || null) });
     return;
   }
 
@@ -285,6 +321,195 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function normalizeUsername(raw) {
+  const username = String(raw || '').trim();
+  const key = username.toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+    return { ok: false, error: 'Identifiant invalide : 3 à 32 caractères, lettres, chiffres, point, tiret ou underscore.' };
+  }
+  return { ok: true, username, key };
+}
+
+function passwordError(raw) {
+  const password = String(raw || '');
+  if (password.length < AUTH_PASSWORD_MIN_LENGTH) return `Mot de passe trop court : ${AUTH_PASSWORD_MIN_LENGTH} caractères minimum.`;
+  if (password.length > 160) return 'Mot de passe trop long.';
+  return '';
+}
+
+function passwordHash(password, salt) {
+  return crypto.scryptSync(String(password), String(salt), 64).toString('hex');
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function createUserRecord(username, password, playerId) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return {
+    id: crypto.randomUUID(),
+    username,
+    usernameKey: username.toLowerCase(),
+    playerId,
+    passwordSalt: salt,
+    passwordHash: passwordHash(password, salt),
+    sessions: {},
+    createdAt: Date.now(),
+    lastLoginAt: null
+  };
+}
+
+function normalizeUsers(raw = {}) {
+  const out = {};
+  const entries = Array.isArray(raw) ? raw.map(u => [u?.usernameKey || u?.username, u]) : Object.entries(raw || {});
+  const now = Date.now();
+  for (const [, value] of entries) {
+    if (!value || typeof value !== 'object') continue;
+    const parsed = normalizeUsername(value.username || value.usernameKey || '');
+    if (!parsed.ok || !value.passwordHash || !value.passwordSalt || !value.playerId) continue;
+    const sessions = {};
+    for (const [hash, session] of Object.entries(value.sessions || {})) {
+      const expiresAt = Number(session?.expiresAt || 0);
+      if (hash && expiresAt > now) sessions[hash] = {
+        createdAt: Number(session.createdAt || now),
+        lastSeenAt: Number(session.lastSeenAt || now),
+        expiresAt
+      };
+    }
+    out[parsed.key] = {
+      id: value.id || crypto.randomUUID(),
+      username: parsed.username,
+      usernameKey: parsed.key,
+      playerId: String(value.playerId),
+      passwordSalt: String(value.passwordSalt),
+      passwordHash: String(value.passwordHash),
+      sessions,
+      createdAt: Number(value.createdAt || now),
+      lastLoginAt: value.lastLoginAt || null
+    };
+  }
+  return out;
+}
+
+function verifyPassword(user, password) {
+  if (!user?.passwordHash || !user?.passwordSalt) return false;
+  const expected = Buffer.from(String(user.passwordHash), 'hex');
+  const actual = Buffer.from(passwordHash(password, user.passwordSalt), 'hex');
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function issueSession(user) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = sha256(token);
+  user.sessions = user.sessions && typeof user.sessions === 'object' ? user.sessions : {};
+  user.sessions[tokenHash] = {
+    createdAt: Date.now(),
+    lastSeenAt: Date.now(),
+    expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_MS
+  };
+  user.lastLoginAt = Date.now();
+  return token;
+}
+
+function revokeSession(user, token) {
+  if (!user || !token) return;
+  const tokenHash = sha256(token);
+  if (user.sessions?.[tokenHash]) delete user.sessions[tokenHash];
+}
+
+function authTokenFromRequest(req, url, body = {}) {
+  const header = String(req.headers.authorization || '');
+  const bearer = header.match(/^Bearer\s+(.+)$/i)?.[1];
+  return String(bearer || body.authToken || url.searchParams.get('authToken') || '').trim();
+}
+
+function authenticateRequest(req, url, body = {}) {
+  const token = authTokenFromRequest(req, url, body);
+  if (!token) return null;
+  const tokenHash = sha256(token);
+  const now = Date.now();
+  for (const user of Object.values(state.users || {})) {
+    const session = user.sessions?.[tokenHash];
+    if (!session) continue;
+    if (Number(session.expiresAt || 0) <= now) {
+      delete user.sessions[tokenHash];
+      return null;
+    }
+    session.lastSeenAt = now;
+    return { user, token, player: state.players?.[user.playerId] || null };
+  }
+  return null;
+}
+
+function authPayload(user, token) {
+  return {
+    token,
+    username: user.username,
+    playerId: user.playerId,
+    expiresAt: user.sessions?.[sha256(token)]?.expiresAt || null
+  };
+}
+
+
+function claimableStarterPlayer() {
+  const linked = new Set(Object.values(state.users || {}).map(user => user.playerId).filter(Boolean));
+  const preferred = state.players?.[STARTER_PLAYER_ID];
+  if (preferred && !linked.has(preferred.id)) return preferred;
+  return null;
+}
+
+function updateClaimedPlayerIdentity(player, body = {}) {
+  if (!player) return null;
+  const nextName = cleanText(body.companyName || body.name || player.name || 'Compagnie', 28);
+  const nextColor = validateColor(body.color) || player.color || randomColor();
+  player.name = nextName;
+  player.color = nextColor;
+  player.logo = sanitizeCompanyLogo(body.logo || player.logo);
+  player.lastSeen = Date.now();
+  notify(player, 'Compte joueur créé : cette compagnie est maintenant liée à ton identifiant.');
+  return player;
+}
+
+function registerAccount(body = {}) {
+  const parsed = normalizeUsername(body.username);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const passError = passwordError(body.password);
+  if (passError) return { ok: false, error: passError };
+  state.users = normalizeUsers(state.users || {});
+  if (state.users[parsed.key]) return { ok: false, error: 'Cet identifiant existe déjà.' };
+  const starter = !Object.keys(state.users).length ? claimableStarterPlayer() : null;
+  const player = starter
+    ? updateClaimedPlayerIdentity(starter, body)
+    : createPlayer({
+      name: body.companyName || body.name || `Compagnie ${parsed.username}`,
+      color: body.color,
+      logo: body.logo
+    });
+  const user = createUserRecord(parsed.username, body.password, player.id);
+  const token = issueSession(user);
+  state.users[parsed.key] = user;
+  saveState();
+  return { ok: true, auth: authPayload(user, token), playerId: player.id, state: publicState(player.id, user) };
+}
+
+function loginAccount(body = {}) {
+  const parsed = normalizeUsername(body.username);
+  if (!parsed.ok) return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
+  state.users = normalizeUsers(state.users || {});
+  const user = state.users[parsed.key];
+  if (!user || !verifyPassword(user, String(body.password || ''))) {
+    return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
+  }
+  if (!state.players[user.playerId]) {
+    const player = createPlayer({ name: body.companyName || `Compagnie ${user.username}` });
+    user.playerId = player.id;
+  }
+  const token = issueSession(user);
+  saveState();
+  return { ok: true, auth: authPayload(user, token), playerId: user.playerId, state: publicState(user.playerId, user) };
+}
+
 function mimeType(file) {
   const ext = path.extname(file).toLowerCase();
   return {
@@ -318,7 +543,7 @@ function migrateState(loaded) {
     players[id] = migratePlayer(player, id);
   }
   return {
-    version: 45,
+    version: 46,
     createdAt: loaded.createdAt || Date.now(),
     now: loaded.now || Date.now(),
     day: Number(loaded.day || 1),
@@ -328,6 +553,7 @@ function migrateState(loaded) {
     events: Array.isArray(loaded.events) ? loaded.events : [],
     news: Array.isArray(loaded.news) ? loaded.news.slice(0, 50) : [],
     customStations: normalizeCustomStations(loaded.customStations),
+    users: normalizeUsers(loaded.users || {}),
     players,
     nextNpcAt: loaded.nextNpcAt || 10
   };
@@ -431,7 +657,7 @@ function normalizeResearchQueue(raw) {
 
 function createState() {
   return {
-    version: 45,
+    version: 46,
     createdAt: Date.now(),
     now: Date.now(),
     day: 1,
@@ -441,6 +667,7 @@ function createState() {
     events: [createEvent('expo', 12)],
     news: [{ day: 1, text: 'Le marché ferroviaire français s’ouvre aux premières compagnies privées.' }],
     customStations: {},
+    users: {},
     players: {},
     nextNpcAt: 10
   };
@@ -817,12 +1044,13 @@ function isInFranceBounds(lat, lon) {
   return lat >= 41.0 && lat <= 51.5 && lon >= -5.7 && lon <= 10.2;
 }
 
-function publicState(playerId) {
+function publicState(playerId, authUser = null) {
   const players = Object.values(state.players).map(p => publicPlayer(p));
   const me = playerId ? players.find(p => p.id === playerId) || null : null;
   return {
     ok: true,
     serverTime: Date.now(),
+    auth: authUser ? { username: authUser.username, playerId: authUser.playerId } : null,
     world: publicWorld(),
     balance: BALANCE.public,
     game: {

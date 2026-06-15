@@ -1625,3 +1625,19 @@ Correction du reliquat de -180 € après lancement puis annulation d’une rech
 - la fréquence de ligne n’accélère plus artificiellement le train : elle augmente le nombre de rames visibles, avec des positions décalées ;
 - une ligne en pénurie de ressource n’affiche plus de train en circulation ;
 - l’animation reste bornée pour éviter les trajets trop rapides ou trop lents.
+
+
+## Version v60.44 — comptes joueurs, connexion et sauvegarde par entreprise
+
+- incrément de version de cette passe : badge interface `v60.44`, package `0.4.33` et schéma d’état serveur `46` ;
+- ajout d’un écran de connexion / création de compte ;
+- chaque compte possède un identifiant et un mot de passe ;
+- les mots de passe ne sont pas stockés en clair : ils sont salés puis dérivés avec `crypto.scryptSync` ;
+- les sessions utilisent un jeton aléatoire côté navigateur, stocké côté serveur sous forme de hash SHA-256 ;
+- les comptes, sessions et liens compte → entreprise sont sauvegardés dans `data/save.json` ;
+- `/api/state` et `/api/action` utilisent maintenant le jeton de session pour retrouver la compagnie du joueur ;
+- si des comptes existent, les actions directes par simple `playerId` sont refusées ;
+- chaque nouveau compte crée sa propre entreprise et ses propres données ;
+- dans une sauvegarde propre sans compte, le premier compte créé récupère la compagnie de départ préparée (`4c7dfa51-225a-487a-aa42-1b0776c4e1d5`) avec ses 10 000 000 €, sa ligne initiale, son train et ses recherches ;
+- ajout d’un bouton `Déconnexion` dans la barre supérieure ;
+- conservation de `data/save.json` dans l’archive, sans `HANDOFF.md` ni `handoff_manifest.json`.

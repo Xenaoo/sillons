@@ -1,5 +1,5 @@
 {
-  "version": 45,
+  "version": 46,
   "createdAt": 1781511648911,
   "now": 1781516141580,
   "day": 1,
@@ -350,5 +350,6 @@
       "lastSeen": 1781516141612
     }
   },
-  "nextNpcAt": 41
+  "nextNpcAt": 41,
+  "users": {}
 }

@@ -9,37 +9,50 @@
 </head>
 <body>
   <div id="setup" class="setup hidden">
-    <form id="setupForm" class="setup-card">
+    <form id="setupForm" class="setup-card auth-card">
       <div class="brand-block">
         <div class="logo-mark">S</div>
         <div>
           <h1>Sillons</h1>
-          <p>Gestion ferroviaire multijoueur sur carte de France.</p>
+          <p>Connecte-toi pour retrouver ta compagnie et ta progression.</p>
         </div>
       </div>
-      <label>Nom de compagnie
-        <input id="companyName" maxlength="28" value="Compagnie des Sillons" autocomplete="off">
+      <div class="auth-tabs" role="tablist" aria-label="Compte joueur">
+        <button id="authLoginTab" type="button" class="active" data-auth-mode="login">Connexion</button>
+        <button id="authRegisterTab" type="button" data-auth-mode="register">Créer un compte</button>
+      </div>
+      <label>Identifiant
+        <input id="authUsername" maxlength="32" autocomplete="username" placeholder="ex : conducteur14">
       </label>
-      <label>Couleur de compagnie
-        <input id="companyColor" type="color" value="#60a5fa">
+      <label>Mot de passe
+        <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="6 caractères minimum">
       </label>
-      <div class="setup-logo-block">
-        <div class="setup-logo-head">
-          <strong>Logo de compagnie</strong>
-          <span class="small muted">Choisis un emblème ferroviaire pixel-art qui colle à la DA du jeu.</span>
-        </div>
-        <div class="setup-logo-preview-card">
-          <img id="setupLogoPreview" src="/assets/company_logos/steam_front.png" alt="Logo sélectionné">
-          <div>
-            <div class="small muted">Sélection actuelle</div>
-            <div id="setupLogoLabel" class="setup-logo-label">Locomotive vapeur</div>
+      <div id="registerFields" class="hidden">
+        <label>Nom de compagnie
+          <input id="companyName" maxlength="28" value="Compagnie des Sillons" autocomplete="organization">
+        </label>
+        <label>Couleur de compagnie
+          <input id="companyColor" type="color" value="#60a5fa">
+        </label>
+        <div class="setup-logo-block">
+          <div class="setup-logo-head">
+            <strong>Logo de compagnie</strong>
+            <span class="small muted">Choisis un emblème ferroviaire pixel-art qui colle à la DA du jeu.</span>
           </div>
+          <div class="setup-logo-preview-card">
+            <img id="setupLogoPreview" src="/assets/company_logos/steam_front.png" alt="Logo sélectionné">
+            <div>
+              <div class="small muted">Sélection actuelle</div>
+              <div id="setupLogoLabel" class="setup-logo-label">Locomotive vapeur</div>
+            </div>
+          </div>
+          <input id="companyLogo" type="hidden" value="steam_front">
+          <div id="logoPicker" class="logo-picker"></div>
         </div>
-        <input id="companyLogo" type="hidden" value="steam_front">
-        <div id="logoPicker" class="logo-picker"></div>
       </div>
-      <button class="primary" type="submit">Créer la compagnie</button>
-      <p class="small muted">Le serveur sauvegarde automatiquement la partie dans <code>data/save.json</code>.</p>
+      <button id="authSubmitBtn" class="primary" type="submit">Se connecter</button>
+      <p id="authModeHint" class="small muted">Entre ton identifiant et ton mot de passe pour reprendre ta compagnie.</p>
+      <p class="small muted">Les comptes, mots de passe chiffrés et progressions sont sauvegardés dans <code>data/save.json</code>.</p>
     </form>
   </div>
 
@@ -57,6 +70,7 @@
     <div id="topStats" class="top-stats"></div>
     <div class="top-actions">
       <button id="renameBtn" class="ghost" title="Renomme ta compagnie ferroviaire.">Compagnie</button>
+      <button id="logoutBtn" class="ghost hidden" type="button" title="Déconnecte le compte actuel.">Déconnexion</button>
       <button id="resetBtn" class="danger ghost" title="Réinitialise ta compagnie actuelle. Action destructive après confirmation.">Reset</button>
     </div>
   </header>
@@ -116,6 +130,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/app.js"></script>
-  <div id="versionBadge">v60.43</div>
+  <div id="versionBadge">v60.44</div>
 </body>
 </html>
