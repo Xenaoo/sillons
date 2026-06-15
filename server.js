@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
@@ -177,8 +178,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Sillons lancé sur http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
   refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
 });
 
