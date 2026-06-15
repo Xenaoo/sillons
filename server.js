@@ -10,6 +10,9 @@ const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
+const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
+const PROJECT_VERSION = 'v60.45.0';
+const STATE_SCHEMA_VERSION = 47;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -211,6 +214,16 @@ async function handleApi(req, res, url) {
     const playerId = auth?.user?.playerId || '';
     await waitForCommuneCache(3500);
     sendJson(res, 200, publicState(playerId, auth?.user || null));
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/changelog') {
+    try {
+      const changelog = fs.readFileSync(CHANGELOG_FILE, 'utf8');
+      sendJson(res, 200, { ok: true, version: PROJECT_VERSION, changelog });
+    } catch (error) {
+      sendJson(res, 500, { ok: false, error: `Changelog indisponible : ${error.message}` });
+    }
     return;
   }
 
@@ -544,7 +557,7 @@ function migrateState(loaded) {
     players[id] = migratePlayer(player, id);
   }
   return {
-    version: 46,
+    version: STATE_SCHEMA_VERSION,
     createdAt: loaded.createdAt || Date.now(),
     now: loaded.now || Date.now(),
     day: Number(loaded.day || 1),
@@ -658,7 +671,7 @@ function normalizeResearchQueue(raw) {
 
 function createState() {
   return {
-    version: 46,
+    version: STATE_SCHEMA_VERSION,
     createdAt: Date.now(),
     now: Date.now(),
     day: 1,

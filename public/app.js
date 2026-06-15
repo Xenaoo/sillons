@@ -4,6 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
+const PROJECT_VERSION = 'v60.45.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -276,6 +277,7 @@ function bindStaticEvents() {
   $('#cancelStopBtn')?.addEventListener('click', disableStationPlacement);
   $('#renameBtn').addEventListener('click', openCompanyModal);
   $('#resetBtn').addEventListener('click', openResetModal);
+  $('#versionBadge')?.addEventListener('click', openChangelogModal);
 
   $('#logoPicker')?.addEventListener('click', event => {
     const card = event.target.closest('[data-logo-id]');
@@ -4275,10 +4277,142 @@ function openResetModal() {
   });
 }
 
-function openModal(title, html) {
+
+function openChangelogModal() {
+  openModal('Changelog', `
+    <div class="changelog-popup changelog-popup--loading">
+      <p class="muted">Chargement du changelog…</p>
+    </div>
+  `, { wide: true });
+
+  fetch('/api/changelog', { cache: 'no-store' })
+    .then(response => response.json())
+    .then(data => {
+      if (!data?.ok) throw new Error(data?.error || 'Changelog indisponible.');
+      const modalBody = $('#modalBody');
+      if (!modalBody) return;
+      modalBody.innerHTML = `
+        <div class="changelog-popup">
+          <div class="changelog-intro">
+            <strong>${escapeHtml(data.version || PROJECT_VERSION)}</strong>
+            <span class="muted small">Versions les plus récentes en premier.</span>
+          </div>
+          ${renderChangelogMarkdown(data.changelog || '')}
+        </div>
+      `;
+    })
+    .catch(error => {
+      const modalBody = $('#modalBody');
+      if (!modalBody) return;
+      modalBody.innerHTML = `
+        <div class="changelog-popup">
+          <p class="bad-text">Impossible de charger le changelog.</p>
+          <p class="muted small">${escapeHtml(error.message)}</p>
+        </div>
+      `;
+    });
+}
+
+function renderChangelogMarkdown(markdown) {
+  const ordered = sortChangelogSections(markdown);
+  const lines = ordered.split(/\r?\n/);
+  const html = [];
+  let listOpen = false;
+  let entryOpen = false;
+
+  const closeList = () => {
+    if (listOpen) {
+      html.push('</ul>');
+      listOpen = false;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || /^#\s+CHANGELOG\s*$/i.test(line)) {
+      closeList();
+      continue;
+    }
+    const versionMatch = line.match(/^##\s+(.+)$/);
+    if (versionMatch) {
+      closeList();
+      if (entryOpen) html.push('</section>');
+      html.push(`<section class="changelog-entry"><h3>${formatChangelogInline(versionMatch[1])}</h3>`);
+      entryOpen = true;
+      continue;
+    }
+    const subheadingMatch = line.match(/^###\s+(.+)$/);
+    if (subheadingMatch) {
+      closeList();
+      html.push(`<h4>${formatChangelogInline(subheadingMatch[1])}</h4>`);
+      continue;
+    }
+    const bulletMatch = line.match(/^-\s+(.+)$/);
+    if (bulletMatch) {
+      if (!listOpen) {
+        html.push('<ul>');
+        listOpen = true;
+      }
+      html.push(`<li>${formatChangelogInline(bulletMatch[1])}</li>`);
+      continue;
+    }
+    closeList();
+    html.push(`<p>${formatChangelogInline(line)}</p>`);
+  }
+  closeList();
+  if (entryOpen) html.push('</section>');
+  return html.join('');
+}
+
+function sortChangelogSections(markdown) {
+  const text = String(markdown || '').replace(/\r\n/g, '\n');
+  const firstSectionIndex = text.search(/^##\s+Version\s+v/im);
+  if (firstSectionIndex < 0) return text;
+
+  const intro = text.slice(0, firstSectionIndex).trim();
+  const body = text.slice(firstSectionIndex);
+  const matches = [...body.matchAll(/^##\s+Version\s+v([0-9]+(?:\.[0-9]+)*).*$/gim)];
+  if (!matches.length) return text;
+
+  const sections = matches.map((match, index) => {
+    const start = match.index;
+    const end = index + 1 < matches.length ? matches[index + 1].index : body.length;
+    return {
+      version: parseVersionParts(match[1]),
+      order: index,
+      content: body.slice(start, end).trim()
+    };
+  });
+
+  sections.sort((a, b) => compareVersionParts(b.version, a.version) || b.order - a.order);
+  return [intro, sections.map(section => section.content).join('\n\n')].filter(Boolean).join('\n\n');
+}
+
+function parseVersionParts(version) {
+  return String(version || '').split('.').map(part => Number(part) || 0);
+}
+
+function compareVersionParts(a, b) {
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
+function formatChangelogInline(value) {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
+function openModal(title, html, options = {}) {
+  const modal = $('#modal');
+  modal.classList.toggle('modal--wide', !!options.wide);
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = html;
-  $('#modal').showModal();
+  modal.showModal();
 }
 
 function resizeCanvas() {

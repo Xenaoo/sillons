@@ -5263,3 +5263,92 @@ button.train-prereq-chip.missing:hover {
 }
 #registerFields { display: grid; gap: 12px; }
 #registerFields.hidden { display: none !important; }
+
+/* ===== v60.45.0 — changelog consultable depuis le badge ===== */
+dialog.modal--wide {
+  width: min(900px, calc(100vw - 32px));
+}
+
+#versionBadge {
+  appearance: none;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+#versionBadge:hover {
+  background: rgba(20, 28, 44, 0.88);
+  border-color: rgba(217,168,82,.52);
+  color: #f6d98a;
+}
+
+#versionBadge:focus-visible {
+  outline: 2px solid rgba(217,168,82,.62);
+  outline-offset: 3px;
+}
+
+.changelog-popup {
+  max-height: min(72vh, 720px);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-color: rgba(217,168,82,.52) rgba(8,12,22,.68);
+}
+
+.changelog-popup--loading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+}
+
+.changelog-intro {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: -2px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(12,18,31,.98), rgba(8,12,22,.96));
+  box-shadow: 0 14px 28px rgba(0,0,0,.22);
+}
+
+.changelog-entry {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid rgba(148,163,184,.16);
+  border-radius: 16px;
+  background: rgba(15,23,42,.54);
+}
+
+.changelog-entry h3 {
+  margin: 0 0 10px;
+  color: #f6d98a;
+  font-size: 15px;
+}
+
+.changelog-entry h4 {
+  margin: 12px 0 8px;
+  color: #cfe8ff;
+  font-size: 13px;
+}
+
+.changelog-entry p {
+  margin: 8px 0;
+  color: #d7e3f3;
+  line-height: 1.45;
+}
+
+.changelog-entry ul {
+  margin: 8px 0 0 18px;
+  padding: 0;
+}
+
+.changelog-entry li {
+  margin: 6px 0;
+  color: #d7e3f3;
+  line-height: 1.45;
+}

@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v60.45.0 — badge de version cliquable et popup changelog
+
+- adoption du format de version complet `XX.YY.ZZ` demandé : badge interface `v60.45.0`, package `0.4.34` et schéma d’état serveur `47` ;
+- transformation du badge de version en bouton cliquable, tout en conservant son affichage discret en bas à droite ;
+- ajout d’une route serveur `/api/changelog` qui expose le contenu de `changelog.md` sans rendre le fichier directement public ;
+- ouverture d’un popup dédié au changelog depuis le badge de version ;
+- le popup présente les versions de la plus récente à la plus ancienne, même si le fichier source contient d’anciennes sections dans un autre ordre ;
+- ajout d’une zone scrollable dans le popup pour consulter l’historique complet sans sortir de l’interface ;
+- rendu HTML léger du Markdown du changelog : titres, listes, paragraphes et codes inline ;
+- conservation de `data/save.json` dans l’archive, sans `HANDOFF.md` ni `handoff_manifest.json`.
+
 ## Version v6
 
 Ajouts principaux :
