@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## Version v60.47.0 — métiers de ligne affinés et entretien d’infrastructure
+
+- incrément de version de cette passe : badge interface `v60.47.0`, package `0.4.37` et schéma d’état serveur `49` ;
+- refonte de la vignette `Salariés nécessaires` dans le menu `Modifier` des lignes : les anciennes cases ont été retirées et remplacées par des barres de couverture scrollables et lisibles ;
+- la barre supérieure des conducteurs affiche maintenant le stock disponible et le besoin de la ligne, puis les autres métiers sont présentés sous forme de barres : contrôleurs, agents de gare, mainteneurs, régulateurs et agents de l’infra ;
+- confirmation et maintien du caractère obligatoire des conducteurs : sans conducteur, un train ne peut toujours pas exploiter sa ligne ;
+- ajout d’un effet direct des contrôleurs sur les recettes voyageurs via une réduction simulée de la fraude ;
+- ajout d’un effet direct des agents de gare sur la satisfaction et sur le flux voyageurs capté par les lignes ;
+- renforcement du rôle des mainteneurs : ils ralentissent désormais explicitement la vitesse d’usure, donc la fréquence à laquelle les trains réclament une maintenance ;
+- renforcement du rôle des régulateurs : ils améliorent la ponctualité et apportent aussi un bonus direct aux revenus des lignes ;
+- transformation des `ingénieurs` en `agents de l’infra`, avec un nouveau rôle dédié à la réduction des coûts d’entretien des lignes ;
+- ajout d’un nouveau coût variable `entretien ligne`, calculé au prorata de la distance de chaque ligne et répercuté sur le coût global au kilomètre exploité par le joueur ;
+- ajout du détail financier de ligne correspondant dans les panneaux d’analyse : énergie, maintenance train, entretien ligne et péages sont maintenant visibles séparément.
+
 ## Version v60.46.0 — conducteurs requis et besoins salariés par ligne
 
 - incrément de version de cette passe : badge interface `v60.46.0`, package `0.4.36` et schéma d’état serveur `48` ;

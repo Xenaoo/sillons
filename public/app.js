@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.46.0';
+const PROJECT_VERSION = 'v60.47.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -1964,6 +1964,13 @@ function renderLineInsightPanels(line) {
           <span>Billets ${lineMoney(finance.ticketRevenue)}</span>
           <span>Services ${lineMoney(finance.ancillaryRevenue)}</span>
           <span>Fret ${lineMoney(finance.freightRevenue)}</span>
+          <span>Gain régulation ${lineMoney(finance.dispatchRevenueBoost)}</span>
+        </div>
+        <div class="line-money-split">
+          <span>Énergie ${lineMoney(finance.energyCost)}</span>
+          <span>Maintenance train ${lineMoney(finance.maintenanceCost)}</span>
+          <span>Entretien ligne ${lineMoney(finance.lineInfrastructureCost)}</span>
+          <span>Péages ${lineMoney(finance.accessCost)}</span>
         </div>
       </section>
 
@@ -2011,25 +2018,47 @@ function renderLineStaffNeedsCard(line, options = {}) {
   const cls = lineStaffNeedsStatusClass(line);
   const effectiveFrequency = line.stats?.capacity?.effectiveFrequency ?? line.stats?.staffing?.effectiveFrequency;
   const requestedFrequency = line.stats?.capacity?.requestedFrequency ?? line.frequency;
-  const lineNeededRoles = staffOrder.map(role => {
-    const label = app.state.balance.staff[role]?.label || role;
-    const need = Math.max(0, Number(needs[role] || 0));
-    return `<div><span>${escapeHtml(label)}</span><b>${formatInt(need)}</b></div>`;
-  }).join('');
+  const driverOwned = Number(app.state.me?.staff?.drivers || 0);
+  const driverNeed = Math.max(0, Number(needs.drivers || 0));
+  const otherRoleBars = staffOrder.filter(role => role !== 'drivers').map(role => renderLineStaffNeedBar(role, needs[role] || 0)).join('');
 
   return `
     <section class="line-insight-panel line-staff-needs-card ${cls}">
       <h4>Salariés nécessaires</h4>
       <div class="line-driver-coverage">
-        <span>Couverture conducteurs</span>
+        <span>Conducteurs ${formatInt(driverOwned)} / ${formatInt(driverNeed)}</span>
         <b class="${cls}-text">${round(coverage)}%</b>
         <i><em style="width:${Math.max(0, Math.min(100, coverage))}%"></em></i>
       </div>
-      <div class="line-staff-grid">${lineNeededRoles}</div>
+      <div class="line-staff-bars">${otherRoleBars}</div>
       ${Number.isFinite(effectiveFrequency) && Number.isFinite(Number(requestedFrequency)) && Number(effectiveFrequency) < Number(requestedFrequency)
         ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de conducteurs.</p>`
         : '<p class="small muted">Conducteurs suffisants : exploitation nominale.</p>'}
     </section>
+  `;
+}
+
+function lineRoleCoverageClient(role, need) {
+  const required = Math.max(0, Number(need || 0));
+  if (required <= 0) return 100;
+  return Math.max(0, Math.min(100, Math.round(Number(app.state.me?.staff?.[role] || 0) / required * 100)));
+}
+
+function renderLineStaffNeedBar(role, need) {
+  const label = app.state.balance.staff[role]?.label || role;
+  const required = Math.max(0, Number(need || 0));
+  const owned = Number(app.state.me?.staff?.[role] || 0);
+  const pct = lineRoleCoverageClient(role, required);
+  const status = pct >= 100 ? 'good' : pct >= 60 ? 'warn' : 'bad';
+  const summary = required > 0 ? `${formatInt(owned)} / ${formatInt(required)}` : 'Non requis';
+  return `
+    <div class="line-role-bar ${status}">
+      <div class="line-role-bar-head">
+        <span>${escapeHtml(label)} ${summary}</span>
+        <b class="${status}-text">${pct}%</b>
+      </div>
+      <i><em style="width:${pct}%"></em></i>
+    </div>
   `;
 }
 
@@ -3287,7 +3316,7 @@ function lineStaffNeedsClient(line) {
     stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
     mechanics: train ? Math.max(1, Math.ceil(0.22 + dist * frequency / 1800)) : Math.max(0, Math.ceil(dist * frequency / 2200)),
     dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
-    engineers: 0
+    engineers: Math.max(0, Math.ceil(dist / 220 + frequency / 16 - 0.5))
   };
 }
 
@@ -3306,6 +3335,7 @@ function computeStaffNeedsClient() {
     needs.drivers += lineNeeds.drivers;
     needs.controllers += lineNeeds.controllers;
     needs.dispatchers += lineNeeds.dispatchers;
+    needs.engineers += lineNeeds.engineers;
     dailyKm += lineDistance(line) * Math.max(1, Math.min(20, Number(line.frequency || 0)));
     stationWork += Math.max(0, lineStopsOf(line).length - 2);
   }
@@ -3315,7 +3345,7 @@ function computeStaffNeedsClient() {
     stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16)) : 0,
     mechanics: me.trains.length ? Math.max(1, Math.ceil(me.trains.length * 0.55 + dailyKm / 1800)) : 0,
     dispatchers: activeLines.length ? Math.max(1, needs.dispatchers) : 0,
-    engineers: Object.keys(me.techUnlocked || {}).length || me.research > 0 ? Math.max(1, Math.ceil(me.epoch + Object.keys(me.techUnlocked || {}).length / 10)) : 0
+    engineers: needs.engineers > 0 ? Math.max(1, needs.engineers) : 0
   };
 }
 
@@ -3353,20 +3383,20 @@ function staffRoleImpact(role) {
       effects: ['Améliore la qualité voyageurs et limite la fraude.', 'Sous-effectif : satisfaction et part de marché plus faibles.']
     },
     stationAgents: {
-      title: 'Fluidité des gares',
-      effects: ['Augmente la capacité pratique des gares exploitées.', 'Sous-effectif : embarquement plus lent et satisfaction en baisse.']
+      title: 'Accueil et flux voyageurs',
+      effects: ['Augmente la satisfaction et le flux de voyageurs sur les lignes.', 'Sous-effectif : demande passagers et qualité de service plus faibles.']
     },
     mechanics: {
-      title: 'Fiabilité du parc',
-      effects: ['Augmente la capacité de maintenance et ralentit la dégradation.', 'Sous-effectif : trains plus usés, coûts et retards plus élevés.']
+      title: 'Maintenance du parc',
+      effects: ['Ralentit la vitesse à laquelle les trains réclament une maintenance.', 'Sous-effectif : usure accélérée, immobilisations plus fréquentes et coûts plus lourds.']
     },
     dispatchers: {
-      title: 'Régulation du réseau',
-      effects: ['Améliore ponctualité, attractivité et stabilité des lignes.', 'Sous-effectif : retards et concurrence plus difficiles à absorber.']
+      title: 'Régularité et recettes',
+      effects: ['Améliore la régularité et ajoute un bonus direct aux revenus des lignes.', 'Sous-effectif : ponctualité et rendement commercial reculent.']
     },
     engineers: {
-      title: 'Recherche et montée en époque',
-      effects: ['Soutient la progression technologique et les époques avancées.', 'Sous-effectif : compagnie moins préparée aux technologies modernes.']
+      title: 'Entretien de l’infrastructure',
+      effects: ['Réduit les coûts d’entretien des lignes au kilomètre.', 'Sous-effectif : la maintenance de l’infrastructure pèse davantage sur chaque ligne.']
     }
   }[role] || { title: 'Effet opérationnel', effects: ['Améliore la robustesse de la compagnie.'] };
 }
@@ -3387,8 +3417,8 @@ function renderStaff() {
 
     <div class="card">
       <h2>Ressources humaines</h2>
-      <p class="muted small">Chaque métier agit sur une partie précise du moteur : capacité réelle, ponctualité, satisfaction, maintenance, régulation ou progression technologique.</p>
-      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : fréquence, distance de ligne, vitesse du train, parc et gares exploitées. Une ligne courte à 8 circulations demande environ 4 conducteurs ; une longue relation en demande davantage.</p>
+      <p class="muted small">Chaque métier agit sur une partie précise du moteur : capacité réelle, recettes, satisfaction, maintenance, régularité ou coûts d’infrastructure.</p>
+      <p class="muted small">Les besoins RH sont calculés à partir des circulations réelles : fréquence, distance de ligne, vitesse du train, parc et gares exploitées. Les agents de l’infra sont désormais dimensionnés selon les kilomètres de lignes à entretenir.</p>
       <div class="list">
         ${staffOrder.map(role => renderStaffRole(role, me.staff[role] || 0)).join('')}
       </div>

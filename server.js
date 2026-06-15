@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.46.0';
-const STATE_SCHEMA_VERSION = 48;
+const PROJECT_VERSION = 'v60.47.0';
+const STATE_SCHEMA_VERSION = 49;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -46,6 +46,7 @@ const ECONOMY = Object.freeze({
   freightRevenueMultiplier: 1.22,
   energyCostMultiplier: 0.42,
   maintenanceCostMultiplier: 0.48,
+  lineInfrastructureMaintenancePerKm: 0.12,
   staffCostDivisor: 82,
   debtInterestPerTick: 0.00012,
   stationLevelCost: 58,
@@ -1963,10 +1964,10 @@ function startNextQueuedResearch(player) {
 }
 
 function researchWorkRate(player) {
-  const engineers = player.staff?.engineers || 0;
-  const labBonus = Math.min(0.85, engineers * 0.08 + Math.max(0, player.reputation - 50) * 0.004);
+  const reputationBonus = Math.min(0.32, Math.max(0, player.reputation - 50) * 0.004);
   const socialBonus = techLevel(player, 'crew_training') * 0.025;
-  return round2(1 + labBonus + socialBonus);
+  const labTechBonus = Math.min(0.22, techLevel(player, 'centralized_control') * 0.018);
+  return round2(1 + reputationBonus + socialBonus + labTechBonus);
 }
 
 function boundedExponential(base, growth, exponent, cap = Number.MAX_SAFE_INTEGER) {
@@ -2152,6 +2153,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   const staffing = computeStaffing(player);
   const staffNeeds = computeStaffNeeds(player);
   const driverCoverage = driverCoverageForNeed(player, staffNeeds.drivers);
+  const lineInfrastructureMultiplier = clamp(1.22 - staffing.engineers * 0.22, 0.78, 1.18);
+  const totalOwnedLineKm = player.lines
+    .filter(line => line?.active && lineStops(line).length >= 2)
+    .reduce((sum, line) => sum + lineDistance(line), 0);
+  const totalLineInfrastructurePool = totalOwnedLineKm * ECONOMY.lineInfrastructureMaintenancePerKm * lineInfrastructureMultiplier;
   const policy = BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
   const maintenanceCapacity = 1 + (player.staff.mechanics || 0) * 0.08 + totalMaintenance(player) * 0.12 + techLevel(player, 'electric_standardized_maintenance') * 0.16 + techLevel(player, 'steam_workshops') * 0.1;
   const eventFactor = currentEventFactor();
@@ -2268,6 +2274,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const crewFactor = Math.min(staffing.controllers, staffing.dispatchers);
     const stationFactor = lineStationFactor(player, line);
     const capacityFactor = Math.min(1, crewFactor * stationFactor);
+    const fareComplianceFactor = clamp(0.76 + staffing.controllers * 0.24, 0.72, 1.06);
+    const stationAgentFlowFactor = clamp(0.76 + staffing.stationAgents * 0.24, 0.72, 1.08);
+    const dispatchRevenueFactor = clamp(0.78 + staffing.dispatchers * 0.22, 0.76, 1.07);
     const maxPax = operatingModel.capacity * effectiveFrequency * capacityFactor;
     const maxFreight = operatingModel.freight * effectiveFrequency * capacityFactor;
     let linePax = 0;
@@ -2278,7 +2287,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 
     if (line.service === 'passengers' || line.service === 'mixed') {
       const share = passengerMarket?.share || 0;
-      linePax = Math.max(0, Math.min(maxPax, routeDemand.passengers * share * passengerCapture));
+      linePax = Math.max(0, Math.min(maxPax, routeDemand.passengers * share * passengerCapture * stationAgentFlowFactor));
     }
     if (line.service === 'freight' || line.service === 'mixed') {
       const share = freightMarket?.share || 0;
@@ -2289,23 +2298,26 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     setLineTicketPrice(line, effectiveTicketPrice, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
-    const ticketRevenue = linePax * effectiveTicketPrice * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
+    const ticketRevenue = linePax * effectiveTicketPrice * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier * fareComplianceFactor;
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
-    const lineRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
+    const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
+    const lineRevenue = serviceRevenue * dispatchRevenueFactor;
     const energyCost = computeEnergyCost(player, operatingModel, distance, effectiveFrequency, line.electrified);
     const maintenanceCost = operatingModel.maintenance * distance * effectiveFrequency * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
     const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance);
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
-    const variableExpenses = energyCost + maintenanceCost + accessCost;
+    const lineInfrastructureCost = totalOwnedLineKm > 0 ? totalLineInfrastructurePool * (distance / totalOwnedLineKm) : 0;
+    const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost;
     const contribution = lineRevenue - variableExpenses;
     revenue += lineRevenue;
     expenses += variableExpenses;
 
     const wearBase = (distance * effectiveFrequency / 120000) * (1.15 - Math.min(0.35, maintenanceCapacity / 20));
+    const mechanicWearFactor = clamp(1.16 - staffing.mechanics * 0.16, 0.74, 1.14);
     const techWear = (1 - Math.min(0.14, techLevel(player, 'electric_standardized_maintenance') * 0.025)) * (1 - Math.min(0.1, techLevel(player, 'steam_workshops') * 0.018));
-    const wear = wearBase * policy.wearMultiplier * techWear;
+    const wear = wearBase * mechanicWearFactor * policy.wearMultiplier * techWear;
     const projectedCondition = clamp(train.condition - wear, 0.12, 1);
     if (!dryRun) {
       train.condition = projectedCondition;
@@ -2314,9 +2326,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const reliabilityCondition = dryRun ? train.condition : projectedCondition;
     const reliability = clamp(operatingModel.reliability * reliabilityCondition * (0.86 + Math.min(0.18, maintenanceCapacity / 30)) * crewFactor + policy.reliabilityBonus + techLevel(player, 'safety_training') * 0.006, 0.18, 0.995);
     const delayRisk = 1 - reliability;
-    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, effectiveFrequency - 10) * 1.4 - Math.max(0, 1 - lineDriverCoverage) * 18, 35, 99);
+    const dispatcherPunctualityBonus = (dispatchRevenueFactor - 1) * 22;
+    const stationSatisfactionBonus = (stationAgentFlowFactor - 1) * 20;
+    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, effectiveFrequency - 10) * 1.4 - Math.max(0, 1 - lineDriverCoverage) * 18 + dispatcherPunctualityBonus, 35, 99);
     const satisfaction = clamp(
-      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, effectiveFrequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5 - Math.max(0, 1 - lineDriverCoverage) * 12,
+      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, effectiveFrequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5 - Math.max(0, 1 - lineDriverCoverage) * 12 + stationSatisfactionBonus,
       10,
       100
     );
@@ -2371,6 +2385,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         ticketRevenue: Math.round(ticketRevenue),
         ancillaryRevenue: Math.round(ancillaryRevenue),
         freightRevenue: Math.round(freightRevenue),
+        dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - serviceRevenue)),
+        lineInfrastructureCost: Math.round(lineInfrastructureCost),
         energyCost: Math.round(energyCost),
         resourceType: resourceCheck.type,
         resourceConsumptionPerHour: round2(resourceCheck.amountPerHour || 0),
@@ -2774,8 +2790,7 @@ function computeOwnedStationRevenue(player, passengers, freightTons) {
 }
 
 function researchOperatingCost(player) {
-  const active = player.researchProject ? ECONOMY.researchLabBaseCost : 0;
-  return active + (player.staff?.engineers || 0) * ECONOMY.researchLabEngineerCost;
+  return player.researchProject ? ECONOMY.researchLabBaseCost : 0;
 }
 
 function computeCo2(model, distance, frequency) {
@@ -2805,7 +2820,7 @@ function computeLineStaffNeeds(player, line) {
     stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
     mechanics: train ? Math.max(1, Math.ceil(0.22 + distance * frequency / 1800)) : Math.max(0, Math.ceil(distance * frequency / 2200)),
     dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
-    engineers: 0
+    engineers: Math.max(0, Math.ceil(distance / 220 + frequency / 16 - 0.5))
   };
 }
 
@@ -2824,6 +2839,7 @@ function computeStaffNeeds(player) {
     needs.drivers += lineNeeds.drivers;
     needs.controllers += lineNeeds.controllers;
     needs.dispatchers += lineNeeds.dispatchers;
+    needs.engineers += lineNeeds.engineers;
     dailyKm += lineDistance(line) * clamp(Number(line.frequency || 0), 1, 20);
     stationWork += Math.max(0, lineStops(line).length - 2);
   }
@@ -2834,7 +2850,7 @@ function computeStaffNeeds(player) {
     stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16)) : 0,
     mechanics: trains ? Math.max(1, Math.ceil(trains * 0.55 + dailyKm / 1800)) : 0,
     dispatchers: activeLines.length ? Math.max(1, needs.dispatchers) : 0,
-    engineers: Object.keys(player.techUnlocked || {}).length || player.research > 0 ? Math.max(1, Math.ceil(player.epoch + Object.keys(player.techUnlocked || {}).length / 10)) : 0
+    engineers: needs.engineers > 0 ? Math.max(1, needs.engineers) : 0
   };
 }
 
@@ -3818,7 +3834,7 @@ function buildBalance() {
     stationAgents: { label: 'agent de gare', salary: 3100, hireCost: 5200 },
     mechanics: { label: 'mainteneur', salary: 3700, hireCost: 7200 },
     dispatchers: { label: 'régulateur', salary: 4600, hireCost: 10500 },
-    engineers: { label: 'ingénieur', salary: 5600, hireCost: 14000 }
+    engineers: { label: 'agent de l’infra', salary: 5600, hireCost: 14000 }
   };
   const energyStrategies = {
     spot: { name: 'Marché spot', defaultMultiplier: 1, multiplier: {} },
