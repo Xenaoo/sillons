@@ -5425,3 +5425,106 @@ dialog.modal--wide {
 .line-role-bar-head {
   display: contents;
 }
+
+/* ===== v60.48.0 — Budget détaillé et agents de gare déplacés ===== */
+.station-agents-card.good {
+  border-color: rgba(106,197,143,.24);
+}
+.station-agents-card.warn {
+  border-color: rgba(245,183,77,.30);
+}
+.station-agents-card.bad {
+  border-color: rgba(239,68,68,.34);
+}
+.station-agents-card .line-role-bar {
+  margin: 10px 0 12px;
+}
+.station-agents-kv b {
+  text-align: right;
+}
+.budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.budget-section {
+  padding: 0;
+  overflow: hidden;
+}
+.budget-heading {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(217,168,82,.12), rgba(24,35,55,.36));
+}
+.budget-section-body {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+.budget-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(3,8,18,.36);
+  border: 1px solid rgba(217,168,82,.10);
+}
+.budget-row.revenue {
+  border-color: rgba(106,197,143,.18);
+  background: linear-gradient(90deg, rgba(21,94,59,.12), rgba(3,8,18,.32));
+}
+.budget-row.expense {
+  border-color: rgba(239,68,68,.18);
+  background: linear-gradient(90deg, rgba(127,29,29,.12), rgba(3,8,18,.32));
+}
+.budget-row.net {
+  border-color: rgba(217,168,82,.18);
+  background: linear-gradient(90deg, rgba(217,168,82,.10), rgba(3,8,18,.32));
+}
+.budget-row span {
+  min-width: 0;
+  color: #f4e3bd;
+  font-size: 13px;
+}
+.budget-row span em {
+  display: block;
+  margin-top: 2px;
+  color: #b8aa84;
+  font-size: 11px;
+  font-style: normal;
+}
+.budget-row b {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.budget-line-card {
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(217,168,82,.12);
+  background: rgba(3,8,18,.26);
+}
+.budget-line-card + .budget-line-card {
+  margin-top: 8px;
+}
+.budget-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+@media (max-width: 1180px) {
+  .budget-summary-grid,
+  .budget-mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .budget-summary-grid,
+  .budget-mini-grid {
+    grid-template-columns: 1fr;
+  }
+}

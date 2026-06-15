@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.47.0';
-const STATE_SCHEMA_VERSION = 49;
+const PROJECT_VERSION = 'v60.48.0';
+const STATE_SCHEMA_VERSION = 50;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -2466,9 +2466,40 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   player.stats.lastRevenue = Math.round(revenue);
   player.stats.lastExpenses = Math.round(expenses);
   player.stats.lastProfit = Math.round(profit);
+  const lineFinanceTotals = activeLineStats.reduce((acc, item) => {
+    const finance = item.stats?.finance || {};
+    acc.ticketRevenue += Number(finance.ticketRevenue || 0);
+    acc.ancillaryRevenue += Number(finance.ancillaryRevenue || 0);
+    acc.freightRevenue += Number(finance.freightRevenue || 0);
+    acc.dispatchRevenueBoost += Number(finance.dispatchRevenueBoost || 0);
+    acc.energyCost += Number(finance.energyCost || 0);
+    acc.trainMaintenanceCost += Number(finance.maintenanceCost || 0);
+    acc.lineInfrastructureCost += Number(finance.lineInfrastructureCost || 0);
+    acc.accessCost += Number(finance.accessCost || 0);
+    acc.variableExpenses += Number(finance.variableExpenses || 0);
+    return acc;
+  }, {
+    ticketRevenue: 0,
+    ancillaryRevenue: 0,
+    freightRevenue: 0,
+    dispatchRevenueBoost: 0,
+    energyCost: 0,
+    trainMaintenanceCost: 0,
+    lineInfrastructureCost: 0,
+    accessCost: 0,
+    variableExpenses: 0
+  });
   player.stats.lastBreakdown = {
     lineRevenue: Math.round(revenue - stationRevenue),
     stationRevenue: Math.round(stationRevenue),
+    ticketRevenue: Math.round(lineFinanceTotals.ticketRevenue),
+    ancillaryRevenue: Math.round(lineFinanceTotals.ancillaryRevenue),
+    freightRevenue: Math.round(lineFinanceTotals.freightRevenue),
+    dispatchRevenueBoost: Math.round(lineFinanceTotals.dispatchRevenueBoost),
+    energyCost: Math.round(lineFinanceTotals.energyCost),
+    trainMaintenanceCost: Math.round(lineFinanceTotals.trainMaintenanceCost),
+    lineInfrastructureCost: Math.round(lineFinanceTotals.lineInfrastructureCost),
+    accessCost: Math.round(lineFinanceTotals.accessCost),
     staffCost: Math.round(staffCost),
     stationCost: Math.round(stationCost),
     debtCost: Math.round(debtCost),

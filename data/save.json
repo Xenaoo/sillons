@@ -1,20 +1,20 @@
 {
-  "version": 49,
+  "version": 50,
   "createdAt": 1781511648911,
-  "now": 1781533680967,
-  "day": 16,
-  "eraYear": 1851,
+  "now": 1781534410177,
+  "day": 376,
+  "eraYear": 1881,
   "tickSpeed": 2000,
   "market": {
-    "coal": 1.3,
-    "diesel": 2.72,
-    "electricity": 0.31,
-    "hydrogen": 1.65,
-    "battery": 0.38,
-    "steel": 1.15,
-    "labor": 1.01,
-    "demand": 0.96,
-    "freight": 1.02
+    "coal": 1.61,
+    "diesel": 4.39,
+    "electricity": 0.5,
+    "hydrogen": 2.06,
+    "battery": 0.42,
+    "steel": 1.08,
+    "labor": 0.77,
+    "demand": 0.86,
+    "freight": 1.18
   },
   "events": [
     {
@@ -22,14 +22,14 @@
       "title": "Météo difficile : la ponctualité devient plus fragile.",
       "passenger": 0.94,
       "freight": 0.92,
-      "remaining": 3
+      "remaining": 1
     },
     {
-      "kind": "social",
-      "title": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées.",
-      "passenger": 0.97,
-      "freight": 0.97,
-      "remaining": 7
+      "kind": "energy",
+      "title": "Tension sur les marchés de l’énergie : les coûts de traction augmentent.",
+      "passenger": 1,
+      "freight": 0.96,
+      "remaining": 13
     }
   ],
   "news": [
@@ -60,6 +60,190 @@
     {
       "day": 3,
       "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 23,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 30,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 41,
+      "text": "Azur Express IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 51,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 56,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 75,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
+    },
+    {
+      "day": 75,
+      "text": "TransHexagone IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 93,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 100,
+      "text": "Massif Central Rail IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 104,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 107,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 112,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
+    },
+    {
+      "day": 117,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 118,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
+    },
+    {
+      "day": 125,
+      "text": "Rebond industriel : les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 134,
+      "text": "Azur Express IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 140,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 165,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 167,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 173,
+      "text": "TransHexagone IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 177,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 185,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 188,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 204,
+      "text": "Nord Fret IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 210,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 214,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 222,
+      "text": "Rebond industriel : les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 233,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 234,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 238,
+      "text": "Azur Express IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 245,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 248,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 260,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 266,
+      "text": "Azur Express IA entre sur le marché ferroviaire."
+    },
+    {
+      "day": 267,
+      "text": "Rebond industriel : les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 276,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 277,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
+    },
+    {
+      "day": 296,
+      "text": "Rebond industriel : les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 298,
+      "text": "Grand événement national : hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 300,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 314,
+      "text": "Vacances scolaires : forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 323,
+      "text": "Tensions sociales sectorielles : les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 339,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 347,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 361,
+      "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 364,
+      "text": "Tension sur les marchés de l’énergie : les coûts de traction augmentent."
     }
   ],
   "customStations": {},
@@ -71,7 +255,7 @@
       "color": "#60a5fa",
       "logo": "steam_front",
       "region": "France",
-      "cash": 10000571.98109308,
+      "cash": 10025587.244772095,
       "debt": 0,
       "epoch": 0,
       "research": 1,
@@ -90,11 +274,11 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 50.90477377941953,
-      "co2": 587.5833600000003,
+      "reputation": 0,
+      "co2": 9401.33376000005,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 1999.9514233333343,
+        "coal": 1998.7855833333583,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -111,8 +295,8 @@
           "id": "starter-steam-030-mixte",
           "modelId": "steam_030_mixte",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.9488865599999989,
-          "age": 24,
+          "condition": 0.7847495999999825,
+          "age": 384,
           "acquiredDay": 1,
           "composition": {
             "mode": "passenger_loco",
@@ -154,13 +338,13 @@
           "electrified": false,
           "createdDay": 1,
           "stats": {
-            "passengers": 143,
+            "passengers": 117,
             "freightTons": 0,
-            "revenue": 485,
-            "expenses": 512,
-            "profit": -27,
+            "revenue": 396,
+            "expenses": 427,
+            "profit": -31,
             "punctuality": 35,
-            "satisfaction": 55.95,
+            "satisfaction": 44.2,
             "share": 100,
             "status": "ok",
             "staffing": {
@@ -179,8 +363,8 @@
               "requestedFrequency": 2
             },
             "market": {
-              "passengerDemand": 519,
-              "freightDemand": 152,
+              "passengerDemand": 352,
+              "freightDemand": 174,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -190,25 +374,25 @@
               "passengerLeader": {
                 "companyName": "Compagnie des Sillons",
                 "lineCode": "COM-001",
-                "score": 0.96
+                "score": 0.41
               },
               "freightLeader": null,
-              "passengerScore": 0.96,
+              "passengerScore": 0.41,
               "freightScore": null,
-              "passengerDemandCapture": 43.5,
+              "passengerDemandCapture": 31.59,
               "freightDemandCapture": null
             },
             "attractiveness": {
               "passenger": {
                 "market": "passengers",
-                "score": 0.96,
+                "score": 0.41,
                 "factors": {
                   "price": 78.57,
                   "frequency": 40.82,
                   "speed": 31.11,
                   "comfortOrCapacity": 62.25,
-                  "reputation": 67.39,
-                  "condition": 96.25,
+                  "reputation": 33.33,
+                  "condition": 84.09,
                   "staff": 40,
                   "stations": 85,
                   "operations": 100
@@ -219,7 +403,7 @@
             "capacity": {
               "passengers": 143,
               "freightTons": 73,
-              "passengerLoad": 100,
+              "passengerLoad": 81.71,
               "freightLoad": 0,
               "crewFactor": 40,
               "stationFactor": 85,
@@ -232,24 +416,24 @@
             "finance": {
               "ticketPrice": 3,
               "farePerKm": 0.12,
-              "ticketRevenue": 509,
-              "ancillaryRevenue": 50,
+              "ticketRevenue": 416,
+              "ancillaryRevenue": 41,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 3,
               "energyCost": 0,
               "resourceType": "coal",
               "resourceConsumptionPerHour": 5.83,
-              "maintenanceCost": 19,
+              "maintenanceCost": 23,
               "accessCost": 0,
               "passageRights": 0,
-              "variableExpenses": 22,
-              "contribution": 463,
-              "allocatedOverhead": 490,
-              "netProfit": -27,
-              "margin": 95.46,
-              "totalExpenses": 512,
-              "netMargin": -5.66
+              "variableExpenses": 26,
+              "contribution": 370,
+              "allocatedOverhead": 401,
+              "netProfit": -31,
+              "margin": 93.34,
+              "totalExpenses": 427,
+              "netMargin": -7.95
             }
           },
           "name": "Caen → Bayeux"
@@ -272,27 +456,35 @@
         }
       },
       "stats": {
-        "passengers": 3432,
+        "passengers": 53437,
         "freightTons": 0,
-        "revenue": 13524,
-        "expenses": 12190,
-        "profit": 1337,
-        "lastRevenue": 547,
-        "lastExpenses": 512,
-        "lastProfit": 34,
+        "revenue": 205178,
+        "expenses": 178707,
+        "profit": 26347,
+        "lastRevenue": 453,
+        "lastExpenses": 428,
+        "lastProfit": 25,
         "punctuality": 35,
-        "satisfaction": 55.95,
+        "satisfaction": 44.2,
         "marketShare": 1,
         "lastBreakdown": {
-          "lineRevenue": 485,
-          "stationRevenue": 62,
-          "staffCost": 374,
+          "lineRevenue": 396,
+          "stationRevenue": 57,
+          "ticketRevenue": 416,
+          "ancillaryRevenue": 41,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 23,
+          "lineInfrastructureCost": 3,
+          "accessCost": 0,
+          "staffCost": 285,
           "stationCost": 116,
           "debtCost": 0,
           "idleTrainCost": 0,
           "researchCost": 0,
-          "variableLineCost": 22,
-          "sharedCosts": 490
+          "variableLineCost": 26,
+          "sharedCosts": 401
         }
       },
       "notifications": [
@@ -334,7 +526,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 49.72999999999999,
+      "reputation": 43.249999999999744,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -368,6 +560,14 @@
         "lastBreakdown": {
           "lineRevenue": 0,
           "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -385,7 +585,695 @@
       ],
       "createdAt": 1781516141612,
       "lastSeen": 1781516141612
+    },
+    "c42bc3c5-20a9-49e2-8384-0e9467fb91b0": {
+      "id": "c42bc3c5-20a9-49e2-8384-0e9467fb91b0",
+      "name": "Azur Express IA",
+      "color": "#a78bfa",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 43.96999999999977,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 41,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 41,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781533731016,
+      "lastSeen": 1781533731016
+    },
+    "5fddd2c1-33c8-421d-a648-80cc12b3db02": {
+      "id": "5fddd2c1-33c8-421d-a648-80cc12b3db02",
+      "name": "TransHexagone IA",
+      "color": "#14b8a6",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 44.581999999999795,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 75,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 75,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781533799007,
+      "lastSeen": 1781533799007
+    },
+    "675bdc60-cc1a-4bb3-9016-97dc30e9fd9a": {
+      "id": "675bdc60-cc1a-4bb3-9016-97dc30e9fd9a",
+      "name": "Massif Central Rail IA",
+      "color": "#facc15",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 45.03199999999981,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 100,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 100,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781533849023,
+      "lastSeen": 1781533849023
+    },
+    "ee203fb8-6bba-4c5c-8d64-932ed93843ed": {
+      "id": "ee203fb8-6bba-4c5c-8d64-932ed93843ed",
+      "name": "Azur Express IA",
+      "color": "#a78bfa",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 45.643999999999835,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 134,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 134,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781533917047,
+      "lastSeen": 1781533917047
+    },
+    "d6d4eca7-4c9b-48b1-b88d-3e15de190ea5": {
+      "id": "d6d4eca7-4c9b-48b1-b88d-3e15de190ea5",
+      "name": "TransHexagone IA",
+      "color": "#f43f5e",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 46.34599999999986,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 173,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 173,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781533995070,
+      "lastSeen": 1781533995070
+    },
+    "6dc05393-edd1-4647-8d15-a972295f091c": {
+      "id": "6dc05393-edd1-4647-8d15-a972295f091c",
+      "name": "Nord Fret IA",
+      "color": "#a78bfa",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 46.90399999999988,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 204,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 204,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781534057093,
+      "lastSeen": 1781534057093
+    },
+    "efbdbccf-5cff-4c91-9de8-39abeed22d5f": {
+      "id": "efbdbccf-5cff-4c91-9de8-39abeed22d5f",
+      "name": "Azur Express IA",
+      "color": "#22c55e",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 47.515999999999906,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 238,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 238,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781534125118,
+      "lastSeen": 1781534125118
+    },
+    "b92af4fa-7b4f-4475-9ae5-f658edb1b942": {
+      "id": "b92af4fa-7b4f-4475-9ae5-f658edb1b942",
+      "name": "Azur Express IA",
+      "color": "#14b8a6",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 600000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 0,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {},
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 48.019999999999925,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 0,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [],
+      "lines": [],
+      "stations": {},
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 0,
+        "expenses": 0,
+        "profit": 0,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 0,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "accessCost": 0,
+          "staffCost": 0,
+          "stationCost": 0,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 266,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 266,
+          "text": "Concurrent IA créé."
+        }
+      ],
+      "createdAt": 1781534181133,
+      "lastSeen": 1781534181133
     }
   },
-  "nextNpcAt": 41
+  "nextNpcAt": 299
 }

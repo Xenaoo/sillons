@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Version v60.48.0 — onglet Budget et réorganisation des besoins RH
+
+- incrément de version de cette passe : badge interface `v60.48.0`, package `0.4.38` et schéma d’état serveur `50` ;
+- retrait des `agents de gare` dans la vignette `Salariés nécessaires` des fiches de ligne du menu `Modifier` ;
+- intégration des besoins en agents de gare directement dans l’onglet `Gares`, avec une barre de couverture dédiée, les gares exploitées, les lignes actives et les arrêts intermédiaires ;
+- uniformisation de la ligne `Conducteurs` dans la vignette des lignes : elle utilise désormais la même présentation en barre que les autres métiers ;
+- ajout d’un nouvel onglet principal `Budget` ;
+- l’onglet `Budget` détaille les recettes, dépenses variables, charges fixes, résultat net, trésorerie, dette, cumul financier et détail par ligne ;
+- ajout d’un code couleur clair : recettes en positif, dépenses en négatif, résultat net selon son signe ;
+- toutes les grandes catégories du budget sont réductibles et mémorisées localement ;
+- enrichissement du détail financier serveur : billets, services, fret, bonus régulation, énergie, maintenance matériel, entretien des lignes, péages et charges fixes sont exposés séparément.
+
 ## Version v60.47.0 — métiers de ligne affinés et entretien d’infrastructure
 
 - incrément de version de cette passe : badge interface `v60.47.0`, package `0.4.37` et schéma d’état serveur `49` ;

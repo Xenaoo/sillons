@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.47.0';
+const PROJECT_VERSION = 'v60.48.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -76,6 +76,7 @@ const app = {
   stationSearch: { query: '', candidateId: '' },
   stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
   ownedStationsCollapsed: localStorage.getItem('sillons.ownedStationsCollapsed') === '1',
+  budgetCollapsed: loadJson('sillons.budgetCollapsed', {}),
   highlightResearchId: '',
   highlightUiTarget: '',
   dynamicBound: false,
@@ -162,7 +163,8 @@ const ART = {
     staff: '/assets/art/hero-staff-v12.png',
     research: '/assets/art/hero-research-v12.png',
     market: '/assets/art/hero-market-v12.png',
-    resources: '/assets/art/hero-market-v12.png'
+    resources: '/assets/art/hero-market-v12.png',
+    budget: '/assets/art/hero-market-v12.png'
   },
   researchGroups: {
     traction: '/assets/art/board-traction.png',
@@ -1170,7 +1172,8 @@ function renderTabs() {
     staff: renderStaff,
     research: renderResearch,
     resources: renderResources,
-    market: renderMarket
+    market: renderMarket,
+    budget: renderBudget
   };
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
@@ -2018,19 +2021,15 @@ function renderLineStaffNeedsCard(line, options = {}) {
   const cls = lineStaffNeedsStatusClass(line);
   const effectiveFrequency = line.stats?.capacity?.effectiveFrequency ?? line.stats?.staffing?.effectiveFrequency;
   const requestedFrequency = line.stats?.capacity?.requestedFrequency ?? line.frequency;
-  const driverOwned = Number(app.state.me?.staff?.drivers || 0);
-  const driverNeed = Math.max(0, Number(needs.drivers || 0));
-  const otherRoleBars = staffOrder.filter(role => role !== 'drivers').map(role => renderLineStaffNeedBar(role, needs[role] || 0)).join('');
+  const roleBars = staffOrder
+    .filter(role => role !== 'stationAgents')
+    .map(role => renderLineStaffNeedBar(role, needs[role] || 0, line))
+    .join('');
 
   return `
     <section class="line-insight-panel line-staff-needs-card ${cls}">
       <h4>Salariés nécessaires</h4>
-      <div class="line-driver-coverage">
-        <span>Conducteurs ${formatInt(driverOwned)} / ${formatInt(driverNeed)}</span>
-        <b class="${cls}-text">${round(coverage)}%</b>
-        <i><em style="width:${Math.max(0, Math.min(100, coverage))}%"></em></i>
-      </div>
-      <div class="line-staff-bars">${otherRoleBars}</div>
+      <div class="line-staff-bars">${roleBars}</div>
       ${Number.isFinite(effectiveFrequency) && Number.isFinite(Number(requestedFrequency)) && Number(effectiveFrequency) < Number(requestedFrequency)
         ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de conducteurs.</p>`
         : '<p class="small muted">Conducteurs suffisants : exploitation nominale.</p>'}
@@ -2038,17 +2037,18 @@ function renderLineStaffNeedsCard(line, options = {}) {
   `;
 }
 
-function lineRoleCoverageClient(role, need) {
+function lineRoleCoverageClient(role, need, line = null) {
+  if (role === 'drivers' && line) return Math.round(lineDriverCoverageForDisplay(line));
   const required = Math.max(0, Number(need || 0));
   if (required <= 0) return 100;
   return Math.max(0, Math.min(100, Math.round(Number(app.state.me?.staff?.[role] || 0) / required * 100)));
 }
 
-function renderLineStaffNeedBar(role, need) {
+function renderLineStaffNeedBar(role, need, line = null) {
   const label = app.state.balance.staff[role]?.label || role;
   const required = Math.max(0, Number(need || 0));
   const owned = Number(app.state.me?.staff?.[role] || 0);
-  const pct = lineRoleCoverageClient(role, required);
+  const pct = lineRoleCoverageClient(role, required, line);
   const status = pct >= 100 ? 'good' : pct >= 60 ? 'warn' : 'bad';
   const summary = required > 0 ? `${formatInt(owned)} / ${formatInt(required)}` : 'Non requis';
   return `
@@ -3155,6 +3155,8 @@ function renderStations() {
       </div>
     </div>
 
+    ${renderStationAgentsCard()}
+
     <div class="card station-owned-card ${collapsed ? 'collapsed' : ''}">
       <button type="button" class="research-era-heading station-owned-heading" data-action="toggle-owned-stations" aria-expanded="${collapsed ? 'false' : 'true'}">
         <span class="research-era-title">
@@ -3166,6 +3168,38 @@ function renderStations() {
       ${collapsed ? '' : `<div class="list station-owned-list">
         ${ownedEntries.map(([id, asset]) => renderStationAsset(station(id), asset)).join('') || '<p class="muted">Aucune gare exploitée.</p>'}
       </div>`}
+    </div>
+  `;
+}
+
+function renderStationAgentsCard() {
+  const me = app.state.me;
+  const need = Math.max(0, Number(staffNeed('stationAgents') || 0));
+  const owned = Number(me.staff?.stationAgents || 0);
+  const pct = need <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(owned / need * 100)));
+  const status = pct >= 100 ? 'good' : pct >= 60 ? 'warn' : 'bad';
+  const activeLines = me.lines.filter(line => line.active).length;
+  const stationCount = Object.keys(me.stations || {}).length;
+  const intermediateStops = me.lines
+    .filter(line => line.active)
+    .reduce((sum, line) => sum + Math.max(0, lineStopsOf(line).length - 2), 0);
+  return `
+    <div class="card station-agents-card ${status}">
+      <h2>Agents de gare</h2>
+      <p class="muted small">Les agents de gare ne sont plus affichés dans les besoins propres à chaque ligne. Ils sont dimensionnés ici, selon les gares exploitées, les lignes actives et les arrêts intermédiaires.</p>
+      <div class="line-role-bar ${status}">
+        <div class="line-role-bar-head">
+          <span>Agents de gare ${formatInt(owned)} / ${formatInt(need)}</span>
+          <b class="${status}-text">${pct}%</b>
+        </div>
+        <i><em style="width:${pct}%"></em></i>
+      </div>
+      <div class="kv station-agents-kv">
+        <span>Gares exploitées</span><b>${formatInt(stationCount)}</b>
+        <span>Lignes actives</span><b>${formatInt(activeLines)}</b>
+        <span>Arrêts intermédiaires</span><b>${formatInt(intermediateStops)}</b>
+        <span>Effet</span><b>Satisfaction + flux voyageurs</b>
+      </div>
     </div>
   `;
 }
@@ -3889,6 +3923,141 @@ function renderResources() {
 }
 
 
+function budgetValueClass(type, value = 0) {
+  if (type === 'revenue') return 'good-text';
+  if (type === 'expense') return 'bad-text';
+  if (type === 'net') return Number(value || 0) >= 0 ? 'good-text' : 'bad-text';
+  return '';
+}
+
+function budgetRow(label, value, type = 'neutral', detail = '') {
+  const numeric = Number(value || 0);
+  return `
+    <div class="budget-row ${type}">
+      <span>${escapeHtml(label)}${detail ? `<em>${escapeHtml(detail)}</em>` : ''}</span>
+      <b class="${budgetValueClass(type, numeric)}">${moneyPerHour(numeric)}</b>
+    </div>
+  `;
+}
+
+function budgetRawRow(label, value, cls = '', detail = '') {
+  return `
+    <div class="budget-row neutral">
+      <span>${escapeHtml(label)}${detail ? `<em>${escapeHtml(detail)}</em>` : ''}</span>
+      <b class="${cls}">${escapeHtml(String(value))}</b>
+    </div>
+  `;
+}
+
+function budgetSection(id, title, rows, meta = '') {
+  const collapsed = app.budgetCollapsed?.[id] === true;
+  return `
+    <section class="card budget-section ${collapsed ? 'collapsed' : ''}">
+      <button type="button" class="research-era-heading budget-heading" data-action="toggle-budget-section" data-id="${escapeAttr(id)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+        <span class="research-era-title">
+          <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          <span>${escapeHtml(title)}</span>
+        </span>
+        <span class="research-era-meta">${escapeHtml(meta || (collapsed ? 'Déplier' : 'Réduire'))}</span>
+      </button>
+      ${collapsed ? '' : `<div class="budget-section-body">${rows}</div>`}
+    </section>
+  `;
+}
+
+function renderBudgetLineDetail() {
+  const lines = app.state.me.lines.filter(line => line.active);
+  if (!lines.length) return '<p class="muted small">Aucune ligne active.</p>';
+  return lines.map((line, index) => {
+    const stats = line.stats || {};
+    const finance = stats.finance || {};
+    const name = line.code || line.name || `Ligne ${index + 1}`;
+    const net = Number(finance.netProfit ?? stats.profit ?? 0);
+    return `
+      <div class="budget-line-card">
+        <div class="item-title">
+          <strong>${escapeHtml(name)}</strong>
+          <span class="tag ${net >= 0 ? 'good' : 'bad'}">${moneyPerHour(net)}</span>
+        </div>
+        <div class="budget-mini-grid">
+          ${budgetRow('Recettes', stats.revenue || 0, 'revenue')}
+          ${budgetRow('Coûts variables', finance.variableExpenses ?? stats.expenses ?? 0, 'expense')}
+          ${budgetRow('Frais alloués', finance.allocatedOverhead || 0, 'expense')}
+          ${budgetRow('Net', net, 'net')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderBudget() {
+  const me = app.state.me;
+  const b = me.stats?.lastBreakdown || {};
+  const revenueTotal = Number(me.stats.lastRevenue || 0);
+  const expenseTotal = Number(me.stats.lastExpenses || 0);
+  const net = Number(me.stats.lastProfit || 0);
+  const variable = Number(b.variableLineCost || 0);
+  const shared = Number(b.sharedCosts || 0);
+  const knownRevenue = Number(b.ticketRevenue || 0) + Number(b.ancillaryRevenue || 0) + Number(b.freightRevenue || 0) + Number(b.dispatchRevenueBoost || 0) + Number(b.stationRevenue || 0);
+  const otherRevenue = Math.max(0, revenueTotal - knownRevenue);
+  const knownVariable = Number(b.energyCost || 0) + Number(b.trainMaintenanceCost || 0) + Number(b.lineInfrastructureCost || 0) + Number(b.accessCost || 0);
+  const otherVariable = Math.max(0, variable - knownVariable);
+  const knownShared = Number(b.staffCost || 0) + Number(b.stationCost || 0) + Number(b.debtCost || 0) + Number(b.idleTrainCost || 0) + Number(b.researchCost || 0);
+  const otherShared = Math.max(0, shared - knownShared);
+  const operatingMargin = revenueTotal > 0 ? Math.round((net / revenueTotal) * 100) : 0;
+
+  return `
+    ${renderSectionHero('BUDGET', 'Lecture financière complète', 'Analyse les recettes, dépenses variables, charges fixes et résultats de la compagnie avec des catégories réductibles.', ART.tabs.budget, ['Recettes', 'Dépenses', 'Marge'])}
+
+    <div class="budget-summary-grid">
+      ${metric('Recettes /h', moneyPerHour(revenueTotal), 'good-text')}
+      ${metric('Dépenses /h', moneyPerHour(expenseTotal), 'bad-text')}
+      ${metric('Résultat /h', moneyPerHour(net), net >= 0 ? 'good-text' : 'bad-text')}
+      ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text')}
+    </div>
+
+    ${budgetSection('revenues', 'Recettes', `
+      ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'prix des billets encaissés')}
+      ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'commerces et services associés')}
+      ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'tonnage transporté')}
+      ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'effet des régulateurs')}
+      ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'gares possédées')}
+      ${otherRevenue > 0 ? budgetRow('Autres recettes', otherRevenue, 'revenue') : ''}
+      ${budgetRow('Total recettes', revenueTotal, 'revenue')}
+    `, moneyPerHour(revenueTotal))}
+
+    ${budgetSection('variable-costs', 'Dépenses variables d’exploitation', `
+      ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'électricité ou ressources consommées')}
+      ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'usure liée aux circulations')}
+      ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'coût proportionnel aux kilomètres exploités')}
+      ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'accès au réseau')}
+      ${otherVariable > 0 ? budgetRow('Autres coûts variables', otherVariable, 'expense') : ''}
+      ${budgetRow('Total variable', variable, 'expense')}
+    `, moneyPerHour(variable))}
+
+    ${budgetSection('fixed-costs', 'Charges fixes', `
+      ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'salaires')}
+      ${budgetRow('Gares', b.stationCost || 0, 'expense', 'niveaux, commerces, ateliers, dépôts')}
+      ${budgetRow('Dette', b.debtCost || 0, 'expense', 'intérêts et charge financière')}
+      ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'stockage du matériel non affecté')}
+      ${budgetRow('R&D', b.researchCost || 0, 'expense', 'projet de recherche actif')}
+      ${otherShared > 0 ? budgetRow('Autres charges fixes', otherShared, 'expense') : ''}
+      ${budgetRow('Total charges fixes', shared, 'expense')}
+    `, moneyPerHour(shared))}
+
+    ${budgetSection('result', 'Résultat et structure financière', `
+      ${budgetRow('Résultat net courant', net, 'net', 'recettes - dépenses')}
+      ${budgetRawRow('Trésorerie disponible', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}
+      ${budgetRawRow('Dette totale', money(me.debt), me.debt > 0 ? 'bad-text' : 'good-text')}
+      ${budgetRawRow('Recettes cumulées', money(me.stats.revenue), 'good-text')}
+      ${budgetRawRow('Dépenses cumulées', money(me.stats.expenses), 'bad-text')}
+      ${budgetRawRow('Profit cumulé', money(me.stats.profit), me.stats.profit >= 0 ? 'good-text' : 'bad-text')}
+    `, net >= 0 ? `+${moneyPerHour(net)}` : moneyPerHour(net))}
+
+    ${budgetSection('lines', 'Détail par ligne', renderBudgetLineDetail(), `${me.lines.filter(line => line.active).length} ligne${me.lines.filter(line => line.active).length > 1 ? 's' : ''}`)}
+  `;
+}
+
 function renderMarket() {
   const me = app.state.me;
   const market = app.state.game.market;
@@ -4051,6 +4220,13 @@ if (action === 'save-train-composition') {
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
   if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }
   if (action === 'toggle-owned-stations') { app.ownedStationsCollapsed = !app.ownedStationsCollapsed; localStorage.setItem('sillons.ownedStationsCollapsed', app.ownedStationsCollapsed ? '1' : '0'); renderAll(); return; }
+  if (action === 'toggle-budget-section') {
+    const id = button.dataset.id || 'main';
+    app.budgetCollapsed[id] = !app.budgetCollapsed[id];
+    localStorage.setItem('sillons.budgetCollapsed', JSON.stringify(app.budgetCollapsed));
+    renderAll();
+    return;
+  }
   if (action === 'research') return doAction('research', { branch: button.dataset.branch });
   if (action === 'energy-strategy') return doAction('energyStrategy', { strategy: button.dataset.id });
   if (action === 'buy-resource') return doAction('buyResource', { type: button.dataset.type, quantity: Number(button.dataset.quantity) });

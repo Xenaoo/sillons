@@ -1,0 +1,79 @@
+{
+  "updatedAt": 1781533776013,
+  "minPopulation": 5000,
+  "source": "geo.api.gouv.fr communes + fallback departements",
+  "stations": [
+    {
+      "id": "COM_91103",
+      "code": "91103",
+      "name": "Brétigny-sur-Orge",
+      "lat": 48.6114,
+      "lon": 2.3059,
+      "population": 26658,
+      "region": "Ville française",
+      "codesPostaux": [
+        "91220"
+      ],
+      "codeDepartement": "91",
+      "baseDemand": 274,
+      "freight": 106,
+      "tourism": 83,
+      "commune": true,
+      "populationSource": "geo.api.gouv.fr"
+    },
+    {
+      "id": "COM_91021",
+      "code": "91021",
+      "name": "Arpajon",
+      "lat": 48.5896,
+      "lon": 2.2467,
+      "population": 11144,
+      "region": "Ville française",
+      "codesPostaux": [
+        "91290"
+      ],
+      "codeDepartement": "91",
+      "baseDemand": 165,
+      "freight": 69,
+      "tourism": 78,
+      "commune": true,
+      "populationSource": "geo.api.gouv.fr"
+    },
+    {
+      "id": "COM_91345",
+      "code": "91345",
+      "name": "Longjumeau",
+      "lat": 48.6951,
+      "lon": 2.2943,
+      "population": 21700,
+      "region": "Ville française",
+      "codesPostaux": [
+        "91160"
+      ],
+      "codeDepartement": "91",
+      "baseDemand": 242,
+      "freight": 96,
+      "tourism": 81,
+      "commune": true,
+      "populationSource": "geo.api.gouv.fr"
+    },
+    {
+      "id": "COM_14258",
+      "code": "14258",
+      "name": "Falaise",
+      "lat": 48.892,
+      "lon": -0.197,
+      "population": 8000,
+      "region": "Ville française",
+      "codesPostaux": [
+        "14700"
+      ],
+      "codeDepartement": "14",
+      "baseDemand": 138,
+      "freight": 58,
+      "tourism": 76,
+      "commune": true,
+      "populationSource": "geo.api.gouv.fr"
+    }
+  ]
+}
