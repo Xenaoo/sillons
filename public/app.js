@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v61.0.1';
+const PROJECT_VERSION = 'v61.1.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -78,6 +78,7 @@ const app = {
   stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
   ownedStationsCollapsed: localStorage.getItem('sillons.ownedStationsCollapsed') === '1',
   budgetCollapsed: loadJson('sillons.budgetCollapsed', {}),
+  lineCollapsed: loadJson('sillons.lineCollapsed', {}),
   highlightResearchId: '',
   highlightUiTarget: '',
   dynamicBound: false,
@@ -2261,17 +2262,16 @@ function renderLineInsightPanels(line) {
           <span>Frais alloues</span><b>${lineMoney(finance.allocatedOverhead)}</b>
           <span>Net estime</span><b class="${netProfit >= 0 ? 'good-text' : 'bad-text'}">${lineMoney(netProfit)}</b>
         </div>
-        <div class="line-money-split">
-          <span>Billets ${lineMoney(finance.ticketRevenue)}</span>
-          <span>Services ${lineMoney(finance.ancillaryRevenue)}</span>
-          <span>Fret ${lineMoney(finance.freightRevenue)}</span>
-          <span>Gain régulation ${lineMoney(finance.dispatchRevenueBoost)}</span>
-        </div>
-        <div class="line-money-split">
-          <span>Énergie ${lineMoney(finance.energyCost)}</span>
-          <span>Maintenance train ${lineMoney(finance.maintenanceCost)}</span>
-          <span>Entretien ligne ${lineMoney(finance.lineInfrastructureCost)}</span>
-          <span>Péages ${lineMoney(finance.accessCost)}</span>
+        <div class="line-finance-pills">
+          <span class="income">Billets <b>${lineMoney(finance.ticketRevenue)}</b></span>
+          <span class="income">Services <b>${lineMoney(finance.ancillaryRevenue)}</b></span>
+          <span class="income">Fret <b>${lineMoney(finance.freightRevenue)}</b></span>
+          <span class="income">Régulation <b>${lineMoney(finance.dispatchRevenueBoost)}</b></span>
+          <span class="expense">Énergie <b>${lineMoney(finance.energyCost)}</b></span>
+          <span class="expense">Maintenance train <b>${lineMoney(finance.maintenanceCost)}</b></span>
+          <span class="expense">Entretien ligne <b>${lineMoney(finance.lineInfrastructureCost)}</b></span>
+          <span class="expense">Exploitation commerciale <b>${lineMoney(finance.commercialOperatingCost)}</b></span>
+          <span class="expense">Péages <b>${lineMoney(finance.accessCost)}</b></span>
         </div>
       </section>
 
@@ -2400,6 +2400,7 @@ function renderLineItem(line) {
   const ticketPrice = lineTicketPrice(line);
   const electrifyCost = line.electrified ? 0 : lineElectrificationCost(line);
   const canElectrify = !line.electrified && app.state.me.cash >= electrifyCost;
+  const collapsed = !!app.lineCollapsed?.[line.id];
   const operationalStatus = line.stats?.status === 'driver-shortage'
     ? { cls: 'bad', label: 'Conducteurs insuffisants' }
     : line.stats?.status === 'resource-shortage'
@@ -2413,19 +2414,16 @@ function renderLineItem(line) {
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);
 
-  return `
-    <article class="line-card-modern ${line.active ? '' : 'inactive'}">
-      <header class="line-card-modern-head">
-        <div>
-          <div class="line-title-row">
-            <h3>${escapeHtml(linePublicName(line))}</h3>
-            ${renderLineServicePill(line, train, model)}
-          </div>
-          <p>${escapeHtml(shortStops)}</p>
-        </div>
-        <span class="tag ${operationalStatus.cls}">${escapeHtml(operationalStatus.label)}</span>
-      </header>
+  const collapsedSummary = `
+    <div class="line-card-collapsed-summary">
+      <span>Train <b>${escapeHtml(model?.name || 'Aucun')}</b></span>
+      <span>Distance <b>${formatInt(lineDistance(line))} km</b></span>
+      <span>Fréq. <b>${line.frequency}</b></span>
+      <span>Net /h <b class="${profitCls}">${moneyPerHour(profit)}</b></span>
+    </div>
+  `;
 
+  const expandedContent = `
       <div class="line-card-modern-route">
         <span>${stops.map((id, index) => `<i title="${escapeAttr(station(id)?.name || id)}">${index + 1}</i>`).join('<b></b>')}</span>
       </div>
@@ -2449,6 +2447,27 @@ function renderLineItem(line) {
         </button>
         <button class="danger" data-action="close-line" data-id="${line.id}" ${tooltipAttr('Ferme la ligne. Le train est libéré et la ligne ne génère plus de revenus.')} ${line.active ? '' : 'disabled'}>Fermer</button>
       </div>
+  `;
+
+  return `
+    <article class="line-card-modern ${line.active ? '' : 'inactive'} ${collapsed ? 'collapsed' : ''}">
+      <header class="line-card-modern-head">
+        <div>
+          <div class="line-title-row">
+            <h3>${escapeHtml(linePublicName(line))}</h3>
+            ${renderLineServicePill(line, train, model)}
+          </div>
+          <p>${escapeHtml(shortStops)}</p>
+        </div>
+        <div class="line-card-modern-head-actions">
+          <span class="tag ${operationalStatus.cls}">${escapeHtml(operationalStatus.label)}</span>
+          <button type="button" class="line-collapse-btn" data-action="toggle-line-card" data-id="${line.id}" aria-expanded="${collapsed ? 'false' : 'true'}">
+            ${collapsed ? 'Déplier' : 'Réduire'}
+          </button>
+        </div>
+      </header>
+
+      ${collapsed ? collapsedSummary : expandedContent}
     </article>
   `;
 }
@@ -4549,6 +4568,15 @@ if (action === 'save-train-composition') {
   if (action === 'sell-train') return doAction('sellTrain', { trainId: button.dataset.id });
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
+  if (action === 'toggle-line-card') {
+    const id = button.dataset.id || '';
+    if (id) {
+      app.lineCollapsed[id] = !app.lineCollapsed[id];
+      localStorage.setItem('sillons.lineCollapsed', JSON.stringify(app.lineCollapsed));
+      renderAll();
+    }
+    return;
+  }
   if (action === 'close-line') return doAction('closeLine', { lineId: button.dataset.id });
   if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
   if (action === 'edit-line') return openLineModal(button.dataset.id);

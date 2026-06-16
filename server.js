@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.0.1';
-const STATE_SCHEMA_VERSION = 57;
+const PROJECT_VERSION = 'v61.1.0';
+const STATE_SCHEMA_VERSION = 58;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -47,6 +47,8 @@ const ECONOMY = Object.freeze({
   energyCostMultiplier: 0.42,
   maintenanceCostMultiplier: 0.75,
   lineInfrastructureMaintenancePerKm: 4.2,
+  lineCommercialCostThreshold: 700,
+  lineCommercialCostRate: 0.92,
   staffCostDivisor: 82,
   debtInterestPerTick: 0.00012,
   stationLevelCost: 58,
@@ -2405,7 +2407,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
     const lineInfrastructureCost = totalOwnedLineKm > 0 ? totalLineInfrastructurePool * (distance / totalOwnedLineKm) : 0;
-    const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost;
+    const commercialOperatingCost = Math.max(0, lineRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
+    const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
     const contribution = lineRevenue - variableExpenses;
     revenue += lineRevenue;
     expenses += variableExpenses;
@@ -2480,6 +2483,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         freightRevenue: Math.round(freightRevenue),
         dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - serviceRevenue)),
         lineInfrastructureCost: Math.round(lineInfrastructureCost),
+        commercialOperatingCost: Math.round(commercialOperatingCost),
         energyCost: Math.round(energyCost),
         resourceType: resourceCheck.type,
         resourceConsumptionPerHour: round2(resourceCheck.amountPerHour || 0),

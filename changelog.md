@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Version v61.1.0 — lignes repliables, finance de ligne clarifiée et marge réduite
+
+- incrément de version de cette passe : badge interface `v61.1.0`, package `0.5.2` et schéma serveur `58` ;
+- ajout d’un bouton `Réduire / Déplier` sur chaque ligne possédée dans `Lignes > Modifier` ;
+- les lignes repliées conservent un résumé lisible : train, distance, fréquence et résultat net par heure ;
+- réorganisation des pastilles `Finance /h` en grille propre, séparant visuellement recettes et dépenses ;
+- ajout d’un poste `Exploitation commerciale` dans les frais variables des lignes ;
+- rééquilibrage économique des lignes très rentables : les recettes élevées supportent maintenant des coûts commerciaux progressifs afin de ramener la marge nette d’une ligne isolée vers une plage beaucoup plus raisonnable ;
+- conservation du détail financier existant : billets, services, fret, régulation, énergie, maintenance train, entretien ligne et péages.
+
 ## Version v61.0.0 — tutoriel guidé complet pour tous les joueurs
 
 - incrément de version de cette passe : badge interface `v61.0.0`, package `0.5.0` et schéma d’état serveur `57` ;

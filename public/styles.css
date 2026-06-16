@@ -5919,3 +5919,106 @@ dialog.modal--wide {
     box-shadow: 0 0 0 9999px rgba(2,6,23,.38), 0 0 18px rgba(217,168,82,.58), inset 0 0 14px rgba(217,168,82,.18);
   }
 }
+
+/* ===== v61.1.0 — lignes repliables et finance lisible ===== */
+.line-card-modern-head-actions {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.line-collapse-btn {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #f4e3bd;
+  border: 1px solid rgba(217,168,82,.28);
+  background: rgba(3,8,18,.42);
+}
+
+.line-collapse-btn:hover {
+  border-color: rgba(217,168,82,.55);
+  background: rgba(217,168,82,.12);
+}
+
+.line-card-modern.collapsed {
+  gap: 8px;
+}
+
+.line-card-collapsed-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.line-card-collapsed-summary span {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 12px;
+  color: #b8aa84;
+  background: rgba(3,8,18,.32);
+  border: 1px solid rgba(217,168,82,.12);
+  font-size: 11px;
+}
+
+.line-card-collapsed-summary b {
+  display: block;
+  margin-top: 3px;
+  color: #f4e3bd;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-finance-pills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.line-finance-pills span {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 7px;
+  border-radius: 10px;
+  border: 1px solid rgba(217,168,82,.12);
+  background: rgba(3,8,18,.28);
+  color: #b8aa84;
+}
+
+.line-finance-pills b {
+  color: #f4e3bd;
+  white-space: nowrap;
+}
+
+.line-finance-pills .income {
+  border-color: rgba(106,197,143,.18);
+  background: rgba(34,197,94,.055);
+}
+
+.line-finance-pills .expense {
+  border-color: rgba(239,68,68,.18);
+  background: rgba(127,29,29,.075);
+}
+
+@media (max-width: 760px) {
+  .line-card-modern-head {
+    display: grid;
+  }
+
+  .line-card-modern-head-actions {
+    justify-items: start;
+  }
+
+  .line-card-collapsed-summary,
+  .line-finance-pills {
+    grid-template-columns: 1fr;
+  }
+}
