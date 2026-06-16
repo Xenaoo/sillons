@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v61.0.0';
+const PROJECT_VERSION = 'v61.0.1';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -93,7 +93,7 @@ const app = {
   compositionScrollState: loadJson('sillons.compositionScrollState', {}),
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
-  tutorial: { syncing: false, currentId: '', rect: null, timer: null },
+  tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };
 
@@ -357,8 +357,10 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); updateTutorialOverlayPosition(); });
-  window.addEventListener('scroll', updateTutorialOverlayPosition, true);
+  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.visualViewport?.addEventListener('resize', () => scheduleTutorialOverlayPosition(60, { scroll: false }));
+  window.visualViewport?.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }));
+  window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
   bindGlobalTooltips();
 }
 
@@ -1107,6 +1109,8 @@ function renderTutorialOverlay() {
   if (!step) {
     existing?.remove();
     $('#tutorialTargetHalo')?.remove();
+    clearTimeout(app.tutorial.positionTimer);
+    app.tutorial.lastScrollKey = '';
     return;
   }
   if (prepareTutorialStepView(step)) {
@@ -1141,7 +1145,7 @@ function renderTutorialOverlay() {
   `;
   overlay.querySelector('[data-tutorial-next]')?.addEventListener('click', () => advanceTutorial(freshStep));
   overlay.querySelector('[data-tutorial-skip]')?.addEventListener('click', skipTutorial);
-  updateTutorialOverlayPosition();
+  scheduleTutorialOverlayPosition(0, { scroll: true });
 }
 
 function tutorialTargetForStep(step = currentTutorialStep()) {
@@ -1153,11 +1157,54 @@ function tutorialTargetForStep(step = currentTutorialStep()) {
   }
 }
 
-function updateTutorialOverlayPosition() {
+function tutorialViewportMetrics() {
+  const vv = window.visualViewport;
+  return {
+    width: vv?.width || window.innerWidth,
+    height: vv?.height || window.innerHeight,
+    offsetLeft: vv?.offsetLeft || 0,
+    offsetTop: vv?.offsetTop || 0
+  };
+}
+
+function isCompactTutorialViewport() {
+  const view = tutorialViewportMetrics();
+  return view.width <= 760 || view.height <= 560;
+}
+
+function scheduleTutorialOverlayPosition(delay = 0, options = {}) {
+  clearTimeout(app.tutorial.positionTimer);
+  app.tutorial.positionTimer = setTimeout(() => {
+    if (app.tutorial.positionFrame) cancelAnimationFrame(app.tutorial.positionFrame);
+    app.tutorial.positionFrame = requestAnimationFrame(() => updateTutorialOverlayPosition(options));
+  }, delay);
+}
+
+function updateTutorialOverlayPosition(options = {}) {
   const overlay = $('#tutorialOverlay');
   const step = currentTutorialStep();
   if (!overlay || !step) return;
   const target = tutorialTargetForStep(step);
+  const card = overlay.querySelector('.tutorial-card');
+  if (!target || !card) return;
+  const scrollKey = `${step.id}:${step.target || ''}`;
+  if (options.scroll !== false && app.tutorial.lastScrollKey !== scrollKey) {
+    app.tutorial.lastScrollKey = scrollKey;
+    target.scrollIntoView?.({
+      behavior: isCompactTutorialViewport() ? 'auto' : 'smooth',
+      block: isCompactTutorialViewport() ? 'center' : 'center',
+      inline: 'center'
+    });
+    scheduleTutorialOverlayPosition(isCompactTutorialViewport() ? 80 : 260, { scroll: false });
+    return;
+  }
+  positionTutorialElements(target, card, step);
+}
+
+function positionTutorialElements(target, card, step) {
+  const view = tutorialViewportMetrics();
+  const rect = target?.getBoundingClientRect?.();
+  if (!rect) return;
   const halo = document.getElementById('tutorialTargetHalo') || (() => {
     const el = document.createElement('div');
     el.id = 'tutorialTargetHalo';
@@ -1165,25 +1212,33 @@ function updateTutorialOverlayPosition() {
     document.body.appendChild(el);
     return el;
   })();
-  const card = overlay.querySelector('.tutorial-card');
-  const rect = target?.getBoundingClientRect?.();
-  if (!card || !rect) return;
-  const margin = 10;
-  halo.style.left = `${Math.max(6, rect.left - 6)}px`;
-  halo.style.top = `${Math.max(6, rect.top - 6)}px`;
-  halo.style.width = `${Math.max(24, rect.width + 12)}px`;
-  halo.style.height = `${Math.max(24, rect.height + 12)}px`;
-  target.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
+  const margin = isCompactTutorialViewport() ? 8 : 10;
+  const pad = isCompactTutorialViewport() ? 5 : 6;
+  const left = Math.max(view.offsetLeft + margin, rect.left - pad);
+  const top = Math.max(view.offsetTop + margin, rect.top - pad);
+  const maxRight = view.offsetLeft + view.width - margin;
+  const maxBottom = view.offsetTop + view.height - margin;
+  const width = Math.max(24, Math.min(rect.width + pad * 2, maxRight - left));
+  const height = Math.max(24, Math.min(rect.height + pad * 2, maxBottom - top));
+  halo.style.left = `${Math.round(left)}px`;
+  halo.style.top = `${Math.round(top)}px`;
+  halo.style.width = `${Math.round(width)}px`;
+  halo.style.height = `${Math.round(height)}px`;
+  if (isCompactTutorialViewport()) {
+    card.dataset.arrow = 'none';
+    card.style.left = '';
+    card.style.top = '';
+    return;
+  }
   const cardRect = card.getBoundingClientRect();
-  let left = rect.right + 18;
-  let top = rect.top + rect.height / 2 - cardRect.height / 2;
-  if (left + cardRect.width > window.innerWidth - margin) left = rect.left - cardRect.width - 18;
-  if (left < margin) left = Math.min(window.innerWidth - cardRect.width - margin, margin);
-  top = Math.max(margin, Math.min(window.innerHeight - cardRect.height - margin, top));
-  card.style.left = `${left}px`;
-  card.style.top = `${top}px`;
-  const side = left > rect.left ? 'left' : 'right';
-  card.dataset.arrow = side;
+  let cardLeft = rect.right + 18;
+  let cardTop = rect.top + rect.height / 2 - cardRect.height / 2;
+  if (cardLeft + cardRect.width > view.offsetLeft + view.width - margin) cardLeft = rect.left - cardRect.width - 18;
+  if (cardLeft < view.offsetLeft + margin) cardLeft = Math.min(view.offsetLeft + view.width - cardRect.width - margin, view.offsetLeft + margin);
+  cardTop = Math.max(view.offsetTop + margin, Math.min(view.offsetTop + view.height - cardRect.height - margin, cardTop));
+  card.style.left = `${Math.round(cardLeft)}px`;
+  card.style.top = `${Math.round(cardTop)}px`;
+  card.dataset.arrow = cardLeft > rect.left ? 'left' : 'right';
 }
 
 function renderAll() {

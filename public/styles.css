@@ -5781,7 +5781,7 @@ dialog.modal--wide {
   background: linear-gradient(90deg, #7f1d1d, #e97b72);
 }
 
-/* ===== v61.0.0 — tutoriel guidé ===== */
+/* ===== v61.0.1 — tutoriel guidé mobile ===== */
 .tutorial-overlay {
   position: fixed;
   inset: 0;
@@ -5884,6 +5884,9 @@ dialog.modal--wide {
   position: fixed;
   z-index: 79;
   pointer-events: none;
+  box-sizing: border-box;
+  contain: layout paint;
+  will-change: left, top, width, height;
   border: 2px solid rgba(217,168,82,.9);
   border-radius: 14px;
   box-shadow: 0 0 0 9999px rgba(2,6,23,.46), 0 0 22px rgba(217,168,82,.55), inset 0 0 18px rgba(217,168,82,.16);
@@ -5895,16 +5898,24 @@ dialog.modal--wide {
   50% { transform: scale(1.025); opacity: 1; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 560px) {
   .tutorial-card {
-    left: 12px !important;
-    right: 12px !important;
+    left: calc(10px + env(safe-area-inset-left)) !important;
+    right: calc(10px + env(safe-area-inset-right)) !important;
     top: auto !important;
-    bottom: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
     width: auto;
+    max-height: min(42vh, 320px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tutorial-card::before {
     display: none;
+  }
+
+  .tutorial-target-halo {
+    border-radius: 10px;
+    box-shadow: 0 0 0 9999px rgba(2,6,23,.38), 0 0 18px rgba(217,168,82,.58), inset 0 0 14px rgba(217,168,82,.18);
   }
 }
