@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.51.0';
+const PROJECT_VERSION = 'v61.0.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -93,8 +93,41 @@ const app = {
   compositionScrollState: loadJson('sillons.compositionScrollState', {}),
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
+  tutorial: { syncing: false, currentId: '', rect: null, timer: null },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };
+
+
+const TUTORIAL_STEPS = [
+  { id: 'welcome', target: '.brand', title: 'Bienvenue dans Sillons', body: 'Ce tutoriel guidé va te faire découvrir le jeu de A à Z : acheter un train, régler sa composition, ouvrir une ligne, puis lire les menus importants.', action: 'Commencer' },
+  { id: 'overview', target: '#tabs [data-tab="overview"]', title: 'Vue générale', body: 'La Vue donne le résumé de ta compagnie : résultat, réseau, matériel, réputation et alertes. C’est ton poste de contrôle.', action: 'Continuer' },
+  { id: 'fleet-tab', target: '#tabs [data-tab="fleet"]', title: 'Va dans le Parc', body: 'Clique sur Parc. C’est ici que tu achètes tes trains, règles les compositions et lances les opérations de maintenance.', wait: 'activeTab:fleet' },
+  { id: 'fleet-catalog', target: '[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, capacité, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
+  { id: 'buy-train', target: '[data-action="buy-train"]:not([disabled])', tab: 'fleet', subtab: 'catalog', title: 'Acheter un train', body: 'Achète un premier train adapté à une ligne courte. Si tu as déjà un train, cette étape est automatiquement validée.', wait: 'hasTrain' },
+  { id: 'fleet-composition-tab', target: '[data-fleet-subtab="composition"]', tab: 'fleet', title: 'Atelier de compositions', body: 'Clique sur Compositions. Tu vas choisir manuellement les voitures ou wagons pour adapter le train à ton service.', wait: 'fleetSubtab:composition' },
+  { id: 'select-composition-train', target: '[data-action="select-composition-train"], [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Sélectionne le train que tu veux configurer. Les réglages de composition apparaissent ensuite à droite.', wait: 'compositionTrainSelected' },
+  { id: 'manual-composition', target: '.composition-editor-card, [data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Composition manuelle', body: 'Règle le nombre de voitures voyageurs ou de wagons. La composition modifie capacité, vitesse, maintenance et rentabilité.', action: 'J’ai compris' },
+  { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
+  { id: 'lines-tab', target: '#tabs [data-tab="lines"]', title: 'Créer une ligne', body: 'Clique sur Lignes. C’est le cœur du jeu : une ligne relie des gares, utilise un train et produit des recettes.', wait: 'activeTab:lines' },
+  { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train, fréquence et prix.', wait: 'linesSubtab:create' },
+  { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. La recherche accepte les gares principales et les villes jouables.', action: 'Continuer' },
+  { id: 'line-to', target: '#lineToSearch', tab: 'lines', subtab: 'create', title: 'Choisir le terminus', body: 'Renseigne la destination. Une ligne courte est préférable au début pour limiter l’usure, le charbon et les coûts.', action: 'Continuer' },
+  { id: 'line-train', target: '#lineTrain', tab: 'lines', subtab: 'create', title: 'Affecter un train', body: 'Sélectionne le train libre à utiliser. Un train en maintenance ou à 0 % d’état ne peut pas produire de trafic.', action: 'Continuer' },
+  { id: 'line-frequency', target: '#lineFreq', tab: 'lines', subtab: 'create', title: 'Régler la fréquence', body: 'La fréquence augmente l’offre et les recettes, mais elle augmente aussi les besoins conducteurs, l’énergie et l’usure.', action: 'Continuer' },
+  { id: 'line-price', target: '#lineTicketPrice', tab: 'lines', subtab: 'create', title: 'Fixer le prix', body: 'Un prix trop élevé réduit l’attractivité. Cherche un équilibre entre volume de voyageurs et recette par billet.', action: 'Continuer' },
+  { id: 'create-line', target: '#createLineBtn:not([disabled])', tab: 'lines', subtab: 'create', title: 'Ouvrir la ligne', body: 'Clique sur Ouvrir la ligne. Si tu possèdes déjà une ligne active, l’étape est validée automatiquement.', wait: 'hasLine' },
+  { id: 'lines-manage', target: '[data-lines-subtab="manage"]', tab: 'lines', title: 'Modifier les lignes', body: 'Le sous-menu Modifier sert à suivre la finance, les besoins métiers, la capacité, les arrêts et l’état opérationnel de chaque ligne.', wait: 'linesSubtab:manage' },
+  { id: 'stations-tab', target: '#tabs [data-tab="stations"]', title: 'Gares', body: 'Clique sur Gares. Tu peux améliorer les niveaux, commerces, ateliers et dépôts pour soutenir le trafic et la maintenance.', wait: 'activeTab:stations' },
+  { id: 'staff-tab', target: '#tabs [data-tab="staff"]', title: 'Ressources humaines', body: 'Clique sur RH. Les conducteurs sont obligatoires, les autres métiers améliorent recettes, régularité, satisfaction, maintenance et infrastructure.', wait: 'activeTab:staff' },
+  { id: 'maintenance-tab', target: '[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Surveille l’état des trains : à 0 %, ils ne roulent plus et disparaissent de la carte.', wait: 'fleetSubtab:maintenance' },
+  { id: 'research-tab', target: '#tabs [data-tab="research"]', title: 'Recherche', body: 'Clique sur R&D. Les recherches débloquent du matériel, de l’exploitation, de l’énergie, du fret, des gares et des bonus sociaux.', wait: 'activeTab:research' },
+  { id: 'resources-tab', target: '#tabs [data-tab="resources"]', title: 'Énergie', body: 'Clique sur Énergie. Surveille charbon, diesel et électricité : sans ressource, les lignes concernées s’arrêtent.', wait: 'activeTab:resources' },
+  { id: 'market-tab', target: '#tabs [data-tab="market"]', title: 'Marché et financement', body: 'Clique sur Marché. Tu y ajustes les contrats et le financement pour accompagner la croissance de la compagnie.', wait: 'activeTab:market' },
+  { id: 'budget-tab', target: '#tabs [data-tab="budget"]', title: 'Budget', body: 'Clique sur Budget. C’est le menu à consulter pour comprendre chaque recette, dépense, charge fixe et résultat net.', wait: 'activeTab:budget' },
+  { id: 'done', target: '#tabs [data-tab="overview"]', title: 'Tutoriel terminé', body: 'Tu as vu le chemin principal. Tu peux maintenant optimiser lignes, parc, RH, maintenance, recherche et budget.', action: 'Terminer' }
+];
+
+const TUTORIAL_STEP_INDEX = Object.fromEntries(TUTORIAL_STEPS.map((step, index) => [step.id, index]));
 
 const serviceLabels = {
   passengers: 'Voyageurs',
@@ -279,6 +312,7 @@ function bindStaticEvents() {
   $('#addStopBtn')?.addEventListener('click', enableStationPlacement);
   $('#cancelStopBtn')?.addEventListener('click', disableStationPlacement);
   $('#renameBtn').addEventListener('click', openCompanyModal);
+  $('#tutorialBtn')?.addEventListener('click', () => syncTutorial({ op: 'restart' }));
   $('#resetBtn').addEventListener('click', openResetModal);
   document.addEventListener('click', event => {
     const versionBadge = event.target.closest('#versionBadge');
@@ -323,7 +357,8 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); });
+  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); updateTutorialOverlayPosition(); });
+  window.addEventListener('scroll', updateTutorialOverlayPosition, true);
   bindGlobalTooltips();
 }
 
@@ -970,12 +1005,194 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
   });
 }
 
+
+function currentTutorialState() {
+  return app.state?.me?.tutorial || null;
+}
+
+function currentTutorialStep() {
+  const tutorial = currentTutorialState();
+  if (!tutorial || tutorial.completed || tutorial.enabled === false) return null;
+  return TUTORIAL_STEPS[TUTORIAL_STEP_INDEX[tutorial.stepId] ?? 0] || TUTORIAL_STEPS[0];
+}
+
+function nextTutorialStepId(stepId) {
+  const index = TUTORIAL_STEP_INDEX[stepId] ?? 0;
+  return TUTORIAL_STEPS[Math.min(TUTORIAL_STEPS.length - 1, index + 1)]?.id || 'done';
+}
+
+function tutorialConditionMet(step) {
+  const me = app.state?.me;
+  if (!step || !me) return false;
+  const wait = step.wait || '';
+  if (!wait) return false;
+  if (wait.startsWith('activeTab:')) return app.activeTab === wait.split(':')[1];
+  if (wait.startsWith('fleetSubtab:')) return app.activeTab === 'fleet' && app.activeFleetSubtab === wait.split(':')[1];
+  if (wait.startsWith('linesSubtab:')) return app.activeTab === 'lines' && app.activeLinesSubtab === wait.split(':')[1];
+  if (wait === 'hasTrain') return (me.trains || []).length > 0;
+  if (wait === 'hasLine') return (me.lines || []).some(line => line.active);
+  if (wait === 'compositionTrainSelected') return Boolean(app.selectedCompositionTrainId || (me.trains || [])[0]?.id);
+  if (wait === 'compositionSaved') return Boolean(me.tutorial?.actionLog?.compositionSaved);
+  return false;
+}
+
+function prepareTutorialStepView(step) {
+  if (!step) return false;
+  let changed = false;
+  if (step.tab && app.activeTab !== step.tab) {
+    app.activeTab = step.tab;
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+    changed = true;
+  }
+  if (step.subtab === 'composition' && app.activeFleetSubtab !== 'composition') {
+    app.activeFleetSubtab = 'composition';
+    localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+    changed = true;
+  }
+  if (step.subtab === 'catalog' && app.activeFleetSubtab !== 'catalog') {
+    app.activeFleetSubtab = 'catalog';
+    localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+    changed = true;
+  }
+  if (step.subtab === 'maintenance' && app.activeFleetSubtab !== 'maintenance') {
+    app.activeFleetSubtab = 'maintenance';
+    localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
+    changed = true;
+  }
+  if (step.subtab === 'create' && app.activeLinesSubtab !== 'create') {
+    app.activeLinesSubtab = 'create';
+    localStorage.setItem('sillons.linesSubtab', app.activeLinesSubtab);
+    changed = true;
+  }
+  if (step.subtab === 'manage' && app.activeLinesSubtab !== 'manage') {
+    app.activeLinesSubtab = 'manage';
+    localStorage.setItem('sillons.linesSubtab', app.activeLinesSubtab);
+    changed = true;
+  }
+  if (step.id === 'select-composition-train' && !app.selectedCompositionTrainId) {
+    const first = app.state?.me?.trains?.[0]?.id;
+    if (first) {
+      app.selectedCompositionTrainId = first;
+      localStorage.setItem('sillons.selectedCompositionTrainId', first);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function syncTutorial(payload) {
+  if (app.tutorial.syncing) return;
+  app.tutorial.syncing = true;
+  try {
+    await performAction('tutorial', payload);
+  } finally {
+    app.tutorial.syncing = false;
+  }
+}
+
+function advanceTutorial(step = currentTutorialStep()) {
+  if (!step) return;
+  if (step.id === 'done') return syncTutorial({ op: 'complete' });
+  syncTutorial({ op: 'advance', stepId: nextTutorialStepId(step.id) });
+}
+
+function skipTutorial() {
+  syncTutorial({ op: 'complete' });
+}
+
+function renderTutorialOverlay() {
+  clearTimeout(app.tutorial.timer);
+  const existing = $('#tutorialOverlay');
+  const step = currentTutorialStep();
+  if (!step) {
+    existing?.remove();
+    $('#tutorialTargetHalo')?.remove();
+    return;
+  }
+  if (prepareTutorialStepView(step)) {
+    setTimeout(renderAll, 0);
+    return;
+  }
+  const freshStep = currentTutorialStep();
+  if (freshStep && tutorialConditionMet(freshStep)) {
+    app.tutorial.timer = setTimeout(() => advanceTutorial(freshStep), 220);
+    return;
+  }
+
+  let overlay = existing;
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'tutorialOverlay';
+    overlay.className = 'tutorial-overlay';
+    document.body.appendChild(overlay);
+  }
+  const index = (TUTORIAL_STEP_INDEX[freshStep.id] ?? 0) + 1;
+  const total = TUTORIAL_STEPS.length;
+  overlay.innerHTML = `
+    <div class="tutorial-card">
+      <div class="tutorial-kicker">Tutoriel guidé · ${index}/${total}</div>
+      <h3>${escapeHtml(freshStep.title)}</h3>
+      <p>${escapeHtml(freshStep.body)}</p>
+      <div class="tutorial-actions">
+        ${freshStep.wait ? '<span class="tutorial-wait">Action attendue</span>' : `<button type="button" class="primary" data-tutorial-next>${escapeHtml(freshStep.action || 'Continuer')}</button>`}
+        <button type="button" class="ghost" data-tutorial-skip>Terminer</button>
+      </div>
+    </div>
+  `;
+  overlay.querySelector('[data-tutorial-next]')?.addEventListener('click', () => advanceTutorial(freshStep));
+  overlay.querySelector('[data-tutorial-skip]')?.addEventListener('click', skipTutorial);
+  updateTutorialOverlayPosition();
+}
+
+function tutorialTargetForStep(step = currentTutorialStep()) {
+  if (!step?.target) return null;
+  try {
+    return document.querySelector(step.target) || document.querySelector('#tabContent') || document.querySelector('.side.panel');
+  } catch {
+    return document.querySelector('#tabContent') || document.querySelector('.side.panel');
+  }
+}
+
+function updateTutorialOverlayPosition() {
+  const overlay = $('#tutorialOverlay');
+  const step = currentTutorialStep();
+  if (!overlay || !step) return;
+  const target = tutorialTargetForStep(step);
+  const halo = document.getElementById('tutorialTargetHalo') || (() => {
+    const el = document.createElement('div');
+    el.id = 'tutorialTargetHalo';
+    el.className = 'tutorial-target-halo';
+    document.body.appendChild(el);
+    return el;
+  })();
+  const card = overlay.querySelector('.tutorial-card');
+  const rect = target?.getBoundingClientRect?.();
+  if (!card || !rect) return;
+  const margin = 10;
+  halo.style.left = `${Math.max(6, rect.left - 6)}px`;
+  halo.style.top = `${Math.max(6, rect.top - 6)}px`;
+  halo.style.width = `${Math.max(24, rect.width + 12)}px`;
+  halo.style.height = `${Math.max(24, rect.height + 12)}px`;
+  target.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
+  const cardRect = card.getBoundingClientRect();
+  let left = rect.right + 18;
+  let top = rect.top + rect.height / 2 - cardRect.height / 2;
+  if (left + cardRect.width > window.innerWidth - margin) left = rect.left - cardRect.width - 18;
+  if (left < margin) left = Math.min(window.innerWidth - cardRect.width - margin, margin);
+  top = Math.max(margin, Math.min(window.innerHeight - cardRect.height - margin, top));
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+  const side = left > rect.left ? 'left' : 'right';
+  card.dataset.arrow = side;
+}
+
 function renderAll() {
   if (!app.state) return;
   const compositionScrollKey = currentCompositionScrollKey();
   captureCompositionScrollPosition();
   renderTopbar();
   renderTabs();
+  renderTutorialOverlay();
   applyLayoutMode();
   if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
   app.lastRenderKey = stateRenderSignature();
@@ -995,6 +1212,8 @@ function renderTopbar() {
   if (fallback) fallback.classList.toggle('hidden', !!me);
   const logoutBtn = $('#logoutBtn');
   if (logoutBtn) logoutBtn.classList.toggle('hidden', !app.authToken);
+  const tutorialBtn = $('#tutorialBtn');
+  if (tutorialBtn) tutorialBtn.classList.toggle('hidden', !me);
   const mapToggleBtn = $('#mapToggleBtn');
   if (mapToggleBtn) mapToggleBtn.remove();
   const topStats = $('#topStats');
@@ -1179,6 +1398,7 @@ function renderTabs() {
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
   if (app.activeTab === 'stations') refreshStationSearchWidgets();
+  setTimeout(renderTutorialOverlay, 0);
 }
 
 function renderOverview() {
@@ -4354,6 +4574,7 @@ async function performAction(type, payload) {
       toast(response.message || 'Action réalisée.', 'ok');
     }
     renderAll(true);
+    setTimeout(renderTutorialOverlay, 40);
     const actionCashDelta = Number(response.cashDelta);
     if (Number.isFinite(actionCashDelta) && actionCashDelta !== 0) {
       animateCashDelta(actionCashDelta);

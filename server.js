@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.51.0';
-const STATE_SCHEMA_VERSION = 56;
+const PROJECT_VERSION = 'v61.0.0';
+const STATE_SCHEMA_VERSION = 57;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -466,6 +466,51 @@ function authPayload(user, token) {
   };
 }
 
+function createTutorialState(raw = null) {
+  const t = raw && typeof raw === 'object' ? raw : {};
+  return {
+    enabled: t.enabled !== false,
+    completed: Boolean(t.completed),
+    stepId: cleanText(t.stepId || 'welcome', 80),
+    actionLog: t.actionLog && typeof t.actionLog === 'object' ? { ...t.actionLog } : {},
+    startedAt: Number(t.startedAt || Date.now()),
+    updatedAt: Number(t.updatedAt || Date.now())
+  };
+}
+
+function markTutorialAction(player, key) {
+  if (!player || !key) return;
+  player.tutorial = createTutorialState(player.tutorial);
+  player.tutorial.actionLog[key] = true;
+  player.tutorial.updatedAt = Date.now();
+}
+
+function actionTutorial(player, payload = {}) {
+  player.tutorial = createTutorialState(player.tutorial);
+  const op = String(payload.op || '');
+  if (op === 'disable') {
+    player.tutorial.enabled = false;
+    player.tutorial.updatedAt = Date.now();
+    return ok('Tutoriel masqué.');
+  }
+  if (op === 'restart') {
+    player.tutorial = createTutorialState({ enabled: true, completed: false, stepId: 'welcome', actionLog: {} });
+    return ok('Tutoriel relancé.');
+  }
+  if (op === 'complete') {
+    player.tutorial.completed = true;
+    player.tutorial.enabled = false;
+    player.tutorial.stepId = 'done';
+    player.tutorial.updatedAt = Date.now();
+    return ok('Tutoriel terminé.');
+  }
+  const next = cleanText(payload.stepId || payload.nextStepId || 'welcome', 80);
+  player.tutorial.enabled = true;
+  player.tutorial.stepId = next;
+  player.tutorial.updatedAt = Date.now();
+  return ok('Tutoriel mis à jour.');
+}
+
 
 function claimableStarterPlayer() {
   const linked = new Set(Object.values(state.users || {}).map(user => user.playerId).filter(Boolean));
@@ -605,6 +650,7 @@ function migratePlayer(player, fallbackId) {
   p.researchQueue = normalizeResearchQueue(p.researchQueue);
   p.maintenancePolicy = BALANCE.maintenancePolicies[p.maintenancePolicy] ? p.maintenancePolicy : 'standard';
   p.staff = { ...staffDefaults, ...(p.staff || {}) };
+  p.tutorial = createTutorialState(p.tutorial);
   p.stats = { ...statsDefaults, ...(p.stats || {}) };
   p.trains = Array.isArray(p.trains) ? p.trains.map(t => normalizeTrain(t, p.id)).filter(Boolean) : [];
   p.lines = Array.isArray(p.lines) ? p.lines : [];
@@ -1108,6 +1154,7 @@ function publicPlayer(p) {
     stations: p.stations,
     staff: p.staff,
     staffNeeds: computeStaffNeeds(p),
+    tutorial: createTutorialState(p.tutorial),
     energyStrategy: p.energyStrategy,
     resources: normalizeResources(p.resources),
     resourceFlow: computePlayerResourceFlow(p),
@@ -1189,6 +1236,7 @@ function createPlayer(input) {
       dispatchers: 0,
       engineers: 0
     },
+    tutorial: createTutorialState(),
     trains: [],
     lines: [],
     stations: {},
@@ -1246,7 +1294,8 @@ function applyAction(playerId, type, payload) {
     takeLoan: () => actionTakeLoan(player, payload),
     repayLoan: () => actionRepayLoan(player, payload),
     rename: () => actionRename(player, payload),
-    resetCompany: () => actionResetCompany(player, payload)
+    resetCompany: () => actionResetCompany(player, payload),
+    tutorial: () => actionTutorial(player, payload)
   };
 
   const handler = handlers[type];
@@ -1271,6 +1320,7 @@ function actionBuyTrain(player, payload) {
   player.cash -= price;
   const train = createTrainInstance(payload.modelId, player.id);
   player.trains.push(train);
+  markTutorialAction(player, 'buyTrain');
   notify(player, `Achat confirmé : ${model.name} pour ${money(price)}.`);
   return ok();
 }
@@ -1325,6 +1375,7 @@ function actionUpdateTrainComposition(player, payload) {
   const before = getTrainOperatingProfile({ ...train, composition: current }, model);
   train.composition = { ...current, ...updated, mode: spec.mode };
   const after = getTrainOperatingProfile(train, model);
+  markTutorialAction(player, 'compositionSaved');
   refreshPlayerLineStatsNow(player);
   notify(player, `Composition mise à jour pour ${model.name} : ${after.compositionSummary}.`);
   return ok(`Composition mise à jour (${before.compositionSummary} → ${after.compositionSummary}).`);
@@ -1436,6 +1487,7 @@ function actionCreateLine(player, payload) {
   player.cash -= setupCost;
   const line = createLineInstance(player, stops, trainId, service, frequency, ticketPrice);
   player.lines.push(line);
+  markTutorialAction(player, 'createLine');
   notify(player, `Nouvelle ligne ouverte : ${lineStopsNames(stops)}.`);
   return ok();
 }

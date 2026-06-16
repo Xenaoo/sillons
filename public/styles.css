@@ -5780,3 +5780,131 @@ dialog.modal--wide {
 .train-condition-bar.bad > i {
   background: linear-gradient(90deg, #7f1d1d, #e97b72);
 }
+
+/* ===== v61.0.0 — tutoriel guidé ===== */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: auto;
+  border: 1px solid rgba(217,168,82,.48);
+  border-radius: 18px;
+  padding: 15px;
+  background:
+    radial-gradient(circle at 0 0, rgba(217,168,82,.18), transparent 34%),
+    linear-gradient(180deg, rgba(12,22,38,.98), rgba(4,10,20,.97));
+  box-shadow: 0 24px 70px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.04);
+  color: var(--text);
+}
+
+.tutorial-card::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%) rotate(45deg);
+  background: rgba(12,22,38,.98);
+  border: 1px solid rgba(217,168,82,.42);
+}
+
+.tutorial-card[data-arrow="left"]::before {
+  left: -8px;
+  border-right: 0;
+  border-top: 0;
+}
+
+.tutorial-card[data-arrow="right"]::before {
+  right: -8px;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.tutorial-kicker {
+  color: #d9a852;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  margin-bottom: 6px;
+}
+
+.tutorial-card h3 {
+  margin: 0 0 7px;
+  color: #f4e3bd;
+  font-size: 17px;
+}
+
+.tutorial-card p {
+  margin: 0;
+  color: #d7e3f3;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.tutorial-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.tutorial-actions button {
+  pointer-events: auto;
+}
+
+.tutorial-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f4e3bd;
+  border: 1px solid rgba(217,168,82,.32);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgba(217,168,82,.08);
+  font-size: 12px;
+}
+
+.tutorial-wait::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d9a852;
+  box-shadow: 0 0 12px rgba(217,168,82,.8);
+}
+
+.tutorial-target-halo {
+  position: fixed;
+  z-index: 79;
+  pointer-events: none;
+  border: 2px solid rgba(217,168,82,.9);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(2,6,23,.46), 0 0 22px rgba(217,168,82,.55), inset 0 0 18px rgba(217,168,82,.16);
+  animation: tutorialPulse 1.35s ease-in-out infinite;
+}
+
+@keyframes tutorialPulse {
+  0%, 100% { transform: scale(1); opacity: .94; }
+  50% { transform: scale(1.025); opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .tutorial-card {
+    left: 12px !important;
+    right: 12px !important;
+    top: auto !important;
+    bottom: 12px;
+    width: auto;
+  }
+
+  .tutorial-card::before {
+    display: none;
+  }
+}

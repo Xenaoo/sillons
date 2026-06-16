@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Version v61.0.0 — tutoriel guidé complet pour tous les joueurs
+
+- incrément de version de cette passe : badge interface `v61.0.0`, package `0.5.0` et schéma d’état serveur `57` ;
+- ajout d’un tutoriel guidé persistant pour tous les joueurs, y compris les compagnies déjà en cours via migration automatique de la sauvegarde ;
+- ajout d’un état tutoriel sauvegardé par compagnie : étape courante, activation, achèvement et actions déjà validées ;
+- ajout d’un bouton `Tutoriel` dans la barre supérieure pour relancer le parcours à tout moment ;
+- ajout de pastilles et d’un halo de ciblage dans la DA du jeu, avec carte explicative pointant vers les boutons, onglets, sous-onglets et champs importants ;
+- parcours détaillé de démarrage : vue générale, achat d’un train, réglage manuel de composition, enregistrement de la composition, création d’une ligne, choix départ/terminus, train, fréquence et prix ;
+- progression automatique quand l’action attendue est réellement effectuée : achat de train, sauvegarde de composition, création de ligne, changement d’onglet ou de sous-onglet ;
+- explication des menus importants : `Vue`, `Lignes`, `Parc`, `Gares`, `RH`, `R&D`, `Énergie`, `Marché` et `Budget` ;
+- le tutoriel reste compatible avec les parties avancées : les étapes déjà satisfaites par l’état de la compagnie peuvent être validées sans bloquer le joueur ;
+- ajout d’actions serveur dédiées au tutoriel pour avancer, terminer, masquer ou relancer le parcours sans dépendre du stockage local du navigateur.
+
 ## Version v60.51.0 — usure progressive, immobilisation et rééquilibrage économique
 
 - incrément de version de cette passe : badge interface `v60.51.0`, package `0.4.44` et schéma d’état serveur `56` ;

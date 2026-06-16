@@ -1,5 +1,5 @@
 {
-  "version": 56,
+  "version": 57,
   "createdAt": 1781511648911,
   "now": 1781598190868,
   "day": 421,
@@ -399,7 +399,15 @@
         }
       ],
       "createdAt": 1781511648911,
-      "lastSeen": 1781511648911
+      "lastSeen": 1781511648911,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "b57d13a6-f264-457c-8d64-7f08216358bb": {
       "id": "b57d13a6-f264-457c-8d64-7f08216358bb",
@@ -481,7 +489,15 @@
         }
       ],
       "createdAt": 1781516141612,
-      "lastSeen": 1781516141612
+      "lastSeen": 1781516141612,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "c42bc3c5-20a9-49e2-8384-0e9467fb91b0": {
       "id": "c42bc3c5-20a9-49e2-8384-0e9467fb91b0",
@@ -567,7 +583,15 @@
         }
       ],
       "createdAt": 1781533731016,
-      "lastSeen": 1781533731016
+      "lastSeen": 1781533731016,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "5fddd2c1-33c8-421d-a648-80cc12b3db02": {
       "id": "5fddd2c1-33c8-421d-a648-80cc12b3db02",
@@ -653,7 +677,15 @@
         }
       ],
       "createdAt": 1781533799007,
-      "lastSeen": 1781533799007
+      "lastSeen": 1781533799007,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "675bdc60-cc1a-4bb3-9016-97dc30e9fd9a": {
       "id": "675bdc60-cc1a-4bb3-9016-97dc30e9fd9a",
@@ -739,7 +771,15 @@
         }
       ],
       "createdAt": 1781533849023,
-      "lastSeen": 1781533849023
+      "lastSeen": 1781533849023,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "ee203fb8-6bba-4c5c-8d64-932ed93843ed": {
       "id": "ee203fb8-6bba-4c5c-8d64-932ed93843ed",
@@ -825,7 +865,15 @@
         }
       ],
       "createdAt": 1781533917047,
-      "lastSeen": 1781533917047
+      "lastSeen": 1781533917047,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "d6d4eca7-4c9b-48b1-b88d-3e15de190ea5": {
       "id": "d6d4eca7-4c9b-48b1-b88d-3e15de190ea5",
@@ -911,7 +959,15 @@
         }
       ],
       "createdAt": 1781533995070,
-      "lastSeen": 1781533995070
+      "lastSeen": 1781533995070,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "6dc05393-edd1-4647-8d15-a972295f091c": {
       "id": "6dc05393-edd1-4647-8d15-a972295f091c",
@@ -997,7 +1053,15 @@
         }
       ],
       "createdAt": 1781534057093,
-      "lastSeen": 1781534057093
+      "lastSeen": 1781534057093,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "efbdbccf-5cff-4c91-9de8-39abeed22d5f": {
       "id": "efbdbccf-5cff-4c91-9de8-39abeed22d5f",
@@ -1083,7 +1147,15 @@
         }
       ],
       "createdAt": 1781534125118,
-      "lastSeen": 1781534125118
+      "lastSeen": 1781534125118,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     },
     "b92af4fa-7b4f-4475-9ae5-f658edb1b942": {
       "id": "b92af4fa-7b4f-4475-9ae5-f658edb1b942",
@@ -1169,7 +1241,15 @@
         }
       ],
       "createdAt": 1781534181133,
-      "lastSeen": 1781534181133
+      "lastSeen": 1781534181133,
+      "tutorial": {
+        "enabled": true,
+        "completed": false,
+        "stepId": "welcome",
+        "actionLog": {},
+        "startedAt": 1781598190868,
+        "updatedAt": 1781598190868
+      }
     }
   },
   "nextNpcAt": 299
