@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.7.0';
+const PROJECT_VERSION = 'v62.8.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -835,6 +835,80 @@ function validCustomStationLatLng(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 40.6 && lat <= 51.8 && lng >= -5.9 && lng <= 10.4;
 }
 
+
+function customStationCreationQuote(lat, lon) {
+  const demand = estimateDemandFromLocationClient(lat, lon);
+  const freight = estimateFreightFromLocationClient(lat, lon);
+  const tourism = estimateTourismFromLocationClient(lat, lon);
+  const market = Number(app.state?.game?.market?.steel || 1);
+  const nearby = dedupedStations(app.state?.world?.stations || [])
+    .filter(s => !s.custom && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lon)))
+    .map(s => ({ station: s, distance: haversineClient(lat, lon, Number(s.lat), Number(s.lon)) }))
+    .filter(entry => Number.isFinite(entry.distance))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 10);
+
+  const localValue = 52000 + demand * 720 + freight * 420 + tourism * 260;
+  let weightedNeighbourValue = localValue;
+  const closest = nearby[0] || null;
+  const closestDistance = closest?.distance ?? 80;
+
+  if (nearby.length) {
+    let totalWeight = 0;
+    let totalValue = 0;
+    for (const entry of nearby) {
+      const d = Math.max(0.5, entry.distance);
+      const weight = 1 / Math.pow(d + 8, 1.35);
+      totalWeight += weight;
+      totalValue += stationAcquisitionCost(entry.station) * weight;
+    }
+    if (totalWeight > 0) weightedNeighbourValue = totalValue / totalWeight;
+  }
+
+  const proximityFactor = closestDistance < 4 ? 1.22 : closestDistance < 12 ? 1.10 : closestDistance > 55 ? 0.82 : 1;
+  const blended = (localValue * 0.58 + weightedNeighbourValue * 0.42) * proximityFactor * market;
+  const cost = Math.round(clamp(blended, 90000, 6500000));
+  return {
+    cost,
+    demand,
+    freight,
+    tourism,
+    closestName: closest?.station?.name || '',
+    closestDistance: closest ? Math.round(closest.distance * 10) / 10 : null
+  };
+}
+
+function estimateDemandFromLocationClient(lat, lon) {
+  let best = 90;
+  for (const s of dedupedStations(app.state?.world?.stations || [])) {
+    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
+    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
+    const influence = Number(s.baseDemand || 80) * Math.exp(-d / 55);
+    best = Math.max(best, influence);
+  }
+  return Math.round(clamp(best, 60, 500));
+}
+
+function estimateFreightFromLocationClient(lat, lon) {
+  let best = 25;
+  for (const s of dedupedStations(app.state?.world?.stations || [])) {
+    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
+    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
+    best = Math.max(best, Number(s.freight || 20) * Math.exp(-d / 70));
+  }
+  return Math.round(clamp(best, 10, 150));
+}
+
+function estimateTourismFromLocationClient(lat, lon) {
+  let best = 30;
+  for (const s of dedupedStations(app.state?.world?.stations || [])) {
+    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
+    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
+    best = Math.max(best, Number(s.tourism || 20) * Math.exp(-d / 85));
+  }
+  return Math.round(clamp(best, 10, 120));
+}
+
 async function createCustomStationFromLatLng(latlng) {
   if (!app.map.stationPlacement || app.map.creatingCustomStation) return false;
   const lat = Number(latlng?.lat);
@@ -848,9 +922,18 @@ async function createCustomStationFromLatLng(latlng) {
   const name = window.prompt('Nom du nouvel arrêt / gare :', defaultName);
   if (!name) return true;
 
+  const quote = customStationCreationQuote(lat, lng);
+  const nearest = quote.closestName ? `\nGare de référence la plus proche : ${quote.closestName} (${quote.closestDistance} km).` : '';
+  const message = `Créer la gare « ${name} » ?\n\nPrix proposé : ${money(quote.cost)}\nDemande estimée : ${formatInt(quote.demand)} voyageurs, ${formatInt(quote.freight)} fret, ${formatInt(quote.tourism)} tourisme.${nearest}\n\nCe montant sera débité immédiatement.`;
+  if (!window.confirm(message)) return true;
+  if (Number(app.state?.me?.cash || 0) < quote.cost) {
+    toast(`Trésorerie insuffisante. Coût estimé : ${money(quote.cost)}.`, 'error');
+    return true;
+  }
+
   app.map.creatingCustomStation = true;
   try {
-    await doAction('createCustomStation', { name, lat, lon: lng });
+    await doAction('createCustomStation', { name, lat, lon: lng, quotedCost: quote.cost });
   } finally {
     disableStationPlacement();
   }
@@ -3752,6 +3835,7 @@ function renderSelectedStation(s) {
         <span>Demande voyageurs</span><b>${formatInt(s.baseDemand)}</b>
         <span>Demande fret</span><b>${formatInt(s.freight)}</b>
         <span>Population</span><b>${s.population ? formatInt(s.population) : '—'}</b>
+        <span>Prix d'achat</span><b>${money(acquisitionCost)}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
         <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
@@ -3774,7 +3858,11 @@ function renderSelectedStation(s) {
 }
 
 function stationAcquisitionCost(s) {
-  if (s?.custom) return Math.round(65000 * app.state.game.market.steel);
+  if (s?.custom) {
+    const stored = Number(s.creationCost || s.purchaseCost || 0);
+    if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
+    return Math.round(65000 * app.state.game.market.steel);
+  }
   const population = Number(s?.population || 0);
   if (population > 0) {
     return Math.round((120000 + population * 3.2 + Math.pow(population, 1.12) * 0.9) * app.state.game.market.steel);
@@ -4171,13 +4259,9 @@ function renderResearch() {
   const trafficTotal = epochTrafficTotalClient(me);
   const techProgress = next ? Math.min(100, totalTech / Math.max(1, next.requiredTech) * 100) : 100;
   const trafficProgress = next ? Math.min(100, trafficTotal / Math.max(1, next.requiredTraffic) * 100) : 100;
-  const requiredEpochTimeMs = next ? Math.max(0, Number(next.requiredRealTimeMs || 0)) : 0;
-  const epochElapsedMs = Math.max(0, Number(me.epochElapsedMs || 0));
-  const epochTimeRemainingMs = next ? Math.max(0, Number(me.nextEpochTimeRemainingMs || Math.max(0, requiredEpochTimeMs - epochElapsedMs))) : 0;
-  const timeProgress = next && requiredEpochTimeMs > 0 ? Math.min(100, epochElapsedMs / Math.max(1, requiredEpochTimeMs) * 100) : 100;
   const displayedTraffic = next ? prepareEpochTrafficAnimation(trafficTotal) : trafficTotal;
   const displayedTrafficProgress = next ? Math.min(100, displayedTraffic / Math.max(1, next.requiredTraffic) * 100) : 100;
-  const progress = next ? Math.min(techProgress, trafficProgress, timeProgress) : 100;
+  const progress = next ? Math.min(techProgress, trafficProgress) : 100;
   const tree = app.state.balance.techTree || {};
   const tabs = Object.values(tree);
   if (!tree[app.activeResearchTab]) app.activeResearchTab = tabs[0]?.id || 'traction';
@@ -4230,14 +4314,7 @@ function renderResearch() {
             </div>
             <div class="progress epoch-traffic-progress"><i data-epoch-traffic-progress style="width:${displayedTrafficProgress}%"></i></div>
           </div>
-          <div class="epoch-requirement-row">
-            <div>
-              <span>Temps dans l’époque</span>
-              <b class="${epochTimeRemainingMs <= 0 ? 'good-text' : ''}">${requiredEpochTimeMs > 0 ? `${formatResearchTime(epochElapsedMs)} / ${formatResearchTime(requiredEpochTimeMs)}` : 'Aucun délai'}</b>
-            </div>
-            <div class="progress"><i style="width:${timeProgress}%"></i></div>
-          </div>
-          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Le passage d’une époque à l’autre demande aussi environ <b>60 h réelles</b> dans l’époque actuelle.</p>
+          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Il n’y a plus de délai réel artificiel : la progression dépend de la technologie et d’un volume de trafic beaucoup plus élevé.</p>
         </div>
       ` : '<p class="muted">Toutes les époques sont débloquées.</p>'}
     </div>
@@ -6141,9 +6218,10 @@ function drawTooltip(ctx) {
 
   ctx.font = '12px "Trebuchet MS", system-ui';
   ctx.fillStyle = '#b8aa84';
+  const acquisitionCost = stationAcquisitionCost(s);
   const subtitle = owner
-    ? `${ownedByMe ? 'Ta ville' : `Propriétaire : ${owner.player.name}`}`
-    : 'Achat requis pour ouvrir une ligne';
+    ? `${ownedByMe ? 'Ta ville' : `Propriétaire : ${owner.player.name}`} · Prix base ${money(acquisitionCost)}`
+    : `Achat requis · Prix ${money(acquisitionCost)}`;
   ctx.fillText(fitTooltipText(subtitle, textMaxW), x + 16, y + 38);
 
   roundRect(ctx, x + width - badgeW - 14, y + 11, badgeW, 23, 11);
@@ -6226,9 +6304,9 @@ function drawTooltip(ctx) {
   ctx.font = '12px "Trebuchet MS", system-ui';
   ctx.fillStyle = owner ? (ownedByMe ? '#9be7a2' : '#f0c875') : '#d3c7ac';
   const footerText = owner
-    ? (ownedByMe ? 'Péage perçu si desservie' : 'Péage dû si desservie')
-    : 'Non utilisable tant qu’elle est libre';
-  ctx.fillText(footerText, x + 25, footerY + 14);
+    ? (ownedByMe ? `Péage perçu · prix base ${money(acquisitionCost)}` : `Péage dû · prix base ${money(acquisitionCost)}`)
+    : `Prix d’achat : ${money(acquisitionCost)}`;
+  ctx.fillText(fitTooltipText(footerText, width - 54), x + 25, footerY + 14);
 
   ctx.restore();
 }

@@ -26,10 +26,10 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 - Achat de matériel roulant.
 - Création de lignes voyageurs, fret ou mixtes.
 - Gestion de fréquence, tarifs, revenus et fréquence effective selon la couverture conducteurs.
-- Gares améliorables avec coût affiché, niveaux maximums, sélection persistante et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
+- Gares améliorables avec prix affiché dans les fiches/infobulles, niveaux maximums, sélection persistante, création personnalisée payante avec validation, et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
 - Salariés : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs, ingénieurs.
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
-- Recherche et progression d’époque avec délai réel minimum entre deux ères.
+- Recherche et progression d’époque ralentie par des seuils élevés de trafic cumulé, sans délai temporel artificiel.
 - Événements dynamiques.
 - Classement multijoueur entre comptes réels uniquement, sans génération de compagnies IA.
 - Utilisation possible des gares possédées par un autre joueur, avec péage uniquement lorsque la ligne dessert une gare concurrente.

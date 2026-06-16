@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Version v62.8.0 — progression d’époque au trafic et création de gare payante
+
+- incrément de version : badge interface `v62.8.0`, package `0.6.8` et schéma serveur `72` ;
+- suppression du prérequis temporel des passages d’époque : il n’y a plus de délai réel minimum entre deux ères ;
+- remplacement du ralentissement temporel par des seuils de trafic cumulés fortement augmentés : 15 000 000 pour le diesel, puis 75 000 000, 300 000 000, 1 200 000 000, 4 000 000 000 et 12 000 000 000 pour les ères suivantes ;
+- retrait de l’indicateur `Temps dans l’époque` de l’onglet R&D ;
+- ajout du prix d’achat dans la fiche et l’infobulle de chaque gare ;
+- création des gares personnalisées rendue explicitement payante avec une fenêtre de validation indiquant le prix proposé avant débit ;
+- calcul du prix des gares personnalisées à partir du potentiel local et des prix des gares proches, pour éviter un tarif fixe uniforme ;
+- mémorisation du coût de création d’une gare personnalisée afin que sa revente rembourse bien la valeur de création.
+
+
 ## Version v62.7.0 — péages limités aux gares et progression d’époque ralentie
 
 - incrément de version : badge interface `v62.7.0`, package `0.6.7` et schéma serveur `71` ;
