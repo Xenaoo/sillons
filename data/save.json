@@ -1,28 +1,35 @@
 {
-  "version": 73,
+  "version": 74,
   "createdAt": 1781511648911,
-  "now": 1781617410878,
-  "day": 46665,
-  "eraYear": 5738,
+  "now": 1781644412041,
+  "day": 46680,
+  "eraYear": 5740,
   "tickSpeed": 2000,
   "market": {
     "coal": 1.81,
-    "diesel": 4.24,
-    "electricity": 0.46,
-    "hydrogen": 2.01,
-    "battery": 0.62,
-    "steel": 1.74,
-    "labor": 1.16,
-    "demand": 1.84,
+    "diesel": 4.28,
+    "electricity": 0.4,
+    "hydrogen": 2,
+    "battery": 0.61,
+    "steel": 1.7,
+    "labor": 1.08,
+    "demand": 1.86,
     "freight": 1.85
   },
   "events": [
     {
-      "kind": "freight",
-      "title": "Rebond industriel : Les contrats fret sont plus nombreux.",
+      "kind": "tourism",
+      "title": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques.",
+      "passenger": 1.18,
+      "freight": 0.98,
+      "remaining": 6
+    },
+    {
+      "kind": "energy",
+      "title": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent.",
       "passenger": 1,
-      "freight": 1.2,
-      "remaining": 14
+      "freight": 0.96,
+      "remaining": 11
     }
   ],
   "news": [
@@ -227,44 +234,12 @@
       "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
     },
     {
-      "day": 46570,
-      "text": "Météo difficile : La ponctualité devient plus fragile."
-    },
-    {
-      "day": 46581,
+      "day": 46671,
       "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
     },
     {
-      "day": 46589,
-      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
-    },
-    {
-      "day": 46603,
+      "day": 46680,
       "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
-    },
-    {
-      "day": 46611,
-      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
-    },
-    {
-      "day": 46621,
-      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
-    },
-    {
-      "day": 46622,
-      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
-    },
-    {
-      "day": 46637,
-      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
-    },
-    {
-      "day": 46649,
-      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
-    },
-    {
-      "day": 46659,
-      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
     }
   ],
   "customStations": {},
@@ -335,7 +310,7 @@
       "color": "#ffff00",
       "logo": "steam_front",
       "region": "France",
-      "cash": 42033944.965354554,
+      "cash": 42039445.63028844,
       "debt": 0,
       "epoch": 0,
       "research": 1,
@@ -355,10 +330,10 @@
       "researchQueue": [],
       "maintenancePolicy": "intensive",
       "reputation": 0,
-      "co2": 1019212.3031994413,
+      "co2": 1019946.7823994413,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 1865.2127037794987,
+        "coal": 1865.115550446164,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -375,8 +350,8 @@
           "id": "starter-steam-030-mixte",
           "modelId": "steam_030_mixte",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.33770453675999174,
-          "age": 37003,
+          "condition": 0.3370555523849916,
+          "age": 37018,
           "acquiredDay": 1,
           "composition": {
             "mode": "passenger_loco",
@@ -418,11 +393,11 @@
           "electrified": false,
           "createdDay": 1,
           "stats": {
-            "passengers": 611,
+            "passengers": 714,
             "freightTons": 0,
-            "revenue": 2292,
-            "expenses": 2211,
-            "profit": 81,
+            "revenue": 2680,
+            "expenses": 2497,
+            "profit": 184,
             "punctuality": 35,
             "satisfaction": 41.8,
             "share": 100,
@@ -443,8 +418,8 @@
               "requestedFrequency": 4
             },
             "market": {
-              "passengerDemand": 2093,
-              "freightDemand": 370,
+              "passengerDemand": 3065,
+              "freightDemand": 822,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -472,7 +447,7 @@
                   "speed": 25,
                   "comfortOrCapacity": 62.25,
                   "reputation": 33.33,
-                  "condition": 50.94,
+                  "condition": 50.9,
                   "staff": 100,
                   "stations": 85,
                   "operations": 100
@@ -483,7 +458,7 @@
             "capacity": {
               "passengers": 714,
               "freightTons": 364,
-              "passengerLoad": 85.51,
+              "passengerLoad": 100,
               "freightLoad": 0,
               "crewFactor": 100,
               "stationFactor": 85,
@@ -496,31 +471,36 @@
             "finance": {
               "ticketPrice": 4,
               "farePerKm": 0.15,
-              "ticketRevenue": 2078,
-              "ancillaryRevenue": 214,
+              "ticketRevenue": 2430,
+              "ancillaryRevenue": 250,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 310,
-              "commercialOperatingCost": 1100,
-              "commercialSalesCost": 470,
-              "commercialControlCost": 265,
-              "commercialAdministrationCost": 365,
+              "commercialOperatingCost": 1385,
+              "commercialSalesCost": 591,
+              "commercialControlCost": 334,
+              "commercialAdministrationCost": 459,
               "energyCost": 0,
               "resourceType": "coal",
               "resourceConsumptionPerHour": 11.66,
               "maintenanceCost": 152,
               "accessCost": 0,
               "passageRights": 0,
-              "variableExpenses": 1561,
-              "contribution": 731,
+              "infrastructurePassageCost": 0,
+              "stationAccessCost": 0,
+              "variableExpenses": 1847,
+              "contribution": 834,
               "allocatedOverhead": 650,
-              "netProfit": 81,
-              "margin": 31.87,
-              "totalExpenses": 2211,
-              "netMargin": 3.55
+              "netProfit": 184,
+              "margin": 31.11,
+              "totalExpenses": 2497,
+              "netMargin": 6.88
             }
           },
-          "name": "Caen → Bayeux"
+          "name": "Caen → Bayeux",
+          "trainIds": [
+            "starter-steam-030-mixte"
+          ]
         }
       ],
       "stations": {
@@ -547,48 +527,45 @@
         }
       },
       "stats": {
-        "passengers": 14863917,
+        "passengers": 14874627,
         "freightTons": 0,
-        "revenue": 69374972,
-        "expenses": 36550456,
-        "profit": 32827078,
-        "lastRevenue": 2456,
-        "lastExpenses": 2211,
-        "lastProfit": 245,
+        "revenue": 69417917,
+        "expenses": 36587896,
+        "profit": 32832583,
+        "lastRevenue": 2863,
+        "lastExpenses": 2496,
+        "lastProfit": 367,
         "punctuality": 35,
         "satisfaction": 41.8,
         "marketShare": 1,
         "lastBreakdown": {
-          "lineRevenue": 2292,
-          "stationRevenue": 164,
-          "ticketRevenue": 2078,
-          "ancillaryRevenue": 214,
+          "lineRevenue": 2680,
+          "stationRevenue": 183,
+          "ticketRevenue": 2430,
+          "ancillaryRevenue": 250,
           "freightRevenue": 0,
           "dispatchRevenueBoost": 0,
           "energyCost": 0,
           "trainMaintenanceCost": 152,
           "lineInfrastructureCost": 310,
-          "commercialOperatingCost": 1100,
-          "commercialSalesCost": 470,
-          "commercialControlCost": 265,
-          "commercialAdministrationCost": 365,
+          "commercialOperatingCost": 1385,
+          "commercialSalesCost": 591,
+          "commercialControlCost": 334,
+          "commercialAdministrationCost": 459,
           "accessCost": 0,
+          "infrastructurePassageCost": 0,
+          "stationAccessCost": 0,
           "passageRightsRevenue": 0,
           "staffCost": 476,
           "stationCost": 174,
           "debtCost": 0,
           "idleTrainCost": 0,
           "researchCost": 0,
-          "variableLineCost": 1561,
-          "sharedCosts": 650,
-          "infrastructurePassageCost": 0
+          "variableLineCost": 1847,
+          "sharedCosts": 650
         }
       },
       "notifications": [
-        {
-          "day": 44327,
-          "text": "1 Contrôleur recruté."
-        },
         {
           "day": 44328,
           "text": "1 Contrôleur recruté."
@@ -744,6 +721,10 @@
         {
           "day": 46650,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46680,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
         }
       ],
       "createdAt": 1781511648911,
@@ -765,7 +746,7 @@
       "color": "#ffb5f0",
       "logo": "semaphore",
       "region": "France",
-      "cash": 10000000,
+      "cash": 9999321.625000006,
       "debt": 0,
       "epoch": 0,
       "research": 1,
@@ -841,9 +822,9 @@
       "stats": {
         "passengers": 0,
         "freightTons": 0,
-        "revenue": 24480,
-        "expenses": 86160,
-        "profit": -61680,
+        "revenue": 24750,
+        "expenses": 87105,
+        "profit": -62355,
         "lastRevenue": 18,
         "lastExpenses": 63,
         "lastProfit": -45,
@@ -865,6 +846,8 @@
           "commercialControlCost": 0,
           "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "infrastructurePassageCost": 0,
+          "stationAccessCost": 0,
           "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 58,
@@ -872,8 +855,7 @@
           "idleTrainCost": 5,
           "researchCost": 0,
           "variableLineCost": 0,
-          "sharedCosts": 63,
-          "infrastructurePassageCost": 0
+          "sharedCosts": 63
         }
       },
       "notifications": [

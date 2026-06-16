@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.9.0';
-const STATE_SCHEMA_VERSION = 73;
+const PROJECT_VERSION = 'v62.10.0';
+const STATE_SCHEMA_VERSION = 74;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -845,7 +845,7 @@ function boundsIntersects(a, b) {
 }
 
 function rfnCoordKey(lon, lat) {
-  return `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
+  return `${Number(lon).toFixed(4)},${Number(lat).toFixed(4)}`;
 }
 
 async function sncfRouteGeometryForStations(fromId, toId) {
@@ -866,11 +866,11 @@ async function sncfRouteGeometryForStations(fromId, toId) {
   const end = stationRoutePoint(to) || stationRawPoint(to);
   if (!start || !end) return rememberSncfRouteGeometry(key, []);
   const directKm = haversine(start.lat, start.lon, end.lat, end.lon);
-  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 520) return rememberSncfRouteGeometry(key, []);
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return rememberSncfRouteGeometry(key, []);
 
   try {
     const lines = await loadSncfRailShapeLines();
-    const pad = Math.min(1.25, Math.max(0.08, directKm / 130));
+    const pad = Math.min(2.2, Math.max(0.12, directKm / 85));
     const bbox = {
       minLat: Math.min(start.lat, end.lat) - pad,
       maxLat: Math.max(start.lat, end.lat) + pad,
@@ -879,7 +879,7 @@ async function sncfRouteGeometryForStations(fromId, toId) {
     };
     const relevant = lines.filter(line => boundsIntersects(line.bounds, bbox));
     if (relevant.length > 850 && directKm < 180) {
-      const tighterPad = Math.min(0.55, Math.max(0.05, directKm / 220));
+      const tighterPad = Math.min(0.9, Math.max(0.08, directKm / 150));
       const tightBox = {
         minLat: Math.min(start.lat, end.lat) - tighterPad,
         maxLat: Math.max(start.lat, end.lat) + tighterPad,
@@ -927,11 +927,11 @@ function buildPathFromRailShapeLines(lines, start, end, directKm) {
   const endGap = pointToCoordDistance(end, coordsByKey.get(endKey));
   const maxGap = Math.min(14, Math.max(3.5, directKm * 0.18));
   if (startGap > maxGap || endGap > maxGap) return [];
-  const ids = dijkstraWeightedGraph(graph, startKey, endKey, 9000);
+  const ids = dijkstraWeightedGraph(graph, startKey, endKey, 60000);
   if (ids.length < 2) return [];
   const path = ids.map(id => coordsByKey.get(id)).filter(Boolean);
   const distance = polylineDistanceKm(path);
-  if (distance <= 0 || distance > Math.max(35, directKm * 3.15)) return [];
+  if (distance <= 0 || distance > Math.max(45, directKm * 4.8)) return [];
   return [[start.lon, start.lat], ...path, [end.lon, end.lat]];
 }
 
@@ -2322,7 +2322,7 @@ function actionSellTrain(player, payload) {
   const train = player.trains.find(t => t.id === payload.trainId);
   if (!train) return fail('Train introuvable.');
   if (train.maintenance?.active) return fail('Ce train est en maintenance.', 'Attends la fin de l’intervention avant de le vendre.');
-  const used = player.lines.some(l => l.trainId === train.id && l.active);
+  const used = player.lines.some(l => l.active && lineTrainIds(l).includes(train.id));
   if (used) return fail('Ce train est affecté à une ligne active. Fermez ou modifiez la ligne avant de le vendre.');
   const model = BALANCE.trains[train.modelId];
   const capitalValue = trainCapitalValue(model, train);
@@ -2474,10 +2474,10 @@ function actionCreateLine(player, payload) {
   const train = player.trains.find(t => t.id === trainId);
   if (!train) return fail('Train introuvable.');
   if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
-  if (player.lines.some(l => l.trainId === trainId && l.active)) return fail('Ce train est déjà affecté à une ligne active.');
+  if (trainUsedByActiveLine(player, trainId)) return fail('Ce train est déjà affecté à une ligne active.');
   const model = BALANCE.trains[train.modelId];
   const operatingModel = getTrainOperatingProfile(train, model, player);
-  if (service === 'freight' && operatingModel.freight <= 0) return fail('Ce train ne peut pas transporter de fret.');
+  if (!lineServiceCompatibleWithProfile(service, operatingModel)) return fail('Ce train n’est pas compatible avec ce type de service.');
 
   const routeInfo = routeBetweenStops(stops);
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
@@ -2528,33 +2528,76 @@ function refreshPlayerLineStatsNow(player) {
 function actionUpdateLine(player, payload) {
   const line = player.lines.find(l => l.id === payload.lineId);
   if (!line) return fail('Ligne introuvable.');
+  normalizeLine(line);
   let changedOperationalData = false;
 
+  const currentStops = lineStops(line);
+  let nextStops = currentStops;
   if (Array.isArray(payload.stops)) {
     const rawStops = sanitizeStopsPayload(payload.stops, null, null);
-    const stops = payload.preserveOrder ? rawStops : coherentStopOrder(rawStops);
-    const invalidReason = validateLineStops(stops);
-    if (invalidReason) return fail(invalidReason);
-    const routeInfo = routeBetweenStops(stops);
-    if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de calculer un itinéraire pour cette nouvelle suite d’arrêts.');
-    const ownershipProblem = lineStopsOwnershipProblem(stops);
-    if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
-    const train = player.trains.find(t => t.id === (payload.trainId || line.trainId));
-    const model = train ? BALANCE.trains[train.modelId] : null;
-    const operatingModel = train && model ? getTrainOperatingProfile(train, model, player) : null;
-    if (train && operatingModel) {
-      const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
-      if (routeInfo.distance > effectiveRange) {
-        return fail(
-          `Modification impossible : ${model.name} ne couvre pas la distance de ligne (${Math.round(routeInfo.distance)} km).`,
-          `Portée actuelle : ${Math.round(effectiveRange)} km. Réduis la distance, change de matériel ou développe les recherches de la même ère.`
-        );
-      }
-    }
+    nextStops = payload.preserveOrder ? rawStops : coherentStopOrder(rawStops);
+  }
+
+  const requestedService = payload.service !== undefined ? String(payload.service || '').trim() : line.service;
+  const nextService = ['passengers', 'freight', 'mixed'].includes(requestedService) ? requestedService : line.service;
+
+  let nextTrainIds = lineTrainIds(line);
+  if (Array.isArray(payload.trainIds)) {
+    nextTrainIds = [...new Set(payload.trainIds.map(id => String(id || '').trim()).filter(Boolean))];
+  } else if (payload.trainId) {
+    nextTrainIds = [String(payload.trainId || '').trim()].filter(Boolean);
+  }
+
+  const invalidReason = validateLineStops(nextStops);
+  if (invalidReason) return fail(invalidReason);
+  if (!nextTrainIds.length) return fail('Sélectionne au moins un train pour cette ligne.');
+
+  const routeInfo = routeBetweenStops(nextStops);
+  if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de calculer un itinéraire pour cette suite d’arrêts.');
+  const ownershipProblem = lineStopsOwnershipProblem(nextStops);
+  if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
+
+  const selectedTrains = [];
+  for (const trainId of nextTrainIds) {
+    const train = player.trains.find(t => t.id === trainId);
+    if (!train) return fail(`Train introuvable : ${trainId}.`);
+    if (train.maintenance?.active) return fail('Un train sélectionné est en maintenance.', `${BALANCE.trains[train.modelId]?.name || 'Train'} sera disponible dans ${formatCycles(train.maintenance.daysLeft)}.`);
+    if (trainUsedByActiveLine(player, train.id, line.id)) return fail('Un train sélectionné est déjà utilisé ailleurs.', 'Retire-le de son autre ligne avant de l’affecter ici.');
+    selectedTrains.push(train);
+  }
+
+  const bundle = combinedOperatingProfile(player, selectedTrains);
+  if (!bundle) return fail('Aucun matériel exploitable sélectionné.');
+  const effectiveRange = effectiveTrainRange(player, bundle.profile, routeInfo);
+  if (routeInfo.distance > effectiveRange) {
+    return fail(
+      `Modification impossible : la ligne fait ${Math.round(routeInfo.distance)} km, alors que la portée minimale des trains sélectionnés est ${Math.round(effectiveRange)} km.`,
+      'Retire les trains trop courts, choisis une ligne plus courte ou développe les recherches de la même ère.'
+    );
+  }
+  if (!lineServiceCompatibleWithProfile(nextService, bundle.profile)) {
+    const label = nextService === 'freight' ? 'fret' : nextService === 'mixed' ? 'mixte' : 'voyageurs';
+    return fail(`Service ${label} impossible avec les trains sélectionnés.`, 'Choisis du matériel compatible avec le type de transport demandé.');
+  }
+
+  if (Array.isArray(payload.stops)) {
     const preservedTicketPrice = lineTicketPrice(line, lineDistance(line));
-    line.stops = [...stops];
+    line.stops = [...nextStops];
     normalizeLine(line);
     if (payload.ticketPrice === undefined && payload.tariff === undefined) setLineTicketPrice(line, preservedTicketPrice, lineDistance(line));
+    changedOperationalData = true;
+  }
+
+  if (payload.service !== undefined && line.service !== nextService) {
+    line.service = nextService;
+    changedOperationalData = true;
+  }
+
+  const currentTrainKey = lineTrainIds(line).join('|');
+  const nextTrainKey = nextTrainIds.join('|');
+  if (currentTrainKey !== nextTrainKey) {
+    line.trainIds = [...nextTrainIds];
+    line.trainId = nextTrainIds[0];
     changedOperationalData = true;
   }
 
@@ -2564,25 +2607,6 @@ function actionUpdateLine(player, payload) {
   }
   if (payload.ticketPrice !== undefined || payload.tariff !== undefined) {
     setLineTicketPrice(line, lineTicketPriceFromPayload(payload, lineDistance(line), line), lineDistance(line));
-    changedOperationalData = true;
-  }
-  if (payload.trainId) {
-    const train = player.trains.find(t => t.id === payload.trainId);
-    if (!train) return fail('Train introuvable.');
-    if (train.maintenance?.active) return fail('Ce train est en maintenance.', `Il sera disponible dans ${formatCycles(train.maintenance.daysLeft)}.`);
-    if (player.lines.some(l => l.id !== line.id && l.trainId === train.id && l.active)) return fail('Ce train est déjà utilisé ailleurs.');
-    const model = BALANCE.trains[train.modelId];
-    const operatingModel = getTrainOperatingProfile(train, model, player);
-    const routeInfo = routeBetweenStops(lineStops(line));
-    const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
-    if (routeInfo.distance > effectiveRange) {
-      return fail(
-        `Changement impossible : ${model.name} ne couvre pas la distance de ligne (${Math.round(routeInfo.distance)} km).`,
-        `Portée actuelle : ${Math.round(effectiveRange)} km. Réduis la distance, change de matériel ou développe les recherches de la même ère.`
-      );
-    }
-    if (line.service === 'freight' && operatingModel.freight <= 0) return fail('Ce train ne peut pas assurer un service fret.');
-    line.trainId = train.id;
     changedOperationalData = true;
   }
   if (payload.electrify) {
@@ -2599,6 +2623,7 @@ function actionUpdateLine(player, payload) {
     changedOperationalData = true;
     notify(player, `Électrification terminée sur ${lineRouteName(lineStops(line))} pour ${money(cost)}.`);
   }
+  normalizeLine(line);
   if (changedOperationalData) refreshPlayerLineStatsNow(player);
   return ok(`Ligne modifiée. Billet moyen : ${money(lineTicketPrice(line))}.`);
 }
@@ -3352,11 +3377,16 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 
   for (const line of player.lines) {
     if (!line.active) continue;
-    const train = player.trains.find(t => t.id === line.trainId);
-    if (!train) continue;
-    const model = BALANCE.trains[train.modelId];
-    if (!model) continue;
-    const operatingModel = getTrainOperatingProfile(train, model, player);
+    normalizeLineTrainIds(line);
+    const assignedTrains = lineAssignedTrains(player, line);
+    if (!assignedTrains.length) continue;
+    const availableTrains = assignedTrains.filter(t => !t.maintenance?.active && trainConditionValue(t) > 0);
+    const bundle = combinedOperatingProfile(player, availableTrains);
+    const stoppedBundle = bundle || combinedOperatingProfile(player, assignedTrains);
+    if (!stoppedBundle) continue;
+    const train = stoppedBundle.primaryTrain;
+    const model = stoppedBundle.primaryModel;
+    const operatingModel = stoppedBundle.profile;
     const stops = lineStops(line);
     const from = stationById(stops[0]);
     const to = stationById(stops[stops.length - 1]);
@@ -3374,8 +3404,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       effectiveFrequency: round2(effectiveFrequency),
       requestedFrequency: Number(line.frequency || 0)
     };
-    if (train.maintenance?.active || trainConditionValue(train) <= 0) {
-      const stoppedForCondition = trainConditionValue(train) <= 0;
+    if (!bundle) {
+      const stoppedForCondition = assignedTrains.every(t => trainConditionValue(t) <= 0);
       line.stats = {
         passengers: 0,
         freightTons: 0,
@@ -3560,13 +3590,17 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     revenue += lineRevenue;
     expenses += variableExpenses;
 
-    const wear = computeTrainWearPerTick(player, train, model, effectiveLine, operatingModel, staffing, policy);
-    const projectedCondition = clamp(train.condition - wear, 0, 1);
-    if (!dryRun) {
-      train.condition = projectedCondition;
-      train.age += 1;
+    let reliabilityCondition = 0;
+    for (const entry of bundle.entries) {
+      const wear = computeTrainWearPerTick(player, entry.train, entry.model, effectiveLine, entry.profile, staffing, policy);
+      const projectedCondition = clamp(entry.train.condition - wear, 0, 1);
+      reliabilityCondition += dryRun ? trainConditionValue(entry.train) : projectedCondition;
+      if (!dryRun) {
+        entry.train.condition = projectedCondition;
+        entry.train.age += 1;
+      }
     }
-    const reliabilityCondition = dryRun ? train.condition : projectedCondition;
+    reliabilityCondition = reliabilityCondition / Math.max(1, bundle.entries.length);
     const reliability = clamp(operatingModel.reliability * reliabilityCondition * (0.86 + Math.min(0.18, maintenanceCapacity / 30)) * crewFactor + policy.reliabilityBonus + techLevel(player, 'safety_training') * 0.006, 0.18, 0.995);
     const delayRisk = 1 - reliability;
     const dispatcherPunctualityBonus = (dispatchRevenueFactor - 1) * 22;
@@ -3663,7 +3697,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   const stationCost = Object.values(player.stations).reduce((sum, a) => sum + (a.level * ECONOMY.stationLevelCost + a.commerce * ECONOMY.stationCommerceCost + a.maintenance * ECONOMY.stationMaintenanceCost + (a.depot ? ECONOMY.stationDepotCost : 0)), 0);
   const debtCost = player.debt * ECONOMY.debtInterestPerTick;
   const idleTrainCost = player.trains.reduce((sum, train) => {
-    const used = player.lines.some(line => line.active && line.trainId === train.id);
+    const used = player.lines.some(line => line.active && lineTrainIds(line).includes(train.id));
     const model = BALANCE.trains[train.modelId];
     return sum + (!used && model ? model.price * ECONOMY.idleTrainStorageFactor : 0);
   }, 0);
@@ -3800,11 +3834,11 @@ function buildLineMarkets() {
     if (driverCoverage <= 0) continue;
     for (const line of player.lines) {
       if (!line.active) continue;
-      const train = player.trains.find(t => t.id === line.trainId);
-      if (!train) continue;
-      if (train.maintenance?.active) continue;
-      const model = BALANCE.trains[train.modelId];
-      const operatingModel = getTrainOperatingProfile(train, model, player);
+      normalizeLineTrainIds(line);
+      const bundle = combinedOperatingProfile(player, lineAssignedTrains(player, line, { availableOnly: true }));
+      if (!bundle) continue;
+      const train = bundle.primaryTrain;
+      const operatingModel = bundle.profile;
       const stops = lineStops(line);
       const distance = lineDistance(line);
       const effectiveLine = lineWithEffectiveFrequency(line, driverCoverage);
@@ -3983,11 +4017,10 @@ function computePlayerResourceFlow(player) {
   const driverCoverage = driverCoverageForNeed(player);
   for (const line of player.lines || []) {
     if (!line.active) continue;
-    const train = player.trains.find(t => t.id === line.trainId);
-    if (!train || train.maintenance?.active || trainConditionValue(train) <= 0) continue;
-    const model = BALANCE.trains[train.modelId];
-    if (!model) continue;
-    const operatingModel = getTrainOperatingProfile(train, model, player);
+    normalizeLineTrainIds(line);
+    const bundle = combinedOperatingProfile(player, lineAssignedTrains(player, line, { availableOnly: true }));
+    if (!bundle) continue;
+    const operatingModel = bundle.profile;
     const type = trainResourceType(operatingModel);
     if (!type) continue;
     const effectiveLine = lineWithEffectiveFrequency(line, driverCoverage);
@@ -3997,7 +4030,7 @@ function computePlayerResourceFlow(player) {
       lineId: line.id,
       lineCode: lineRouteName(lineStops(line)),
       lineName: lineRouteName(lineStops(line)),
-      trainName: model.name,
+      trainName: bundle.entries.length > 1 ? `${bundle.entries.length} trains` : bundle.primaryModel.name,
       amountPerHour: round2(perHour)
     });
   }
@@ -4129,7 +4162,7 @@ function computeTrainWearPerTick(player, train, model, line, profile = null, sta
 }
 
 function trainMaintenanceProjection(player, train, model, profile = null) {
-  const line = player?.lines?.find(l => l.active && l.trainId === train?.id);
+  const line = player?.lines?.find(l => l.active && lineTrainIds(l).includes(train?.id));
   const baseHours = trainBaseWearLifetimeHours(model);
   if (!line) return { active: false, baseHours, hoursToZero: null, label: 'Non affecté' };
   if (train?.maintenance?.active) return { active: false, baseHours, hoursToZero: null, label: 'En atelier' };
@@ -4154,18 +4187,19 @@ function computeLineStaffNeeds(player, line) {
   if (!line?.active) return emptyStaffNeeds();
   const stops = lineStops(line);
   if (stops.length < 2) return emptyStaffNeeds();
+  normalizeLineTrainIds(line);
   const distance = lineDistance(line);
   const frequency = clamp(Number(line.frequency || 0), 1, 20);
+  const trainCount = Math.max(1, lineAssignedTrains(player, line).length || lineTrainIds(line).length || 1);
   const longLineFactor = 1 + Math.max(0, distance - 180) / 420;
   const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
   const passengerService = line.service === 'passengers' || line.service === 'mixed';
-  const train = player?.trains?.find(t => t.id === line.trainId);
 
   return {
-    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor)),
+    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor * trainCount)),
     controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
     stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
-    mechanics: train ? Math.max(1, Math.ceil(0.22 + distance * frequency / 1800)) : Math.max(0, Math.ceil(distance * frequency / 2200)),
+    mechanics: Math.max(1, Math.ceil(trainCount * 0.34 + distance * frequency * trainCount / 2200)),
     dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
     engineers: Math.max(0, Math.ceil(distance / 220 + frequency / 16 - 0.5))
   };
@@ -4711,6 +4745,7 @@ function createLineInstance(player, stops, trainId, service, frequency, ticketPr
     to: normalizedStops[normalizedStops.length - 1],
     stops: normalizedStops,
     trainId,
+    trainIds: [trainId],
     service,
     frequency,
     ticketPrice,
@@ -4725,6 +4760,76 @@ function createLineInstance(player, stops, trainId, service, frequency, ticketPr
 function lineStops(line) {
   const raw = Array.isArray(line?.stops) && line.stops.length ? line.stops : [line?.from, line?.to];
   return [...new Set(raw.map(id => String(id || '').trim()).filter(Boolean))];
+}
+
+function lineTrainIds(line) {
+  const raw = Array.isArray(line?.trainIds) && line.trainIds.length ? line.trainIds : [line?.trainId];
+  return [...new Set(raw.map(id => String(id || '').trim()).filter(Boolean))];
+}
+
+function lineAssignedTrains(player, line, { availableOnly = false } = {}) {
+  const ids = lineTrainIds(line);
+  return ids
+    .map(id => player?.trains?.find(t => t.id === id))
+    .filter(Boolean)
+    .filter(train => !availableOnly || (!train.maintenance?.active && trainConditionValue(train) > 0));
+}
+
+function trainUsedByActiveLine(player, trainId, exceptLineId = '') {
+  return (player?.lines || []).some(line => line?.active && line.id !== exceptLineId && lineTrainIds(line).includes(trainId));
+}
+
+function normalizeLineTrainIds(line) {
+  const ids = lineTrainIds(line);
+  line.trainIds = ids;
+  line.trainId = ids[0] || line.trainId || '';
+  return ids;
+}
+
+function combinedOperatingProfile(player, trains) {
+  const entries = (trains || [])
+    .map(train => {
+      const model = BALANCE.trains[train?.modelId];
+      if (!train || !model) return null;
+      return { train, model, profile: getTrainOperatingProfile(train, model, player) };
+    })
+    .filter(Boolean);
+  if (!entries.length) return null;
+
+  const first = entries[0].profile;
+  if (entries.length === 1) return { profile: first, primaryTrain: entries[0].train, primaryModel: entries[0].model, entries };
+
+  const capacityWeight = value => Math.max(1, Number(value?.capacity || 0) + Number(value?.freight || 0) * 0.25);
+  const totalWeight = entries.reduce((sum, entry) => sum + capacityWeight(entry.profile), 0) || entries.length;
+  const weightedAverage = key => entries.reduce((sum, entry) => sum + Number(entry.profile[key] || 0) * capacityWeight(entry.profile), 0) / totalWeight;
+  const sum = key => entries.reduce((total, entry) => total + Number(entry.profile[key] || 0), 0);
+  const energyTypes = [...new Set(entries.map(entry => entry.profile.energyType || entry.model.energyType).filter(Boolean))];
+  const minRange = Math.min(...entries.map(entry => Number(entry.profile.range || entry.model.range || 0)).filter(Number.isFinite));
+  const aggregate = {
+    ...first,
+    id: 'aggregate-line-profile',
+    name: `${entries.length} trains affectés`,
+    type: 'Composition multi-trains',
+    speed: Math.min(...entries.map(entry => Number(entry.profile.speed || entry.model.speed || 0)).filter(Number.isFinite)),
+    capacity: sum('capacity'),
+    freight: sum('freight'),
+    energy: sum('energy'),
+    maintenance: sum('maintenance'),
+    reliability: weightedAverage('reliability'),
+    comfort: weightedAverage('comfort'),
+    range: Number.isFinite(minRange) ? minRange : Number(first.range || 0),
+    energyType: energyTypes.length === 1 ? energyTypes[0] : (first.energyType || entries[0].model.energyType),
+    profitabilityMultiplier: weightedAverage('profitabilityMultiplier') || 1,
+    freightRevenueMultiplier: weightedAverage('freightRevenueMultiplier') || 1,
+    compositionSummary: `${entries.length} trains · ${Math.round(sum('capacity'))} voy. · ${Math.round(sum('freight'))} t`
+  };
+  return { profile: aggregate, primaryTrain: entries[0].train, primaryModel: entries[0].model, entries };
+}
+
+function lineServiceCompatibleWithProfile(service, profile) {
+  if (service === 'freight') return Number(profile?.freight || 0) > 0;
+  if (service === 'mixed') return Number(profile?.capacity || 0) > 0 && Number(profile?.freight || 0) > 0;
+  return Number(profile?.capacity || 0) > 0;
 }
 
 function sanitizeStopsPayload(rawStops, from, to) {
@@ -4849,6 +4954,7 @@ function normalizeLine(line) {
   line.stops = stops.length >= 2 ? stops : [line.from, line.to].filter(Boolean);
   line.from = line.stops[0];
   line.to = line.stops[line.stops.length - 1];
+  normalizeLineTrainIds(line);
   line.name = lineRouteName(line.stops);
   if (!line.stats) line.stats = { passengers: 0, freightTons: 0, revenue: 0, expenses: 0, profit: 0, punctuality: 100, satisfaction: 50, share: 0 };
   const distance = lineDistance(line);

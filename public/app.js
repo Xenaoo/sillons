@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.9.0';
+const PROJECT_VERSION = 'v62.10.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -539,7 +539,7 @@ function endPanOverlay() {
 
 function worldRouteSignature(state = app.state) {
   if (!state?.players || !state?.world) return '';
-  const playerSig = state.players.map(p => `${p.id}:${(p.lines || []).map(l => `${l.id}:${lineStopsOf(l).join('>')}:${l.trainId}:${l.active ? 1 : 0}:${l.electrified ? 1 : 0}`).join('|')}`).join('||');
+  const playerSig = state.players.map(p => `${p.id}:${(p.lines || []).map(l => `${l.id}:${lineStopsOf(l).join('>')}:${lineTrainIdsOf(l).join('+')}:${l.active ? 1 : 0}:${l.electrified ? 1 : 0}`).join('|')}`).join('||');
   const customCount = state.world.stations?.filter?.(s => s.custom)?.length || 0;
   const communeStatus = state.world.communesStatus || {};
   const stationSig = `${state.world.stations?.length || 0}:${communeStatus.status || ''}:${communeStatus.count || 0}:${communeStatus.updatedAt || ''}`;
@@ -569,7 +569,7 @@ function stateRenderSignature(state = app.state) {
     Object.values(me.staff || {}).join(','),
     Object.keys(me.stations || {}).length,
     (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? t.maintenance.daysLeft : 0}`).join('|'),
-    (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.trainId}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}`).join('|'),
+    (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.service}:${lineTrainIdsOf(l).join('+')}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}`).join('|'),
     Object.entries(me.techUnlocked || {}).sort().map(([id, level]) => `${id}:${level}`).join(','),
     me.researchProject ? `${me.researchProject.nodeId}:${me.researchProject.targetLevel}:${me.researchProject.durationMs}:${me.researchProject.costMoney || 0}:${me.researchProject.startedAt || 0}` : '',
     (me.researchQueue || []).map(item => `${item.nodeId}:${item.targetLevel}`).join('|')
@@ -2318,7 +2318,7 @@ function updateLineDistanceCalculator() {
 
 function renderCreateLinePanel() {
   const me = app.state.me;
-  const freeTrains = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && l.trainId === t.id));
+  const freeTrains = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id)));
   const draft = normalizeLineDraft(freeTrains);
   const trainOptions = freeTrains.map(t => {
     const model = app.state.balance.trains[t.modelId];
@@ -2629,8 +2629,10 @@ function renderLineFactorBars(details) {
 
 function renderLineItem(line) {
   const stops = lineStopsOf(line);
-  const train = app.state.me.trains.find(t => t.id === line.trainId);
+  const assignedTrains = lineAssignedTrainsClient(line);
+  const train = assignedTrains[0];
   const model = train ? app.state.balance.trains[train.modelId] : null;
+  const trainLabel = assignedTrains.length > 1 ? `${assignedTrains.length} trains` : (model?.name || 'Aucun');
   const profit = Number(line.stats?.finance?.netProfit ?? line.stats?.profit ?? 0);
   const profitCls = profit >= 0 ? 'good-text' : 'bad-text';
   const ticketPrice = lineTicketPrice(line);
@@ -2652,7 +2654,7 @@ function renderLineItem(line) {
 
   const collapsedSummary = `
     <div class="line-card-collapsed-summary">
-      <span>Train <b>${escapeHtml(model?.name || 'Aucun')}</b></span>
+      <span>Train <b>${escapeHtml(trainLabel)}</b></span>
       <span>Distance <b>${formatInt(lineDistance(line))} km</b></span>
       <span>Fréq. <b>${line.frequency}</b></span>
       <span>Net /h <b class="${profitCls}">${moneyPerHour(profit)}</b></span>
@@ -2665,7 +2667,7 @@ function renderLineItem(line) {
       </div>
 
       <div class="line-card-modern-stats">
-        <div><span>Train</span><b>${escapeHtml(model?.name || 'Aucun')}</b></div>
+        <div><span>Trains</span><b>${escapeHtml(trainLabel)}</b></div>
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
         <div><span>Fréq.</span><b>${line.frequency}</b></div>
@@ -3124,7 +3126,7 @@ function renderCompositionVariantPicker(train, model) {
 
 function trainCurrentLine(trainId) {
 
-  return app.state.me.lines.find(l => l.active && l.trainId === trainId) || null;
+  return app.state.me.lines.find(l => l.active && lineHasTrain(l, trainId)) || null;
 }
 
 function renderCompositionTrainListItem(train) {
@@ -3142,6 +3144,7 @@ function renderCompositionTrainListItem(train) {
       <div class="composition-mini-stats">
         <b>${formatInt(profile.capacity)} voy.</b>
         <b>${formatInt(profile.freight)} t</b>
+        <b>${formatInt(profile.range)} km</b>
       </div>
     </button>
   `;
@@ -3321,8 +3324,8 @@ function renderCompositionEditor(train) {
         <div class="composition-capacity-card">
           <b>Capacité réelle par train</b>
           <span>${formatInt(profile.capacity)} voyageurs · ${formatInt(profile.freight)} t fret</span>
-          <span>${formatInt(profile.speed)} km/h · Maintenance ${round(profile.maintenance)}</span>
-          <span>${Math.round(profile.reliability * 100)}% fiabilité · ${Math.round(profile.comfort * 100)}% confort</span>
+          <span>${formatInt(profile.speed)} km/h · Portée ${formatInt(profile.range)} km</span>
+          <span>Maintenance ${round(profile.maintenance)} · ${Math.round(profile.reliability * 100)}% fiabilité · ${Math.round(profile.comfort * 100)}% confort</span>
           ${variant ? `<span class="small muted">${escapeHtml(variant.description || '')}</span>` : ''}
         </div>
       </div>
@@ -3333,6 +3336,7 @@ function renderCompositionEditor(train) {
         ${compositionMetric('Voyageurs / train', formatInt(profile.capacity), 'Nombre maximal de voyageurs transportés par train après prise en compte de la composition choisie.', profile.capacity >= (model.capacity || 0) ? 'good-text' : '')}
         ${compositionMetric('Fret / train', `${formatInt(profile.freight)} t`, 'Tonnage maximal de fret transportable par train avec cette composition.', profile.freight >= (model.freight || 0) ? 'good-text' : '')}
         ${compositionMetric('Vitesse commerciale', `${formatInt(profile.speed)} km/h`, 'Vitesse de référence retenue en exploitation. Elle influence le temps de rotation, la productivité et la capacité quotidienne.', '')}
+        ${compositionMetric('Portée', `${formatInt(profile.range)} km`, 'Distance maximale admissible pour ce train après composition et recherches. Une ligne plus longue sera refusée.', profile.range >= (model.range || 0) ? 'good-text' : '')}
         ${compositionMetric('Fiabilité', `${Math.round(profile.reliability * 100)}%`, 'Probabilité de rouler sans incident majeur. Plus elle est basse, plus le risque de panne, retard et perte d’attractivité augmente.', profile.reliability >= 0.88 ? 'good-text' : '')}
         ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, 'Qualité perçue du service par les voyageurs : Agrément, image et standing. Le confort améliore l’attractivité des lignes voyageurs.', profile.comfort >= 0.75 ? 'good-text' : '')}
         ${compositionMetric('Énergie', round(profile.energy), 'Consommation énergétique de référence pour cette composition. Une valeur plus élevée alourdit les coûts d’exploitation.', profile.energy <= (model.energy || 0) ? 'good-text' : 'warn-text')}
@@ -3480,8 +3484,8 @@ function renderFleetCatalogPanel(available, locked) {
 
 function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
-  const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && l.trainId === t.id)).length;
-  const assigned = me.trains.filter(t => me.lines.some(l => l.active && l.trainId === t.id)).length;
+  const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const assigned = me.trains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
 
   return `
     <div class="fleet-maintenance-layout">
@@ -3749,7 +3753,7 @@ function renderTrainCatalogItem(model, buyable) {
 
 function renderOwnedTrain(train) {
   const model = app.state.balance.trains[train.modelId];
-  const line = app.state.me.lines.find(l => l.active && l.trainId === train.id);
+  const line = app.state.me.lines.find(l => l.active && lineHasTrain(l, train.id));
   const maint = train.maintenance || {};
   const inMaint = !!maint.active;
   const actions = app.state.balance.maintenanceActions || {};
@@ -4119,12 +4123,12 @@ function lineStaffNeedsClient(line) {
   const longLineFactor = 1 + Math.max(0, dist - 180) / 420;
   const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
   const passengerService = line.service === 'passengers' || line.service === 'mixed';
-  const train = app.state.me?.trains?.find(t => t.id === line.trainId);
+  const trainCount = Math.max(1, lineAssignedTrainsClient(line).length || lineTrainIdsOf(line).length || 1);
   return {
-    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor)),
+    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor * trainCount)),
     controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
     stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
-    mechanics: train ? Math.max(1, Math.ceil(0.22 + dist * frequency / 1800)) : Math.max(0, Math.ceil(dist * frequency / 2200)),
+    mechanics: Math.max(1, Math.ceil(trainCount * 0.34 + dist * frequency * trainCount / 2200)),
     dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
     engineers: Math.max(0, Math.ceil(dist / 220 + frequency / 16 - 0.5))
   };
@@ -5146,11 +5150,13 @@ function openLineModal(lineId) {
   const line = app.state.me.lines.find(l => l.id === lineId);
   if (!line) return;
   const stops = lineStopsOf(line);
-  const freeOrCurrent = app.state.me.trains.filter(t => t.id === line.trainId || !app.state.me.lines.some(l => l.active && l.trainId === t.id));
+  const freeOrCurrent = app.state.me.trains.filter(t => lineHasTrain(line, t.id) || !app.state.me.lines.some(l => l.active && lineHasTrain(l, t.id)));
   app.lineEditor = {
     lineId,
     stops: [...stops],
-    trainId: line.trainId,
+    trainIds: lineTrainIdsOf(line),
+    trainId: lineTrainIdsOf(line)[0] || '',
+    service: line.service || 'passengers',
     frequency: line.frequency,
     tariff: line.tariff,
     ticketPrice: lineTicketPrice(line),
@@ -5183,13 +5189,31 @@ function openLineModal(lineId) {
     const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
     app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
     app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
+    const trainChoices = freeOrCurrent.map(t => {
+      const selected = app.lineEditor.trainIds.includes(t.id);
+      const profile = previewOperatingProfile(t, app.state.balance.trains[t.modelId]);
+      return `
+        <label class="line-train-choice ${selected ? 'selected' : ''}">
+          <input type="checkbox" class="edit-line-train-check" value="${escapeAttr(t.id)}" ${selected ? 'checked' : ''}>
+          <span><b>${escapeHtml(trainName(t))}</b><em>${formatInt(profile.capacity)} voy. · ${formatInt(profile.freight)} t · ${formatInt(profile.range)} km</em></span>
+        </label>`;
+    }).join('');
     return `
     <div class="form-grid line-editor">
-      <label>Train
-        <select id="editLineTrain">${freeOrCurrent.map(t => `<option value="${t.id}" ${t.id === app.lineEditor.trainId ? 'selected' : ''}>${escapeHtml(trainName(t))}</option>`).join('')}</select>
-      </label>
       <div class="two form-grid">
+        <label>Type de transport
+          <select id="editLineService">${serviceOptions(app.lineEditor.service)}</select>
+        </label>
         <label>Fréquence d’exploitation <input id="editLineFreq" type="number" min="1" max="20" value="${app.lineEditor.frequency}"></label>
+      </div>
+      <div class="line-editor-train-picker">
+        <div class="line-editor-subtitle">
+          <strong>Trains affectés à cette ligne</strong>
+          <span class="small muted">Coche plusieurs trains libres pour augmenter la capacité de la ligne.</span>
+        </div>
+        <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre.</p>'}</div>
+      </div>
+      <div class="two form-grid">
         <label>Prix billet moyen
           ${renderTicketPriceControl({
             inputId: 'editLineTicketPrice',
@@ -5260,8 +5284,12 @@ function openLineModal(lineId) {
       app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
       refreshTicketPriceControl('editLineTicketPrice', 'editLineTicketPriceRange', 'editLineTicketPriceHint', editorDistance, app.lineEditor.ticketPrice, sourceId);
     };
-    $('#editLineTrain').addEventListener('change', e => app.lineEditor.trainId = e.target.value);
+    $('#editLineService')?.addEventListener('change', e => app.lineEditor.service = e.target.value);
     $('#editLineFreq').addEventListener('input', e => app.lineEditor.frequency = Number(e.target.value));
+    document.querySelectorAll('.edit-line-train-check').forEach(input => input.addEventListener('change', () => {
+      const checked = [...document.querySelectorAll('.edit-line-train-check:checked')].map(item => item.value);
+      app.lineEditor.trainIds = checked;
+    }));
     $('#editLineTicketPrice').addEventListener('input', () => syncEditorTicketControls('editLineTicketPrice'));
     $('#editLineTicketPrice').addEventListener('change', () => syncEditorTicketControls('editLineTicketPrice'));
     $('#editLineTicketPriceRange').addEventListener('input', () => syncEditorTicketControls('editLineTicketPriceRange'));
@@ -5351,7 +5379,8 @@ function openLineModal(lineId) {
 
       const response = await performAction('updateLine', {
         lineId,
-        trainId: $('#editLineTrain').value,
+        trainIds: [...app.lineEditor.trainIds],
+        service: $('#editLineService')?.value || app.lineEditor.service,
         frequency: Number($('#editLineFreq').value),
         ticketPrice,
         stops: [...app.lineEditor.stops],
@@ -5821,11 +5850,13 @@ function drawAllLines(ctx, lite = false) {
       const own = app.state.me && player.id === app.state.me.id;
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
       if (lite) continue;
-      const train = (player.trains || []).find(t => t.id === line.trainId);
-      if (!train || train.maintenance?.active || Number(train.condition || 0) <= 0) continue;
+      const trains = lineAssignedTrainsClient(line, player).filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
+      if (!trains.length) continue;
       if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage' || line.stats?.status === 'train-out-of-service') continue;
-      const model = app.state.balance.trains[train.modelId];
-      drawTrainSprite(ctx, route.points, player.color, visualLineWithEffectiveFrequency(line), model, own, train);
+      trains.forEach((train, index) => {
+        const model = app.state.balance.trains[train.modelId];
+        drawTrainSprite(ctx, route.points, player.color, { ...visualLineWithEffectiveFrequency(line), id: `${line.id}:${index}` }, model, own, train);
+      });
     }
   }
 }
@@ -6812,25 +6843,18 @@ async function ensureRailwayRouteGeometry(a, b) {
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
   const directKm = stationRouteDistanceClient(sa, sb);
-  // Les requêtes très grandes sont volontairement évitées : le graphe ferroviaire
-  // local prend le relais segment par segment, ce qui préserve les performances.
-  if (!Number.isFinite(directKm) || directKm > 260) return;
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return;
 
   const latA = stationRouteLat(sa), lonA = stationRouteLon(sa);
   const latB = stationRouteLat(sb), lonB = stationRouteLon(sb);
   if (![latA, lonA, latB, lonB].every(Number.isFinite)) return;
 
-  const pad = Math.min(0.30, Math.max(0.045, directKm / 980));
-  const south = Math.min(latA, latB) - pad;
-  const north = Math.max(latA, latB) + pad;
-  const west = Math.min(lonA, lonB) - pad;
-  const east = Math.max(lonA, lonB) + pad;
-  const bboxArea = Math.abs(north - south) * Math.abs(east - west);
-  if (bboxArea > 3.4) return;
-
   app.osmRoutePending.add(key);
   let foundGeometry = false;
   try {
+    // Priorité stricte au RFN serveur : il utilise le dataset SNCF officiel et peut
+    // reconstruire un chemin via les gares intermédiaires même si elles ne sont pas
+    // des arrêts commerciaux de la ligne créée par le joueur.
     const sncf = await fetchSncfRouteGeometry(a, b);
     if (sncf?.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, sncf, OSM_ROUTE_CACHE_MAX_ENTRIES);
@@ -6839,6 +6863,14 @@ async function ensureRailwayRouteGeometry(a, b) {
       invalidateMapProjection('sncf-rail-geometry-loaded');
       return;
     }
+
+    const pad = Math.min(0.42, Math.max(0.055, directKm / 760));
+    const south = Math.min(latA, latB) - pad;
+    const north = Math.max(latA, latB) + pad;
+    const west = Math.min(lonA, lonB) - pad;
+    const east = Math.max(lonA, lonB) + pad;
+    const bboxArea = Math.abs(north - south) * Math.abs(east - west);
+    if (bboxArea > 4.6) return;
 
     const query = `
 [out:json][timeout:18];
@@ -7174,6 +7206,20 @@ function ensureSelectedStation() {
 function lineStopsOf(line) {
   const raw = Array.isArray(line?.stops) && line.stops.length ? line.stops : [line?.from, line?.to];
   return raw.map(id => String(id || '').trim()).filter(Boolean);
+}
+
+function lineTrainIdsOf(line) {
+  const raw = Array.isArray(line?.trainIds) && line.trainIds.length ? line.trainIds : [line?.trainId];
+  return [...new Set(raw.map(id => String(id || '').trim()).filter(Boolean))];
+}
+
+function lineHasTrain(line, trainId) {
+  return lineTrainIdsOf(line).includes(String(trainId || '').trim());
+}
+
+function lineAssignedTrainsClient(line, player = app.state?.me) {
+  const trains = player?.trains || [];
+  return lineTrainIdsOf(line).map(id => trains.find(t => t.id === id)).filter(Boolean);
 }
 
 function stationOwnerClient(stationId) {

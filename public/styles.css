@@ -6374,3 +6374,64 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+.line-editor-train-picker {
+  border: 1px solid rgba(242, 202, 120, 0.22);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(5, 12, 24, 0.56);
+}
+
+.line-editor-subtitle {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.line-train-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.line-train-choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: rgba(8, 16, 30, 0.72);
+  cursor: pointer;
+}
+
+.line-train-choice.selected {
+  border-color: rgba(242, 202, 120, 0.76);
+  box-shadow: 0 0 0 1px rgba(242, 202, 120, 0.16) inset;
+}
+
+.line-train-choice input {
+  margin-top: 4px;
+}
+
+.line-train-choice span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.line-train-choice b,
+.line-train-choice em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-train-choice em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 0.78rem;
+}

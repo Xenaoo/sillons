@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## Version v62.10.0 — lignes multi-trains et tracés RFN renforcés
+
+- incrément de version : badge interface `v62.10.0`, package `0.6.10` et schéma serveur `74` ;
+- ajout du changement de type de transport dans le menu de modification des lignes : `Voyageurs`, `Fret` ou `Mixte` ;
+- ajout de l’affectation de plusieurs trains à une même ligne depuis le menu de modification ;
+- les trains affectés à une ligne sont validés côté serveur : pas de train déjà utilisé ailleurs, pas de train en maintenance, portée minimale suffisante et compatibilité avec le service demandé ;
+- les statistiques d’exploitation agrègent désormais la capacité, le fret, la consommation, la maintenance, la fiabilité et le confort des trains affectés à la ligne ;
+- les besoins en conducteurs et mainteneurs tiennent compte du nombre de trains sur une ligne ;
+- la carte affiche les circulations de tous les trains affectés à une ligne au lieu d’un seul train principal ;
+- renforcement de la priorité RFN pour les tracés entre gares réelles : le client interroge maintenant le serveur RFN avant les restrictions Overpass, même pour les trajets plus longs ;
+- correction du graphe RFN serveur : jonctions moins fragiles, zone de recherche élargie, Dijkstra autorisé sur davantage de nœuds et garde-fou de détour moins agressif afin de suivre la voie réelle via les gares intermédiaires quand elles existent ;
+- ajout de la portée dans `Parc -> Composition`, dans la liste des trains et les métriques de l’atelier ;
+- correction explicite du badge de version en bas à droite, qui affiche maintenant la même version que le serveur.
+
 ## Version v62.9.0 — compositions payantes, carte corrigée et optimisation des tracés
 
 - incrément de version : badge interface `v62.9.0`, package `0.6.9` et schéma serveur `73` ;
