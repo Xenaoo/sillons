@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v61.1.0';
+const PROJECT_VERSION = 'v61.1.1';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -395,8 +395,8 @@ function bindGlobalTooltips() {
 function tooltipLineClass(line) {
   const text = String(line || '').trim().toLowerCase();
   if (!text) return '';
-  if (text.startsWith('consommation')) return 'tooltip-line--consumption';
-  if (text.startsWith('production') || text.startsWith('stock disponible') || text.startsWith('commande producteur')) return 'tooltip-line--production';
+  if (text.startsWith('dépenses') || text.startsWith('depenses') || text.startsWith('charges') || text.startsWith('consommation')) return 'tooltip-line--consumption';
+  if (text.startsWith('revenus') || text.startsWith('stock disponible') || text.startsWith('commande producteur') || text.startsWith('production')) return 'tooltip-line--production';
   if (text.startsWith('résultat net') || text.startsWith('resultat net')) {
     const match = text.match(/([-+]?\d[\d\s.,]*)\s*€/);
     if (match) return String(match[1]).trim().startsWith('-') ? 'tooltip-line--consumption' : 'tooltip-line--production';
@@ -4370,10 +4370,12 @@ function renderBudget() {
   const shared = Number(b.sharedCosts || 0);
   const knownRevenue = Number(b.ticketRevenue || 0) + Number(b.ancillaryRevenue || 0) + Number(b.freightRevenue || 0) + Number(b.dispatchRevenueBoost || 0) + Number(b.stationRevenue || 0);
   const otherRevenue = Math.max(0, revenueTotal - knownRevenue);
-  const knownVariable = Number(b.energyCost || 0) + Number(b.trainMaintenanceCost || 0) + Number(b.lineInfrastructureCost || 0) + Number(b.accessCost || 0);
-  const otherVariable = Math.max(0, variable - knownVariable);
+  const knownVariableBase = Number(b.energyCost || 0) + Number(b.trainMaintenanceCost || 0) + Number(b.lineInfrastructureCost || 0) + Number(b.accessCost || 0);
+  const commercialOperatingCost = Number(b.commercialOperatingCost || Math.max(0, variable - knownVariableBase));
+  const knownVariable = knownVariableBase + commercialOperatingCost;
+  const residualVariable = Math.max(0, variable - knownVariable);
   const knownShared = Number(b.staffCost || 0) + Number(b.stationCost || 0) + Number(b.debtCost || 0) + Number(b.idleTrainCost || 0) + Number(b.researchCost || 0);
-  const otherShared = Math.max(0, shared - knownShared);
+  const residualShared = Math.max(0, shared - knownShared);
   const operatingMargin = revenueTotal > 0 ? Math.round((net / revenueTotal) * 100) : 0;
 
   return `
@@ -4392,17 +4394,16 @@ function renderBudget() {
       ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
       ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
       ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
-      ${otherRevenue > 0 ? budgetRow('Autres recettes', otherRevenue, 'revenue') : ''}
-      ${budgetRow('Total recettes', revenueTotal, 'revenue')}
+      ${otherRevenue > 0 ? budgetRow('Ajustement de revenus', otherRevenue, 'revenue', 'Écart temporaire entre le dernier tick et le détail par poste') : ''}
     `, moneyPerHour(revenueTotal))}
 
     ${budgetSection('variable-costs', 'Dépenses variables d’exploitation', `
       ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
       ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
       ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Coût proportionnel aux kilomètres exploités')}
+      ${budgetRow('Exploitation commerciale', commercialOperatingCost, 'expense', 'Frais progressifs liés aux volumes encaissés : vente, exploitation, contrôle et organisation commerciale')}
       ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'Accès au réseau')}
-      ${otherVariable > 0 ? budgetRow('Autres coûts variables', otherVariable, 'expense') : ''}
-      ${budgetRow('Total variable', variable, 'expense')}
+      ${residualVariable > 0 ? budgetRow('Écart variable temporaire', residualVariable, 'expense', 'Écart transitoire avant recalcul complet du prochain tick serveur') : ''}
     `, moneyPerHour(variable))}
 
     ${budgetSection('fixed-costs', 'Charges fixes', `
@@ -4411,8 +4412,7 @@ function renderBudget() {
       ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
       ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
       ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Projet de recherche actif')}
-      ${otherShared > 0 ? budgetRow('Autres charges fixes', otherShared, 'expense') : ''}
-      ${budgetRow('Total charges fixes', shared, 'expense')}
+      ${residualShared > 0 ? budgetRow('Écart de charges fixes temporaire', residualShared, 'expense', 'Écart transitoire avant recalcul complet du prochain tick serveur') : ''}
     `, moneyPerHour(shared))}
 
     ${budgetSection('result', 'Résultat et structure financière', `
@@ -7430,17 +7430,17 @@ function moneyPerHour(value) {
 
 function topResultTooltip(me) {
   const b = me.stats?.lastBreakdown || {};
-  const production = Number(b.lineRevenue || me.stats.lastRevenue || 0) + Number(b.stationRevenue || 0);
-  const consumption = Number(b.variableLineCost || 0) + Number(b.sharedCosts || 0);
+  const revenues = Number(b.lineRevenue || me.stats.lastRevenue || 0) + Number(b.stationRevenue || 0);
+  const expenses = Number(b.variableLineCost || 0) + Number(b.sharedCosts || 0);
   return [
-    `Production totale : ${moneyPerHour(production)}`,
-    `Consommation totale : ${moneyPerHour(consumption)}`,
+    `Revenus totaux : ${moneyPerHour(revenues)}`,
+    `Dépenses totales : ${moneyPerHour(expenses)}`,
     `Résultat net : ${moneyPerHour(me.stats.lastProfit)}`,
     '---------------------------------------------',
-    `Production lignes : ${moneyPerHour(b.lineRevenue || me.stats.lastRevenue)}`,
-    `Production gares : ${moneyPerHour(b.stationRevenue || 0)}`,
-    `Consommation coûts variables : ${moneyPerHour(b.variableLineCost || 0)}`,
-    `Consommation charges fixes : ${moneyPerHour(b.sharedCosts || 0)}`
+    `Revenus des lignes : ${moneyPerHour(b.lineRevenue || me.stats.lastRevenue)}`,
+    `Revenus des gares : ${moneyPerHour(b.stationRevenue || 0)}`,
+    `Dépenses variables : ${moneyPerHour(b.variableLineCost || 0)}`,
+    `Charges fixes : ${moneyPerHour(b.sharedCosts || 0)}`
   ].join('\n');
 }
 

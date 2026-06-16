@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Version v61.1.1 — budget détaillé et libellés financiers corrigés
+
+- incrément de version de cette passe : badge interface `v61.1.1`, package `0.5.3` et schéma serveur `59` ;
+- suppression des lignes de total en bas des sections du budget, car les montants de synthèse sont déjà affichés dans l’en-tête des catégories ;
+- suppression du libellé vague `Autres coûts variables` ;
+- ajout du poste explicite `Exploitation commerciale`, correspondant aux frais progressifs liés aux volumes encaissés : vente, exploitation, contrôle et organisation commerciale ;
+- ajout de `commercialOperatingCost` dans le détail serveur `lastBreakdown`, afin que le budget ne regroupe plus ce coût dans une catégorie indéterminée ;
+- correction de la tooltip financière de la barre supérieure : remplacement de `Production` et `Consommation` par `Revenus` et `Dépenses` ;
+- correction de la classification couleur des tooltips financières utilisant les nouveaux libellés.
+
 ## Version v61.1.0 — lignes repliables, finance de ligne clarifiée et marge réduite
 
 - incrément de version de cette passe : badge interface `v61.1.0`, package `0.5.2` et schéma serveur `58` ;

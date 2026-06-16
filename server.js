@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.1.0';
-const STATE_SCHEMA_VERSION = 58;
+const PROJECT_VERSION = 'v61.1.1';
+const STATE_SCHEMA_VERSION = 59;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -2276,6 +2276,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           freightRevenue: 0,
           dispatchRevenueBoost: 0,
           lineInfrastructureCost: 0,
+          commercialOperatingCost: 0,
           energyCost: 0,
           maintenanceCost: 0,
           accessCost: 0,
@@ -2572,6 +2573,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     acc.energyCost += Number(finance.energyCost || 0);
     acc.trainMaintenanceCost += Number(finance.maintenanceCost || 0);
     acc.lineInfrastructureCost += Number(finance.lineInfrastructureCost || 0);
+    acc.commercialOperatingCost += Number(finance.commercialOperatingCost || 0);
     acc.accessCost += Number(finance.accessCost || 0);
     acc.variableExpenses += Number(finance.variableExpenses || 0);
     return acc;
@@ -2583,6 +2585,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     energyCost: 0,
     trainMaintenanceCost: 0,
     lineInfrastructureCost: 0,
+    commercialOperatingCost: 0,
     accessCost: 0,
     variableExpenses: 0
   });
@@ -2596,6 +2599,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     energyCost: Math.round(lineFinanceTotals.energyCost),
     trainMaintenanceCost: Math.round(lineFinanceTotals.trainMaintenanceCost),
     lineInfrastructureCost: Math.round(lineFinanceTotals.lineInfrastructureCost),
+    commercialOperatingCost: Math.round(lineFinanceTotals.commercialOperatingCost),
     accessCost: Math.round(lineFinanceTotals.accessCost),
     staffCost: Math.round(staffCost),
     stationCost: Math.round(stationCost),
