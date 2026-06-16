@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.3.2';
-const STATE_SCHEMA_VERSION = 63;
+const PROJECT_VERSION = 'v62.0.0';
+const STATE_SCHEMA_VERSION = 64;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -32,7 +32,7 @@ const AUTH_PASSWORD_MIN_LENGTH = 6;
 const STARTER_PLAYER_ID = '4c7dfa51-225a-487a-aa42-1b0776c4e1d5';
 // Plafond global du billet : volontairement haut pour laisser le joueur arbitrer
 // entre revenus et attractivité. À 50 €, les petites lignes deviennent très peu attractives.
-const TICKET_PRICE_CAP_ABSOLUTE = 50;
+const TICKET_PRICE_CAP_ABSOLUTE = 28;
 // Départ v49 : aucune ligne, aucun train, aucun salarié. Capital suffisant
 // pour un premier achat sérieux, mais insuffisant pour contrôler une métropole.
 const STARTING_CASH = 500000;
@@ -42,9 +42,7 @@ const COMPANY_LOGOS = ["steam_front", "winged_wheel", "semaphore", "royal_track"
 const ECONOMY = Object.freeze({
   passengerDemandMultiplier: 2.85,
   freightDemandMultiplier: 1.8,
-  passengerRevenueMultiplier: 0.52,
-  passengerFarePerKmCap: 0.12,
-  passengerLongDistanceDampingKm: 320,
+  passengerRevenueMultiplier: 0.74,
   freightRevenueMultiplier: 1.0,
   energyCostMultiplier: 0.42,
   maintenanceCostMultiplier: 0.75,
@@ -758,6 +756,116 @@ function saveState() {
 }
 
 
+
+function stationRawPoint(station) {
+  if (!station) return null;
+  const lat = Number(station.lat);
+  const lon = Number(station.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function projectStationOnSegment(stationPoint, segment) {
+  const a = stationById(segment?.from);
+  const b = stationById(segment?.to);
+  if (!stationPoint || !a || !b) return null;
+  const ax = Number(a.lon), ay = Number(a.lat);
+  const bx = Number(b.lon), by = Number(b.lat);
+  const px = Number(stationPoint.lon), py = Number(stationPoint.lat);
+  if (![ax, ay, bx, by, px, py].every(Number.isFinite)) return null;
+  const vx = bx - ax;
+  const vy = by - ay;
+  const denom = vx * vx + vy * vy || 1;
+  const t = clamp(((px - ax) * vx + (py - ay) * vy) / denom, 0, 1);
+  const lon = ax + vx * t;
+  const lat = ay + vy * t;
+  const distanceKm = haversine(py, px, lat, lon);
+  return { lat, lon, t, distanceKm, from: segment.from, to: segment.to };
+}
+
+function nearestRailProjection(station) {
+  const point = stationRawPoint(station);
+  if (!point || !WORLD?.railSegments?.length) return null;
+  let best = null;
+  for (const segment of WORLD.railSegments) {
+    const snap = projectStationOnSegment(point, segment);
+    if (!snap) continue;
+    if (!best || snap.distanceKm < best.distanceKm) best = snap;
+  }
+  return best;
+}
+
+function stationRailPlacement(station) {
+  if (!station) return null;
+  if (WORLD.stationIndex?.[station.id]) {
+    return {
+      ...station,
+      railLat: Number(station.lat),
+      railLon: Number(station.lon),
+      placement: 'station',
+      railDistanceKm: 0
+    };
+  }
+
+  const snap = nearestRailProjection(station);
+  const population = Number(station.population || 0);
+  const maxSnapKm = station.custom ? 5 : population >= 50000 ? 12 : population >= 15000 ? 9 : 7;
+  if (snap && snap.distanceKm <= maxSnapKm) {
+    return {
+      ...station,
+      originalLat: Number(station.lat),
+      originalLon: Number(station.lon),
+      railLat: round2(snap.lat),
+      railLon: round2(snap.lon),
+      placement: 'rail-snap',
+      railDistanceKm: round2(snap.distanceKm),
+      railSegment: `${snap.from}-${snap.to}`
+    };
+  }
+
+  return {
+    ...station,
+    railLat: Number(station.lat),
+    railLon: Number(station.lon),
+    placement: 'commune',
+    railDistanceKm: snap ? round2(snap.distanceKm) : null
+  };
+}
+
+function stationRoutePoint(station) {
+  if (!station) return null;
+  const placed = stationRailPlacement(station) || station;
+  const lat = Number(placed.railLat ?? placed.lat);
+  const lon = Number(placed.railLon ?? placed.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : stationRawPoint(station);
+}
+
+function nearestRailAnchorsForStation(station, count = 4) {
+  const point = stationRawPoint(station);
+  if (!point || !WORLD?.railSegments?.length) return [];
+  const ranked = [];
+  for (const segment of WORLD.railSegments) {
+    const snap = projectStationOnSegment(point, segment);
+    if (!snap) continue;
+    ranked.push({ segment, distanceKm: snap.distanceKm });
+  }
+  ranked.sort((a, b) => a.distanceKm - b.distanceKm);
+  const anchors = [];
+  for (const item of ranked.slice(0, Math.max(2, count))) {
+    for (const id of [item.segment.from, item.segment.to]) {
+      if (!anchors.includes(id)) anchors.push(id);
+      if (anchors.length >= count) return anchors;
+    }
+  }
+  return anchors;
+}
+
+function railPlacementStats(stations) {
+  const total = stations.length || 0;
+  const snapped = stations.filter(s => s.placement === 'rail-snap' || s.placement === 'station').length;
+  return { total, snapped, percent: total ? Math.round(snapped / total * 100) : 0 };
+}
+
+
 function publicWorld() {
   const customIds = Object.keys(state.customStations || {}).sort().join(',');
   const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
@@ -766,10 +874,14 @@ function publicWorld() {
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
   const customStations = Object.values(state.customStations || {});
-  const baseStations = enrichBaseStationsWithPopulation(WORLD.stations);
-  const communeStations = Object.values(communeCache.byId || {}).filter(s => !isDuplicatePublicStation(s, baseStations));
+  const baseStations = enrichBaseStationsWithPopulation(WORLD.stations).map(stationRailPlacement);
+  const communeStations = Object.values(communeCache.byId || {})
+    .filter(s => !isDuplicatePublicStation(s, baseStations))
+    .map(stationRailPlacement);
   const publicStationsWithoutCustom = [...baseStations, ...communeStations];
-  const customFiltered = customStations.filter(s => !isDuplicatePublicStation(s, publicStationsWithoutCustom));
+  const customFiltered = customStations
+    .filter(s => !isDuplicatePublicStation(s, publicStationsWithoutCustom))
+    .map(stationRailPlacement);
   const stations = [...baseStations, ...communeStations, ...customFiltered];
   const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
   const world = {
@@ -785,6 +897,7 @@ function publicWorld() {
       updatedAt: communeCache.updatedAt,
       error: communeCache.error || ''
     },
+    railPlacement: railPlacementStats(stations),
     regions: [...new Set([...WORLD.regions, 'Arrêts personnalisés'])].sort()
   };
   publicWorldCache = { key: cacheKey, value: world };
@@ -1387,9 +1500,17 @@ function actionUpdateTrainComposition(player, payload) {
 
 function ticketPriceCeiling(distance) {
   const km = Math.max(1, Number(distance || 0));
-  // Plafond plus strict : le billet reste lié à la distance, sans devenir extravagant
-  // sur les longues lignes.
-  return Math.round(Math.min(35, Math.max(6, 4 + km * 0.13)));
+  // Plafond progressif volontairement sobre : le prix dépend de la longueur,
+  // mais les petites et moyennes lignes ne peuvent plus atteindre des billets extravagants.
+  return Math.round(Math.min(TICKET_PRICE_CAP_ABSOLUTE, Math.max(5, 2.5 + km * 0.18)));
+}
+
+function demandAdjustedTicketPrice(line, distance, demand) {
+  const km = Math.max(1, Number(distance || 0));
+  const rawUnitPrice = lineEffectiveTariff(line, km);
+  const unitPrice = clamp(rawUnitPrice, 0.035, 0.16);
+  const demandFactor = clamp(0.9 + Math.log10(1 + Math.max(0, Number(demand || 0)) / 280) * 0.10, 0.9, 1.10);
+  return clampTicketPrice(km * unitPrice * demandFactor, km);
 }
 
 function clampTicketPrice(price, distance) {
@@ -1449,34 +1570,6 @@ function lineTicketPrice(line, distance = lineDistance(line)) {
 function lineEffectiveTariff(line, distance = lineDistance(line)) {
   const routeDistance = Math.max(1, Number(distance || 0));
   return lineTicketPrice(line, routeDistance) / routeDistance;
-}
-
-function effectivePassengerPricedDistance(distance) {
-  const km = Math.max(1, Number(distance || 0));
-  const dampAt = ECONOMY.passengerLongDistanceDampingKm || 320;
-  return Math.min(km, dampAt) + Math.max(0, km - dampAt) * 0.35;
-}
-
-function computePassengerTicketRevenue(linePax, distance, line, routeDemand, maxPax, controllerCoverage, profitabilityMultiplier = 1) {
-  const passengers = Math.max(0, Number(linePax || 0));
-  if (passengers <= 0) {
-    return { ticketRevenue: 0, unitFare: 0, pricedDistance: effectivePassengerPricedDistance(distance), demandFactor: 1, controllerRevenueBoost: 0 };
-  }
-  const km = Math.max(1, Number(distance || 0));
-  const unitFare = clamp(lineEffectiveTariff(line, km), 0.02, ECONOMY.passengerFarePerKmCap || 0.12);
-  const pricedDistance = effectivePassengerPricedDistance(km);
-  const demandPressure = Number(routeDemand?.passengers || 0) / Math.max(1, Number(maxPax || 0));
-  const demandFactor = clamp(0.88 + demandPressure * 0.08, 0.88, 1.04);
-  const baseRevenue = passengers * pricedDistance * unitFare * demandFactor * Math.max(0.1, Number(profitabilityMultiplier || 1)) * ECONOMY.passengerRevenueMultiplier;
-  const controllerRevenueBoost = clamp(Number(controllerCoverage || 0), 0, 1) * 0.15;
-  return {
-    ticketRevenue: baseRevenue * (1 + controllerRevenueBoost),
-    baseTicketRevenue: baseRevenue,
-    unitFare,
-    pricedDistance,
-    demandFactor,
-    controllerRevenueBoost
-  };
 }
 
 function actionCreateLine(player, payload) {
@@ -2401,13 +2494,15 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const scoredShares = [passengerMarket?.share, freightMarket?.share].filter(Number.isFinite);
     if (scoredShares.length) marketScore += scoredShares.reduce((sum, share) => sum + share, 0) / scoredShares.length;
 
-    const controllerCoverage = lineNeeds.controllers > 0 ? clamp(Number(player.staff.controllers || 0) / lineNeeds.controllers, 0, 1) : 1;
-    const crewFactor = staffing.dispatchers;
+    const controllerCoverage = lineNeeds.controllers > 0 ? clamp(Number(player.staff.controllers || 0) / Math.max(1, staffNeeds.controllers || lineNeeds.controllers), 0, 1) : 1;
+    const stationAgentCoverage = lineNeeds.stationAgents > 0 ? clamp(Number(player.staff.stationAgents || 0) / Math.max(1, staffNeeds.stationAgents || lineNeeds.stationAgents), 0, 1) : 1;
+    const dispatcherCoverage = lineNeeds.dispatchers > 0 ? clamp(Number(player.staff.dispatchers || 0) / Math.max(1, staffNeeds.dispatchers || lineNeeds.dispatchers), 0, 1) : 1;
+    const crewFactor = clamp(0.72 + dispatcherCoverage * 0.28, 0.72, 1);
     const stationFactor = lineStationFactor(player, line);
     const capacityFactor = Math.min(1, crewFactor * stationFactor);
     const fareComplianceFactor = 1 + controllerCoverage * 0.15;
-    const stationAgentFlowFactor = clamp(0.76 + staffing.stationAgents * 0.24, 0.72, 1.08);
-    const dispatchRevenueFactor = clamp(0.78 + staffing.dispatchers * 0.22, 0.76, 1.07);
+    const stationAgentFlowFactor = clamp(0.86 + stationAgentCoverage * 0.14, 0.86, 1);
+    const dispatchRevenueFactor = clamp(0.94 + dispatcherCoverage * 0.06, 0.94, 1.03);
     const maxPax = operatingModel.capacity * effectiveFrequency * capacityFactor;
     const maxFreight = operatingModel.freight * effectiveFrequency * capacityFactor;
     let linePax = 0;
@@ -2425,13 +2520,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       lineFreight = Math.max(0, Math.min(maxFreight, routeDemand.freight * share * freightCapture));
     }
 
-    const effectiveTicketPrice = lineTicketPrice(line, distance);
-    const effectiveTariff = lineEffectiveTariff(line, distance);
+    const effectiveTicketPrice = demandAdjustedTicketPrice(line, distance, routeDemand.passengers);
+    const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     setLineTicketPrice(line, effectiveTicketPrice, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
-    const ticketRevenueDetails = computePassengerTicketRevenue(linePax, distance, line, routeDemand, maxPax, controllerCoverage, profitabilityMultiplier);
-    const baseTicketRevenue = ticketRevenueDetails.baseTicketRevenue || 0;
-    const ticketRevenue = ticketRevenueDetails.ticketRevenue || 0;
+    const baseTicketRevenue = linePax * distance * effectiveTariff * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
+    const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
     const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
@@ -2444,8 +2538,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const lineInfrastructureCost = computeLineInfrastructureCost(player, line, lineInfrastructureMultiplier, infrastructureUsage);
     const commercialBaseRevenue = baseTicketRevenue + ancillaryRevenue + freightRevenue;
     const grossCommercialOperatingCost = Math.max(0, commercialBaseRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
-    const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.15);
-    const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.35);
+    const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.08);
+    const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.22);
     const commercialAdministrationCost = grossCommercialOperatingCost * 0.30;
     const commercialOperatingCost = commercialSalesCost + commercialControlCost + commercialAdministrationCost;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
@@ -2518,9 +2612,6 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       finance: {
         ticketPrice: Math.round(effectiveTicketPrice),
         farePerKm: round2(effectiveTariff),
-        pricedDistance: round2(ticketRevenueDetails.pricedDistance || distance),
-        demandFareFactor: round2(ticketRevenueDetails.demandFactor || 1),
-        controllerRevenueBoost: round2((ticketRevenueDetails.controllerRevenueBoost || 0) * 100),
         ticketRevenue: Math.round(ticketRevenue),
         ancillaryRevenue: Math.round(ancillaryRevenue),
         freightRevenue: Math.round(freightRevenue),
@@ -3921,10 +4012,13 @@ function routeAdjacencyFor(a, b) {
     const station = stationById(id);
     if (!station) continue;
     adjacency[id] ||= [];
-    const nearest = WORLD.stations
-      .map(s => ({ id: s.id, d: haversine(station.lat, station.lon, s.lat, s.lon) }))
-      .sort((x, y) => x.d - y.d)
-      .slice(0, station.commune ? 4 : 3);
+    const anchors = nearestRailAnchorsForStation(station, station.commune ? 6 : 4);
+    const nearest = anchors.length
+      ? anchors.map(anchorId => ({ id: anchorId }))
+      : WORLD.stations
+          .map(s => ({ id: s.id, d: haversine(station.lat, station.lon, s.lat, s.lon) }))
+          .sort((x, y) => x.d - y.d)
+          .slice(0, station.commune ? 4 : 3);
     for (const n of nearest) {
       adjacency[id].push(n.id);
       (adjacency[n.id] ||= []).push(id);
@@ -4039,8 +4133,8 @@ function effectiveTrainRange(player, model, routeInfo) {
 }
 
 function edgeDistance(a, b) {
-  const sa = stationById(a);
-  const sb = stationById(b);
+  const sa = stationRoutePoint(stationById(a));
+  const sb = stationRoutePoint(stationById(b));
   if (!sa || !sb) return 0;
   return haversine(sa.lat, sa.lon, sb.lat, sb.lon);
 }
@@ -4539,6 +4633,7 @@ function buildWorld() {
   const regions = [...new Set(stations.map(s => s.region))].sort();
   const outlines = franceOutlines();
   const railGraph = buildRailGraph();
+  const railSegments = buildRailSegments(railGraph, stationIndex);
   return {
     bounds: computeBounds(outlines),
     stations,
@@ -4547,6 +4642,7 @@ function buildWorld() {
     outline: outlines[0],
     outlines,
     railGraph,
+    railSegments,
     railAdjacency: buildRailAdjacencyIndex(railGraph)
   };
 }
@@ -4586,6 +4682,25 @@ function buildRailGraph() {
     ['AVI', 'MAR'], ['MAR', 'TOU3'], ['TOU3', 'CAN'], ['CAN', 'NIC'], ['AVI', 'NIM'], ['NIM', 'MON'], ['MON', 'BEZ'], ['BEZ', 'PER'], ['BEZ', 'CAR'], ['CAR', 'TOU'],
     ['TOU', 'ALB'], ['TOU', 'AGE'], ['PAR', 'NEV'], ['NEV', 'BOU'], ['BOU', 'CHA2'], ['CHA2', 'LIM'], ['LIM', 'POI'], ['LYO', 'GRE'], ['GRE', 'CHA'], ['CHA', 'ANN'], ['CLE', 'LYO'], ['CLE', 'NEV']
   ];
+}
+
+function buildRailSegments(graph, stationIndex) {
+  return (graph || [])
+    .map(([from, to]) => {
+      const a = stationIndex[from];
+      const b = stationIndex[to];
+      if (!a || !b) return null;
+      return {
+        from,
+        to,
+        distance: Math.round(haversine(a.lat, a.lon, b.lat, b.lon)),
+        geometry: [
+          [Number(a.lon), Number(a.lat)],
+          [Number(b.lon), Number(b.lat)]
+        ]
+      };
+    })
+    .filter(Boolean);
 }
 
 function buildRailAdjacencyIndex(graph) {

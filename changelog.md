@@ -1,15 +1,28 @@
 # CHANGELOG
 
-## Version v61.3.2 — revenus voyageurs plafonnés et effets RH encadrés
+## Version v62.0.0 — refonte ferroviaire de la carte
+
+- incrément majeur de version : badge interface `v62.0.0`, package `0.6.0` et schéma serveur `64` ;
+- ajout d’un moteur de placement ferroviaire : les villes issues des communes sont désormais positionnées visuellement sur la gare connue ou, à défaut, projetées sur le tronçon ferroviaire le plus proche quand celui-ci est cohérent avec la ville ;
+- conservation des coordonnées d’origine des communes dans les données publiques, avec indication du mode de placement (`station`, `rail-snap` ou `commune`) ;
+- ajout d’une table publique `railSegments` permettant au client de connaître les tronçons ferroviaires internes ;
+- le serveur relie désormais les villes non présentes dans le graphe ferroviaire aux tronçons les plus proches, plutôt qu’à de simples gares voisines arbitraires ;
+- le calcul des distances et des itinéraires utilise les coordonnées ferroviaires projetées quand elles existent ;
+- le rendu de carte utilise les coordonnées ferroviaires projetées pour les pastilles, la sélection et les tracés ;
+- ajout d’un chargement progressif de géométries ferroviaires réelles côté client : quand un tronçon ferroviaire public est disponible dans les données de voies, le tracé suit la géométrie des rails ;
+- fallback conservé : si aucune géométrie ferroviaire détaillée n’est disponible ou si la requête est trop large, le jeu utilise le graphe ferroviaire interne et ses corridors.
+
+## Version v61.3.2 — revenus voyageurs bornés et effets salariés rationalisés
 
 - incrément de version de cette passe : badge interface `v61.3.2`, package `0.5.7` et schéma serveur `63` ;
-- refonte du calcul des revenus voyageurs : les billets encaissés sont désormais calculés à partir des voyageurs transportés, de la distance tarifaire, du prix unitaire au kilomètre et d’un facteur de demande plafonné ;
-- baisse du multiplicateur global des recettes voyageurs afin d’éviter les revenus extravagants sur une seule ligne ;
-- plafonnement plus strict du prix du billet sur les longues distances ;
-- amortissement tarifaire des très longues lignes : au-delà d’un seuil, la distance continue de compter mais moins fortement ;
-- effet des Contrôleurs maintenu à +15 % maximum sur les billets lorsque l’effectif requis est atteint ;
-- les Contrôleurs réduisent davantage les dépenses `Vente & distribution` et `Contrôle & fraude`, au lieu de gonfler mécaniquement les coûts commerciaux ;
-- centrage renforcé du bouton `France` dans les contrôles de carte.
+- recalcul des revenus voyageurs sur une base plus stricte : demande captée × distance × prix unitaire au kilomètre ;
+- ajout d’un prix de billet ajusté à la demande, mais borné pour éviter les montants extravagants ;
+- baisse du plafond de billet pour éviter que d’anciennes sauvegardes ou des réglages extrêmes produisent des revenus incohérents ;
+- baisse du multiplicateur global de revenus voyageurs ;
+- les effets salariés sont maintenant appliqués comme modificateurs bornés par rapport aux besoins RH globaux de la compagnie ;
+- les Contrôleurs donnent au maximum +15 % de revenus voyageurs quand l’effectif requis est atteint ;
+- les Agents de gare et Régulateurs ne peuvent plus amplifier brutalement les revenus ou la capacité ;
+- clarification des descriptions Budget pour `Vente & distribution`, `Contrôle & fraude` et `Organisation commerciale`.
 
 ## Version v61.3.1 — correction contrôleurs et nettoyage Budget
 

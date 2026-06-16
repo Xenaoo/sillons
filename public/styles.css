@@ -6046,13 +6046,3 @@ dialog.modal--wide {
   padding-inline: 10px;
   line-height: 1;
 }
-
-/* ===== v61.3.2 — équilibre billets et centrage carte ===== */
-.map-controls #zoomResetBtn {
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  min-width: 58px;
-  padding-inline: 10px;
-}

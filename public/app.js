@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v61.3.2';
+const PROJECT_VERSION = 'v62.0.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -183,7 +183,7 @@ const techOrder = ['traction', 'energy', 'maintenance', 'operations', 'stations'
 const DEFAULT_PASSENGER_TARIFF = 0.08;
 const DEFAULT_TICKET_DISTANCE = 120;
 // Même plafond que côté serveur : prix billet maximum fixe.
-const TICKET_PRICE_CAP_ABSOLUTE = 50;
+const TICKET_PRICE_CAP_ABSOLUTE = 28;
 const MAINTENANCE_COST_MULTIPLIER_CLIENT = 0.48;
 const STAFF_COST_DIVISOR_CLIENT = 82;
 
@@ -4418,7 +4418,7 @@ function renderBudget() {
 
     <div class="budget-two-column">
       ${budgetSection('revenues', 'Recettes', `
-        ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Prix des billets encaissés')}
+        ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Demande captée × longueur × prix unitaire, avec bonus salariés bornés')}
         ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'Commerces et services associés')}
         ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
         ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
@@ -4431,9 +4431,9 @@ function renderBudget() {
         ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
         ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Entretien infrastructure triplé, partagé entre joueurs qui utilisent les mêmes tronçons')}
         ${budgetRow('Péage', b.accessCost || 0, 'expense', 'Coût payé quand ta ligne emprunte un tronçon déjà utilisé par un autre joueur')}
-        ${budgetRow('Vente & distribution', commercialSalesCost, 'expense', 'Distribution commerciale, billetterie et canaux de vente')}
-        ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Contrôle à bord, prévention fraude et litiges voyageurs')}
-        ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Planification commerciale, support, information et gestion opérationnelle')}
+        ${budgetRow('Vente & distribution', commercialSalesCost, 'expense', 'Billetterie, canaux de vente, information tarifaire et distribution')}
+        ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Fraude résiduelle, litiges voyageurs et dispositifs de contrôle')}
+        ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Support client, planification commerciale et organisation opérationnelle')}
         ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
         ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
         ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
@@ -5358,8 +5358,8 @@ function drawBaseRailNetwork(ctx) {
     const aStation = station(from);
     const bStation = station(to);
     if (!aStation || !bStation) continue;
-    const a = project(aStation.lon, aStation.lat);
-    const b = project(bStation.lon, bStation.lat);
+    const a = projectStationPoint(aStation);
+    const b = projectStationPoint(bStation);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -5679,7 +5679,7 @@ function drawableStations(lite = false) {
     const served = servedStationIds.has(s.id);
     if (lite && !selected && !asset && !s.custom) continue;
     if (!shouldDrawStation(s, asset, selected)) continue;
-    const p = project(s.lon, s.lat);
+    const p = projectStationPoint(s);
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     if (p.x < -40 || p.x > app.map.width + 40 || p.y < -40 || p.y > app.map.height + 40) continue;
     candidates.push({
@@ -6039,6 +6039,89 @@ function project(lon, lat) {
 }
 
 
+function stationRouteLon(station) {
+  return Number(station?.railLon ?? station?.stationLon ?? station?.lon);
+}
+
+function stationRouteLat(station) {
+  return Number(station?.railLat ?? station?.stationLat ?? station?.lat);
+}
+
+function projectStationPoint(station) {
+  if (!station) return { x: NaN, y: NaN };
+  return project(stationRouteLon(station), stationRouteLat(station));
+}
+
+function stationRouteDistanceClient(a, b) {
+  const latA = stationRouteLat(a);
+  const lonA = stationRouteLon(a);
+  const latB = stationRouteLat(b);
+  const lonB = stationRouteLon(b);
+  if (![latA, lonA, latB, lonB].every(Number.isFinite)) return 0;
+  return haversineClient(latA, lonA, latB, lonB);
+}
+
+function projectStationOnRailSegmentClient(station, segment) {
+  const a = app.state?.world?.stationIndex?.[segment?.from];
+  const b = app.state?.world?.stationIndex?.[segment?.to];
+  if (!station || !a || !b) return null;
+  const ax = Number(a.lon), ay = Number(a.lat);
+  const bx = Number(b.lon), by = Number(b.lat);
+  const px = Number(station.lon), py = Number(station.lat);
+  if (![ax, ay, bx, by, px, py].every(Number.isFinite)) return null;
+  const vx = bx - ax;
+  const vy = by - ay;
+  const denom = vx * vx + vy * vy || 1;
+  const t = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / denom));
+  const lon = ax + vx * t;
+  const lat = ay + vy * t;
+  return { lat, lon, distanceKm: haversineClient(py, px, lat, lon), from: segment.from, to: segment.to };
+}
+
+function nearestRailAnchorsForStationClient(station, count = 4) {
+  const segments = app.state?.world?.railSegments || [];
+  const ranked = segments
+    .map(segment => ({ segment, snap: projectStationOnRailSegmentClient(station, segment) }))
+    .filter(item => item.snap)
+    .sort((a, b) => a.snap.distanceKm - b.snap.distanceKm);
+  const anchors = [];
+  for (const item of ranked.slice(0, Math.max(2, count))) {
+    for (const id of [item.segment.from, item.segment.to]) {
+      if (!anchors.includes(id)) anchors.push(id);
+      if (anchors.length >= count) return anchors;
+    }
+  }
+  return anchors;
+}
+
+function routeAdjacencyForClient(a, b) {
+  const base = app.state?.world?.railAdjacency || {};
+  const adjacency = {};
+  for (const [id, list] of Object.entries(base)) adjacency[id] = [...list];
+
+  for (const id of [a, b]) {
+    if (!id || adjacency[id]) continue;
+    const s = station(id);
+    if (!s) continue;
+    const anchors = nearestRailAnchorsForStationClient(s, s.commune ? 6 : 4);
+    const fallback = anchors.length
+      ? anchors
+      : dedupedStations(app.state?.world?.stations || [])
+          .filter(candidate => app.state?.world?.railAdjacency?.[candidate.id])
+          .map(candidate => ({ id: candidate.id, distance: stationRouteDistanceClient(s, candidate) }))
+          .sort((x, y) => x.distance - y.distance)
+          .slice(0, s.commune ? 4 : 3)
+          .map(item => item.id);
+    adjacency[id] ||= [];
+    for (const anchorId of fallback) {
+      adjacency[id].push(anchorId);
+      (adjacency[anchorId] ||= []).push(id);
+    }
+  }
+  return adjacency;
+}
+
+
 function hitStationAt(p) {
   return app.map.stationHit
     .map(h => {
@@ -6119,7 +6202,7 @@ function nearestProjectedStationAt(p, maxDistance = 28) {
   const stations = dedupedStations(app.state?.world?.stations || []);
   let best = null;
   for (const s of stations) {
-    const sp = project(s.lon, s.lat);
+    const sp = projectStationPoint(s);
     if (!Number.isFinite(sp.x) || !Number.isFinite(sp.y)) continue;
     if (sp.x < -80 || sp.x > app.map.width + 80 || sp.y < -80 || sp.y > app.map.height + 80) continue;
     const d = Math.hypot(sp.x - p.x, sp.y - p.y);
@@ -6249,31 +6332,153 @@ function geometryForRoute(a, b) {
   if (direct) return direct;
   const reverse = app.osmRouteCache.get(routeGeometryKey(b, a));
   if (reverse) return [...reverse].reverse();
-  ensureOsmRouteGeometry(a, b);
+  ensureRailwayRouteGeometry(a, b);
   return null;
 }
 
-async function ensureOsmRouteGeometry(a, b) {
-  if (!app.map.leaflet || app.osmRoutePending.has(routeGeometryKey(a, b))) return;
+async function ensureRailwayRouteGeometry(a, b) {
+  const key = routeGeometryKey(a, b);
+  if (app.osmRoutePending.has(key)) return;
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
-  const key = routeGeometryKey(a, b);
+  const directKm = stationRouteDistanceClient(sa, sb);
+  // Les requêtes très grandes sont volontairement évitées : le graphe ferroviaire
+  // local prend le relais segment par segment, ce qui préserve les performances.
+  if (!Number.isFinite(directKm) || directKm > 260) return;
+
+  const latA = stationRouteLat(sa), lonA = stationRouteLon(sa);
+  const latB = stationRouteLat(sb), lonB = stationRouteLon(sb);
+  if (![latA, lonA, latB, lonB].every(Number.isFinite)) return;
+
+  const pad = Math.min(0.30, Math.max(0.045, directKm / 980));
+  const south = Math.min(latA, latB) - pad;
+  const north = Math.max(latA, latB) + pad;
+  const west = Math.min(lonA, lonB) - pad;
+  const east = Math.max(lonA, lonB) + pad;
+  const bboxArea = Math.abs(north - south) * Math.abs(east - west);
+  if (bboxArea > 3.4) return;
+
   app.osmRoutePending.add(key);
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${sa.lon},${sa.lat};${sb.lon},${sb.lat}?overview=full&geometries=geojson`;
-    const response = await fetch(url, { cache: 'force-cache' });
-    if (!response.ok) throw new Error(`OSRM ${response.status}`);
+    const query = `
+[out:json][timeout:18];
+(
+  way["railway"~"^(rail|light_rail|subway|tram)$"]["service"!~"^(yard|siding|spur)$"](${south},${west},${north},${east});
+);
+out geom;
+`;
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: `data=${encodeURIComponent(query)}`,
+      cache: 'force-cache'
+    });
+    if (!response.ok) throw new Error(`rail geometry ${response.status}`);
     const data = await response.json();
-    const coords = data.routes?.[0]?.geometry?.coordinates;
-    if (Array.isArray(coords) && coords.length >= 2) {
-      app.osmRouteCache.set(key, coords.map(([lon, lat]) => [Number(lon), Number(lat)]).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1])));
+    const coords = buildRailwayPathFromOverpass(data.elements || [], { lat: latA, lon: lonA }, { lat: latB, lon: lonB }, directKm);
+    if (coords.length >= 2) {
+      app.osmRouteCache.set(key, coords);
       app.routeCache.clear();
+      invalidateMapProjection('rail-geometry-loaded');
     }
   } catch (error) {
-    // Pas bloquant : on conserve le tracé de secours.
+    // Non bloquant : le graphe ferroviaire interne reste utilisé.
   } finally {
     app.osmRoutePending.delete(key);
   }
+}
+
+function coordKey(lon, lat) {
+  return `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
+}
+
+function buildRailwayPathFromOverpass(elements, start, end, directKm) {
+  const graph = new Map();
+  const coordsByKey = new Map();
+
+  function addNode(lon, lat) {
+    if (![lon, lat].every(Number.isFinite)) return null;
+    const key = coordKey(lon, lat);
+    coordsByKey.set(key, [lon, lat]);
+    if (!graph.has(key)) graph.set(key, []);
+    return key;
+  }
+
+  for (const way of elements || []) {
+    const geom = Array.isArray(way.geometry) ? way.geometry : [];
+    for (let i = 1; i < geom.length; i++) {
+      const a = geom[i - 1];
+      const b = geom[i];
+      const ka = addNode(Number(a.lon), Number(a.lat));
+      const kb = addNode(Number(b.lon), Number(b.lat));
+      if (!ka || !kb || ka === kb) continue;
+      const weight = haversineClient(Number(a.lat), Number(a.lon), Number(b.lat), Number(b.lon));
+      graph.get(ka).push([kb, weight]);
+      graph.get(kb).push([ka, weight]);
+    }
+  }
+
+  if (graph.size < 2) return [];
+  const startKey = nearestRailNodeKey(coordsByKey, start);
+  const endKey = nearestRailNodeKey(coordsByKey, end);
+  if (!startKey || !endKey || startKey === endKey) return [];
+
+  const ids = dijkstraRailNodePath(graph, startKey, endKey);
+  if (ids.length < 2) return [];
+  const path = ids.map(id => coordsByKey.get(id)).filter(Boolean);
+  const pathDistance = polylineGeoDistance(path);
+  if (pathDistance <= 0 || pathDistance > Math.max(35, directKm * 2.75)) return [];
+  return [[start.lon, start.lat], ...path, [end.lon, end.lat]];
+}
+
+function nearestRailNodeKey(coordsByKey, point) {
+  let best = null;
+  for (const [key, [lon, lat]] of coordsByKey.entries()) {
+    const distance = haversineClient(point.lat, point.lon, lat, lon);
+    if (!best || distance < best.distance) best = { key, distance };
+  }
+  return best?.key || null;
+}
+
+function dijkstraRailNodePath(graph, startKey, endKey) {
+  const dist = new Map([[startKey, 0]]);
+  const prev = new Map();
+  const open = new Set(graph.keys());
+  while (open.size) {
+    let current = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const key of open) {
+      const d = dist.get(key) ?? Number.POSITIVE_INFINITY;
+      if (d < best) { best = d; current = key; }
+    }
+    if (!current || current === endKey || !Number.isFinite(best)) break;
+    open.delete(current);
+    for (const [next, weight] of graph.get(current) || []) {
+      if (!open.has(next)) continue;
+      const alt = best + weight;
+      if (alt < (dist.get(next) ?? Number.POSITIVE_INFINITY)) {
+        dist.set(next, alt);
+        prev.set(next, current);
+      }
+    }
+  }
+  if (!dist.has(endKey)) return [];
+  const out = [endKey];
+  let cur = endKey;
+  while (prev.has(cur)) {
+    cur = prev.get(cur);
+    out.push(cur);
+  }
+  out.reverse();
+  return out;
+}
+
+function polylineGeoDistance(coords) {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineClient(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+  }
+  return total;
 }
 
 function getRoute(a, b) {
@@ -6290,8 +6495,7 @@ function getRoute(a, b) {
     app.routeCache.set(key, route);
     return route;
   }
-  const world = app.state.world;
-  const adjacency = world.railAdjacency || {};
+  const adjacency = routeAdjacencyForClient(a, b);
   const nodes = new Set([...Object.keys(adjacency), a, b]);
   const dist = {};
   const prev = {};
@@ -6335,7 +6539,7 @@ function getRoute(a, b) {
     if (!points.length) points.push(...segment);
     else points.push(...segment.slice(1));
   }
-  if (!points.length && ids.length) points = ids.map(id => station(id)).filter(Boolean).map(s => project(s.lon, s.lat));
+  if (!points.length && ids.length) points = ids.map(id => station(id)).filter(Boolean).map(projectStationPoint);
   const route = {
     ids,
     distance: Math.round(dist[b] || 0),
@@ -6355,8 +6559,8 @@ function resolveSegmentPath(a, b) {
     return geometry.map(([lon, lat]) => project(lon, lat)).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
   }
 
-  const start = project(sa.lon, sa.lat);
-  const end = project(sb.lon, sb.lat);
+  const start = projectStationPoint(sa);
+  const end = projectStationPoint(sb);
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const dist = Math.hypot(dx, dy) || 1;
@@ -6379,7 +6583,7 @@ function resolveSegmentPath(a, b) {
 function directRailDistance(a, b) {
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return 0;
-  return haversineClient(sa.lat, sa.lon, sb.lat, sb.lon);
+  return stationRouteDistanceClient(sa, sb);
 }
 
 function ensureSelectedStation() {
@@ -6667,7 +6871,7 @@ function cleanRoutePoints(points) {
 function pointFromStationId(id) {
   const s = station(id);
   if (!s) return null;
-  const p = project(s.lon, s.lat);
+  const p = projectStationPoint(s);
   return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
 }
 
@@ -6873,7 +7077,7 @@ function suggestedTicketPrice(distance) {
 
 function ticketPriceCeiling(distance) {
   const km = normalizedTicketDistance(distance);
-  return Math.round(Math.min(35, Math.max(6, 4 + km * 0.13)));
+  return Math.round(Math.min(TICKET_PRICE_CAP_ABSOLUTE, Math.max(5, 2.5 + km * 0.18)));
 }
 
 function normalizeTicketPrice(value, fallback = suggestedTicketPrice(DEFAULT_TICKET_DISTANCE), distance = DEFAULT_TICKET_DISTANCE) {
