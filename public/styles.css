@@ -6722,3 +6722,201 @@ dialog.modal--wide {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+
+/* ===== V62.16 : panneau rétractable cadré, ressources personnalisées et gares compactes ===== */
+.layout {
+  grid-template-columns: minmax(420px, 1fr) 42px minmax(520px, 0.75fr) !important;
+  gap: 0 !important;
+  align-items: stretch;
+  transition: grid-template-columns 240ms ease;
+}
+.layout.side-collapsed {
+  grid-template-columns: minmax(0, 3fr) 42px minmax(260px, 1fr) !important;
+}
+.layout .map-section {
+  grid-column: 1;
+  min-width: 0 !important;
+  margin-right: 7px;
+}
+.layout .side.panel {
+  grid-column: 3;
+  min-width: 0 !important;
+  width: auto;
+  margin-left: 7px;
+}
+.panel-collapse-btn {
+  position: relative !important;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-self: center;
+  top: auto !important;
+  right: auto !important;
+  transform: none !important;
+  z-index: 70;
+}
+.layout.side-collapsed .side.panel {
+  min-width: 0 !important;
+}
+.layout.side-collapsed .tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  max-height: 176px;
+  overflow: auto;
+}
+.layout.side-collapsed .tabs button {
+  min-height: 38px;
+  padding: 9px 4px;
+  font-size: 11px;
+}
+.layout.side-collapsed .tab-content {
+  padding: 10px;
+}
+.layout.side-collapsed .card {
+  padding: 11px;
+}
+.layout.side-collapsed .line-card-modern-head,
+.layout.side-collapsed .fleet-card-heading,
+.layout.side-collapsed .research-era-heading {
+  gap: 8px;
+}
+@media (max-width: 1100px) {
+  .layout,
+  .layout.side-collapsed {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .layout .map-section,
+  .layout .side.panel {
+    grid-column: auto;
+    margin: 0;
+  }
+  .panel-collapse-btn {
+    display: none !important;
+  }
+}
+
+.resource-buy-custom {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(217,168,82,.16);
+  border-radius: 14px;
+  background: rgba(2,6,23,.28);
+}
+.resource-buy-custom label {
+  display: grid;
+  gap: 6px;
+  color: #f1dfb8;
+  font-size: 12px;
+}
+.resource-qty-input {
+  width: 100%;
+}
+
+.fleet-bulk-maintenance-card .fleet-card-heading {
+  align-items: center;
+}
+.fleet-bulk-maintenance-card button {
+  white-space: normal;
+  min-width: 190px;
+}
+
+.station-owned-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+.station-owned-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 190px;
+  color: #b8aa84;
+  font-size: 12px;
+}
+.station-owned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 10px;
+}
+.station-owned-tile {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(217,168,82,.08), transparent 34%),
+    rgba(4, 10, 22, 0.56);
+}
+.station-owned-tile-head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+}
+.station-owned-tile-head strong {
+  min-width: 0;
+  color: #f4e6bd;
+  font-size: 13px;
+  line-height: 1.18;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.station-owned-tile-price {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: rgba(2,6,23,.32);
+  border: 1px solid rgba(217,168,82,.10);
+}
+.station-owned-tile-price span,
+.station-owned-tile-foot span {
+  color: #b8aa84;
+  font-size: 11px;
+}
+.station-owned-tile-price b {
+  color: #f4e6bd;
+  font-size: 13px;
+}
+.station-owned-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.station-owned-mini-stats div {
+  display: grid;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 9px;
+  text-align: center;
+  background: rgba(11, 18, 32, .62);
+  border: 1px solid rgba(217,168,82,.10);
+}
+.station-owned-mini-stats span {
+  color: #b8aa84;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.station-owned-mini-stats b {
+  color: #f4e6bd;
+  font-size: 12px;
+}
+.station-owned-tile-foot {
+  display: grid;
+  gap: 8px;
+}
+.station-owned-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.station-owned-actions button {
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 11px;
+}

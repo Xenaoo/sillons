@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.15.0';
-const STATE_SCHEMA_VERSION = 79;
+const PROJECT_VERSION = 'v62.16.0';
+const STATE_SCHEMA_VERSION = 80;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -2366,6 +2366,7 @@ function applyAction(playerId, type, payload) {
     buyTrain: () => actionBuyTrain(player, payload),
     sellTrain: () => actionSellTrain(player, payload),
     repairTrain: () => actionRepairTrain(player, payload),
+    repairAllTrains: () => actionRepairAllTrains(player, payload),
     updateTrainComposition: () => actionUpdateTrainComposition(player, payload),
     setMaintenancePolicy: () => actionSetMaintenancePolicy(player, payload),
     createLine: () => actionCreateLine(player, payload),
@@ -3061,6 +3062,54 @@ function actionRepairTrain(player, payload) {
   };
   notify(player, `${model.name} envoyé en maintenance (${mode.name}) : ${formatCycles(duration)}, ${money(cost)}.`);
   return ok('Maintenance planifiée.');
+}
+
+function actionRepairAllTrains(player, payload) {
+  const modeId = String(payload.mode || 'standard');
+  const mode = BALANCE.maintenanceActions[modeId];
+  if (!mode) return fail('Type de maintenance inconnu.');
+  if (mode.requiredTech && !hasTech(player, mode.requiredTech)) {
+    const tech = techNodeById(mode.requiredTech);
+    return fail('Recherche requise pour cette maintenance.', `Débloque d’abord : ${tech?.title || mode.requiredTech}.`);
+  }
+  if (mode.requiresDepot && !hasMaintenanceWorkshop(player)) {
+    return fail('Atelier requis.', 'Construis un atelier de maintenance ou un dépôt dans au moins une gare exploitée.');
+  }
+
+  const candidates = [];
+  let totalCost = 0;
+  for (const train of player.trains || []) {
+    normalizeTrain(train, player.id);
+    if (train.maintenance?.active) continue;
+    const model = BALANCE.trains[train.modelId];
+    if (!model) continue;
+    const targetCondition = Math.max(train.condition, Math.min(mode.target || 0.99, train.condition + mode.restore));
+    if (targetCondition <= train.condition + 0.005) continue;
+    const cost = maintenanceActionCost(player, train, model, mode);
+    candidates.push({ train, model, targetCondition, cost });
+    totalCost += cost;
+  }
+
+  if (!candidates.length) return fail('Aucun train éligible.', 'Tous les trains sont déjà en maintenance ou dans un état trop élevé pour cette intervention.');
+  totalCost = Math.round(totalCost);
+  if (!canPay(player, totalCost)) return fail(`Trésorerie insuffisante. Coût total : ${money(totalCost)}.`);
+
+  const duration = maintenanceDuration(player, mode);
+  player.cash -= totalCost;
+  for (const item of candidates) {
+    item.train.maintenance = {
+      active: true,
+      mode: modeId,
+      label: mode.name,
+      daysLeft: duration,
+      duration,
+      targetCondition: item.targetCondition,
+      startedDay: state.day,
+      cost: item.cost
+    };
+  }
+  notify(player, `${candidates.length} train(s) envoyés en maintenance (${mode.name}) : ${formatCycles(duration)}, ${money(totalCost)}.`);
+  return ok(`${candidates.length} train(s) envoyés en maintenance.`);
 }
 
 function actionSetMaintenancePolicy(player, payload) {

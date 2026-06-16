@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.15.0';
+const PROJECT_VERSION = 'v62.16.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -81,6 +81,7 @@ const app = {
   lineDraft: loadJson('sillons.lineDraft', {}),
   stationSearch: { query: '', candidateId: '' },
   stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
+  ownedStationSortMode: localStorage.getItem('sillons.ownedStationSortMode') || 'alpha',
   ownedStationsCollapsed: localStorage.getItem('sillons.ownedStationsCollapsed') === '1',
   budgetCollapsed: loadJson('sillons.budgetCollapsed', {}),
   lineCollapsed: loadJson('sillons.lineCollapsed', {}),
@@ -3660,6 +3661,16 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
 
       ${renderMaintenancePolicyCard()}
 
+      <div class="card fleet-bulk-maintenance-card">
+        <div class="fleet-card-heading">
+          <div>
+            <h2>Maintenance globale</h2>
+            <p class="muted small">Envoie en une seule action tous les trains éligibles en révision atelier. Les trains déjà en atelier ou presque neufs sont ignorés.</p>
+          </div>
+          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${me.trains.length ? '' : 'disabled'}>Tout envoyer en maintenance</button>
+        </div>
+      </div>
+
       <div class="card fleet-owned-card">
         <div class="fleet-card-heading">
           <div>
@@ -4014,7 +4025,7 @@ function renderStations() {
   const me = app.state.me;
   const selected = app.selectedStation ? station(app.selectedStation) : null;
   const stationSearchValue = stationSearchDisplayValue(selected);
-  const ownedEntries = Object.entries(me.stations || {});
+  const ownedEntries = sortOwnedStationEntries(Object.entries(me.stations || {}));
   const collapsed = app.ownedStationsCollapsed;
   return `
     ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs, les ateliers et les dépôts tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Ateliers'])}
@@ -4052,9 +4063,15 @@ function renderStations() {
         </span>
         <span class="research-era-meta">${ownedEntries.length} gare${ownedEntries.length > 1 ? 's' : ''} · ${collapsed ? 'Déplier' : 'Réduire'}</span>
       </button>
-      ${collapsed ? '' : `<div class="list station-owned-list">
-        ${ownedEntries.map(([id, asset]) => renderStationAsset(station(id), asset)).join('') || '<p class="muted">Aucune gare exploitée.</p>'}
-      </div>`}
+      ${collapsed ? '' : `
+        <div class="station-owned-toolbar">
+          <label>Trier les gares
+            <select id="ownedStationSort">${ownedStationSortOptions(app.ownedStationSortMode)}</select>
+          </label>
+        </div>
+        <div class="station-owned-grid">
+          ${ownedEntries.map(([id, asset]) => renderStationAsset(station(id), asset)).join('') || '<p class="muted">Aucune gare exploitée.</p>'}
+        </div>`}
     </div>
   `;
 }
@@ -4183,6 +4200,31 @@ function stationSortOptions(selected = 'alpha') {
   return options.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
 }
 
+function ownedStationSortOptions(selected = 'alpha') {
+  const options = [
+    ['alpha', 'Alphabétique'],
+    ['costDesc', 'Coût / valeur'],
+    ['levelDesc', 'Niveau']
+  ];
+  return options.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+}
+
+function sortOwnedStationEntries(entries, mode = app.ownedStationSortMode) {
+  const collator = new Intl.Collator('fr', { sensitivity: 'base' });
+  const decorated = entries
+    .map(([id, asset]) => ({ id, asset, station: station(id) }))
+    .filter(item => item.station);
+  const byName = (a, b) => collator.compare(a.station.name || '', b.station.name || '');
+  if (mode === 'costDesc') {
+    decorated.sort((a, b) => stationAcquisitionCost(b.station) - stationAcquisitionCost(a.station) || byName(a, b));
+  } else if (mode === 'levelDesc') {
+    decorated.sort((a, b) => Number(b.asset?.level || 1) - Number(a.asset?.level || 1) || byName(a, b));
+  } else {
+    decorated.sort(byName);
+  }
+  return decorated.map(item => [item.id, item.asset]);
+}
+
 function stationSortPrice(s) {
   return stationAcquisitionCost(s);
 }
@@ -4287,26 +4329,33 @@ function renderStationAsset(s, asset) {
   const users = activeStationUsersClient(s.id);
   const lines = users.filter(entry => entry.player.id === app.state.me.id).length;
   const refund = stationSaleRefundBreakdown(s, asset);
+  const cost = stationAcquisitionCost(s);
   return `
-    <div class="list-item">
-      <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag">${lines} ligne${lines > 1 ? 's' : ''}</span></div>
-      <div class="kv">
-        <span>Niveau</span><b>${asset.level}</b>
-        <span>Commerces</span><b>${asset.commerce}</b>
-        <span>Atelier</span><b>${asset.maintenance}</b>
-        <span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b>
-        <span>Électrifiée</span><b>${asset.electrified ? 'Oui' : 'Non'}</b>
-        <span>Remboursement vente</span><b>${money(refund.total)}</b>
-        ${stationOperatingCostRows(asset)}
+    <article class="station-owned-tile">
+      <div class="station-owned-tile-head">
+        <strong>${escapeHtml(s.name)}</strong>
+        <span class="tag">${lines} ligne${lines > 1 ? 's' : ''}</span>
       </div>
-      <div class="actions">
-        <button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir sur carte</button>
-        <button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${users.length ? 'disabled' : ''}>Vendre ${money(refund.total)}</button>
+      <div class="station-owned-tile-price">
+        <span>Valeur base</span>
+        <b>${money(cost)}</b>
       </div>
-    </div>
+      <div class="station-owned-mini-stats">
+        <div><span>Niv.</span><b>${asset.level}</b></div>
+        <div><span>Com.</span><b>${asset.commerce}</b></div>
+        <div><span>Atel.</span><b>${asset.maintenance}</b></div>
+        <div><span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b></div>
+      </div>
+      <div class="station-owned-tile-foot">
+        <span>Revente ${money(refund.total)}</span>
+        <div class="station-owned-actions">
+          <button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir</button>
+          <button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${users.length ? 'disabled' : ''}>Vendre</button>
+        </div>
+      </div>
+    </article>
   `;
 }
-
 
 function emptyStaffNeedsClient() {
   return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
@@ -4871,9 +4920,12 @@ function renderResourceCard(type, cfg) {
         </label>
         <button class="primary" data-action="set-electricity-order" ${locked ? 'disabled' : ''}>Enregistrer la commande</button>
       ` : ['coal', 'diesel'].includes(type) ? `
-        <div class="resource-buy-row">
-          <span>Achat rapide : ${formatInt(buyQty)} u · ${money(resourcePurchaseCost(type, buyQty))}</span>
-          <button class="primary" data-action="buy-resource" data-type="${escapeAttr(type)}" data-quantity="${buyQty}" ${locked ? 'disabled' : ''}>Acheter</button>
+        <div class="resource-buy-custom">
+          <label>Quantité à acheter
+            <input id="resourceQty_${escapeAttr(type)}" class="resource-qty-input" type="number" min="1" max="100000" step="100" value="${buyQty}" ${locked ? 'disabled' : ''}>
+          </label>
+          <span class="small muted">Prix indicatif pour ${formatInt(buyQty)} u : ${money(resourcePurchaseCost(type, buyQty))}</span>
+          <button class="primary" data-action="buy-resource" data-type="${escapeAttr(type)}" data-quantity-input="resourceQty_${escapeAttr(type)}" ${locked ? 'disabled' : ''}>Acheter cette quantité</button>
         </div>
       ` : `
         <div class="resource-buy-row">
@@ -5210,6 +5262,11 @@ Valeur estimée : ${money(estimate)}.` : ''}`;
     return doAction('sellTrain', { trainId: button.dataset.id });
   }
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
+  if (action === 'repair-all-trains') {
+    const mode = button.dataset.mode || 'standard';
+    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance atelier ?\n\nLes trains affectés à des lignes seront immobilisés pendant l’intervention.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
+    return doAction('repairAllTrains', { mode });
+  }
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
     const id = button.dataset.id || '';
@@ -5265,7 +5322,11 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   }
   if (action === 'research') return doAction('research', { branch: button.dataset.branch });
   if (action === 'energy-strategy') return doAction('energyStrategy', { strategy: button.dataset.id });
-  if (action === 'buy-resource') return doAction('buyResource', { type: button.dataset.type, quantity: Number(button.dataset.quantity) });
+  if (action === 'buy-resource') {
+    const input = button.dataset.quantityInput ? $(`#${button.dataset.quantityInput}`) : null;
+    const quantity = Number(input?.value || button.dataset.quantity || 0);
+    return doAction('buyResource', { type: button.dataset.type, quantity });
+  }
   if (action === 'set-electricity-order') return doAction('setElectricityOrder', { amount: Number($('#electricityOrderInput')?.value || 0) });
   if (action === 'loan') return doAction('takeLoan', { amount: Number(button.dataset.amount) });
   if (action === 'repay') return doAction('repayLoan', { amount: Number(button.dataset.amount) });
@@ -5277,6 +5338,12 @@ function onTabContentChange(event) {
     app.stationSortMode = event.target.value || 'alpha';
     localStorage.setItem('sillons.stationSortMode', app.stationSortMode);
     if ($('#lineStationSearch')?.value) updateStationSearch('station', $('#lineStationSearch').value);
+    return;
+  }
+  if (event.target.id === 'ownedStationSort') {
+    app.ownedStationSortMode = event.target.value || 'alpha';
+    localStorage.setItem('sillons.ownedStationSortMode', app.ownedStationSortMode);
+    renderAll();
     return;
   }
   if (['lineTicketPrice', 'lineTicketPriceRange', 'lineFreq'].includes(event.target.id)) {
@@ -6129,8 +6196,7 @@ function drawAllLines(ctx, lite = false) {
       const own = app.state.me && player.id === app.state.me.id;
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
       if (lite) continue;
-      const zoom = app.map.leaflet?.getZoom?.() || 6;
-      if (!own && zoom < 8) continue;
+      if (!own && !mapMaxZoomReached()) continue;
       const trains = lineAssignedTrainsClient(line, player).filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
       if (!trains.length) continue;
       if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage' || line.stats?.status === 'train-out-of-service') continue;

@@ -1,5 +1,17 @@
 # Changelog
 
+## Version v62.16.0 — carte, maintenance globale, ressources et gares compactes
+
+- incrément de version : badge interface `v62.16.0`, package `0.6.16` et schéma serveur `80` ;
+- les trains animés du joueur restent toujours visibles, quelle que soit l’échelle de zoom ;
+- les trains animés des autres joueurs n’apparaissent qu’au zoom maximal ;
+- repositionnement du bouton flèche entre carte et panneau, en colonne dédiée, pour éviter le chevauchement avec les cartes ;
+- amélioration du panneau rétracté : la largeur se recalcule proprement et le contenu évite les débordements horizontaux ;
+- ajout d’un champ de quantité personnalisée pour acheter du charbon et du diesel ;
+- ajout d’un bouton de maintenance globale pour envoyer tous les trains éligibles en révision atelier ;
+- refonte de l’onglet Gares : les gares possédées s’affichent en grille compacte avec 4 à 5 cartes par rangée selon la largeur disponible ;
+- ajout d’un tri des gares possédées par ordre alphabétique, coût/valeur ou niveau.
+
 ## Version v62.15.0 — carte multi-joueurs, confirmations intégrées et panneau rétractable
 
 - incrément de version : badge interface `v62.15.0`, package `0.6.15` et schéma serveur `79` ;
