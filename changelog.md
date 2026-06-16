@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v62.2.0 — reconstruction officielle des gares et villes
+
+- incrément de version : badge interface `v62.2.0`, package `0.6.2` et schéma serveur `66` ;
+- suppression de l’affichage public des anciennes gares manuelles lorsque le cache communes officiel est disponible ;
+- reconstruction des points jouables depuis `gares-de-voyageurs` : association stricte par code commune INSEE, lecture de `nom_gare`, `position_geographique`, `code_commune`, `code_uic`, `id_gare` et `trigramme` ;
+- placement des communes sans gare voyageurs sur les coordonnées officielles `geo.api.gouv.fr/communes`, sans projection automatique sur une voie ferrée voisine ;
+- invalidation automatique de l’ancien cache de communes afin de forcer une reconstruction avec le nouveau schéma de placement ;
+- migration des anciennes références de gares internes (`CAE`, `BAY`, etc.) vers leurs identifiants communes `COM_...` pour préserver les lignes et gares déjà possédées ;
+- ajout d’un contrôle anti-doublons `npm run check:stations` vérifiant IDs, codes INSEE, codes UIC, coordonnées de gares et coordonnées publiques + noms ;
+- maintien du garde-fou de distance : les trajets locaux incohérents, comme Dreux — Vernouillet, retombent sur une distance directe cohérente au lieu d’un détour ferroviaire absurde.
+
 ## Version v62.1.0 — administration Xenao et tracés SNCF RFN
 
 - incrément de version : badge interface `v62.1.0`, package `0.6.1` et schéma serveur `65` ;

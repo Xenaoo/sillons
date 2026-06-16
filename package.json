@@ -1,12 +1,13 @@
 {
   "name": "sillons-rail-browser-game",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Jeu navigateur multijoueur de gestion ferroviaire en France, sans dépendance externe.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js && node --check public/app.js",
-    "reset": "node scripts/reset-save.js"
+    "reset": "node scripts/reset-save.js",
+    "check:stations": "node scripts/check-station-duplicates.js"
   },
   "keywords": [
     "rail",

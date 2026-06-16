@@ -6047,7 +6047,7 @@ dialog.modal--wide {
   line-height: 1;
 }
 
-/* ===== v62.1.0 — panneau admin Xenao ===== */
+/* ===== v62.2.0 — panneau admin Xenao ===== */
 .admin-grid {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);

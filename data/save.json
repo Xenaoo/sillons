@@ -1,5 +1,5 @@
 {
-  "version": 65,
+  "version": 66,
   "createdAt": 1781511648911,
   "now": 1781617410878,
   "day": 46665,
@@ -403,11 +403,11 @@
         {
           "id": "starter-line-caen-bayeux",
           "code": "COM-001",
-          "from": "CAE",
-          "to": "BAY",
+          "from": "COM_14118",
+          "to": "COM_14047",
           "stops": [
-            "CAE",
-            "BAY"
+            "COM_14118",
+            "COM_14047"
           ],
           "trainId": "starter-steam-030-mixte",
           "service": "passengers",
@@ -524,14 +524,14 @@
         }
       ],
       "stations": {
-        "CAE": {
+        "COM_14118": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
           "electrified": false
         },
-        "BAY": {
+        "COM_14047": {
           "level": 1,
           "depot": false,
           "commerce": 0,
