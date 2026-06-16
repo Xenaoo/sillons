@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.12.0';
+const PROJECT_VERSION = 'v62.13.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -2741,12 +2741,13 @@ function formatTrainStatModifier(baseDisplay, modifiedDisplay) {
 function renderTrainStat(label, value, ratio, cls = '', modifiedValue = '', modifiedRatio = null) {
   const pct = Math.max(4, Math.min(100, Math.round(ratio * 100)));
   const extraPct = modifiedRatio == null ? pct : Math.max(pct, Math.min(100, Math.round(modifiedRatio * 100)));
-  const hasModifier = modifiedValue && String(modifiedValue) !== String(value);
+  const addPct = Math.max(0, extraPct - pct);
+  const hasModifier = modifiedValue && String(modifiedValue) !== String(value) && addPct > 0;
   return `
     <div class="train-stat ${cls} ${hasModifier ? 'has-modifier' : ''}">
       <span>${escapeHtml(label)}</span>
       <b>${escapeHtml(String(value))}${formatTrainStatModifier(value, modifiedValue)}</b>
-      <i><em style="width:${pct}%"></em>${hasModifier ? `<strong style="width:${extraPct}%"></strong>` : ''}</i>
+      <i><em style="width:${pct}%"></em>${hasModifier ? `<strong style="left:${pct}%; width:${addPct}%"></strong>` : ''}</i>
     </div>`;
 }
 

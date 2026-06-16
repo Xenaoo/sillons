@@ -1,5 +1,12 @@
 # Changelog
 
+## Version v62.13.0 — barres de bonus lisibles et recherches rééquilibrées
+
+- incrément de version : badge interface `v62.13.0`, package `0.6.13` et schéma serveur `77` ;
+- correction des barres de statistiques du catalogue : la base reste en jaune et seul le supplément après modificateur apparaît en vert ;
+- division par `10` de tous les effets numériques de recherche : un ancien bonus de `+5%` donne maintenant `+0,5%` par niveau ;
+- les valeurs affichées dans les fiches de recherche et les calculs serveur utilisent les nouveaux bonus réduits.
+
 ## Version v62.12.0 — composition détaillée et gares parisiennes revalorisées
 
 - incrément de version : badge interface `v62.12.0`, package `0.6.12` et schéma serveur `76` ;
