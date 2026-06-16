@@ -1,28 +1,28 @@
 {
-  "version": 51,
+  "version": 53,
   "createdAt": 1781511648911,
-  "now": 1781535223675,
-  "day": 391,
-  "eraYear": 1882,
+  "now": 1781536480192,
+  "day": 406,
+  "eraYear": 1883,
   "tickSpeed": 2000,
   "market": {
-    "coal": 1.52,
-    "diesel": 4.35,
-    "electricity": 0.51,
-    "hydrogen": 2.06,
-    "battery": 0.38,
-    "steel": 1.1,
+    "coal": 1.53,
+    "diesel": 4.28,
+    "electricity": 0.48,
+    "hydrogen": 2.07,
+    "battery": 0.37,
+    "steel": 1.08,
     "labor": 0.81,
-    "demand": 0.75,
-    "freight": 1.2
+    "demand": 0.74,
+    "freight": 1.25
   },
   "events": [
     {
-      "kind": "tourism",
-      "title": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques.",
-      "passenger": 1.18,
-      "freight": 0.98,
-      "remaining": 8
+      "kind": "weather",
+      "title": "Météo difficile : La ponctualité devient plus fragile.",
+      "passenger": 0.94,
+      "freight": 0.92,
+      "remaining": 14
     }
   ],
   "news": [
@@ -227,8 +227,12 @@
       "text": "Météo difficile : la ponctualité devient plus fragile."
     },
     {
-      "day": 377,
-      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+      "day": 394,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 402,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
     }
   ],
   "customStations": {},
@@ -240,7 +244,7 @@
       "color": "#60a5fa",
       "logo": "steam_front",
       "region": "France",
-      "cash": 10025715.01365337,
+      "cash": 10024554.050987564,
       "debt": 0,
       "epoch": 0,
       "research": 1,
@@ -260,10 +264,10 @@
       "researchQueue": [],
       "maintenancePolicy": "standard",
       "reputation": 0,
-      "co2": 9768.573360000053,
+      "co2": 10135.812960000056,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 1998.7370066666927,
+        "coal": 1998.688430000027,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -280,8 +284,8 @@
           "id": "starter-steam-030-mixte",
           "modelId": "steam_030_mixte",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.7779105599999818,
-          "age": 399,
+          "condition": 0.7710715199999811,
+          "age": 414,
           "acquiredDay": 1,
           "composition": {
             "mode": "passenger_loco",
@@ -323,11 +327,11 @@
           "electrified": false,
           "createdDay": 1,
           "stats": {
-            "passengers": 128,
+            "passengers": 100,
             "freightTons": 0,
-            "revenue": 434,
+            "revenue": 341,
             "expenses": 514,
-            "profit": -80,
+            "profit": -173,
             "punctuality": 35,
             "satisfaction": 44.2,
             "share": 100,
@@ -348,8 +352,8 @@
               "requestedFrequency": 2
             },
             "market": {
-              "passengerDemand": 386,
-              "freightDemand": 196,
+              "passengerDemand": 303,
+              "freightDemand": 192,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -358,7 +362,7 @@
               "freightCompetitors": 0,
               "passengerLeader": {
                 "companyName": "Compagnie des Sillons",
-                "lineCode": "COM-001",
+                "lineCode": "Caen → Bayeux",
                 "score": 0.41
               },
               "freightLeader": null,
@@ -377,7 +381,7 @@
                   "speed": 31.11,
                   "comfortOrCapacity": 62.25,
                   "reputation": 33.33,
-                  "condition": 83.58,
+                  "condition": 83.08,
                   "staff": 40,
                   "stations": 85,
                   "operations": 100
@@ -388,7 +392,7 @@
             "capacity": {
               "passengers": 143,
               "freightTons": 73,
-              "passengerLoad": 89.45,
+              "passengerLoad": 70.31,
               "freightLoad": 0,
               "crewFactor": 40,
               "stationFactor": 85,
@@ -401,8 +405,8 @@
             "finance": {
               "ticketPrice": 3,
               "farePerKm": 0.12,
-              "ticketRevenue": 455,
-              "ancillaryRevenue": 45,
+              "ticketRevenue": 358,
+              "ancillaryRevenue": 35,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 3,
@@ -413,12 +417,12 @@
               "accessCost": 0,
               "passageRights": 0,
               "variableExpenses": 27,
-              "contribution": 407,
+              "contribution": 314,
               "allocatedOverhead": 487,
-              "netProfit": -80,
-              "margin": 93.88,
+              "netProfit": -173,
+              "margin": 92.15,
               "totalExpenses": 514,
-              "netMargin": -18.37
+              "netMargin": -50.65
             }
           },
           "name": "Caen → Bayeux"
@@ -441,22 +445,22 @@
         }
       },
       "stats": {
-        "passengers": 55476,
+        "passengers": 57152,
         "freightTons": 0,
-        "revenue": 213005,
-        "expenses": 186402,
-        "profit": 26474,
-        "lastRevenue": 493,
+        "revenue": 219544,
+        "expenses": 194097,
+        "profit": 25314,
+        "lastRevenue": 395,
         "lastExpenses": 513,
-        "lastProfit": -21,
+        "lastProfit": -119,
         "punctuality": 35,
         "satisfaction": 44.2,
         "marketShare": 1,
         "lastBreakdown": {
-          "lineRevenue": 434,
-          "stationRevenue": 59,
-          "ticketRevenue": 455,
-          "ancillaryRevenue": 45,
+          "lineRevenue": 341,
+          "stationRevenue": 54,
+          "ticketRevenue": 358,
+          "ancillaryRevenue": 35,
           "freightRevenue": 0,
           "dispatchRevenueBoost": 0,
           "energyCost": 0,
@@ -511,7 +515,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 42.979999999999734,
+      "reputation": 42.709999999999724,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -593,7 +597,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 43.69999999999976,
+      "reputation": 43.42999999999975,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -679,7 +683,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 44.311999999999784,
+      "reputation": 44.041999999999774,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -765,7 +769,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 44.7619999999998,
+      "reputation": 44.49199999999979,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -851,7 +855,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 45.373999999999825,
+      "reputation": 45.103999999999814,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -937,7 +941,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 46.07599999999985,
+      "reputation": 45.80599999999984,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1023,7 +1027,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 46.63399999999987,
+      "reputation": 46.36399999999986,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1109,7 +1113,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 47.245999999999896,
+      "reputation": 46.975999999999885,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1195,7 +1199,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 47.749999999999915,
+      "reputation": 47.479999999999905,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {

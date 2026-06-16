@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.49.0';
+const PROJECT_VERSION = 'v60.50.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -1607,8 +1607,33 @@ function staffRoleLabel(label, count = 1) {
 
 function staffActionTooltip(role, count, kind) {
   const def = app.state.balance.staff[role];
-  if (kind === 'hire') return `Recrute ${count} ${staffRoleLabel(def.label, count)}. Coût immédiat : ${money(def.hireCost * count)}. Salaire ajouté : ${staffSalaryPerHour(def, count)}/h. Effet : Réduit le sous-effectif et améliore la ponctualité/fiabilité selon le métier.`;
-  return `Licencie ${count} ${staffRoleLabel(def.label, count)}. Effet : Réduit les salaires, mais peut dégrader la qualité d’exploitation si l’équipe devient insuffisante.`;
+  const impact = staffRoleImpact(role);
+  const need = Math.ceil(staffNeed(role));
+  const owned = Number(app.state.me?.staff?.[role] || 0);
+  const nextCount = kind === 'hire' ? owned + count : Math.max(0, owned - count);
+  const nextStatus = nextCount >= need ? 'Effectif suffisant' : 'Sous-effectif';
+  if (kind === 'hire') {
+    return [
+      `Action : Recruter ${count} ${staffRoleLabel(def.label, count)}`,
+      `Coût immédiat : ${money(def.hireCost * count)}`,
+      `Salaire ajouté : ${staffSalaryPerHour(def, count)}/h`,
+      '---------------------------------------------',
+      `Besoin actuel : ${need}`,
+      `Effectif après action : ${nextCount}`,
+      `Statut après action : ${nextStatus}`,
+      `Effet métier : ${impact.title}`,
+      `Impact : ${impact.effects.join(' ')}`
+    ].join('\n');
+  }
+  return [
+    `Action : Licencier ${count} ${staffRoleLabel(def.label, count)}`,
+    `Salaire retiré : ${staffSalaryPerHour(def, count)}/h`,
+    '---------------------------------------------',
+    `Besoin actuel : ${need}`,
+    `Effectif après action : ${nextCount}`,
+    `Statut après action : ${nextStatus}`,
+    `Risque : Une équipe insuffisante dégrade l’exploitation.`
+  ].join('\n');
 }
 
 function maintenancePolicyTooltip(policy) {
@@ -3416,10 +3441,11 @@ function driverCoverageClient() {
 }
 
 function staffStatus(role, count) {
-  const r = staffRatio(role, count);
-  if (r >= 1.05) return { label: 'Confortable', cls: 'good', pct: 100 };
-  if (r >= 0.85) return { label: 'Correct', cls: 'warn', pct: Math.round(r * 100) };
-  return { label: 'Sous-effectif', cls: 'bad', pct: Math.round(r * 100) };
+  const need = Math.ceil(staffNeed(role));
+  if (need <= 0) return { label: 'Non requis', cls: 'good', pct: 100 };
+  const owned = Number(count || 0);
+  if (owned >= need) return { label: 'Effectif suffisant', cls: 'good', pct: 100 };
+  return { label: 'Sous-effectif', cls: 'bad', pct: Math.max(0, Math.round(owned / Math.max(1, need) * 100)) };
 }
 
 function staffRoleImpact(role) {
@@ -3455,8 +3481,17 @@ function staffRoleTooltip(role, count) {
   const def = app.state.balance.staff[role];
   const impact = staffRoleImpact(role);
   const need = Math.ceil(staffNeed(role));
-  const ratio = staffStatus(role, count);
-  return `${def.label}. Besoin estimé actuel : ${need}. Statut : ${ratio.label}. Apport : ${impact.title}. ${impact.effects.join(' ')}`;
+  const status = staffStatus(role, count);
+  return [
+    `Métier : ${def.label}`,
+    `Besoin estimé : ${need}`,
+    `Effectif actuel : ${Number(count || 0)}`,
+    `Couverture : ${status.pct}%`,
+    `Statut : ${status.label}`,
+    '---------------------------------------------',
+    `Rôle : ${impact.title}`,
+    `Effets : ${impact.effects.join(' ')}`
+  ].join('\n');
 }
 
 
@@ -3500,9 +3535,9 @@ function renderStaffRole(role, count) {
         <span>Couverture</span><b>${Math.round(staffRatio(role, count) * 100)}%</b>
       </div>
       <div class="actions staff-compact-actions">
-        <button data-action="hire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'hire') + ' ' + staffRoleTooltip(role, count))}>+1</button>
-        <button data-action="hire-staff" data-role="${role}" data-count="5" ${tooltipAttr(staffActionTooltip(role, 5, 'hire') + ' ' + staffRoleTooltip(role, count))}>+5</button>
-        <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire') + ' ' + staffRoleTooltip(role, count))} ${count <= 0 ? 'disabled' : ''}>-1</button>
+        <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire'))} ${count <= 0 ? 'disabled' : ''}>-1</button>
+        <button data-action="hire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'hire'))}>+1</button>
+        <button data-action="hire-staff" data-role="${role}" data-count="5" ${tooltipAttr(staffActionTooltip(role, 5, 'hire'))}>+5</button>
       </div>
     </div>
   `;
@@ -6055,9 +6090,9 @@ function lineStopsLabel(stops) {
 
 function lineDisplayName(line) {
   const stops = lineStopsOf(line);
-  if (line.name) return line.name;
-  if (stops.length < 2) return lineStopsLabel(stops);
-  return `${station(stops[0])?.name || stops[0]} → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`;
+  if (stops.length >= 2) return `${station(stops[0])?.name || stops[0]} → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`;
+  if (line.name && !/^\w{2,4}-\d{3}$/i.test(String(line.name))) return line.name;
+  return line.code || 'Ligne';
 }
 
 function linePublicName(line) {
@@ -6071,10 +6106,15 @@ function linePublicName(line) {
 function lineCompositionService(line, train = null, model = null) {
   const candidateTrain = train || app.state?.me?.trains?.find(t => t.id === line?.trainId);
   const candidateModel = model || (candidateTrain ? app.state?.balance?.trains?.[candidateTrain.modelId] : null);
+  const explicitMode = candidateTrain?.composition?.mode || candidateTrain?.compositionMode || candidateTrain?.compositionSpec?.mode;
+  if (explicitMode === 'freight_loco') return { key: 'freight', label: 'Fret' };
+  if (explicitMode === 'passenger_loco') return { key: 'passengers', label: 'Voyageur' };
+  if (line?.service === 'freight') return { key: 'freight', label: 'Fret' };
+  if (line?.service === 'passengers') return { key: 'passengers', label: 'Voyageur' };
   const profile = candidateTrain && candidateModel ? previewOperatingProfile(candidateTrain, candidateModel) : candidateModel;
   const pax = Number(profile?.capacity ?? candidateModel?.capacity ?? 0);
   const freight = Number(profile?.freight ?? candidateModel?.freight ?? 0);
-  if (freight > pax * 0.35 && freight >= 80) return { key: 'freight', label: 'Fret' };
+  if (freight > pax && freight >= 80) return { key: 'freight', label: 'Fret' };
   return { key: 'passengers', label: 'Voyageur' };
 }
 

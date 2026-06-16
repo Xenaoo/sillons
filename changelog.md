@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Version v60.50.0 — RH lisible et typage fiable des lignes
+
+- Incrément de version de cette passe : badge interface `v60.50.0`, package `0.4.41` et schéma d’état serveur `53` ;
+- réorganisation des boutons RH : le bouton `-1` est maintenant placé avant `+1` et `+5` ;
+- restructuration des infobulles RH en lignes distinctes : action, coût, salaire, besoin, effectif après action, statut et effet métier ;
+- les vignettes RH en sous-effectif sont maintenant teintées en rouge sur toute leur surface, comme les vignettes de ligne en anomalie ;
+- correction de la détection `Voyageur` / `Fret` des lignes : le type affiché se base d’abord sur le mode de composition explicite du matériel roulant, et non plus sur une comparaison fragile capacité/fret ;
+- correction du cas de la sauvegarde de départ : la ligne Caen → Bayeux équipée en composition voyageurs n’est plus affichée comme ligne fret ;
+- durcissement préventif : si une ligne possède des arrêts valides, son nom public est toujours reconstruit sous la forme `Gare d’origine → Gare de destination`, sans réutiliser un ancien code interne.
+
 ## Version v60.49.0 — RH compacte, carte neutralisée, animation trains et noms de lignes
 
 - incrément de version de cette passe : badge interface `v60.49.0`, package `0.4.40` et schéma d’état serveur `52` ;
