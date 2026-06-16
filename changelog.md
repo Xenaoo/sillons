@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.17.0 — correction panneau latéral et trains du joueur
+
+- incrément de version : badge interface `v62.17.0`, package `0.6.17` et schéma serveur `81` ;
+- correction du layout du panneau latéral : la largeur normale du panneau est restaurée ;
+- repositionnement de la flèche sur la séparation carte/panneau, légèrement décalée vers la droite ;
+- correction de l’overflow qui faisait sortir le panneau de la fenêtre en mode réduit ;
+- audit et correction du rendu des trains : les trains du joueur connecté sont maintenant dessinés depuis `app.state.me` en passe dédiée ;
+- les trains du joueur connecté restent visibles quel que soit le zoom ;
+- les trains des autres joueurs restent masqués jusqu’au zoom maximal.
+
 ## Version v62.16.0 — carte, maintenance globale, ressources et gares compactes
 
 - incrément de version : badge interface `v62.16.0`, package `0.6.16` et schéma serveur `80` ;

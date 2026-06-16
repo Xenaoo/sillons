@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.16.0';
+const PROJECT_VERSION = 'v62.17.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -6188,24 +6188,48 @@ function visualLineWithEffectiveFrequency(line) {
 
 function drawAllLines(ctx, lite = false) {
   const players = app.state.players || [];
-  for (const player of players) {
+  const me = app.state.me || null;
+  const maxZoom = mapMaxZoomReached();
+
+  const drawLinesForPlayer = (player, own = false) => {
+    if (!player) return;
     for (const line of player.lines || []) {
       if (!line.active) continue;
       const route = getRouteForStops(lineStopsOf(line));
       if (!route.points.length) continue;
-      const own = app.state.me && player.id === app.state.me.id;
+
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
       if (lite) continue;
-      if (!own && !mapMaxZoomReached()) continue;
-      const trains = lineAssignedTrainsClient(line, player).filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
+
+      // Les trains du joueur connecté sont toujours dessinés.
+      // Ceux des autres compagnies restent masqués tant que le zoom maximal n'est pas atteint.
+      if (!own && !maxZoom) continue;
+
+      const trains = lineAssignedTrainsClient(line, player)
+        .filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
       if (!trains.length) continue;
-      if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage' || line.stats?.status === 'train-out-of-service') continue;
+
+      // Les états de pénurie masquent seulement les trains concurrents.
+      // Le joueur connecté doit toujours voir son exploitation et son animation.
+      if (!own && (
+        line.stats?.status === 'resource-shortage'
+        || line.stats?.status === 'driver-shortage'
+        || line.stats?.status === 'train-out-of-service'
+      )) continue;
+
       trains.forEach((train, index) => {
         const model = app.state.balance.trains[train.modelId];
-        drawTrainSprite(ctx, route.points, player.color, { ...visualLineWithEffectiveFrequency(line), id: `${line.id}:${index}` }, model, own, train);
+        if (!model) return;
+        drawTrainSprite(ctx, route.points, player.color, { ...visualLineWithEffectiveFrequency(line), id: `${player.id}:${line.id}:${index}` }, model, own, train);
       });
     }
+  };
+
+  for (const player of players) {
+    if (me && player.id === me.id) continue;
+    drawLinesForPlayer(player, false);
   }
+  drawLinesForPlayer(me, true);
 }
 
 function drawRailLine(ctx, points, color, own, electrified, lite = false) {
