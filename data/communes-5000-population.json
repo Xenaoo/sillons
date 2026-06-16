@@ -35134,7 +35134,15 @@
       "freight": 106,
       "tourism": 83,
       "commune": true,
-      "populationSource": "geo.api.gouv.fr"
+      "populationSource": "geo.api.gouv.fr",
+      "stationLat": 48.6544,
+      "stationLon": 2.3946,
+      "stationName": "Grigny Centre",
+      "stationUic": "",
+      "stationTrigramme": "",
+      "stationIdGare": "",
+      "stationSource": "critical-fallback-grigny-centre",
+      "hasPassengerStation": true
     },
     {
       "id": "COM_91312",

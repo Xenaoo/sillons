@@ -1563,6 +1563,25 @@ body.dragging-map #map {
 }
 
 /* Responsive : la carte reste visible, elle passe au-dessus seulement si l’écran est trop étroit. */
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .layout,
   .layout.map-visible,
@@ -1850,6 +1869,25 @@ button[data-tooltip]:focus-visible::before {
 /* Neutralise les anciens styles de hero-card si jamais un ancien bloc reste en cache. */
 .hero-card {
   display: none !important;
+}
+
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
 }
 
 @media (max-width: 1180px) {
@@ -3239,6 +3277,25 @@ button[data-tooltip]:focus-visible::before {
   padding: 6px;
 }
 
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .fleet-kpi-card,
   .policy-stats {
@@ -3517,15 +3574,20 @@ input[type="number"] {
 .fleet-composition-layout {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(440px, 1.55fr) minmax(440px, 1.55fr);
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   align-items: start;
+  max-width: 100%;
+  overflow: hidden;
 }
 .composition-list-card {
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .composition-editor-card {
-  grid-column: 2 / -1;
+  grid-column: 2;
+  min-width: 0;
   max-height: calc(100vh - 205px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -3571,9 +3633,21 @@ input[type="number"] {
 }
 .composition-train-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+}
+.composition-train-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.composition-train-head .tag {
+  flex: 0 1 auto;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .composition-mini-stats {
   display: flex;
@@ -3958,6 +4032,25 @@ input[type="number"] {
   margin: 10px 0 4px;
 }
 
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .fleet-composition-layout {
     grid-template-columns: 1fr;
@@ -4122,6 +4215,25 @@ input[type="number"] {
 .epoch-traffic-progress > i {
   transition: width 160ms linear;
   will-change: width;
+}
+
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
 }
 
 @media (max-width: 1180px) {
@@ -4409,6 +4521,25 @@ button.train-prereq-chip.missing:hover {
   .fleet-catalog-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 }
 
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .fleet-catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
@@ -4653,6 +4784,25 @@ button.train-prereq-chip.missing:hover {
 
 @media (max-width: 1500px) {
   .research-era-section .tech-tree { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
 }
 
 @media (max-width: 1180px) {
@@ -5518,6 +5668,25 @@ dialog.modal--wide {
   gap: 7px;
   margin-top: 8px;
 }
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .budget-summary-grid,
   .budget-mini-grid {
@@ -5623,6 +5792,25 @@ dialog.modal--wide {
   background: #6ac58f;
   box-shadow: 0 0 8px rgba(106,197,143,.42);
 }
+.composition-cost-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+}
+.composition-cost-summary b {
+  color: #f0c875;
+}
+.composition-cost-summary .good-text b {
+  color: #9be7a2;
+}
+.composition-cost-summary .warn-text b {
+  color: #ffb86b;
+}
+
 @media (max-width: 1180px) {
   .staff-grid-compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));

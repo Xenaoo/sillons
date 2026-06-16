@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.8.0';
+const PROJECT_VERSION = 'v62.9.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -76,6 +76,7 @@ const app = {
   routeCache: new Map(),
   osmRouteCache: new Map(),
   osmRoutePending: new Set(),
+  osmRouteMissing: new Set(),
   lineDraft: loadJson('sillons.lineDraft', {}),
   stationSearch: { query: '', candidateId: '' },
   stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
@@ -2823,6 +2824,103 @@ function selectedCompositionVariant(train, model = app.state.balance.trains[trai
   return variants.find(v => v.id === selectedId) || variants[0] || null;
 }
 
+function compositionVariantAssetMultiplierClient(variant) {
+  if (!variant) return 1;
+  const stats = variant.stats || variant;
+  const raw = 1
+    + (Number(stats.capacityMultiplier ?? 1) - 1) * 0.42
+    + (Number(stats.speedMultiplier ?? 1) - 1) * 0.35
+    + (Number(stats.revenueMultiplier ?? 1) - 1) * 0.38
+    + Math.max(0, Number(stats.comfortDelta || 0)) * 0.55
+    + Math.max(0, Number(stats.reliabilityDelta || 0)) * 2.5
+    + Math.max(0, Number(stats.maintenanceMultiplier ?? 1) - 1) * 0.14
+    + Math.max(0, Number(stats.energyMultiplier ?? 1) - 1) * 0.10
+    + Math.max(0, Number(variant.requiredModelEpoch ?? variant.requiredEpoch ?? 0)) * 0.08;
+  return clamp(raw, 0.72, 1.85);
+}
+
+function compositionVariantByIdClient(mode, id) {
+  const list = CLIENT_COMPOSITION_VARIANTS?.[mode] || [];
+  return list.find(v => v.id === id) || list[0] || null;
+}
+
+function compositionUnitCostClient(model, mode, variantId = '') {
+  const modelPrice = Math.max(50000, Number(model?.price || 0));
+  if (mode === 'multiple_unit') {
+    const spec = buildClientCompositionSpec(model, 'multiple_unit');
+    const defaultUnits = Math.max(1, Number(spec.powerUnits?.default || 1));
+    return Math.max(85000, Math.round(modelPrice * 0.58 / defaultUnits));
+  }
+  if (mode === 'freight_loco') {
+    const spec = buildClientCompositionSpec(model, 'freight_loco');
+    const defaultWagons = Math.max(1, Number(spec.freightCars?.default || 1));
+    const variant = compositionVariantByIdClient('freight_loco', variantId || 'covered');
+    return Math.max(18000, Math.round(modelPrice * 0.34 / defaultWagons * compositionVariantAssetMultiplierClient(variant)));
+  }
+  const spec = buildClientCompositionSpec(model, 'passenger_loco');
+  const defaultCars = Math.max(1, Number(spec.passengerCars?.default || 1));
+  const variant = compositionVariantByIdClient('passenger_loco', variantId || 'standard');
+  return Math.max(26000, Math.round(modelPrice * 0.38 / defaultCars * compositionVariantAssetMultiplierClient(variant)));
+}
+
+function compositionAssetValueClient(model, composition, mode = null) {
+  if (!model || !composition) return 0;
+  const activeMode = mode || composition.mode || compositionDefaultModeForModelClient(model);
+  if (activeMode === 'multiple_unit') {
+    const spec = buildClientCompositionSpec(model, 'multiple_unit');
+    const count = clamp(Math.round(Number(composition.powerUnits ?? spec.powerUnits?.default ?? 1)), spec.powerUnits.min, spec.powerUnits.max);
+    return Math.round(count * compositionUnitCostClient(model, 'multiple_unit'));
+  }
+  if (activeMode === 'freight_loco') {
+    const spec = buildClientCompositionSpec(model, 'freight_loco');
+    const count = clamp(Math.round(Number(composition.freightCars ?? spec.freightCars?.default ?? 0)), spec.freightCars.min, spec.freightCars.max);
+    return Math.round(count * compositionUnitCostClient(model, 'freight_loco', composition.freightVariant || 'covered'));
+  }
+  const spec = buildClientCompositionSpec(model, 'passenger_loco');
+  const count = clamp(Math.round(Number(composition.passengerCars ?? spec.passengerCars?.default ?? 0)), spec.passengerCars.min, spec.passengerCars.max);
+  return Math.round(count * compositionUnitCostClient(model, 'passenger_loco', composition.passengerVariant || 'standard'));
+}
+
+function compositionChangeEconomyClient(train, payload) {
+  const model = app.state.balance.trains[train.modelId];
+  const current = train.composition || {};
+  const mode = payload?.mode || activeCompositionMode(train, model);
+  const target = { ...current, mode };
+  if (mode === 'multiple_unit') target.powerUnits = Number(payload.powerUnits ?? current.powerUnits ?? buildClientCompositionSpec(model, 'multiple_unit').powerUnits.default);
+  if (mode === 'freight_loco') {
+    target.freightCars = Number(payload.freightCars ?? current.freightCars ?? buildClientCompositionSpec(model, 'freight_loco').freightCars.default);
+    target.freightVariant = payload.freightVariant || current.freightVariant || 'covered';
+  }
+  if (mode === 'passenger_loco') {
+    target.passengerCars = Number(payload.passengerCars ?? current.passengerCars ?? buildClientCompositionSpec(model, 'passenger_loco').passengerCars.default);
+    target.passengerVariant = payload.passengerVariant || current.passengerVariant || 'standard';
+  }
+  const beforeValue = compositionAssetValueClient(model, current, current.mode || compositionDefaultModeForModelClient(model));
+  const afterValue = compositionAssetValueClient(model, target, target.mode);
+  const delta = Math.round(afterValue - beforeValue);
+  const conditionFactor = clamp(Number(train?.condition || 0), 0.05, 1);
+  return {
+    beforeValue,
+    afterValue,
+    delta,
+    cost: delta > 0 ? delta : 0,
+    refund: delta < 0 ? Math.round(Math.abs(delta) * 0.78 * conditionFactor) : 0,
+    target
+  };
+}
+
+function renderCompositionCostSummary(train) {
+  const model = app.state.balance.trains[train.modelId];
+  const composition = train.composition || {};
+  const value = compositionAssetValueClient(model, composition, composition.mode || activeCompositionMode(train, model));
+  const condition = Math.round(clamp(Number(train.condition || 0), 0, 1) * 100);
+  return `
+    <div class="composition-cost-summary" id="compositionCostSummary">
+      <span>Valeur voitures/wagons actuelle : <b>${money(value)}</b></span>
+      <span class="small muted">Tout ajout est facturé. Tout retrait est remboursé à 78% de sa valeur, corrigé par l’usure du train (${condition}%).</span>
+    </div>`;
+}
+
 function trainConditionPerformanceFactorClient(train) {
   const condition = clamp(Number(train?.condition ?? 1), 0, 1);
   if (condition <= 0) return 0;
@@ -3246,6 +3344,7 @@ function renderCompositionEditor(train) {
         <div class="composition-controls-top">
           ${quantityControl}
           <div class="composition-save-box">
+            ${renderCompositionCostSummary(train)}
             <p class="small muted">Impact ligne : Capacité d’exploitation = composition × fréquence. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
             <button class="primary" data-action="save-train-composition" data-id="${train.id}">Enregistrer la composition</button>
           </div>
@@ -4887,6 +4986,12 @@ if (action === 'save-train-composition') {
   } else {
     payload.passengerCars = Number($('#compPassengerCarsValue')?.value || $('#compPassengerCars')?.value || 1);
     payload.passengerVariant = document.querySelector('input[name="compPassengerVariant"]:checked')?.value || '';
+  }
+  const economy = compositionChangeEconomyClient(train, payload);
+  if (economy.cost > 0) {
+    if (!window.confirm(`Modifier cette composition ?\n\nCoût des voitures/wagons ajoutés : ${money(economy.cost)}.`)) return;
+  } else if (economy.refund > 0) {
+    if (!window.confirm(`Modifier cette composition ?\n\nRemboursement estimé au prorata de l’usure : ${money(economy.refund)}.`)) return;
   }
   return doAction('updateTrainComposition', payload);
 }
@@ -6687,7 +6792,8 @@ function routeGeometryKey(a, b) {
 function geometryForRoute(a, b) {
   const direct = cachedRailGeometryForRoute(a, b);
   if (direct) return direct;
-  ensureRailwayRouteGeometry(a, b);
+  const key = routeGeometryKey(a, b);
+  if (!app.osmRouteMissing.has(key) && !app.osmRouteMissing.has(routeGeometryKey(b, a))) ensureRailwayRouteGeometry(a, b);
   return null;
 }
 
@@ -6701,7 +6807,8 @@ function cachedRailGeometryForRoute(a, b) {
 
 async function ensureRailwayRouteGeometry(a, b) {
   const key = routeGeometryKey(a, b);
-  if (app.osmRoutePending.has(key)) return;
+  if (app.osmRoutePending.has(key) || app.osmRouteMissing.has(key) || app.osmRouteMissing.has(routeGeometryKey(b, a))) return;
+  if (app.osmRoutePending.size >= 3) return;
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
   const directKm = stationRouteDistanceClient(sa, sb);
@@ -6722,10 +6829,12 @@ async function ensureRailwayRouteGeometry(a, b) {
   if (bboxArea > 3.4) return;
 
   app.osmRoutePending.add(key);
+  let foundGeometry = false;
   try {
     const sncf = await fetchSncfRouteGeometry(a, b);
     if (sncf?.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, sncf, OSM_ROUTE_CACHE_MAX_ENTRIES);
+      foundGeometry = true;
       app.routeCache.clear();
       invalidateMapProjection('sncf-rail-geometry-loaded');
       return;
@@ -6749,12 +6858,14 @@ out geom;
     const coords = buildRailwayPathFromOverpass(data.elements || [], { lat: latA, lon: lonA }, { lat: latB, lon: lonB }, directKm);
     if (coords.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
+      foundGeometry = true;
       app.routeCache.clear();
       invalidateMapProjection('rail-geometry-loaded');
     }
   } catch (error) {
     // Non bloquant : le graphe ferroviaire interne reste utilisé.
   } finally {
+    if (!foundGeometry) app.osmRouteMissing.add(key);
     app.osmRoutePending.delete(key);
   }
 }

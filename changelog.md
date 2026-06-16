@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Version v62.9.0 — compositions payantes, carte corrigée et optimisation des tracés
+
+- incrément de version : badge interface `v62.9.0`, package `0.6.9` et schéma serveur `73` ;
+- correction de la mise en page `Parc -> Composition` : la liste des trains ne déborde plus du cadre et l’éditeur utilise une colonne fluide ;
+- ajout d’une économie de composition : les voitures, wagons et unités motrices ajoutés sont facturés selon la valeur du matériel ;
+- ajout du remboursement des voitures/wagons retirés, calculé à 78 % de leur valeur puis corrigé par l’état d’usure du train ;
+- prise en compte de la valeur réelle de la composition lors de la revente d’un train afin d’éviter les incohérences après retrait de voitures ou wagons ;
+- ajout d’une confirmation avant modification de composition quand l’opération coûte de l’argent ou génère un remboursement ;
+- audit performance de la création de lignes longues : cache serveur des géométries SNCF/RFN, Dijkstra RFN accéléré par file de priorité et réutilisation de la distance déjà calculée lors de la création ;
+- réduction des appels concurrents de géométrie côté client pour éviter de saturer le serveur quand une ligne comporte beaucoup d’arrêts ;
+- renforcement du placement des gares SNCF : extraction plus robuste des champs, appairage plus strict par code commune INSEE et distance maximale contrôlée ;
+- ajout d’un audit automatique des placements incohérents avec correction ciblée de Grigny vers `Grigny Centre` quand les données SNCF ne sont pas encore disponibles.
+
 ## Version v62.8.0 — progression d’époque au trafic et création de gare payante
 
 - incrément de version : badge interface `v62.8.0`, package `0.6.8` et schéma serveur `72` ;
