@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## Version v62.5.0 — fallback sinueux des tracés sans géométrie SNCF
+
+- incrément de version : badge interface `v62.5.0`, package `0.6.5` et schéma serveur `69` ;
+- remplacement du fallback visuel des tronçons sans géométrie SNCF/RFN ou Overpass : l'ancien arc unique est supprimé au profit d'un tracé sinueux déterministe ;
+- conservation des coordonnées exactes des gares en début et fin de tronçon, sans déplacement des points officiels ;
+- génération stable par paire de gares : le même tronçon garde la même forme à chaque affichage, dans les deux sens ;
+- les géométries officielles SNCF/RFN et les tracés réels chargés restent prioritaires ; le fallback sinueux ne s'applique que lorsqu'aucun tracé réel exploitable n'est disponible.
+
+## Version v62.4.0 — revente des gares et péages de desserte
+
+- incrément de version : badge interface `v62.4.0`, package `0.6.4` et schéma serveur `68` ;
+- ajout d’une action de vente des gares possédées, accessible depuis la fiche de gare et la liste des gares exploitées ;
+- calcul du remboursement en additionnant la valeur actuelle de la gare, des niveaux construits, des commerces, des ateliers de maintenance et du dépôt ;
+- blocage de la vente lorsqu’une ligne active, du joueur ou d’un autre compte, dessert encore la gare afin d’éviter des lignes actives rattachées à une gare redevenue libre ;
+- conservation de la possibilité de créer une ligne passant par une gare possédée par un autre joueur ;
+- ajout du péage de gare explicite : une ligne qui dessert une gare concurrente paie un montant récurrent au propriétaire, en complément des droits déjà calculés sur les tronçons partagés ;
+- détail financier enrichi avec `stationAccessCost` et `infrastructurePassageCost`, tout en conservant `accessCost` comme total de péage.
+
 ## Version v62.3.0 — suppression des compagnies IA
 
 - incrément de version : badge interface `v62.3.0`, package `0.6.3` et schéma serveur `67` ;

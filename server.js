@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.3.0';
-const STATE_SCHEMA_VERSION = 67;
+const PROJECT_VERSION = 'v62.5.0';
+const STATE_SCHEMA_VERSION = 69;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -77,6 +77,8 @@ const ECONOMY = Object.freeze({
   stationDepotCost: 150,
   ownedStationIncomeBase: 18,
   ownedStationCommerceIncome: 46,
+  stationAccessTollBase: 18,
+  stationAccessTollCapacityFactor: 0.045,
   idleTrainStorageFactor: 0.000055,
   researchLabBaseCost: 180,
   researchLabEngineerCost: 95
@@ -993,12 +995,6 @@ function activePlayers() {
   const players = Object.values(state.players || {});
   if (!linkedIds.size) return players;
   return players.filter(player => linkedIds.has(String(player.id)));
-}
-
-function isActivePlayerId(playerId) {
-  const linkedIds = userLinkedPlayerIds(state.users || {});
-  if (!linkedIds.size) return Boolean(state.players?.[playerId]);
-  return linkedIds.has(String(playerId || ''));
 }
 
 function migrateState(loaded) {
@@ -2107,6 +2103,7 @@ function applyAction(playerId, type, payload) {
     closeLine: () => actionCloseLine(player, payload),
     updateLine: () => actionUpdateLine(player, payload),
     upgradeStation: () => actionUpgradeStation(player, payload),
+    sellStation: () => actionSellStation(player, payload),
     createCustomStation: () => actionCreateCustomStation(player, payload),
     hireStaff: () => actionHireStaff(player, payload),
     fireStaff: () => actionFireStaff(player, payload),
@@ -2492,6 +2489,75 @@ function stationUpgradeCost(station, asset, kind) {
   if (kind === 'maintenance') return Math.round(90000 * (asset.maintenance + 1) * asset.level);
   if (kind === 'depot') return 180000;
   return 0;
+}
+
+function stationSaleRefundBreakdown(station, asset) {
+  const normalized = {
+    level: clamp(Math.floor(Number(asset?.level || 1)), 1, 5),
+    commerce: clamp(Math.floor(Number(asset?.commerce || 0)), 0, 4),
+    maintenance: clamp(Math.floor(Number(asset?.maintenance || 0)), 0, 4),
+    depot: Boolean(asset?.depot)
+  };
+  const acquisition = stationAcquisitionCost(station);
+  let levels = 0;
+  for (let level = 1; level < normalized.level; level++) {
+    levels += stationUpgradeCost(station, { ...normalized, level }, 'level');
+  }
+  let commerces = 0;
+  for (let commerce = 0; commerce < normalized.commerce; commerce++) {
+    commerces += stationUpgradeCost(station, { ...normalized, commerce }, 'commerce');
+  }
+  let maintenance = 0;
+  for (let step = 0; step < normalized.maintenance; step++) {
+    maintenance += stationUpgradeCost(station, { ...normalized, maintenance: step }, 'maintenance');
+  }
+  const depot = normalized.depot ? stationUpgradeCost(station, normalized, 'depot') : 0;
+  const total = Math.round(acquisition + levels + commerces + maintenance + depot);
+  return { acquisition, levels, commerces, maintenance, depot, total };
+}
+
+function stationSaleBlockingLine(stationId) {
+  for (const player of activePlayers()) {
+    for (const line of player.lines || []) {
+      if (!line?.active) continue;
+      if (lineStops(line).includes(stationId)) {
+        return { player, line };
+      }
+    }
+  }
+  return null;
+}
+
+function actionSellStation(player, payload) {
+  const stationId = String(payload.stationId || '');
+  const station = stationById(stationId);
+  if (!station) return fail('Gare introuvable.');
+  if (!player.stations?.[stationId]) return fail('Cette gare ne t’appartient pas.');
+
+  const blocking = stationSaleBlockingLine(stationId);
+  if (blocking) {
+    const lineName = lineRouteName(lineStops(blocking.line));
+    const ownerName = blocking.player.id === player.id ? 'ta compagnie' : blocking.player.name;
+    return fail(
+      'Vente impossible : gare encore utilisée.',
+      `${station.name} est desservie par ${lineName} (${ownerName}). Ferme ou modifie d’abord les lignes actives qui utilisent cette gare.`
+    );
+  }
+
+  const asset = normalizeStationAsset(player, stationId);
+  const refund = stationSaleRefundBreakdown(station, asset);
+  player.cash += refund.total;
+  delete player.stations[stationId];
+
+  const custom = state.customStations?.[stationId];
+  if (custom?.ownerId === player.id) delete state.customStations[stationId];
+
+  notify(
+    player,
+    `${station.name} vendue : remboursement ${money(refund.total)} ` +
+    `(gare ${money(refund.acquisition)}, niveaux ${money(refund.levels)}, commerces ${money(refund.commerces)}, ateliers ${money(refund.maintenance)}, dépôt ${money(refund.depot)}).`
+  );
+  return ok(`${station.name} vendue pour ${money(refund.total)}.`);
 }
 
 
@@ -3111,6 +3177,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           maintenanceCost: 0,
           accessCost: 0,
           passageRights: 0,
+          infrastructurePassageCost: 0,
+          stationAccessCost: 0,
           variableExpenses: 0,
           contribution: 0,
           allocatedOverhead: 0,
@@ -3333,6 +3401,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         maintenanceCost: Math.round(maintenanceCost),
         accessCost: Math.round(accessCost),
         passageRights: Math.round(accessCost),
+        infrastructurePassageCost: Math.round(passageRights.infrastructureTotal || 0),
+        stationAccessCost: Math.round(passageRights.stationTotal || 0),
         variableExpenses: Math.round(variableExpenses),
         contribution: Math.round(contribution),
         allocatedOverhead: 0,
@@ -3420,6 +3490,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     acc.commercialControlCost += Number(finance.commercialControlCost || 0);
     acc.commercialAdministrationCost += Number(finance.commercialAdministrationCost || 0);
     acc.accessCost += Number(finance.accessCost || 0);
+    acc.infrastructurePassageCost += Number(finance.infrastructurePassageCost || 0);
+    acc.stationAccessCost += Number(finance.stationAccessCost || 0);
     acc.variableExpenses += Number(finance.variableExpenses || 0);
     return acc;
   }, {
@@ -3435,6 +3507,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     commercialControlCost: 0,
     commercialAdministrationCost: 0,
     accessCost: 0,
+    infrastructurePassageCost: 0,
+    stationAccessCost: 0,
     variableExpenses: 0
   });
   player.stats.lastBreakdown = {
@@ -3452,6 +3526,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     commercialControlCost: Math.round(lineFinanceTotals.commercialControlCost),
     commercialAdministrationCost: Math.round(lineFinanceTotals.commercialAdministrationCost),
     accessCost: Math.round(lineFinanceTotals.accessCost),
+    infrastructurePassageCost: Math.round(lineFinanceTotals.infrastructurePassageCost),
+    stationAccessCost: Math.round(lineFinanceTotals.stationAccessCost),
     passageRightsRevenue: 0,
     staffCost: Math.round(staffCost),
     stationCost: Math.round(stationCost),
@@ -4345,7 +4421,7 @@ function stationOwnerInfo(stationId) {
     }
   }
   const custom = state.customStations?.[stationId];
-  if (custom?.ownerId && state.players[custom.ownerId] && isActivePlayerId(custom.ownerId)) {
+  if (custom?.ownerId && state.players[custom.ownerId]) {
     const owner = state.players[custom.ownerId];
     return { player: owner, asset: ensureStationAsset(owner, stationId) };
   }
@@ -4367,7 +4443,20 @@ function lineStopsOwnershipProblem(stops) {
 function computePassageRights(player, line, model, distance, infrastructureUsage = null) {
   const usage = infrastructureUsage || buildInfrastructureUsage();
   const byOwner = new Map();
-  let total = 0;
+  let infrastructureTotal = 0;
+  let stationTotal = 0;
+
+  function addAllocation(ownerId, amount, sourceKey) {
+    const owner = state.players[ownerId];
+    if (!owner || !Number.isFinite(amount) || amount <= 0) return;
+    const current = byOwner.get(ownerId) || { ownerId, amount: 0, segments: [] };
+    current.amount += amount;
+    if (sourceKey) current.segments.push(sourceKey);
+    byOwner.set(ownerId, current);
+  }
+
+  const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
+  const frequency = Math.max(1, Number(line.frequency || 1));
 
   for (const segment of lineSegments(line)) {
     const entry = usage.get(segment.key);
@@ -4377,30 +4466,38 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
       .filter(ownerId => ownerId && ownerId !== player.id))];
     if (!otherOwners.length) continue;
 
-    const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
-    const segmentAmount = 0.0065 * segment.distance * Math.max(1, Number(line.frequency || 1)) * capacityBase;
-    total += segmentAmount;
+    const segmentAmount = 0.0065 * segment.distance * frequency * capacityBase;
+    infrastructureTotal += segmentAmount;
 
     const amountPerOwner = segmentAmount / otherOwners.length;
-    for (const ownerId of otherOwners) {
-      const owner = state.players[ownerId];
-      if (!owner) continue;
-      const current = byOwner.get(ownerId) || { ownerId, amount: 0, segments: [] };
-      current.amount += amountPerOwner;
-      current.segments.push(segment.key);
-      byOwner.set(ownerId, current);
-    }
+    for (const ownerId of otherOwners) addAllocation(ownerId, amountPerOwner, `segment:${segment.key}`);
   }
 
+  for (const stopId of [...new Set(lineStops(line))]) {
+    const ownerInfo = stationOwnerInfo(stopId);
+    if (!ownerInfo || ownerInfo.player.id === player.id) continue;
+    const asset = ownerInfo.asset || { level: 1, commerce: 0, maintenance: 0, depot: false };
+    const qualityFactor = 1
+      + clamp(Number(asset.level || 1), 1, 5) * 0.10
+      + clamp(Number(asset.commerce || 0), 0, 4) * 0.04
+      + clamp(Number(asset.maintenance || 0), 0, 4) * 0.025
+      + (asset.depot ? 0.06 : 0);
+    const stopAmount = (ECONOMY.stationAccessTollBase + capacityBase * ECONOMY.stationAccessTollCapacityFactor) * frequency * qualityFactor;
+    stationTotal += stopAmount;
+    addAllocation(ownerInfo.player.id, stopAmount, `station:${stopId}`);
+  }
+
+  const total = infrastructureTotal + stationTotal;
   return {
     total,
+    infrastructureTotal,
+    stationTotal,
     allocations: [...byOwner.values()].map(item => ({
       ...item,
       amount: Math.round(item.amount)
     }))
   };
 }
-
 function recordPassageRights(ledger, payer, line, rights) {
   if (!ledger || !rights?.allocations?.length) return;
   for (const allocation of rights.allocations) {
@@ -5037,7 +5134,9 @@ function buildBalance() {
       stationLevelCost: ECONOMY.stationLevelCost,
       stationCommerceCost: ECONOMY.stationCommerceCost,
       stationMaintenanceCost: ECONOMY.stationMaintenanceCost,
-      stationDepotCost: ECONOMY.stationDepotCost
+      stationDepotCost: ECONOMY.stationDepotCost,
+      stationAccessTollBase: ECONOMY.stationAccessTollBase,
+      stationAccessTollCapacityFactor: ECONOMY.stationAccessTollCapacityFactor
     }, techLabels: {
       traction: 'Traction',
       energy: 'Énergie',

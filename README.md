@@ -20,18 +20,19 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 
 - Serveur Node.js natif, sans Express ni Socket.io.
 - Interface web HTML/CSS/JS.
-- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, points de villes/gares reconstruits depuis les données officielles et géométries SNCF RFN quand elles sont disponibles.
+- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, points de villes/gares reconstruits depuis les données officielles, géométries SNCF RFN quand elles sont disponibles et fallback sinueux pour les liaisons sans tracé officiel.
 - Multijoueur par état serveur partagé et polling.
 - Création de compagnie.
 - Achat de matériel roulant.
 - Création de lignes voyageurs, fret ou mixtes.
 - Gestion de fréquence, tarifs, revenus et fréquence effective selon la couverture conducteurs.
-- Gares améliorables avec coût affiché, niveaux maximums et sélection persistante.
+- Gares améliorables avec coût affiché, niveaux maximums, sélection persistante et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
 - Salariés : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs, ingénieurs.
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
 - Recherche et progression d’époque.
 - Événements dynamiques.
 - Classement multijoueur entre comptes réels uniquement, sans génération de compagnies IA.
+- Utilisation possible des gares possédées par un autre joueur, avec péages reversés au propriétaire.
 - Sauvegarde automatique dans `data/save.json`.
 - Panneau administrateur réservé au compte `Xenao`, avec édition des compagnies et journal de connexions horodatées.
 

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.3.0';
+const PROJECT_VERSION = 'v62.5.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -2424,6 +2424,8 @@ function renderLineInsightPanels(line) {
           <span class="expense">Contrôle & fraude <b>${lineMoney(finance.commercialControlCost)}</b></span>
           <span class="expense">Organisation commerciale <b>${lineMoney(finance.commercialAdministrationCost)}</b></span>
           <span class="expense">Péage <b>${lineMoney(finance.accessCost)}</b></span>
+          ${Number(finance.stationAccessCost || 0) > 0 ? `<span class="expense">Péage gares <b>${lineMoney(finance.stationAccessCost)}</b></span>` : ''}
+          ${Number(finance.infrastructurePassageCost || 0) > 0 ? `<span class="expense">Péage tronçons <b>${lineMoney(finance.infrastructurePassageCost)}</b></span>` : ''}
         </div>
       </section>
 
@@ -3757,6 +3759,7 @@ function renderSelectedStation(s) {
         <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
         <span>Dépôt</span><b>${asset?.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset?.electrified ? 'Oui' : 'Non'}</b>
+        ${asset ? `<span>Remboursement vente</span><b>${money(stationSaleRefundBreakdown(s, asset).total)}</b>` : ''}
         ${asset ? stationOperatingCostRows(asset) : ''}
       </div>
       <div class="actions station-upgrades">
@@ -3765,8 +3768,9 @@ function renderSelectedStation(s) {
             ${escapeHtml(up.label)} <span>${!asset && up.kind !== 'level' ? 'Verrouillé' : up.maxed ? 'Max' : money(up.cost)}</span>
           </button>
         `).join('')}
+        ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${activeStationUsersClient(s.id).length ? 'disabled' : ''}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
       </div>
-      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser uniquement si ton itinéraire paie des droits de passage.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront des droits de passage s’ils l’empruntent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare et des droits de passage si ton itinéraire l’emprunte.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
     </div>
   `;
 }
@@ -3827,6 +3831,46 @@ function stationUpgradeCost(s, asset, kind) {
   return 0;
 }
 
+function stationSaleRefundBreakdown(s, asset = {}) {
+  const normalized = {
+    level: Math.max(1, Math.min(5, Math.floor(Number(asset.level || 1)))),
+    commerce: Math.max(0, Math.min(4, Math.floor(Number(asset.commerce || 0)))),
+    maintenance: Math.max(0, Math.min(4, Math.floor(Number(asset.maintenance || 0)))),
+    depot: Boolean(asset.depot)
+  };
+  const acquisition = stationAcquisitionCost(s);
+  let levels = 0;
+  for (let level = 1; level < normalized.level; level++) levels += stationUpgradeCost(s, { ...normalized, level }, 'level');
+  let commerces = 0;
+  for (let commerce = 0; commerce < normalized.commerce; commerce++) commerces += stationUpgradeCost(s, { ...normalized, commerce }, 'commerce');
+  let maintenance = 0;
+  for (let step = 0; step < normalized.maintenance; step++) maintenance += stationUpgradeCost(s, { ...normalized, maintenance: step }, 'maintenance');
+  const depot = normalized.depot ? stationUpgradeCost(s, normalized, 'depot') : 0;
+  const total = Math.round(acquisition + levels + commerces + maintenance + depot);
+  return { acquisition, levels, commerces, maintenance, depot, total };
+}
+
+function activeStationUsersClient(stationId) {
+  const users = [];
+  for (const player of app.state?.players || []) {
+    for (const line of player.lines || []) {
+      if (!line?.active) continue;
+      if (lineStopsOf(line).includes(stationId)) users.push({ player, line });
+    }
+  }
+  return users;
+}
+
+function stationSaleTooltip(s, asset) {
+  const users = activeStationUsersClient(s.id);
+  if (users.length) {
+    const first = users[0];
+    return `Vente impossible : ${s.name} est encore desservie par ${lineDisplayName(first.line)} (${first.player.name}). Ferme ou modifie d’abord les lignes actives qui l’utilisent.`;
+  }
+  const refund = stationSaleRefundBreakdown(s, asset);
+  return `Vend ${s.name} et rembourse la gare, les niveaux, les commerces, les ateliers et le dépôt. Remboursement total : ${money(refund.total)}.`;
+}
+
 function economyValue(key, fallback = 0) {
   const value = Number(app.state?.balance?.economy?.[key]);
   return Number.isFinite(value) ? value : fallback;
@@ -3851,7 +3895,10 @@ function stationOperatingCostRows(asset = {}) {
 }
 
 function renderStationAsset(s, asset) {
-  const lines = app.state.me.lines.filter(l => lineStopsOf(l).includes(s.id)).length;
+  if (!s) return '';
+  const users = activeStationUsersClient(s.id);
+  const lines = users.filter(entry => entry.player.id === app.state.me.id).length;
+  const refund = stationSaleRefundBreakdown(s, asset);
   return `
     <div class="list-item">
       <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag">${lines} ligne${lines > 1 ? 's' : ''}</span></div>
@@ -3861,9 +3908,13 @@ function renderStationAsset(s, asset) {
         <span>Atelier</span><b>${asset.maintenance}</b>
         <span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset.electrified ? 'Oui' : 'Non'}</b>
+        <span>Remboursement vente</span><b>${money(refund.total)}</b>
         ${stationOperatingCostRows(asset)}
       </div>
-      <div class="actions"><button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir sur carte</button></div>
+      <div class="actions">
+        <button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir sur carte</button>
+        <button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${users.length ? 'disabled' : ''}>Vendre ${money(refund.total)}</button>
+      </div>
     </div>
   `;
 }
@@ -4574,7 +4625,7 @@ function renderBudget() {
         ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
         ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
         ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Entretien infrastructure triplé, partagé entre joueurs qui utilisent les mêmes tronçons')}
-        ${budgetRow('Péage', b.accessCost || 0, 'expense', 'Coût payé quand ta ligne emprunte un tronçon déjà utilisé par un autre joueur')}
+        ${budgetRow('Péage', b.accessCost || 0, 'expense', 'Coût payé quand ta ligne emprunte une gare concurrente ou un tronçon déjà utilisé par un autre joueur')}
         ${budgetRow('Vente & distribution', commercialSalesCost, 'expense', 'Billetterie, canaux de vente, information tarifaire et distribution')}
         ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Fraude résiduelle, litiges voyageurs et dispositifs de contrôle')}
         ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Support client, planification commerciale et organisation opérationnelle')}
@@ -4771,6 +4822,13 @@ if (action === 'save-train-composition') {
   if (action === 'edit-line') return openLineModal(button.dataset.id);
   if (action === 'remove-waypoint') { removeDraftWaypoint(button.dataset.index); return; }
   if (action === 'upgrade-station') return doAction('upgradeStation', { stationId: button.dataset.id, kind: button.dataset.kind });
+  if (action === 'sell-station') {
+    const s = station(button.dataset.id);
+    const asset = app.state.me.stations?.[button.dataset.id];
+    const refund = s && asset ? stationSaleRefundBreakdown(s, asset).total : 0;
+    if (!window.confirm(`Vendre ${s?.name || 'cette gare'} pour ${money(refund)} ?`)) return;
+    return doAction('sellStation', { stationId: button.dataset.id });
+  }
   if (action === 'select-station') {
     setSelectedStation(button.dataset.id);
     const selected = station(button.dataset.id);
@@ -6809,23 +6867,58 @@ function resolveSegmentPath(a, b) {
 
   const start = projectStationPoint(sa);
   const end = projectStationPoint(sb);
+  return fallbackSinuousRailSegmentPath(a, b, start, end);
+}
+
+function fallbackSinuousRailSegmentPath(a, b, start, end) {
+  if (String(a) > String(b)) return fallbackSinuousRailSegmentPath(b, a, end, start).reverse();
+  if (!start || !end) return [];
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const dist = Math.hypot(dx, dy) || 1;
-  const offset = Math.max(-90, Math.min(90, (hashCode(`${a}-${b}`) % 120) - 60)) * Math.min(1, dist / 360);
+  if (!Number.isFinite(dist) || dist <= 0) return [start, end];
+
   const nx = -dy / dist;
   const ny = dx / dist;
-  const steps = Math.max(5, Math.min(18, Math.ceil(dist / 70)));
+  const tx = dx / dist;
+  const ty = dy / dist;
+  const seed = hashCode(`fallback-sinuous:${a}|${b}`);
+  const phaseA = deterministicUnit(seed + 11);
+  const phaseB = deterministicUnit(seed + 29);
+  const phaseC = deterministicUnit(seed + 47);
+  const polarity = deterministicUnit(seed + 71) < 0.5 ? -1 : 1;
+
+  // Fallback visuel uniquement : quand aucun tracé SNCF/RFN ou Overpass n'est
+  // disponible, on évite l'ancien arc unique trop propre. Le motif reste
+  // déterministe pour que la même ligne conserve exactement la même forme.
+  const steps = Math.max(12, Math.min(72, Math.ceil(dist / 24)));
+  const turns = Math.max(2.15, Math.min(6.25, dist / 145 + 1.15 + phaseA * 1.1));
+  const amplitude = Math.min(68, Math.max(9, dist * 0.075));
+  const meander = Math.min(32, Math.max(5, dist * 0.032));
   const points = [];
+
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const bend = Math.sin(Math.PI * t) * offset;
+    const envelope = Math.sin(Math.PI * t);
+    const tapered = Math.pow(Math.max(0, envelope), 0.82);
+    const waveA = Math.sin((t * turns + phaseB) * Math.PI * 2);
+    const waveB = Math.sin((t * (turns * 1.85 + 0.65) + phaseC) * Math.PI * 2) * 0.34;
+    const broad = Math.sin((t + phaseA * 0.22) * Math.PI * 2) * 0.22;
+    const lateral = tapered * amplitude * polarity * (waveA + waveB + broad);
+
+    // Très léger décalage longitudinal pour casser l'impression de segment
+    // parfaitement géométrique, sans modifier les extrémités.
+    const longitudinal = envelope * meander * Math.sin((t * 3.0 + phaseA) * Math.PI * 2) * 0.42;
+
     points.push({
-      x: start.x + dx * t + nx * bend,
-      y: start.y + dy * t + ny * bend
+      x: start.x + dx * t + nx * lateral + tx * longitudinal,
+      y: start.y + dy * t + ny * lateral + ty * longitudinal
     });
   }
-  return points;
+
+  points[0] = { ...start };
+  points[points.length - 1] = { ...end };
+  return cleanRoutePoints(points);
 }
 
 function directRailDistance(a, b) {
