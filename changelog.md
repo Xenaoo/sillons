@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Version v62.3.0 — suppression des compagnies IA
+
+- incrément de version : badge interface `v62.3.0`, package `0.6.3` et schéma serveur `67` ;
+- suppression définitive de la génération automatique de concurrents IA pendant la simulation ;
+- nettoyage de la sauvegarde : seules les compagnies réellement liées à un compte utilisateur sont conservées ;
+- retrait du champ technique `nextNpcAt`, devenu inutile ;
+- les calculs de marché, d’usage d’infrastructure, de droits de passage, de classement public et d’administration ne prennent plus en compte de compagnies sans compte ;
+- remplacement du libellé `IA / sans compte` par `Sans compte lié` dans l’interface admin, au cas où une ancienne sauvegarde externe contiendrait encore un joueur orphelin.
+
 ## Version v62.2.0 — reconstruction officielle des gares et villes
 
 - incrément de version : badge interface `v62.2.0`, package `0.6.2` et schéma serveur `66` ;

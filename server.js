@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.2.0';
-const STATE_SCHEMA_VERSION = 66;
+const PROJECT_VERSION = 'v62.3.0';
+const STATE_SCHEMA_VERSION = 67;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -669,7 +669,7 @@ function buildAdminDashboard() {
   for (const user of Object.values(state.users || {})) {
     usersByPlayer.set(user.playerId, user);
   }
-  const players = Object.values(state.players || {}).map(player => {
+  const players = activePlayers().map(player => {
     const user = usersByPlayer.get(player.id) || null;
     const history = normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).slice(-80).reverse();
     const sessions = Object.values(user?.sessions || {}).filter(session => Number(session.expiresAt || 0) > Date.now());
@@ -973,6 +973,34 @@ function loadOrCreateState() {
   return createState();
 }
 
+
+function userLinkedPlayerIds(users = {}) {
+  return new Set(Object.values(users || {}).map(user => String(user?.playerId || '')).filter(Boolean));
+}
+
+function purgeUnlinkedPlayers(players = {}, users = {}) {
+  const linkedIds = userLinkedPlayerIds(users);
+  if (!linkedIds.size) return players;
+  const out = {};
+  for (const [id, player] of Object.entries(players || {})) {
+    if (linkedIds.has(String(id))) out[id] = player;
+  }
+  return out;
+}
+
+function activePlayers() {
+  const linkedIds = userLinkedPlayerIds(state.users || {});
+  const players = Object.values(state.players || {});
+  if (!linkedIds.size) return players;
+  return players.filter(player => linkedIds.has(String(player.id)));
+}
+
+function isActivePlayerId(playerId) {
+  const linkedIds = userLinkedPlayerIds(state.users || {});
+  if (!linkedIds.size) return Boolean(state.players?.[playerId]);
+  return linkedIds.has(String(playerId || ''));
+}
+
 function migrateState(loaded) {
   const players = {};
   for (const [id, player] of Object.entries(loaded.players || {})) {
@@ -990,8 +1018,7 @@ function migrateState(loaded) {
     news: Array.isArray(loaded.news) ? loaded.news.slice(0, 50) : [],
     customStations: normalizeCustomStations(loaded.customStations),
     users: normalizeUsers(loaded.users || {}),
-    players,
-    nextNpcAt: loaded.nextNpcAt || 10
+    players: purgeUnlinkedPlayers(players, loaded.users || {}),
   };
 }
 
@@ -1140,8 +1167,7 @@ function createState() {
     news: [{ day: 1, text: 'Le marché ferroviaire français s’ouvre aux premières compagnies privées.' }],
     customStations: {},
     users: {},
-    players: {},
-    nextNpcAt: 10
+    players: {}
   };
 }
 
@@ -1903,7 +1929,7 @@ function isInFranceBounds(lat, lon) {
 }
 
 function publicState(playerId, authUser = null) {
-  const players = Object.values(state.players).map(p => publicPlayer(p));
+  const players = activePlayers().map(p => publicPlayer(p));
   const me = playerId ? players.find(p => p.id === playerId) || null : null;
   return {
     ok: true,
@@ -1918,7 +1944,7 @@ function publicState(playerId, authUser = null) {
       market: state.market,
       events: state.events,
       news: state.news.slice(-12).reverse(),
-      playerCount: Object.keys(state.players).length
+      playerCount: activePlayers().length
     },
     players,
     me,
@@ -2986,11 +3012,10 @@ function simulateTick() {
   const lineMarkets = buildLineMarkets();
   const infrastructureUsage = buildInfrastructureUsage();
   const passageRightsLedger = new Map();
-  for (const player of Object.values(state.players)) {
+  for (const player of activePlayers()) {
     simulatePlayer(player, lineMarkets, passageRightsLedger, { infrastructureUsage });
   }
   applyPassageRightsLedger(passageRightsLedger);
-  maybeCreateNpc();
 }
 
 function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options = {}) {
@@ -3453,7 +3478,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 
 function buildLineMarkets() {
   const markets = {};
-  for (const player of Object.values(state.players)) {
+  for (const player of activePlayers()) {
     const staffing = computeStaffing(player);
     const needs = computeStaffNeeds(player);
     const driverCoverage = driverCoverageForNeed(player, needs.drivers);
@@ -3963,18 +3988,6 @@ function checkEpochUnlock(player) {
   }
 }
 
-function maybeCreateNpc() {
-  if (Object.keys(state.players).length >= 10) return;
-  if (state.day < state.nextNpcAt) return;
-  state.nextNpcAt += 22 + Math.floor(Math.random() * 18);
-  const names = ['TransHexagone', 'Ouest Rail', 'Nord Fret', 'Azur Express', 'Massif Central Rail', 'Atlantique Sillons'];
-  const regions = [...new Set(WORLD.stations.map(s => s.region))];
-  const name = names[Math.floor(Math.random() * names.length)] + ' IA';
-  const player = createPlayer({ name, color: randomColor(), region: regions[Math.floor(Math.random() * regions.length)] });
-  player.cash += 100000;
-  notify(player, 'Concurrent IA créé.');
-}
-
 function compositionDefaultModeForModel(model) {
   const label = `${model?.name || ''} ${model?.type || ''}`.toLowerCase();
   const isMultipleUnit = /(autorail|rame|tgv|duplex|régio|ter|hydrogène|batterie|train de nuit|maglev|grande vitesse)/.test(label);
@@ -4326,13 +4339,13 @@ function validateLineStops(stops) {
 }
 
 function stationOwnerInfo(stationId) {
-  for (const candidate of Object.values(state.players || {})) {
+  for (const candidate of activePlayers()) {
     if (candidate?.stations?.[stationId]) {
       return { player: candidate, asset: normalizeStationAsset(candidate, stationId) };
     }
   }
   const custom = state.customStations?.[stationId];
-  if (custom?.ownerId && state.players[custom.ownerId]) {
+  if (custom?.ownerId && state.players[custom.ownerId] && isActivePlayerId(custom.ownerId)) {
     const owner = state.players[custom.ownerId];
     return { player: owner, asset: ensureStationAsset(owner, stationId) };
   }
@@ -4465,7 +4478,7 @@ function lineSegments(line) {
 
 function buildInfrastructureUsage() {
   const usage = new Map();
-  for (const player of Object.values(state.players || {})) {
+  for (const player of activePlayers()) {
     for (const line of player.lines || []) {
       if (!line?.active) continue;
       for (const segment of lineSegments(line)) {

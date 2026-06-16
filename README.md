@@ -31,7 +31,7 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
 - Recherche et progression d’époque.
 - Événements dynamiques.
-- Classement multijoueur.
+- Classement multijoueur entre comptes réels uniquement, sans génération de compagnies IA.
 - Sauvegarde automatique dans `data/save.json`.
 - Panneau administrateur réservé au compte `Xenao`, avec édition des compagnies et journal de connexions horodatées.
 

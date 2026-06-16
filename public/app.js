@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.2.0';
+const PROJECT_VERSION = 'v62.3.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -1525,7 +1525,7 @@ function renderAdmin() {
         <div class="admin-player-list">
           ${players.map(player => `
             <button type="button" class="admin-player-row ${player.id === selected.id ? 'active' : ''}" data-action="admin-select-player" data-id="${escapeAttr(player.id)}">
-              <span><strong>${escapeHtml(player.name)}</strong><em>${escapeHtml(player.username || 'IA / sans compte')}</em></span>
+              <span><strong>${escapeHtml(player.name)}</strong><em>${escapeHtml(player.username || 'Sans compte lié')}</em></span>
               <b>${money(player.cash)}</b>
             </button>
           `).join('')}
