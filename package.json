@@ -1,6 +1,6 @@
 {
   "name": "sillons-rail-browser-game",
-  "version": "0.4.42",
+  "version": "0.4.43",
   "description": "Jeu navigateur multijoueur de gestion ferroviaire en France, sans dépendance externe.",
   "main": "server.js",
   "scripts": {

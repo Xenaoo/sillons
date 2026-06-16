@@ -5656,3 +5656,97 @@ dialog.modal--wide {
 .staff-card-compact.bad .staff-meter > i {
   background: linear-gradient(90deg, #7f1d1d, #ef4444) !important;
 }
+
+/* ===== v60.50.2 — correction inscription mobile ===== */
+.setup {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+.setup-card {
+  flex: 0 0 auto;
+  margin: auto 0;
+  max-height: none;
+}
+@media (max-width: 700px), (max-height: 760px) {
+  .setup {
+    align-items: flex-start;
+    padding: max(10px, env(safe-area-inset-top)) 10px max(22px, env(safe-area-inset-bottom));
+  }
+  .setup-card {
+    width: min(520px, 100%);
+    margin: 0 0 28px;
+    padding: 16px;
+    border-radius: 18px;
+    gap: 11px;
+  }
+  .setup-card .brand-block {
+    align-items: flex-start;
+  }
+  .setup-card .logo-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 24px;
+  }
+  .auth-tabs {
+    gap: 6px;
+  }
+  .auth-tabs button,
+  #authSubmitBtn {
+    padding-block: 9px;
+  }
+  #registerFields {
+    gap: 10px;
+  }
+  .setup-logo-block {
+    margin-top: 2px;
+    padding: 10px;
+    border-radius: 15px;
+  }
+  .setup-logo-head {
+    margin-bottom: 8px;
+  }
+  .setup-logo-preview-card {
+    margin-bottom: 9px;
+    padding: 8px 10px;
+  }
+  .setup-logo-preview-card img {
+    width: 52px;
+    height: 52px;
+  }
+  .setup-logo-label {
+    font-size: 13px;
+  }
+  .logo-picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-height: 190px;
+    gap: 7px;
+  }
+  .logo-choice {
+    padding: 6px;
+    border-radius: 11px;
+  }
+  .logo-choice img {
+    width: 42px;
+    height: 42px;
+  }
+  .logo-choice span {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .logo-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 168px;
+  }
+  .setup-card {
+    padding: 14px;
+  }
+}

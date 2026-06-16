@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Version v60.50.2 — correction inscription mobile
+
+- Incrément de version de cette passe : badge interface `v60.50.2`, package `0.4.43` et schéma d’état serveur `55` ;
+- Correction du formulaire de connexion / création de compte sur téléphone : la fenêtre d’inscription peut maintenant défiler verticalement ;
+- Ajustement de la carte d’inscription sur petits écrans : marges réduites, bloc logo compact et sélecteur de logos moins haut ;
+- Le bouton `Créer le compte` reste accessible même quand le clavier mobile ou la hauteur réduite de l’écran limite l’espace disponible ;
+- Aucun changement de gameplay ni de données économiques dans cette passe.
+
 ## Version v60.50.1 — correction RH et charbon de départ
 
 - Incrément de version de cette passe : badge interface `v60.50.1`, package `0.4.42` et schéma d’état serveur `54` ;
