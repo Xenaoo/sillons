@@ -1,5 +1,17 @@
 # Changelog
 
+## Version v62.15.0 — carte multi-joueurs, confirmations intégrées et panneau rétractable
+
+- incrément de version : badge interface `v62.15.0`, package `0.6.15` et schéma serveur `79` ;
+- les trains animés des autres joueurs ne sont affichés qu’à partir d’un zoom suffisant afin de réduire la surcharge visuelle ;
+- les lignes des autres joueurs utilisent maintenant la couleur de leur entreprise sur la carte ;
+- remplacement des confirmations navigateur par des fenêtres de confirmation intégrées à la DA du jeu ;
+- ajout d’un bouton flèche entre la carte et le panneau latéral pour rétracter/rouvrir le panneau avec animation ;
+- le panneau rétracté occupe environ un quart de la fenêtre, laissant plus de place à la carte ;
+- amélioration visuelle de la sélection multi-trains dans le menu de modification de ligne ;
+- accentuation rouge du bouton de fermeture de ligne ;
+- conservation du calcul de péage de gare indexé sur le niveau de gare : `+12,5%` par niveau au-dessus du niveau 1.
+
 ## Version v62.14.0 — composition, fermeture de ligne et péages de niveau
 
 - incrément de version : badge interface `v62.14.0`, package `0.6.14` et schéma serveur `78` ;

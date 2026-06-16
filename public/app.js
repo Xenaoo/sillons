@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.14.0';
+const PROJECT_VERSION = 'v62.15.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -42,6 +42,7 @@ const app = {
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
+  sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
   admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
   mapPref: 'show',
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
@@ -296,6 +297,32 @@ async function init() {
   requestAnimationFrame(drawLoop);
 }
 
+
+function syncSidePanelCollapseUi(animate = true) {
+  const layout = document.querySelector('.layout');
+  const btn = $('#panelCollapseBtn');
+  if (!layout || !btn) return;
+  layout.classList.toggle('side-collapsed', !!app.sidePanelCollapsed);
+  layout.classList.toggle('no-panel-transition', !animate);
+  btn.classList.toggle('is-collapsed', !!app.sidePanelCollapsed);
+  btn.setAttribute('aria-label', app.sidePanelCollapsed ? 'Rouvrir le panneau latéral' : 'Réduire le panneau latéral');
+  btn.title = app.sidePanelCollapsed ? 'Rouvrir le panneau latéral' : 'Réduire le panneau latéral';
+  const arrow = btn.querySelector('span');
+  if (arrow) arrow.textContent = app.sidePanelCollapsed ? '‹' : '›';
+  requestAnimationFrame(() => {
+    if (layout.classList.contains('no-panel-transition')) layout.classList.remove('no-panel-transition');
+    resizeCanvas();
+    scheduleLeafletInvalidateSize();
+    drawMap();
+  });
+}
+
+function toggleSidePanelCollapse() {
+  app.sidePanelCollapsed = !app.sidePanelCollapsed;
+  localStorage.setItem('sillons.sidePanelCollapsed', app.sidePanelCollapsed ? '1' : '0');
+  syncSidePanelCollapseUi(true);
+}
+
 function bindStaticEvents() {
   $('#setupForm').addEventListener('submit', handleAuthSubmit);
   $('#authLoginTab')?.addEventListener('click', () => setAuthMode('login'));
@@ -311,6 +338,8 @@ function bindStaticEvents() {
   });
 
   $('#mapToggleBtn')?.addEventListener('click', toggleMapVisibility);
+  $('#panelCollapseBtn')?.addEventListener('click', toggleSidePanelCollapse);
+  syncSidePanelCollapseUi(false);
   $('#zoomInBtn')?.addEventListener('click', () => app.map.leaflet?.zoomIn());
   $('#zoomOutBtn')?.addEventListener('click', () => app.map.leaflet?.zoomOut());
   $('#zoomResetBtn')?.addEventListener('click', fitFranceMap);
@@ -928,7 +957,7 @@ async function createCustomStationFromLatLng(latlng) {
   const quote = customStationCreationQuote(lat, lng);
   const nearest = quote.closestName ? `\nGare de référence la plus proche : ${quote.closestName} (${quote.closestDistance} km).` : '';
   const message = `Créer la gare « ${name} » ?\n\nPrix proposé : ${money(quote.cost)}\nDemande estimée : ${formatInt(quote.demand)} voyageurs, ${formatInt(quote.freight)} fret, ${formatInt(quote.tourism)} tourisme.${nearest}\n\nCe montant sera débité immédiatement.`;
-  if (!window.confirm(message)) return true;
+  if (!(await gameConfirm('Créer un arrêt', message, { confirmLabel: 'Créer l’arrêt' }))) return true;
   if (Number(app.state?.me?.cash || 0) < quote.cost) {
     toast(`Trésorerie insuffisante. Coût estimé : ${money(quote.cost)}.`, 'error');
     return true;
@@ -5047,7 +5076,7 @@ function energyStrategyDescription(id) {
   }[id] || '';
 }
 
-function onTabContentClick(event) {
+async function onTabContentClick(event) {
   markUiInteraction();
   const suggestion = event.target.closest('[data-station-choice]');
   if (suggestion) {
@@ -5163,9 +5192,9 @@ if (action === 'save-train-composition') {
   }
   const economy = compositionChangeEconomyClient(train, payload);
   if (economy.cost > 0) {
-    if (!window.confirm(`Modifier cette composition ?\n\nCoût des voitures/wagons ajoutés : ${money(economy.cost)}.`)) return;
+    if (!(await gameConfirm('Modifier la composition', `Coût des voitures/wagons ajoutés : ${money(economy.cost)}.`, { confirmLabel: 'Modifier' }))) return;
   } else if (economy.refund > 0) {
-    if (!window.confirm(`Modifier cette composition ?\n\nRemboursement estimé au prorata de l’usure : ${money(economy.refund)}.`)) return;
+    if (!(await gameConfirm('Modifier la composition', `Remboursement estimé au prorata de l’usure : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }))) return;
   }
   return doAction('updateTrainComposition', payload);
 }
@@ -5174,9 +5203,10 @@ if (action === 'save-train-composition') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
     const model = train ? app.state.balance.trains[train.modelId] : null;
     const estimate = train && model ? trainResaleEstimateClient(train, model) : 0;
-    if (!window.confirm(`Vendre ${train ? trainName(train) : 'ce train'} ?${estimate ? `
+    const message = `Vendre ${train ? trainName(train) : 'ce train'} ?${estimate ? `
 
-Valeur estimée : ${money(estimate)}.` : ''}`)) return;
+Valeur estimée : ${money(estimate)}.` : ''}`;
+    if (!(await gameConfirm('Vendre un train', message, { confirmLabel: 'Vendre', danger: true }))) return;
     return doAction('sellTrain', { trainId: button.dataset.id });
   }
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
@@ -5192,9 +5222,10 @@ Valeur estimée : ${money(estimate)}.` : ''}`)) return;
   }
   if (action === 'close-line') {
     const line = app.state.me.lines.find(l => l.id === button.dataset.id);
-    if (!window.confirm(`Fermer ${line ? linePublicName(line) : 'cette ligne'} ?
+    const message = `Fermer ${line ? linePublicName(line) : 'cette ligne'} ?
 
-Les trains seront libérés et la ligne ne générera plus de revenus.`)) return;
+Les trains seront libérés et la ligne ne générera plus de revenus.`;
+    if (!(await gameConfirm('Fermer la ligne', message, { confirmLabel: 'Fermer la ligne', danger: true }))) return;
     return doAction('closeLine', { lineId: button.dataset.id });
   }
   if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
@@ -5205,7 +5236,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`)) return
     const s = station(button.dataset.id);
     const asset = app.state.me.stations?.[button.dataset.id];
     const refund = s && asset ? stationSaleRefundBreakdown(s, asset).total : 0;
-    if (!window.confirm(`Vendre ${s?.name || 'cette gare'} pour ${money(refund)} ?`)) return;
+    if (!(await gameConfirm('Vendre la gare', `Vendre ${s?.name || 'cette gare'} pour ${money(refund)} ?`, { confirmLabel: 'Vendre', danger: true }))) return;
     return doAction('sellStation', { stationId: button.dataset.id });
   }
   if (action === 'select-station') {
@@ -5383,8 +5414,12 @@ function openLineModal(lineId) {
           <input type="checkbox" class="edit-line-train-check" value="${escapeAttr(t.id)}" ${selected ? 'checked' : ''}>
           <span class="line-train-choice-check">${selected ? '✓' : ''}</span>
           <span class="line-train-choice-main">
+            <span class="line-train-choice-visual" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </span>
             <b>${escapeHtml(trainName(t))}</b>
-            <em>${escapeHtml(model?.type || 'Matériel')} · ${formatInt(profile.capacity)} voy. · ${formatInt(profile.freight)} t · ${formatInt(profile.range)} km</em>
+            <em>${escapeHtml(model?.type || 'Matériel')}</em>
+            <small>${formatInt(profile.capacity)} voy. · ${formatInt(profile.freight)} t · ${formatInt(profile.range)} km · ${formatInt(profile.speed)} km/h</small>
           </span>
         </label>`;
     }).join('');
@@ -5482,6 +5517,19 @@ function openLineModal(lineId) {
     document.querySelectorAll('.edit-line-train-check').forEach(input => input.addEventListener('change', () => {
       const checked = [...document.querySelectorAll('.edit-line-train-check:checked')].map(item => item.value);
       app.lineEditor.trainIds = checked;
+      document.querySelectorAll('.line-train-choice').forEach(label => {
+        const box = label.querySelector('.edit-line-train-check');
+        const selected = !!box?.checked;
+        label.classList.toggle('selected', selected);
+        const check = label.querySelector('.line-train-choice-check');
+        if (check) check.textContent = selected ? '✓' : '';
+      });
+      const tag = document.querySelector('.line-editor-subtitle .tag');
+      if (tag) {
+        tag.classList.toggle('good', checked.length > 0);
+        tag.classList.toggle('warn', checked.length <= 0);
+        tag.textContent = `${checked.length} sélectionné${checked.length > 1 ? 's' : ''}`;
+      }
     }));
     $('#editLineTicketPrice').addEventListener('input', () => syncEditorTicketControls('editLineTicketPrice'));
     $('#editLineTicketPrice').addEventListener('change', () => syncEditorTicketControls('editLineTicketPrice'));
@@ -5758,6 +5806,44 @@ function openModal(title, html, options = {}) {
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = html;
   modal.showModal();
+}
+
+
+function gameConfirm(title, message, options = {}) {
+  const modal = $('#modal');
+  if (!modal) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const confirmLabel = options.confirmLabel || 'Confirmer';
+    const cancelLabel = options.cancelLabel || 'Annuler';
+    const danger = !!options.danger;
+    let settled = false;
+
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      modal.removeEventListener('close', onClose);
+      if (modal.open) modal.close();
+      resolve(!!value);
+    };
+    const onClose = () => finish(false);
+
+    modal.classList.toggle('modal--wide', !!options.wide);
+    $('#modalTitle').textContent = title || 'Confirmation';
+    $('#modalBody').innerHTML = `
+      <div class="game-confirm">
+        <div class="game-confirm-icon ${danger ? 'danger' : ''}">${danger ? '!' : '?'}</div>
+        <div class="game-confirm-copy">${String(message || '').split('\n').map(line => `<p>${escapeHtml(line || ' ')}</p>`).join('')}</div>
+        <div class="game-confirm-actions">
+          <button type="button" class="ghost" data-confirm-cancel>${escapeHtml(cancelLabel)}</button>
+          <button type="button" class="${danger ? 'danger confirm-danger' : 'primary'}" data-confirm-ok>${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>
+    `;
+    modal.addEventListener('close', onClose, { once: true });
+    $('#modalBody').querySelector('[data-confirm-cancel]')?.addEventListener('click', () => finish(false));
+    $('#modalBody').querySelector('[data-confirm-ok]')?.addEventListener('click', () => finish(true));
+    modal.showModal();
+  });
 }
 
 function resizeCanvas() {
@@ -6043,6 +6129,8 @@ function drawAllLines(ctx, lite = false) {
       const own = app.state.me && player.id === app.state.me.id;
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
       if (lite) continue;
+      const zoom = app.map.leaflet?.getZoom?.() || 6;
+      if (!own && zoom < 8) continue;
       const trains = lineAssignedTrainsClient(line, player).filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
       if (!trains.length) continue;
       if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage' || line.stats?.status === 'train-out-of-service') continue;
@@ -6072,10 +6160,10 @@ function drawRailLine(ctx, points, color, own, electrified, lite = false) {
   ctx.stroke();
 
   // main rail pass
-  ctx.strokeStyle = own ? color : 'rgba(208, 196, 150, 0.85)';
-  ctx.lineWidth = own ? 4 : 2.5;
-  ctx.shadowColor = own ? color : 'rgba(236, 205, 127, 0.25)';
-  ctx.shadowBlur = lite ? 0 : (own ? 8 : 2);
+  ctx.strokeStyle = color || '#d9a852';
+  ctx.lineWidth = own ? 4 : 2.8;
+  ctx.shadowColor = color || 'rgba(236, 205, 127, 0.25)';
+  ctx.shadowBlur = lite ? 0 : (own ? 8 : 3);
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
   for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
