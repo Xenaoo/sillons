@@ -36,7 +36,7 @@ const byPublicCoordName = new Map();
 for (const station of stations) {
   const item = `${station.id || '?'} ${station.name || ''}`;
   push(byId, station.id, item);
-  push(byCode, station.code, item);
+  if (!station.multiStation && !station.allowSameCommuneStation) push(byCode, station.code, item);
   push(byStationUic, station.stationUic, item);
   const lat = Number(station.stationLat ?? station.lat);
   const lon = Number(station.stationLon ?? station.lon);
@@ -52,7 +52,7 @@ for (const station of stations) {
 
 const checks = [
   ['IDs', duplicates(byId)],
-  ['codes INSEE', duplicates(byCode)],
+  ['codes INSEE hors communes multi-gares', duplicates(byCode)],
   ['codes UIC gare', duplicates(byStationUic)],
   ['coordonnées gare', duplicates(byStationCoord)],
   ['coordonnées publiques + nom', duplicates(byPublicCoordName)]

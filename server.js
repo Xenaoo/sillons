@@ -11,12 +11,12 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.10.0';
-const STATE_SCHEMA_VERSION = 74;
+const PROJECT_VERSION = 'v62.11.0';
+const STATE_SCHEMA_VERSION = 75;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
-const COMMUNE_CACHE_SOURCE_VERSION = 5;
+const COMMUNE_CACHE_SOURCE_VERSION = 6;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
 const SNCF_STATION_API_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/gares-de-voyageurs/records';
 const SNCF_STATION_EXPORT_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/gares-de-voyageurs/exports/json';
@@ -25,7 +25,7 @@ const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
 const ADMIN_USERNAME_KEY = 'xenao';
 const LEGACY_STATION_COMMUNE_IDS = Object.freeze({
-  PAR: 'COM_75056', LYO: 'COM_69123', MAR: 'COM_13055', LIL: 'COM_59350', BOR: 'COM_33063', NAN: 'COM_44109', STR: 'COM_67482', REN: 'COM_35238', TOU: 'COM_31555',
+  PAR: 'PAR_GARE_DU_NORD', COM_75056: 'PAR_GARE_DU_NORD', LYO: 'COM_69123', MAR: 'COM_13055', LIL: 'COM_59350', BOR: 'COM_33063', NAN: 'COM_44109', STR: 'COM_67482', REN: 'COM_35238', TOU: 'COM_31555',
   MON: 'COM_34172', NIC: 'COM_06088', GRE: 'COM_38185', DIJ: 'COM_21231', MET: 'COM_57463', NAN2: 'COM_54395', REI: 'COM_51454', AMI: 'COM_80021',
   ROU: 'COM_76540', LEH: 'COM_76351', BRET: 'COM_91103', LONJ: 'COM_91345', CAE: 'COM_14118', FAL: 'COM_14258', BAY: 'COM_14047', ARP: 'COM_91021',
   CHB: 'COM_50129', BRE: 'COM_29019', QUI: 'COM_29232', LOR: 'COM_56121', VAN: 'COM_56260', STB: 'COM_22278', ANG: 'COM_49007', LEM: 'COM_72181',
@@ -86,6 +86,18 @@ const ECONOMY = Object.freeze({
   researchLabBaseCost: 180,
   researchLabEngineerCost: 95
 });
+
+
+const PARIS_TERMINAL_STATIONS = Object.freeze([
+  { id: 'PAR_AUSTERLITZ', name: 'Paris Austerlitz', code: '75056', postal: '75013', lat: 48.8417, lon: 2.3659, stationUic: '87547000', stationName: 'Paris Austerlitz', annualPassengers: 23798578 },
+  { id: 'PAR_MONTPARNASSE', name: 'Paris Montparnasse', code: '75056', postal: '75015', lat: 48.8406, lon: 2.3195, stationUic: '87391003', stationName: 'Paris Montparnasse', annualPassengers: 68925312 },
+  { id: 'PAR_GARE_DE_LYON', name: 'Paris Gare de Lyon', code: '75056', postal: '75012', lat: 48.8443, lon: 2.3730, stationUic: '87686006', stationName: 'Paris Gare de Lyon', annualPassengers: 113224000 },
+  { id: 'PAR_GARE_DU_NORD', name: 'Paris Gare du Nord', code: '75056', postal: '75010', lat: 48.8809, lon: 2.3553, stationUic: '87271007', stationName: 'Paris Gare du Nord', annualPassengers: 257024152 },
+  { id: 'PAR_GARE_DE_L_EST', name: "Paris Gare de l'Est", code: '75056', postal: '75010', lat: 48.8768, lon: 2.3591, stationUic: '87113001', stationName: 'Paris Est', annualPassengers: 42725621 },
+  { id: 'PAR_SAINT_LAZARE', name: 'Paris Saint-Lazare', code: '75056', postal: '75008', lat: 48.8763, lon: 2.3249, stationUic: '87384008', stationName: 'Paris Saint-Lazare', annualPassengers: 114093491 }
+]);
+const PARIS_TERMINAL_SOURCE = 'sncf-gares-de-voyageurs + frequentation-gares-2024';
+const PARIS_COMMUNE_POPULATION = 2133111;
 
 const PASSENGER_COMPOSITION_VARIANTS = Object.freeze({
   standard: { id: 'standard', name: 'Standard', shortLabel: 'Standard', description: 'Voiture polyvalente équilibrée pour la majorité des lignes voyageurs.', asset: '/assets/composition/variants/passenger_standard.png', capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0 },
@@ -1403,9 +1415,10 @@ function railPlacementStats(stations) {
 
 function stationPhysicalKey(station) {
   if (!station) return '';
+  const uic = String(station.stationUic || station.codeUic || '').split(',')[0].trim();
+  if (station.multiStation && uic) return `uic:${uic}`;
   const code = stationCommuneCode(station);
   if (code) return `code:${code}`;
-  const uic = String(station.stationUic || station.codeUic || '').split(',')[0].trim();
   if (uic) return `uic:${uic}`;
   const lat = Number(station.railLat ?? station.stationLat ?? station.lat);
   const lon = Number(station.railLon ?? station.stationLon ?? station.lon);
@@ -1517,7 +1530,8 @@ function isDuplicatePublicStation(candidate, existingStations) {
   const cname = stationDedupName(candidate.name);
   for (const s of existingStations) {
     const existingCode = stationCommuneCode(s);
-    if (candidateCode && existingCode && candidateCode === existingCode) return true;
+    const sameMultiStationCommune = candidate.multiStation && s.multiStation && candidateCode && existingCode && candidateCode === existingCode;
+    if (candidateCode && existingCode && candidateCode === existingCode && !sameMultiStationCommune) return true;
     if (candidate.id && s.id && candidate.id === s.id) return true;
 
     const sname = stationDedupName(s.name);
@@ -1539,6 +1553,73 @@ function stationDedupName(name) {
     .trim();
 }
 
+
+function stationPriceFromAnnualPassengers(annualPassengers) {
+  const passengers = Math.max(0, Number(annualPassengers || 0));
+  if (!Number.isFinite(passengers) || passengers <= 0) return 0;
+  // Fréquentation SNCF 2024 : la plus petite gare commence à 100 k€,
+  // puis le prix augmente fortement pour les hubs nationaux.
+  return Math.round(100000 + Math.pow(passengers / 1000000, 1.25) * 35000);
+}
+
+function parisTerminalStationEntry(entry) {
+  const price = stationPriceFromAnnualPassengers(entry.annualPassengers);
+  const demand = Math.round(clamp(160 + Math.pow(entry.annualPassengers / 1000000, 0.74) * 58, 220, 1600));
+  return {
+    id: entry.id,
+    code: entry.code,
+    name: entry.name,
+    lat: roundCoord(entry.lat),
+    lon: roundCoord(entry.lon),
+    population: PARIS_COMMUNE_POPULATION,
+    region: 'Paris — grande gare terminus',
+    codesPostaux: [entry.postal],
+    codeDepartement: '75',
+    baseDemand: demand,
+    freight: Math.round(clamp(38 + Math.log10(entry.annualPassengers) * 14, 70, 170)),
+    tourism: Math.round(clamp(78 + Math.log10(entry.annualPassengers) * 3, 90, 120)),
+    commune: true,
+    populationSource: 'geo.api.gouv.fr + découpage Paris multi-gares',
+    stationLat: roundCoord(entry.lat),
+    stationLon: roundCoord(entry.lon),
+    stationName: entry.stationName,
+    stationUic: entry.stationUic,
+    stationTrigramme: '',
+    stationIdGare: entry.stationUic,
+    stationSource: PARIS_TERMINAL_SOURCE,
+    hasPassengerStation: true,
+    hasFreightStation: false,
+    annualPassengers: Math.round(entry.annualPassengers),
+    passengerTrafficYear: 2024,
+    purchaseCost: price,
+    stationKind: 'paris-terminal',
+    majorTerminal: true,
+    multiStation: true,
+    allowSameCommuneStation: true
+  };
+}
+
+function applyParisTerminalStations(byId) {
+  if (!byId || typeof byId !== 'object') return { removed: 0, added: 0 };
+  let removed = 0;
+  for (const key of Object.keys(byId)) {
+    const station = byId[key];
+    if (!station) continue;
+    const isParisCommune = String(station.code || station.communeCode || '') === '75056';
+    const isOldParis = key === 'COM_75056' || (isParisCommune && !station.multiStation && stationDedupName(station.name || '') === 'paris');
+    if (isOldParis) {
+      delete byId[key];
+      removed += 1;
+    }
+  }
+  let added = 0;
+  for (const entry of PARIS_TERMINAL_STATIONS) {
+    byId[entry.id] = parisTerminalStationEntry(entry);
+    added += 1;
+  }
+  return { removed, added };
+}
+
 function loadCommuneCache() {
   try {
     if (!fs.existsSync(COMMUNE_CACHE_FILE)) return { status: 'loading', updatedAt: null, byId: {}, error: '' };
@@ -1548,6 +1629,7 @@ function loadCommuneCache() {
       const normalized = normalizeCommuneStation(station);
       if (normalized) byId[normalized.id] = normalized;
     }
+    const parisTerminals = applyParisTerminalStations(byId);
     const sourceVersion = Number(parsed.sourceVersion || 0);
     const missingAuthoritativePlacement = Object.values(byId).some(s => s.hasPassengerStation && (!Number.isFinite(Number(s.stationLat)) || !Number.isFinite(Number(s.stationLon)))) || !parsed.sncfStats;
     const status = sourceVersion >= COMMUNE_CACHE_SOURCE_VERSION && !missingAuthoritativePlacement ? 'ready-cache' : 'stale-cache';
@@ -1931,6 +2013,8 @@ async function refreshCommuneCache(force = false) {
       sncfStats.error = error.message;
       console.warn('Enrichissement gares SNCF indisponible:', error.message);
     }
+    const parisTerminals = applyParisTerminalStations(byId);
+    sncfStats.parisTerminals = parisTerminals;
     const placementAudit = auditStationPlacements(byId);
     sncfStats.placementAudit = placementAudit;
     communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '', sncfStats };
@@ -2023,11 +2107,22 @@ function normalizeCommuneStation(station) {
     commune: true,
     populationSource: station.populationSource || 'geo.api.gouv.fr'
   };
+  const annualPassengers = Number(station.annualPassengers || station.passengers2024 || 0);
+  const purchaseCost = Number(station.purchaseCost || station.acquisitionCost || 0);
+  if (Number.isFinite(annualPassengers) && annualPassengers > 0) normalized.annualPassengers = Math.round(annualPassengers);
+  if (Number.isFinite(Number(station.passengerTrafficYear))) normalized.passengerTrafficYear = Math.round(Number(station.passengerTrafficYear));
+  if (Number.isFinite(purchaseCost) && purchaseCost > 0) normalized.purchaseCost = Math.round(purchaseCost);
+  if (station.stationKind) normalized.stationKind = cleanText(station.stationKind, 40);
+  if (station.majorTerminal) normalized.majorTerminal = true;
+  if (station.multiStation) normalized.multiStation = true;
+  if (station.allowSameCommuneStation) normalized.allowSameCommuneStation = true;
   if (Number.isFinite(stationLat) && Number.isFinite(stationLon) && isInFranceBounds(stationLat, stationLon)) {
     normalized.stationLat = stationLat;
     normalized.stationLon = stationLon;
     normalized.stationName = cleanText(station.stationName || station.name || 'Gare', 64);
     normalized.stationUic = String(station.stationUic || '').slice(0, 16);
+    normalized.stationTrigramme = String(station.stationTrigramme || '').slice(0, 12);
+    normalized.stationIdGare = String(station.stationIdGare || station.stationUic || '').slice(0, 40);
     normalized.stationSource = station.stationSource || 'sncf-gares-de-voyageurs';
     normalized.hasPassengerStation = Boolean(station.hasPassengerStation);
     normalized.hasFreightStation = Boolean(station.hasFreightStation);
@@ -2683,6 +2778,10 @@ function actionUpgradeStation(player, payload) {
 
 
 function stationAcquisitionCost(station) {
+  const storedPurchaseCost = Number(station?.purchaseCost || station?.acquisitionCost || 0);
+  if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
+  const annualPassengers = Number(station?.annualPassengers || station?.passengers2024 || 0);
+  if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
   if (station?.custom) {
     const stored = Number(station.creationCost || station.purchaseCost || 0);
     if (Number.isFinite(stored) && stored > 0) return Math.round(stored);

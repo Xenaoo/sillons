@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.10.0';
+const PROJECT_VERSION = 'v62.11.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -3938,6 +3938,7 @@ function renderSelectedStation(s) {
         <span>Demande voyageurs</span><b>${formatInt(s.baseDemand)}</b>
         <span>Demande fret</span><b>${formatInt(s.freight)}</b>
         <span>Population</span><b>${s.population ? formatInt(s.population) : '—'}</b>
+        ${s.annualPassengers ? `<span>Fréquentation ${s.passengerTrafficYear || 2024}</span><b>${formatInt(s.annualPassengers)} voy./an</b>` : ''}
         <span>Prix d'achat</span><b>${money(acquisitionCost)}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
@@ -3960,7 +3961,18 @@ function renderSelectedStation(s) {
   `;
 }
 
+
+function stationPriceFromAnnualPassengers(annualPassengers) {
+  const passengers = Math.max(0, Number(annualPassengers || 0));
+  if (!Number.isFinite(passengers) || passengers <= 0) return 0;
+  return Math.round(100000 + Math.pow(passengers / 1000000, 1.25) * 35000);
+}
+
 function stationAcquisitionCost(s) {
+  const storedPurchaseCost = Number(s?.purchaseCost || s?.acquisitionCost || 0);
+  if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
+  const annualPassengers = Number(s?.annualPassengers || s?.passengers2024 || 0);
+  if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
   if (s?.custom) {
     const stored = Number(s.creationCost || s.purchaseCost || 0);
     if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
@@ -6355,9 +6367,10 @@ function drawTooltip(ctx) {
   ctx.font = '12px "Trebuchet MS", system-ui';
   ctx.fillStyle = '#b8aa84';
   const acquisitionCost = stationAcquisitionCost(s);
+  const trafficText = s.annualPassengers ? ` · ${formatInt(s.annualPassengers)} voy./an` : '';
   const subtitle = owner
-    ? `${ownedByMe ? 'Ta ville' : `Propriétaire : ${owner.player.name}`} · Prix base ${money(acquisitionCost)}`
-    : `Achat requis · Prix ${money(acquisitionCost)}`;
+    ? `${ownedByMe ? 'Ta gare' : `Propriétaire : ${owner.player.name}`} · Prix base ${money(acquisitionCost)}${trafficText}`
+    : `Achat requis · Prix ${money(acquisitionCost)}${trafficText}`;
   ctx.fillText(fitTooltipText(subtitle, textMaxW), x + 16, y + 38);
 
   roundRect(ctx, x + width - badgeW - 14, y + 11, badgeW, 23, 11);
@@ -6758,7 +6771,8 @@ function isStationDuplicateClient(a, b) {
   if (!a || !b || a.id === b.id) return false;
   const acode = stationCommuneCodeClient(a);
   const bcode = stationCommuneCodeClient(b);
-  if (acode && bcode && acode === bcode) return true;
+  const sameMultiStationCommune = a.multiStation && b.multiStation && acode && bcode && acode === bcode;
+  if (acode && bcode && acode === bcode && !sameMultiStationCommune) return true;
 
   const an = stationDedupNameClient(a.name);
   const bn = stationDedupNameClient(b.name);
@@ -8025,6 +8039,7 @@ function stationSearchLabel(s) {
 
 function stationMetaLabel(s) {
   if (!s) return '';
+  if (s.annualPassengers) return `${formatInt(s.annualPassengers)} voy./an · ${s.codesPostaux?.[0] || s.codeDepartement || 'France'}`;
   if (s.population) return `${formatInt(s.population)} hab. · ${s.codesPostaux?.[0] || s.codeDepartement || 'France'}`;
   if (s.custom) return 'Arrêt personnalisé';
   return s.region || 'Gare principale';

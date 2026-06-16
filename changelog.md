@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v62.11.0 — grandes gares parisiennes et tarifs par fréquentation
+
+- incrément de version : badge interface `v62.11.0`, package `0.6.11` et schéma serveur `75` ;
+- remplacement de l’entrée unique `Paris` par six grandes gares parisiennes distinctes : Paris Austerlitz, Paris Montparnasse, Paris Gare de Lyon, Paris Gare du Nord, Paris Gare de l’Est et Paris Saint-Lazare ;
+- placement de ces gares à leurs coordonnées propres au lieu du centroïde communal de Paris ;
+- migration des anciennes références `PAR` et `COM_75056` vers `PAR_GARE_DU_NORD` pour éviter les lignes orphelines ;
+- ajout d’une exception de dédoublonnage contrôlée pour les communes multi-gares : plusieurs gares peuvent partager le code INSEE `75056` uniquement si elles ont des IDs et codes UIC distincts ;
+- ajout de la fréquentation annuelle 2024 aux grandes gares parisiennes ;
+- recalcul du prix d’achat des grandes gares parisiennes selon leur fréquentation, avec une formule commençant à 100 000 € pour les très petites gares et une progression forte pour les hubs ;
+- affichage de la fréquentation annuelle dans la fiche de gare et les libellés de recherche.
+
 ## Version v62.10.0 — lignes multi-trains et tracés RFN renforcés
 
 - incrément de version : badge interface `v62.10.0`, package `0.6.10` et schéma serveur `74` ;
