@@ -29,10 +29,10 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 - Gares améliorables avec coût affiché, niveaux maximums, sélection persistante et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
 - Salariés : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs, ingénieurs.
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
-- Recherche et progression d’époque.
+- Recherche et progression d’époque avec délai réel minimum entre deux ères.
 - Événements dynamiques.
 - Classement multijoueur entre comptes réels uniquement, sans génération de compagnies IA.
-- Utilisation possible des gares possédées par un autre joueur, avec péages reversés au propriétaire.
+- Utilisation possible des gares possédées par un autre joueur, avec péage uniquement lorsque la ligne dessert une gare concurrente.
 - Sauvegarde automatique dans `data/save.json`.
 - Panneau administrateur réservé au compte `Xenao`, avec édition des compagnies et journal de connexions horodatées.
 

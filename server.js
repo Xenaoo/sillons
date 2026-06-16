@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.6.0';
-const STATE_SCHEMA_VERSION = 70;
+const PROJECT_VERSION = 'v62.7.0';
+const STATE_SCHEMA_VERSION = 71;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -49,6 +49,9 @@ const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;
 const AUTH_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const AUTH_PASSWORD_MIN_LENGTH = 6;
+// Chaque passage d'époque doit rester un vrai palier de progression : 60 h réelles minimum
+// entre deux ères, en plus des prérequis de technologie et de trafic.
+const EPOCH_MIN_REALTIME_MS = 1000 * 60 * 60 * 60;
 const STARTER_PLAYER_ID = '4c7dfa51-225a-487a-aa42-1b0776c4e1d5';
 // Plafond global du billet : volontairement haut pour laisser le joueur arbitrer
 // entre revenus et attractivité. À 50 €, les petites lignes deviennent très peu attractives.
@@ -1097,6 +1100,9 @@ function migratePlayer(player, fallbackId) {
   p.co2 = Number.isFinite(Number(p.co2)) ? Number(p.co2) : 0;
   p.region = cleanText(p.region || 'France', 40);
   p.createdAt = p.createdAt || Date.now();
+  p.epochStartedAt = Number.isFinite(Number(p.epochStartedAt))
+    ? Number(p.epochStartedAt)
+    : (p.epoch > 0 ? Date.now() : p.createdAt);
   p.lastSeen = p.lastSeen || Date.now();
   return p;
 }
@@ -1960,6 +1966,9 @@ function publicPlayer(p) {
     reputation: round2(p.reputation),
     co2: Math.round(p.co2),
     epoch: p.epoch,
+    epochStartedAt: Number(p.epochStartedAt || p.createdAt || Date.now()),
+    epochElapsedMs: Math.max(0, Date.now() - Number(p.epochStartedAt || p.createdAt || Date.now())),
+    nextEpochTimeRemainingMs: nextEpochTimeRemainingMs(p),
     eraName: BALANCE.epochs[p.epoch]?.name || 'Inconnue',
     research: round2(p.research),
     tech: p.tech,
@@ -2031,6 +2040,7 @@ function createPlayer(input) {
     cash: STARTING_CASH,
     debt: 0,
     epoch: 0,
+    epochStartedAt: Date.now(),
     research: 0,
     tech: {
       traction: 0,
@@ -2450,7 +2460,7 @@ function actionUpgradeStation(player, payload) {
 
   player.cash -= cost;
   if (wasUnowned) {
-    notify(player, `${station.name} acquise pour ${money(cost)} : Les autres compagnies devront payer des droits de passage pour l’utiliser.`);
+    notify(player, `${station.name} acquise pour ${money(cost)} : les autres compagnies devront payer un péage de gare si elles la desservent.`);
     return ok('Ville achetée.');
   }
 
@@ -4049,6 +4059,15 @@ function epochTrafficTotal(player) {
   return Math.max(0, Math.round(Number(player.stats?.passengers || 0) + Number(player.stats?.freightTons || 0)));
 }
 
+function nextEpochTimeRemainingMs(player) {
+  const next = BALANCE.epochs[Math.max(0, Number(player?.epoch || 0)) + 1];
+  if (!next) return 0;
+  const requiredMs = Math.max(0, Number(next.requiredRealTimeMs || 0));
+  if (!requiredMs) return 0;
+  const startedAt = Number(player?.epochStartedAt || player?.createdAt || Date.now());
+  return Math.max(0, Math.round(startedAt + requiredMs - Date.now()));
+}
+
 function checkEpochUnlock(player) {
   let unlocked = false;
   while (true) {
@@ -4056,8 +4075,9 @@ function checkEpochUnlock(player) {
     const next = BALANCE.epochs[player.epoch + 1];
     if (!next) return unlocked;
     const trafficTotal = epochTrafficTotal(player);
-    if (totalTech < next.requiredTech || trafficTotal < next.requiredTraffic) return unlocked;
+    if (totalTech < next.requiredTech || trafficTotal < next.requiredTraffic || nextEpochTimeRemainingMs(player) > 0) return unlocked;
     player.epoch += 1;
+    player.epochStartedAt = Date.now();
     unlocked = true;
     notify(player, `Nouvelle époque débloquée : ${BALANCE.epochs[player.epoch].name}.`);
     state.news.push({ day: state.day, text: `${player.name} entre dans l’époque : ${BALANCE.epochs[player.epoch].name}.` });
@@ -4441,9 +4461,7 @@ function lineStopsOwnershipProblem(stops) {
 }
 
 function computePassageRights(player, line, model, distance, infrastructureUsage = null) {
-  const usage = infrastructureUsage || buildInfrastructureUsage();
   const byOwner = new Map();
-  let infrastructureTotal = 0;
   let stationTotal = 0;
 
   function addAllocation(ownerId, amount, sourceKey) {
@@ -4458,21 +4476,8 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
   const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
   const frequency = Math.max(1, Number(line.frequency || 1));
 
-  for (const segment of lineSegments(line)) {
-    const entry = usage.get(segment.key);
-    if (!entry) continue;
-    const otherOwners = [...new Set((entry.entries || [])
-      .map(item => item.playerId)
-      .filter(ownerId => ownerId && ownerId !== player.id))];
-    if (!otherOwners.length) continue;
-
-    const segmentAmount = 0.0065 * segment.distance * frequency * capacityBase;
-    infrastructureTotal += segmentAmount;
-
-    const amountPerOwner = segmentAmount / otherOwners.length;
-    for (const ownerId of otherOwners) addAllocation(ownerId, amountPerOwner, `segment:${segment.key}`);
-  }
-
+  // Le péage ne dépend plus des tronçons partagés. On ne paie que lorsqu'une ligne
+  // dessert concrètement une gare possédée par une autre compagnie.
   for (const stopId of [...new Set(lineStops(line))]) {
     const ownerInfo = stationOwnerInfo(stopId);
     if (!ownerInfo || ownerInfo.player.id === player.id) continue;
@@ -4487,10 +4492,10 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
     addAllocation(ownerInfo.player.id, stopAmount, `station:${stopId}`);
   }
 
-  const total = infrastructureTotal + stationTotal;
+  const total = stationTotal;
   return {
     total,
-    infrastructureTotal,
+    infrastructureTotal: 0,
     stationTotal,
     allocations: [...byOwner.values()].map(item => ({
       ...item,
@@ -5029,13 +5034,13 @@ function formatCycles(value) {
 
 function buildBalance() {
   const epochs = [
-    { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0 },
-    { id: 1, name: 'Ère du diesel', year: 1930, requiredTech: 4, requiredTraffic: 30000 },
-    { id: 2, name: 'Ère de l’électrique', year: 1950, requiredTech: 9, requiredTraffic: 110000 },
-    { id: 3, name: 'Ère de la grande vitesse', year: 1980, requiredTech: 17, requiredTraffic: 350000 },
-    { id: 4, name: 'Ère de l’hydrogène', year: 2025, requiredTech: 28, requiredTraffic: 900000 },
-    { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 42, requiredTraffic: 1800000 },
-    { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 58, requiredTraffic: 3200000 }
+    { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0, requiredRealTimeMs: 0 },
+    { id: 1, name: 'Ère du diesel', year: 1930, requiredTech: 4, requiredTraffic: 30000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS },
+    { id: 2, name: 'Ère de l’électrique', year: 1950, requiredTech: 9, requiredTraffic: 110000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS },
+    { id: 3, name: 'Ère de la grande vitesse', year: 1980, requiredTech: 17, requiredTraffic: 350000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS },
+    { id: 4, name: 'Ère de l’hydrogène', year: 2025, requiredTech: 28, requiredTraffic: 900000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS },
+    { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 42, requiredTraffic: 1800000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS },
+    { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 58, requiredTraffic: 3200000, requiredRealTimeMs: EPOCH_MIN_REALTIME_MS }
   ];
   const trains = {
     steam_030_mixte: { id: 'steam_030_mixte', name: 'Locomotive vapeur 030 mixte', unlockEpoch: 0, type: 'Vapeur mixte', speed: 55, capacity: 140, freight: 120, energyType: 'coal', energy: 9.5, maintenance: 0.62, price: 95000, reliability: 0.78, comfort: 0.32, range: 50, description: 'Modèle de départ polyvalent, lent mais économique pour ouvrir les premières lignes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 1 },

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.6.0';
+const PROJECT_VERSION = 'v62.7.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -2423,9 +2423,7 @@ function renderLineInsightPanels(line) {
           <span class="expense">Vente & distribution <b>${lineMoney(finance.commercialSalesCost)}</b></span>
           <span class="expense">Contrôle & fraude <b>${lineMoney(finance.commercialControlCost)}</b></span>
           <span class="expense">Organisation commerciale <b>${lineMoney(finance.commercialAdministrationCost)}</b></span>
-          <span class="expense">Péage <b>${lineMoney(finance.accessCost)}</b></span>
-          ${Number(finance.stationAccessCost || 0) > 0 ? `<span class="expense">Péage gares <b>${lineMoney(finance.stationAccessCost)}</b></span>` : ''}
-          ${Number(finance.infrastructurePassageCost || 0) > 0 ? `<span class="expense">Péage tronçons <b>${lineMoney(finance.infrastructurePassageCost)}</b></span>` : ''}
+          <span class="expense">Péage gares concurrentes <b>${lineMoney(finance.accessCost)}</b></span>
         </div>
       </section>
 
@@ -3770,7 +3768,7 @@ function renderSelectedStation(s) {
         `).join('')}
         ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${activeStationUsersClient(s.id).length ? 'disabled' : ''}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
       </div>
-      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare et des droits de passage si ton itinéraire l’emprunte.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
     </div>
   `;
 }
@@ -4173,9 +4171,13 @@ function renderResearch() {
   const trafficTotal = epochTrafficTotalClient(me);
   const techProgress = next ? Math.min(100, totalTech / Math.max(1, next.requiredTech) * 100) : 100;
   const trafficProgress = next ? Math.min(100, trafficTotal / Math.max(1, next.requiredTraffic) * 100) : 100;
+  const requiredEpochTimeMs = next ? Math.max(0, Number(next.requiredRealTimeMs || 0)) : 0;
+  const epochElapsedMs = Math.max(0, Number(me.epochElapsedMs || 0));
+  const epochTimeRemainingMs = next ? Math.max(0, Number(me.nextEpochTimeRemainingMs || Math.max(0, requiredEpochTimeMs - epochElapsedMs))) : 0;
+  const timeProgress = next && requiredEpochTimeMs > 0 ? Math.min(100, epochElapsedMs / Math.max(1, requiredEpochTimeMs) * 100) : 100;
   const displayedTraffic = next ? prepareEpochTrafficAnimation(trafficTotal) : trafficTotal;
   const displayedTrafficProgress = next ? Math.min(100, displayedTraffic / Math.max(1, next.requiredTraffic) * 100) : 100;
-  const progress = next ? Math.min(techProgress, trafficProgress) : 100;
+  const progress = next ? Math.min(techProgress, trafficProgress, timeProgress) : 100;
   const tree = app.state.balance.techTree || {};
   const tabs = Object.values(tree);
   if (!tree[app.activeResearchTab]) app.activeResearchTab = tabs[0]?.id || 'traction';
@@ -4228,7 +4230,14 @@ function renderResearch() {
             </div>
             <div class="progress epoch-traffic-progress"><i data-epoch-traffic-progress style="width:${displayedTrafficProgress}%"></i></div>
           </div>
-          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie.</p>
+          <div class="epoch-requirement-row">
+            <div>
+              <span>Temps dans l’époque</span>
+              <b class="${epochTimeRemainingMs <= 0 ? 'good-text' : ''}">${requiredEpochTimeMs > 0 ? `${formatResearchTime(epochElapsedMs)} / ${formatResearchTime(requiredEpochTimeMs)}` : 'Aucun délai'}</b>
+            </div>
+            <div class="progress"><i style="width:${timeProgress}%"></i></div>
+          </div>
+          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Le passage d’une époque à l’autre demande aussi environ <b>60 h réelles</b> dans l’époque actuelle.</p>
         </div>
       ` : '<p class="muted">Toutes les époques sont débloquées.</p>'}
     </div>
@@ -4618,14 +4627,14 @@ function renderBudget() {
         ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
         ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
         ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
-        ${budgetRow('Droits de passage', b.passageRightsRevenue || 0, 'revenue', 'Revenus payés par les autres joueurs quand ils empruntent tes lignes')}
+        ${budgetRow('Péages de gares', b.passageRightsRevenue || 0, 'revenue', 'Revenus payés par les autres joueurs quand ils desservent tes gares')}
       `, moneyPerHour(revenueTotal))}
 
       ${budgetSection('expenses', 'Dépenses', `
         ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
         ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
         ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Entretien infrastructure triplé, partagé entre joueurs qui utilisent les mêmes tronçons')}
-        ${budgetRow('Péage', b.accessCost || 0, 'expense', 'Coût payé quand ta ligne emprunte une gare concurrente ou un tronçon déjà utilisé par un autre joueur')}
+        ${budgetRow('Péage gares concurrentes', b.accessCost || 0, 'expense', 'Coût payé uniquement quand ta ligne dessert une gare possédée par un autre joueur')}
         ${budgetRow('Vente & distribution', commercialSalesCost, 'expense', 'Billetterie, canaux de vente, information tarifaire et distribution')}
         ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Fraude résiduelle, litiges voyageurs et dispositifs de contrôle')}
         ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Support client, planification commerciale et organisation opérationnelle')}
@@ -6217,7 +6226,7 @@ function drawTooltip(ctx) {
   ctx.font = '12px "Trebuchet MS", system-ui';
   ctx.fillStyle = owner ? (ownedByMe ? '#9be7a2' : '#f0c875') : '#d3c7ac';
   const footerText = owner
-    ? (ownedByMe ? 'Droits perçus sur les concurrents' : 'Droits de passage dus si desservie')
+    ? (ownedByMe ? 'Péage perçu si desservie' : 'Péage dû si desservie')
     : 'Non utilisable tant qu’elle est libre';
   ctx.fillText(footerText, x + 25, footerY + 14);
 
@@ -7003,7 +7012,7 @@ function lineExternalRightsLabel(stops) {
     if (owner && owner.player.id !== app.state?.me?.id) owners.set(owner.player.id, owner.player.name);
   }
   if (!owners.size) return '';
-  return `Droits de passage dus à : ${[...owners.values()].join(', ')}.`;
+  return `Péage de gare dû à : ${[...owners.values()].join(', ')}.`;
 }
 
 function lineStopsLabel(stops) {

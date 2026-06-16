@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Version v62.7.0 — péages limités aux gares et progression d’époque ralentie
+
+- incrément de version : badge interface `v62.7.0`, package `0.6.7` et schéma serveur `71` ;
+- suppression du péage de tronçon symétrique : deux joueurs qui circulent sur le même segment ne se paient plus mutuellement ;
+- conservation d’un seul péage : une compagnie paie uniquement lorsqu’une ligne dessert une gare possédée par un autre joueur ;
+- mise à jour des libellés financiers pour distinguer clairement les `Péages de gares` des coûts d’entretien de ligne ;
+- ajout d’un délai réel minimum de 60 heures dans chaque époque avant de pouvoir débloquer la suivante, en plus des prérequis de technologie et de trafic ;
+- ajout d’un indicateur `Temps dans l’époque` dans l’onglet R&D.
+
 ## Version v62.6.0 — tracés fictifs plus doux au dézoom
 
 - incrément de version : badge interface `v62.6.0`, package `0.6.6` et schéma serveur `70` ;

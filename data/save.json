@@ -1,1 +1,929 @@
-{"version":69,"createdAt":1781511648911,"now":1781617410878,"day":46665,"eraYear":5738,"tickSpeed":2000,"market":{"coal":1.81,"diesel":4.24,"electricity":0.46,"hydrogen":2.01,"battery":0.62,"steel":1.74,"labor":1.16,"demand":1.84,"freight":1.85},"events":[{"kind":"freight","title":"Rebond industriel : Les contrats fret sont plus nombreux.","passenger":1,"freight":1.2,"remaining":14}],"news":[{"day":46085,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46087,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46088,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46091,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46097,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46099,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46102,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46104,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46117,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46121,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46134,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46142,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46156,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46176,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46184,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46188,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46207,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46216,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46239,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46253,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46259,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46271,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46293,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46305,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46319,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46334,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46344,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46347,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46357,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46372,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46385,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46393,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46410,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46414,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46440,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46446,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46454,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46461,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46462,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46464,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46487,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46488,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46498,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46516,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46517,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46520,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46541,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46552,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46561,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46563,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46570,"text":"Météo difficile : La ponctualité devient plus fragile."},{"day":46581,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46589,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46603,"text":"Tension sur les marchés de l’énergie : Les coûts de traction augmentent."},{"day":46611,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46621,"text":"Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."},{"day":46622,"text":"Rebond industriel : Les contrats fret sont plus nombreux."},{"day":46637,"text":"Vacances scolaires : Forte demande voyageurs sur les axes touristiques."},{"day":46649,"text":"Grand événement national : Hausse temporaire des déplacements longue distance."},{"day":46659,"text":"Rebond industriel : Les contrats fret sont plus nombreux."}],"customStations":{},"users":{"xenao":{"id":"e7d0ea72-c490-413a-954f-bfe53ac9de11","username":"Xenao","usernameKey":"xenao","playerId":"4c7dfa51-225a-487a-aa42-1b0776c4e1d5","passwordSalt":"cbf4501d54845fcdf4455d7b634b53b6","passwordHash":"382bba450168b3741dd3ae9c37bd938140cd412dddee149b48e507ee9bff2544cda7c0d5e263fd833fecd980e5653731cad407b251093a05c9808ec390ee8434","sessions":{"84779a80e48a09ae7b3eff9643115d9b98c697c7a78b0399604d2f000e8a8cbc":{"createdAt":1781579452973,"lastSeenAt":1781604616977,"expiresAt":1784171452973},"0e3c9ffd57899e10e056095fc6f0b00917727506b2d0443cb368e83c7cd90408":{"createdAt":1781598688641,"lastSeenAt":1781617409621,"expiresAt":1784190688641},"ddf9667b9cbb8f1e66492731de89494c014e7c06915c2f07bb37485c6b8a44ea":{"createdAt":1781601325332,"lastSeenAt":1781616605210,"expiresAt":1784193325332}},"createdAt":1781529287009,"lastLoginAt":1781601325332,"loginHistory":[{"at":1781601325332,"userAgent":"","ip":""}]},"laplusbelle":{"id":"b5547139-7509-4da3-9560-60ba8a0ab3f3","username":"Laplusbelle","usernameKey":"laplusbelle","playerId":"2ab0580e-4fc2-477f-b1ab-b46649e5e590","passwordSalt":"118130a74ba277468553a28fba35e665","passwordHash":"69e3b08a6b91889b6ce37a4e28d94087fe4df94fd45294a5779513e7642c74dd058f5ff593c5654c0054f363ee849928858139e1142a27719e64a8b733c024c3","sessions":{"6ea2f094b7220c63e1356f78d3d8384866394eeb7b1247e6920be1c9151f6760":{"createdAt":1781598832108,"lastSeenAt":1781617410078,"expiresAt":1784190832108}},"createdAt":1781598832108,"lastLoginAt":1781598832108,"loginHistory":[{"at":1781598832108,"userAgent":"","ip":""}]}},"players":{"4c7dfa51-225a-487a-aa42-1b0776c4e1d5":{"id":"4c7dfa51-225a-487a-aa42-1b0776c4e1d5","name":"Xenao","color":"#ffff00","logo":"steam_front","region":"France","cash":42033944.965354554,"debt":0,"epoch":0,"research":1,"tech":{"traction":1,"energy":0,"operations":0,"stations":0,"social":0,"freight":0,"maintenance":0},"techUnlocked":{"steam_first_locomotives":1},"researchProject":null,"researchQueue":[],"maintenancePolicy":"intensive","reputation":0,"co2":1019212.3031994413,"energyStrategy":"spot","resources":{"coal":1865.2127037794987,"diesel":0,"electricityOrder":0},"staff":{"drivers":2,"controllers":2,"stationAgents":2,"mechanics":2,"dispatchers":1,"engineers":1},"trains":[{"id":"starter-steam-030-mixte","modelId":"steam_030_mixte","ownerId":"4c7dfa51-225a-487a-aa42-1b0776c4e1d5","condition":0.33770453675999174,"age":37003,"acquiredDay":1,"composition":{"mode":"passenger_loco","passengerCars":3,"freightCars":3,"powerUnits":1,"passengerVariant":"standard","freightVariant":"covered"},"maintenance":{"active":false,"mode":null,"label":null,"daysLeft":0,"duration":0,"targetCondition":0,"startedDay":null,"cost":0,"lastServiceDay":42023}}],"lines":[{"id":"starter-line-caen-bayeux","code":"COM-001","from":"COM_14118","to":"COM_14047","stops":["COM_14118","COM_14047"],"trainId":"starter-steam-030-mixte","service":"passengers","frequency":4,"ticketPrice":4,"tariff":0.15384615384615385,"active":true,"electrified":false,"createdDay":1,"stats":{"passengers":611,"freightTons":0,"revenue":2292,"expenses":2211,"profit":81,"punctuality":35,"satisfaction":41.8,"share":100,"status":"ok","staffing":{"needs":{"drivers":2,"controllers":2,"stationAgents":1,"mechanics":1,"dispatchers":1,"engineers":0},"driverCoverage":100,"allocatedDrivers":2,"requiredDrivers":2,"effectiveFrequency":4,"requestedFrequency":4},"market":{"passengerDemand":2093,"freightDemand":370,"passengerShare":100,"freightShare":null,"passengerRank":1,"freightRank":null,"passengerCompetitors":0,"freightCompetitors":0,"passengerLeader":{"companyName":"Xenao","lineCode":"Caen → Bayeux","score":0.37},"freightLeader":null,"passengerScore":0.37,"freightScore":null,"passengerDemandCapture":30.59,"freightDemandCapture":null},"attractiveness":{"passenger":{"market":"passengers","score":0.37,"factors":{"price":42.86,"frequency":57.74,"speed":25,"comfortOrCapacity":62.25,"reputation":33.33,"condition":50.94,"staff":100,"stations":85,"operations":100}},"freight":null},"capacity":{"passengers":714,"freightTons":364,"passengerLoad":85.51,"freightLoad":0,"crewFactor":100,"stationFactor":85,"capacityFactor":85,"driverCoverage":100,"effectiveFrequency":4,"requestedFrequency":4,"trainComposition":"3 voiture(s) · Standard"},"finance":{"ticketPrice":4,"farePerKm":0.15,"ticketRevenue":2078,"ancillaryRevenue":214,"freightRevenue":0,"dispatchRevenueBoost":0,"lineInfrastructureCost":310,"commercialOperatingCost":1100,"commercialSalesCost":470,"commercialControlCost":265,"commercialAdministrationCost":365,"energyCost":0,"resourceType":"coal","resourceConsumptionPerHour":11.66,"maintenanceCost":152,"accessCost":0,"passageRights":0,"variableExpenses":1561,"contribution":731,"allocatedOverhead":650,"netProfit":81,"margin":31.87,"totalExpenses":2211,"netMargin":3.55}},"name":"Caen → Bayeux"}],"stations":{"COM_14118":{"level":1,"depot":false,"commerce":0,"maintenance":0,"electrified":false},"COM_14047":{"level":1,"depot":false,"commerce":0,"maintenance":0,"electrified":false},"COM_28404":{"level":1,"depot":false,"commerce":0,"maintenance":0,"electrified":false}},"stats":{"passengers":14863917,"freightTons":0,"revenue":69374972,"expenses":36550456,"profit":32827078,"lastRevenue":2456,"lastExpenses":2211,"lastProfit":245,"punctuality":35,"satisfaction":41.8,"marketShare":1,"lastBreakdown":{"lineRevenue":2292,"stationRevenue":164,"ticketRevenue":2078,"ancillaryRevenue":214,"freightRevenue":0,"dispatchRevenueBoost":0,"energyCost":0,"trainMaintenanceCost":152,"lineInfrastructureCost":310,"commercialOperatingCost":1100,"commercialSalesCost":470,"commercialControlCost":265,"commercialAdministrationCost":365,"accessCost":0,"passageRightsRevenue":0,"staffCost":476,"stationCost":174,"debtCost":0,"idleTrainCost":0,"researchCost":0,"variableLineCost":1561,"sharedCosts":650}},"notifications":[{"day":44327,"text":"1 Contrôleur recruté."},{"day":44328,"text":"1 Contrôleur recruté."},{"day":45627,"text":"Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."},{"day":45653,"text":"Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."},{"day":45674,"text":"Vernouillet acquise pour 185 947 € : Les autres compagnies devront payer des droits de passage pour l’utiliser."},{"day":45720,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."},{"day":45750,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."},{"day":45780,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."},{"day":45810,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45840,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45870,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45900,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45930,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45937,"text":"Locomotive vapeur 030 mixte vendu pour 41 040 €."},{"day":45938,"text":"Locomotive vapeur 030 mixte vendu pour 41 040 €."},{"day":45939,"text":"Locomotive vapeur 030 mixte vendu pour 41 040 €."},{"day":45960,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":45990,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":46020,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."},{"day":46050,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46080,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46110,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46140,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46170,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46200,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46230,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46260,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."},{"day":46290,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46320,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46350,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46380,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46410,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46440,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46470,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."},{"day":46500,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."},{"day":46530,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."},{"day":46560,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."},{"day":46590,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."},{"day":46620,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."},{"day":46650,"text":"Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."}],"createdAt":1781511648911,"lastSeen":1781615955412,"tutorial":{"enabled":false,"completed":true,"stepId":"done","actionLog":{"buyTrain":true},"startedAt":1781602421811,"updatedAt":1781615383693}},"2ab0580e-4fc2-477f-b1ab-b46649e5e590":{"id":"2ab0580e-4fc2-477f-b1ab-b46649e5e590","name":"Raphaële","color":"#ffb5f0","logo":"semaphore","region":"France","cash":10000000,"debt":0,"epoch":0,"research":1,"tech":{"traction":1,"energy":0,"operations":0,"stations":0,"social":0,"freight":0},"techUnlocked":{"steam_first_locomotives":1},"researchProject":null,"researchQueue":[],"maintenancePolicy":"standard","reputation":0,"co2":0,"energyStrategy":"spot","resources":{"coal":100,"diesel":0,"electricityOrder":0},"staff":{"drivers":0,"controllers":0,"stationAgents":0,"mechanics":0,"dispatchers":0,"engineers":0},"trains":[{"id":"2204d831-841b-4bc0-9cba-140501ecf940","modelId":"steam_030_mixte","ownerId":"2ab0580e-4fc2-477f-b1ab-b46649e5e590","condition":0.96,"age":0,"acquiredDay":45749,"maintenance":{"active":false,"mode":null,"label":null,"daysLeft":0,"duration":0,"targetCondition":0,"startedDay":null,"cost":0,"lastServiceDay":45749},"composition":{"mode":"passenger_loco","passengerCars":2,"freightCars":2,"powerUnits":1,"passengerVariant":"standard","freightVariant":"covered"}}],"lines":[],"stations":{"COM_28134":{"level":1,"depot":false,"commerce":0,"maintenance":0,"electrified":false}},"stats":{"passengers":0,"freightTons":0,"revenue":24480,"expenses":86160,"profit":-61680,"lastRevenue":18,"lastExpenses":63,"lastProfit":-45,"punctuality":91,"satisfaction":55,"marketShare":0,"lastBreakdown":{"lineRevenue":0,"stationRevenue":18,"ticketRevenue":0,"ancillaryRevenue":0,"freightRevenue":0,"dispatchRevenueBoost":0,"energyCost":0,"trainMaintenanceCost":0,"lineInfrastructureCost":0,"commercialOperatingCost":0,"commercialSalesCost":0,"commercialControlCost":0,"commercialAdministrationCost":0,"accessCost":0,"passageRightsRevenue":0,"staffCost":0,"stationCost":58,"debtCost":0,"idleTrainCost":5,"researchCost":0,"variableLineCost":0,"sharedCosts":63}},"notifications":[{"day":37386,"text":"Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."},{"day":37417,"text":"Identité de compagnie modifiée."},{"day":43754,"text":"Identité de compagnie modifiée."},{"day":44566,"text":"Identité de compagnie modifiée."},{"day":45305,"text":"Dreux acquise pour 239 506 € : Les autres compagnies devront payer des droits de passage pour l’utiliser."},{"day":45527,"text":"Projet R&D lancé : Premières locomotives à vapeur niveau 1."},{"day":45543,"text":"Recherche terminée : Premières locomotives à vapeur niveau 1."},{"day":45749,"text":"Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."}],"createdAt":1781598832060,"lastSeen":1781617374421,"tutorial":{"enabled":false,"completed":true,"stepId":"done","actionLog":{"buyTrain":true},"startedAt":1781614747573,"updatedAt":1781615576343}}}}
+{
+  "version": 71,
+  "createdAt": 1781511648911,
+  "now": 1781617410878,
+  "day": 46665,
+  "eraYear": 5738,
+  "tickSpeed": 2000,
+  "market": {
+    "coal": 1.81,
+    "diesel": 4.24,
+    "electricity": 0.46,
+    "hydrogen": 2.01,
+    "battery": 0.62,
+    "steel": 1.74,
+    "labor": 1.16,
+    "demand": 1.84,
+    "freight": 1.85
+  },
+  "events": [
+    {
+      "kind": "freight",
+      "title": "Rebond industriel : Les contrats fret sont plus nombreux.",
+      "passenger": 1,
+      "freight": 1.2,
+      "remaining": 14
+    }
+  ],
+  "news": [
+    {
+      "day": 46085,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46087,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46088,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46091,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46097,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46099,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46102,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46104,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46117,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46121,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46134,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46142,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46156,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46176,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46184,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46188,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46207,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46216,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46239,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46253,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46259,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46271,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46293,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46305,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46319,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46334,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46344,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46347,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46357,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46372,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46385,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46393,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46410,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46414,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46440,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46446,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46454,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46461,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46462,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46464,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46487,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46488,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46498,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46516,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46517,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46520,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46541,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46552,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46561,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46563,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46570,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 46581,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46589,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46603,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 46611,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46621,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 46622,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 46637,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 46649,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 46659,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    }
+  ],
+  "customStations": {},
+  "users": {
+    "xenao": {
+      "id": "e7d0ea72-c490-413a-954f-bfe53ac9de11",
+      "username": "Xenao",
+      "usernameKey": "xenao",
+      "playerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+      "passwordSalt": "cbf4501d54845fcdf4455d7b634b53b6",
+      "passwordHash": "382bba450168b3741dd3ae9c37bd938140cd412dddee149b48e507ee9bff2544cda7c0d5e263fd833fecd980e5653731cad407b251093a05c9808ec390ee8434",
+      "sessions": {
+        "84779a80e48a09ae7b3eff9643115d9b98c697c7a78b0399604d2f000e8a8cbc": {
+          "createdAt": 1781579452973,
+          "lastSeenAt": 1781604616977,
+          "expiresAt": 1784171452973
+        },
+        "0e3c9ffd57899e10e056095fc6f0b00917727506b2d0443cb368e83c7cd90408": {
+          "createdAt": 1781598688641,
+          "lastSeenAt": 1781617409621,
+          "expiresAt": 1784190688641
+        },
+        "ddf9667b9cbb8f1e66492731de89494c014e7c06915c2f07bb37485c6b8a44ea": {
+          "createdAt": 1781601325332,
+          "lastSeenAt": 1781616605210,
+          "expiresAt": 1784193325332
+        }
+      },
+      "createdAt": 1781529287009,
+      "lastLoginAt": 1781601325332,
+      "loginHistory": [
+        {
+          "at": 1781601325332,
+          "userAgent": "",
+          "ip": ""
+        }
+      ]
+    },
+    "laplusbelle": {
+      "id": "b5547139-7509-4da3-9560-60ba8a0ab3f3",
+      "username": "Laplusbelle",
+      "usernameKey": "laplusbelle",
+      "playerId": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
+      "passwordSalt": "118130a74ba277468553a28fba35e665",
+      "passwordHash": "69e3b08a6b91889b6ce37a4e28d94087fe4df94fd45294a5779513e7642c74dd058f5ff593c5654c0054f363ee849928858139e1142a27719e64a8b733c024c3",
+      "sessions": {
+        "6ea2f094b7220c63e1356f78d3d8384866394eeb7b1247e6920be1c9151f6760": {
+          "createdAt": 1781598832108,
+          "lastSeenAt": 1781617410078,
+          "expiresAt": 1784190832108
+        }
+      },
+      "createdAt": 1781598832108,
+      "lastLoginAt": 1781598832108,
+      "loginHistory": [
+        {
+          "at": 1781598832108,
+          "userAgent": "",
+          "ip": ""
+        }
+      ]
+    }
+  },
+  "players": {
+    "4c7dfa51-225a-487a-aa42-1b0776c4e1d5": {
+      "id": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+      "name": "Xenao",
+      "color": "#ffff00",
+      "logo": "steam_front",
+      "region": "France",
+      "cash": 42033944.965354554,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 1,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0,
+        "maintenance": 0
+      },
+      "techUnlocked": {
+        "steam_first_locomotives": 1
+      },
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "intensive",
+      "reputation": 0,
+      "co2": 1019212.3031994413,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 1865.2127037794987,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 2,
+        "controllers": 2,
+        "stationAgents": 2,
+        "mechanics": 2,
+        "dispatchers": 1,
+        "engineers": 1
+      },
+      "trains": [
+        {
+          "id": "starter-steam-030-mixte",
+          "modelId": "steam_030_mixte",
+          "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+          "condition": 0.33770453675999174,
+          "age": 37003,
+          "acquiredDay": 1,
+          "composition": {
+            "mode": "passenger_loco",
+            "passengerCars": 3,
+            "freightCars": 3,
+            "powerUnits": 1,
+            "passengerVariant": "standard",
+            "freightVariant": "covered"
+          },
+          "maintenance": {
+            "active": false,
+            "mode": null,
+            "label": null,
+            "daysLeft": 0,
+            "duration": 0,
+            "targetCondition": 0,
+            "startedDay": null,
+            "cost": 0,
+            "lastServiceDay": 42023
+          }
+        }
+      ],
+      "lines": [
+        {
+          "id": "starter-line-caen-bayeux",
+          "code": "COM-001",
+          "from": "COM_14118",
+          "to": "COM_14047",
+          "stops": [
+            "COM_14118",
+            "COM_14047"
+          ],
+          "trainId": "starter-steam-030-mixte",
+          "service": "passengers",
+          "frequency": 4,
+          "ticketPrice": 4,
+          "tariff": 0.15384615384615385,
+          "active": true,
+          "electrified": false,
+          "createdDay": 1,
+          "stats": {
+            "passengers": 611,
+            "freightTons": 0,
+            "revenue": 2292,
+            "expenses": 2211,
+            "profit": 81,
+            "punctuality": 35,
+            "satisfaction": 41.8,
+            "share": 100,
+            "status": "ok",
+            "staffing": {
+              "needs": {
+                "drivers": 2,
+                "controllers": 2,
+                "stationAgents": 1,
+                "mechanics": 1,
+                "dispatchers": 1,
+                "engineers": 0
+              },
+              "driverCoverage": 100,
+              "allocatedDrivers": 2,
+              "requiredDrivers": 2,
+              "effectiveFrequency": 4,
+              "requestedFrequency": 4
+            },
+            "market": {
+              "passengerDemand": 2093,
+              "freightDemand": 370,
+              "passengerShare": 100,
+              "freightShare": null,
+              "passengerRank": 1,
+              "freightRank": null,
+              "passengerCompetitors": 0,
+              "freightCompetitors": 0,
+              "passengerLeader": {
+                "companyName": "Xenao",
+                "lineCode": "Caen → Bayeux",
+                "score": 0.37
+              },
+              "freightLeader": null,
+              "passengerScore": 0.37,
+              "freightScore": null,
+              "passengerDemandCapture": 30.59,
+              "freightDemandCapture": null
+            },
+            "attractiveness": {
+              "passenger": {
+                "market": "passengers",
+                "score": 0.37,
+                "factors": {
+                  "price": 42.86,
+                  "frequency": 57.74,
+                  "speed": 25,
+                  "comfortOrCapacity": 62.25,
+                  "reputation": 33.33,
+                  "condition": 50.94,
+                  "staff": 100,
+                  "stations": 85,
+                  "operations": 100
+                }
+              },
+              "freight": null
+            },
+            "capacity": {
+              "passengers": 714,
+              "freightTons": 364,
+              "passengerLoad": 85.51,
+              "freightLoad": 0,
+              "crewFactor": 100,
+              "stationFactor": 85,
+              "capacityFactor": 85,
+              "driverCoverage": 100,
+              "effectiveFrequency": 4,
+              "requestedFrequency": 4,
+              "trainComposition": "3 voiture(s) · Standard"
+            },
+            "finance": {
+              "ticketPrice": 4,
+              "farePerKm": 0.15,
+              "ticketRevenue": 2078,
+              "ancillaryRevenue": 214,
+              "freightRevenue": 0,
+              "dispatchRevenueBoost": 0,
+              "lineInfrastructureCost": 310,
+              "commercialOperatingCost": 1100,
+              "commercialSalesCost": 470,
+              "commercialControlCost": 265,
+              "commercialAdministrationCost": 365,
+              "energyCost": 0,
+              "resourceType": "coal",
+              "resourceConsumptionPerHour": 11.66,
+              "maintenanceCost": 152,
+              "accessCost": 0,
+              "passageRights": 0,
+              "variableExpenses": 1561,
+              "contribution": 731,
+              "allocatedOverhead": 650,
+              "netProfit": 81,
+              "margin": 31.87,
+              "totalExpenses": 2211,
+              "netMargin": 3.55
+            }
+          },
+          "name": "Caen → Bayeux"
+        }
+      ],
+      "stations": {
+        "COM_14118": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        },
+        "COM_14047": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        },
+        "COM_28404": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        }
+      },
+      "stats": {
+        "passengers": 14863917,
+        "freightTons": 0,
+        "revenue": 69374972,
+        "expenses": 36550456,
+        "profit": 32827078,
+        "lastRevenue": 2456,
+        "lastExpenses": 2211,
+        "lastProfit": 245,
+        "punctuality": 35,
+        "satisfaction": 41.8,
+        "marketShare": 1,
+        "lastBreakdown": {
+          "lineRevenue": 2292,
+          "stationRevenue": 164,
+          "ticketRevenue": 2078,
+          "ancillaryRevenue": 214,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 152,
+          "lineInfrastructureCost": 310,
+          "commercialOperatingCost": 1100,
+          "commercialSalesCost": 470,
+          "commercialControlCost": 265,
+          "commercialAdministrationCost": 365,
+          "accessCost": 0,
+          "passageRightsRevenue": 0,
+          "staffCost": 476,
+          "stationCost": 174,
+          "debtCost": 0,
+          "idleTrainCost": 0,
+          "researchCost": 0,
+          "variableLineCost": 1561,
+          "sharedCosts": 650,
+          "infrastructurePassageCost": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 44327,
+          "text": "1 Contrôleur recruté."
+        },
+        {
+          "day": 44328,
+          "text": "1 Contrôleur recruté."
+        },
+        {
+          "day": 45627,
+          "text": "Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."
+        },
+        {
+          "day": 45653,
+          "text": "Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."
+        },
+        {
+          "day": 45674,
+          "text": "Vernouillet acquise pour 185 947 € : Les autres compagnies devront payer des droits de passage pour l’utiliser."
+        },
+        {
+          "day": 45720,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."
+        },
+        {
+          "day": 45750,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."
+        },
+        {
+          "day": 45780,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 38% d’état."
+        },
+        {
+          "day": 45810,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45840,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45870,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45900,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45930,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45937,
+          "text": "Locomotive vapeur 030 mixte vendu pour 41 040 €."
+        },
+        {
+          "day": 45938,
+          "text": "Locomotive vapeur 030 mixte vendu pour 41 040 €."
+        },
+        {
+          "day": 45939,
+          "text": "Locomotive vapeur 030 mixte vendu pour 41 040 €."
+        },
+        {
+          "day": 45960,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 45990,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 46020,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 37% d’état."
+        },
+        {
+          "day": 46050,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46080,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46110,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46140,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46170,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46200,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46230,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46260,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 36% d’état."
+        },
+        {
+          "day": 46290,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46320,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46350,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46380,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46410,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46440,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46470,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 35% d’état."
+        },
+        {
+          "day": 46500,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46530,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46560,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46590,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46620,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        },
+        {
+          "day": 46650,
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 34% d’état."
+        }
+      ],
+      "createdAt": 1781511648911,
+      "lastSeen": 1781615955412,
+      "tutorial": {
+        "enabled": false,
+        "completed": true,
+        "stepId": "done",
+        "actionLog": {
+          "buyTrain": true
+        },
+        "startedAt": 1781602421811,
+        "updatedAt": 1781615383693
+      },
+      "epochStartedAt": 1781511648911
+    },
+    "2ab0580e-4fc2-477f-b1ab-b46649e5e590": {
+      "id": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
+      "name": "Raphaële",
+      "color": "#ffb5f0",
+      "logo": "semaphore",
+      "region": "France",
+      "cash": 10000000,
+      "debt": 0,
+      "epoch": 0,
+      "research": 1,
+      "tech": {
+        "traction": 1,
+        "energy": 0,
+        "operations": 0,
+        "stations": 0,
+        "social": 0,
+        "freight": 0
+      },
+      "techUnlocked": {
+        "steam_first_locomotives": 1
+      },
+      "researchProject": null,
+      "researchQueue": [],
+      "maintenancePolicy": "standard",
+      "reputation": 0,
+      "co2": 0,
+      "energyStrategy": "spot",
+      "resources": {
+        "coal": 100,
+        "diesel": 0,
+        "electricityOrder": 0
+      },
+      "staff": {
+        "drivers": 0,
+        "controllers": 0,
+        "stationAgents": 0,
+        "mechanics": 0,
+        "dispatchers": 0,
+        "engineers": 0
+      },
+      "trains": [
+        {
+          "id": "2204d831-841b-4bc0-9cba-140501ecf940",
+          "modelId": "steam_030_mixte",
+          "ownerId": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
+          "condition": 0.96,
+          "age": 0,
+          "acquiredDay": 45749,
+          "maintenance": {
+            "active": false,
+            "mode": null,
+            "label": null,
+            "daysLeft": 0,
+            "duration": 0,
+            "targetCondition": 0,
+            "startedDay": null,
+            "cost": 0,
+            "lastServiceDay": 45749
+          },
+          "composition": {
+            "mode": "passenger_loco",
+            "passengerCars": 2,
+            "freightCars": 2,
+            "powerUnits": 1,
+            "passengerVariant": "standard",
+            "freightVariant": "covered"
+          }
+        }
+      ],
+      "lines": [],
+      "stations": {
+        "COM_28134": {
+          "level": 1,
+          "depot": false,
+          "commerce": 0,
+          "maintenance": 0,
+          "electrified": false
+        }
+      },
+      "stats": {
+        "passengers": 0,
+        "freightTons": 0,
+        "revenue": 24480,
+        "expenses": 86160,
+        "profit": -61680,
+        "lastRevenue": 18,
+        "lastExpenses": 63,
+        "lastProfit": -45,
+        "punctuality": 91,
+        "satisfaction": 55,
+        "marketShare": 0,
+        "lastBreakdown": {
+          "lineRevenue": 0,
+          "stationRevenue": 18,
+          "ticketRevenue": 0,
+          "ancillaryRevenue": 0,
+          "freightRevenue": 0,
+          "dispatchRevenueBoost": 0,
+          "energyCost": 0,
+          "trainMaintenanceCost": 0,
+          "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
+          "accessCost": 0,
+          "passageRightsRevenue": 0,
+          "staffCost": 0,
+          "stationCost": 58,
+          "debtCost": 0,
+          "idleTrainCost": 5,
+          "researchCost": 0,
+          "variableLineCost": 0,
+          "sharedCosts": 63,
+          "infrastructurePassageCost": 0
+        }
+      },
+      "notifications": [
+        {
+          "day": 37386,
+          "text": "Compagnie créée avec 500 000 €. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale."
+        },
+        {
+          "day": 37417,
+          "text": "Identité de compagnie modifiée."
+        },
+        {
+          "day": 43754,
+          "text": "Identité de compagnie modifiée."
+        },
+        {
+          "day": 44566,
+          "text": "Identité de compagnie modifiée."
+        },
+        {
+          "day": 45305,
+          "text": "Dreux acquise pour 239 506 € : Les autres compagnies devront payer des droits de passage pour l’utiliser."
+        },
+        {
+          "day": 45527,
+          "text": "Projet R&D lancé : Premières locomotives à vapeur niveau 1."
+        },
+        {
+          "day": 45543,
+          "text": "Recherche terminée : Premières locomotives à vapeur niveau 1."
+        },
+        {
+          "day": 45749,
+          "text": "Achat confirmé : Locomotive vapeur 030 mixte pour 95 000 €."
+        }
+      ],
+      "createdAt": 1781598832060,
+      "lastSeen": 1781617374421,
+      "tutorial": {
+        "enabled": false,
+        "completed": true,
+        "stepId": "done",
+        "actionLog": {
+          "buyTrain": true
+        },
+        "startedAt": 1781614747573,
+        "updatedAt": 1781615576343
+      },
+      "epochStartedAt": 1781598832060
+    }
+  }
+}
