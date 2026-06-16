@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.5.0';
+const PROJECT_VERSION = 'v62.6.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -5644,8 +5644,8 @@ function drawRailLine(ctx, points, color, own, electrified, lite = false) {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = own ? 0.96 : 0.68;
-  ctx.lineJoin = 'miter';
-  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   ctx.setLineDash([]);
 
   // sleeper/shadow pass
@@ -6888,37 +6888,67 @@ function fallbackSinuousRailSegmentPath(a, b, start, end) {
   const phaseC = deterministicUnit(seed + 47);
   const polarity = deterministicUnit(seed + 71) < 0.5 ? -1 : 1;
 
-  // Fallback visuel uniquement : quand aucun tracé SNCF/RFN ou Overpass n'est
-  // disponible, on évite l'ancien arc unique trop propre. Le motif reste
-  // déterministe pour que la même ligne conserve exactement la même forme.
-  const steps = Math.max(12, Math.min(72, Math.ceil(dist / 24)));
-  const turns = Math.max(2.15, Math.min(6.25, dist / 145 + 1.15 + phaseA * 1.1));
-  const amplitude = Math.min(68, Math.max(9, dist * 0.075));
-  const meander = Math.min(32, Math.max(5, dist * 0.032));
-  const points = [];
+  // Fallback visuel uniquement : aucun tracé SNCF/RFN ou Overpass n'a été trouvé.
+  // On génère donc un corridor ferroviaire fictif, mais volontairement doux :
+  // peu de changements de direction, courbure progressive et points spline
+  // suréchantillonnés pour éviter les cassures visibles au dézoom.
+  const shortFactor = clamp(dist / 120, 0.36, 1);
+  const anchorCount = Math.max(4, Math.min(10, Math.ceil(dist / 115) + 2));
+  const amplitude = Math.min(46, Math.max(5.5, dist * 0.045)) * shortFactor;
+  const drift = Math.min(18, Math.max(2, dist * 0.015));
+  const anchors = [];
 
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
+  for (let i = 0; i <= anchorCount; i++) {
+    const t = i / anchorCount;
     const envelope = Math.sin(Math.PI * t);
-    const tapered = Math.pow(Math.max(0, envelope), 0.82);
-    const waveA = Math.sin((t * turns + phaseB) * Math.PI * 2);
-    const waveB = Math.sin((t * (turns * 1.85 + 0.65) + phaseC) * Math.PI * 2) * 0.34;
-    const broad = Math.sin((t + phaseA * 0.22) * Math.PI * 2) * 0.22;
-    const lateral = tapered * amplitude * polarity * (waveA + waveB + broad);
+    const easedEnvelope = Math.pow(Math.max(0, envelope), 0.94);
+    const broad = Math.sin((t + phaseA * 0.28) * Math.PI * 2) * 0.56;
+    const secondary = Math.sin((t * 1.72 + phaseB) * Math.PI * 2) * 0.24;
+    const local = (deterministicUnit(seed + 101 + i * 37) - 0.5) * 0.26;
+    const lateral = easedEnvelope * amplitude * polarity * (broad + secondary + local);
+    const longitudinal = envelope * drift * Math.sin((t * 1.35 + phaseC) * Math.PI * 2) * 0.34;
 
-    // Très léger décalage longitudinal pour casser l'impression de segment
-    // parfaitement géométrique, sans modifier les extrémités.
-    const longitudinal = envelope * meander * Math.sin((t * 3.0 + phaseA) * Math.PI * 2) * 0.42;
-
-    points.push({
+    anchors.push({
       x: start.x + dx * t + nx * lateral + tx * longitudinal,
       y: start.y + dy * t + ny * lateral + ty * longitudinal
     });
   }
 
+  anchors[0] = { ...start };
+  anchors[anchors.length - 1] = { ...end };
+
+  const samplesPerSegment = dist < 90 ? 8 : dist < 240 ? 10 : 12;
+  const points = catmullRomRoutePoints(anchors, samplesPerSegment);
   points[0] = { ...start };
   points[points.length - 1] = { ...end };
   return cleanRoutePoints(points);
+}
+
+function catmullRomRoutePoints(anchors, samplesPerSegment = 10) {
+  if (!Array.isArray(anchors) || anchors.length < 3) return anchors || [];
+  const points = [];
+  const samples = Math.max(4, Math.min(18, Math.round(samplesPerSegment || 10)));
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const p0 = anchors[Math.max(0, i - 1)];
+    const p1 = anchors[i];
+    const p2 = anchors[i + 1];
+    const p3 = anchors[Math.min(anchors.length - 1, i + 2)];
+    const firstSample = i === 0 ? 0 : 1;
+    for (let step = firstSample; step <= samples; step++) {
+      const t = step / samples;
+      points.push(catmullRomPoint(p0, p1, p2, p3, t));
+    }
+  }
+  return points;
+}
+
+function catmullRomPoint(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+    y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+  };
 }
 
 function directRailDistance(a, b) {

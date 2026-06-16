@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Version v62.6.0 — tracés fictifs plus doux au dézoom
+
+- incrément de version : badge interface `v62.6.0`, package `0.6.6` et schéma serveur `70` ;
+- amélioration du fallback des itinéraires sans géométrie SNCF/RFN ou Overpass : le tracé reste sinueux mais utilise maintenant un corridor à courbure progressive ;
+- réduction des changements de direction trop serrés et de l'amplitude excessive des méandres ;
+- suréchantillonnage du tracé par spline Catmull-Rom pour supprimer les cassures visuelles quand la carte est dézoomée ;
+- rendu des lignes avec jointures et extrémités arrondies afin d'éviter les angles agressifs sur les tracés fictifs.
+
 ## Version v62.5.0 — fallback sinueux des tracés sans géométrie SNCF
 
 - incrément de version : badge interface `v62.5.0`, package `0.6.5` et schéma serveur `69` ;

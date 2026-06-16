@@ -20,7 +20,7 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 
 - Serveur Node.js natif, sans Express ni Socket.io.
 - Interface web HTML/CSS/JS.
-- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, points de villes/gares reconstruits depuis les données officielles, géométries SNCF RFN quand elles sont disponibles et fallback sinueux pour les liaisons sans tracé officiel.
+- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, points de villes/gares reconstruits depuis les données officielles, géométries SNCF RFN quand elles sont disponibles et fallback sinueux adouci pour les liaisons sans tracé officiel.
 - Multijoueur par état serveur partagé et polling.
 - Création de compagnie.
 - Achat de matériel roulant.
@@ -44,7 +44,7 @@ Le serveur utilise les données SNCF Open Data lorsque l’accès réseau est di
 - `geo.api.gouv.fr/communes` pour placer les communes jouables qui n’ont pas de gare voyageurs connue ;
 - `formes-des-lignes-du-rfn` pour calculer des géométries de route suivant les lignes du Réseau Ferré National.
 
-Le cache `data/communes-5000-population.json` est reconstruit dès que son format est obsolète, afin d’éviter les anciens placements manuels. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si les API ou le réseau sont indisponibles, le jeu reste lançable avec le dernier cache local et ses fallbacks de tracé.
+Le cache `data/communes-5000-population.json` est reconstruit dès que son format est obsolète, afin d’éviter les anciens placements manuels. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si les API ou le réseau sont indisponibles, le jeu reste lançable avec le dernier cache local et ses fallbacks de tracé adoucis.
 
 ## Notes
 
