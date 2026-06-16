@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.11.0';
+const PROJECT_VERSION = 'v62.12.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -399,6 +399,8 @@ function bindGlobalTooltips() {
 function tooltipLineClass(line) {
   const text = String(line || '').trim().toLowerCase();
   if (!text) return '';
+  if (/^bonus\b|^\[\+\]|^\+/.test(text)) return 'tooltip-line--production';
+  if (/^malus\b|^\[-\]|^-/.test(text)) return 'tooltip-line--consumption';
   if (text.startsWith('dépenses') || text.startsWith('depenses') || text.startsWith('charges') || text.startsWith('consommation')) return 'tooltip-line--consumption';
   if (text.startsWith('revenus') || text.startsWith('stock disponible') || text.startsWith('commande producteur') || text.startsWith('production')) return 'tooltip-line--production';
   if (text.startsWith('résultat net') || text.startsWith('resultat net')) {
@@ -2044,7 +2046,7 @@ function startResearchAnimationLoop() {
   requestAnimationFrame(tick);
 }
 
-function compositionMetric(label, value, tooltip, cls = '') {
+function compositionMetric(label, value, tooltip, cls = '', secondaryValue = '') {
   return `
     <div class="metric composition-metric ${tooltip ? 'metric-has-tooltip' : ''}" ${tooltip ? `tabindex="0" ${tooltipAttr(tooltip)}` : ''}>
       <div class="metric-label-row">
@@ -2052,6 +2054,7 @@ function compositionMetric(label, value, tooltip, cls = '') {
         ${tooltip ? '<i class="metric-info" aria-hidden="true">i</i>' : ''}
       </div>
       <b class="${cls}">${escapeHtml(String(value))}</b>
+      ${secondaryValue ? `<small class="composition-metric-secondary">${escapeHtml(String(secondaryValue))}</small>` : ''}
     </div>`;
 }
 
@@ -2728,9 +2731,23 @@ function trainStrengths(model) {
   return parts.slice(0, 3).join(' · ') || 'polyvalent';
 }
 
-function renderTrainStat(label, value, ratio, cls = '') {
+function formatTrainStatModifier(baseDisplay, modifiedDisplay) {
+  if (baseDisplay == null || modifiedDisplay == null) return '';
+  const base = String(baseDisplay);
+  const next = String(modifiedDisplay);
+  return base === next ? '' : `<small class="train-stat-modifier good-text">→ ${escapeHtml(next)}</small>`;
+}
+
+function renderTrainStat(label, value, ratio, cls = '', modifiedValue = '', modifiedRatio = null) {
   const pct = Math.max(4, Math.min(100, Math.round(ratio * 100)));
-  return `<div class="train-stat ${cls}"><span>${escapeHtml(label)}</span><b>${escapeHtml(String(value))}</b><i style="width:${pct}%"></i></div>`;
+  const extraPct = modifiedRatio == null ? pct : Math.max(pct, Math.min(100, Math.round(modifiedRatio * 100)));
+  const hasModifier = modifiedValue && String(modifiedValue) !== String(value);
+  return `
+    <div class="train-stat ${cls} ${hasModifier ? 'has-modifier' : ''}">
+      <span>${escapeHtml(label)}</span>
+      <b>${escapeHtml(String(value))}${formatTrainStatModifier(value, modifiedValue)}</b>
+      <i><em style="width:${pct}%"></em>${hasModifier ? `<strong style="width:${extraPct}%"></strong>` : ''}</i>
+    </div>`;
 }
 
 function renderTrainArt(model) {
@@ -2961,18 +2978,92 @@ function trainProjectionLabel(train) {
   return `0% dans ${formatMaintenanceCountdown(projection.hoursToZero)}`;
 }
 
-function previewOperatingProfile(train, model = app.state.balance.trains[train.modelId]) {
+function metricFormatOptions(metricKey) {
+  if (metricKey === 'reliability' || metricKey === 'comfort') return { decimals: 0, unit: '%', factor: 100 };
+  if (metricKey === 'energy' || metricKey === 'maintenance') return { decimals: 1, unit: '', factor: 1 };
+  if (metricKey === 'freight') return { decimals: 0, unit: ' t', factor: 1 };
+  if (metricKey === 'speed' || metricKey === 'range') return { decimals: 0, unit: ' km', factor: 1 };
+  return { decimals: 0, unit: '', factor: 1 };
+}
+
+function formatMetricAbsolute(metricKey, value) {
+  const cfg = metricFormatOptions(metricKey);
+  const scaled = Number(value || 0) * cfg.factor;
+  const rounded = cfg.decimals ? round(scaled) : Math.round(scaled);
+  return `${formatInt(rounded)}${cfg.unit}`;
+}
+
+function formatMetricDelta(metricKey, value) {
+  const cfg = metricFormatOptions(metricKey);
+  const scaled = Number(value || 0) * cfg.factor;
+  const rounded = cfg.decimals ? round(Math.abs(scaled)) : Math.round(Math.abs(scaled));
+  return `${scaled > 0 ? '+' : '-'}${formatInt(rounded)}${cfg.unit}`;
+}
+
+function buildMetricTooltip(metricLabel, metricKey, detail) {
+  const lines = [detail.description || metricLabel, `Base : ${formatMetricAbsolute(metricKey, detail.base)}`];
+  for (const step of detail.steps || []) {
+    if (!step || Math.abs(Number(step.delta || 0)) < 0.0001) continue;
+    lines.push(`${step.delta >= 0 ? 'Bonus' : 'Malus'} ${step.label} : ${formatMetricDelta(metricKey, step.delta)}`);
+    for (const sub of step.sources || []) lines.push(`${sub.delta >= 0 ? 'Bonus' : 'Malus'} ${sub.label} : ${sub.value}`);
+  }
+  lines.push('----');
+  lines.push(`Final : ${formatMetricAbsolute(metricKey, detail.final)}`);
+  return lines.join('\n');
+}
+
+function computeOperatingProfileDetailed(train, model = app.state.balance.trains[train.modelId]) {
+  const sourceModel = effectiveModelWithResearchClient(model);
+  const researchInfo = trainInheritedResearchBonus(model);
   const spec = trainCompositionSpec(train, model);
   const c = train?.composition || {};
-  const profile = {
+  const baseProfile = {
     capacity: Number(model?.capacity || 0),
     freight: Number(model?.freight || 0),
     speed: Number(model?.speed || 0),
+    range: Number(model?.range || 0),
     energy: Number(model?.energy || 0),
     maintenance: Number(model?.maintenance || 0),
     reliability: Number(model?.reliability || 0),
     comfort: Number(model?.comfort || 0)
   };
+  const profile = {
+    capacity: Number(sourceModel?.capacity || 0),
+    freight: Number(sourceModel?.freight || 0),
+    speed: Number(sourceModel?.speed || 0),
+    range: Number(sourceModel?.range || 0),
+    energy: Number(sourceModel?.energy || 0),
+    maintenance: Number(sourceModel?.maintenance || 0),
+    reliability: Number(sourceModel?.reliability || 0),
+    comfort: Number(sourceModel?.comfort || 0)
+  };
+  const metrics = {};
+  const metricLabels = {
+    capacity: 'Voyageurs / train', freight: 'Fret / train', speed: 'Vitesse commerciale', range: 'Portée', reliability: 'Fiabilité', comfort: 'Confort', energy: 'Énergie', maintenance: 'Maintenance'
+  };
+  const descriptions = {
+    capacity: 'Nombre maximal de voyageurs transportés par train après prise en compte de la composition choisie.',
+    freight: 'Tonnage maximal de fret transportable par train avec cette composition.',
+    speed: 'Vitesse de référence retenue en exploitation. Elle influence le temps de rotation, la productivité et la capacité quotidienne.',
+    range: 'Distance maximale admissible pour ce train après composition et recherches. Une ligne plus longue sera refusée.',
+    reliability: 'Probabilité de rouler sans incident majeur. Plus elle est basse, plus le risque de panne, retard et perte d’attractivité augmente.',
+    comfort: 'Qualité perçue du service par les voyageurs : agrément, image et standing.',
+    energy: 'Consommation énergétique de référence pour cette composition. Une valeur plus élevée alourdit les coûts d’exploitation.',
+    maintenance: 'Coût d’entretien unitaire issu du matériel, de la composition et de l’état du train.'
+  };
+  for (const key of Object.keys(baseProfile)) {
+    metrics[key] = { key, label: metricLabels[key], description: descriptions[key], base: Number(baseProfile[key] || 0), steps: [] };
+    const researchDelta = Number(profile[key] || 0) - Number(baseProfile[key] || 0);
+    if (Math.abs(researchDelta) >= 0.0001) {
+      const sourceLines = researchInfo.effects
+        .filter(effect => (key === 'range' ? ['range', 'autonomy'].includes(effect.kind) : effect.kind === key))
+        .map(effect => ({ label: `${effect.title} niv. ${effect.level}`, delta: researchDelta >= 0 ? 1 : -1, value: effect.signedPercent || '' }))
+        .filter(item => item.value);
+      metrics[key].steps.push({ label: 'recherches héritées', delta: researchDelta, sources: sourceLines });
+    }
+  }
+
+  const beforeComposition = { ...profile };
   if (spec.mode === 'multiple_unit') {
     const defaultUnits = spec.powerUnits.default;
     const ratio = Number(c.powerUnits || defaultUnits) / Math.max(1, defaultUnits);
@@ -2983,15 +3074,13 @@ function previewOperatingProfile(train, model = app.state.balance.trains[train.m
     profile.maintenance = round(profile.maintenance * ratio * (0.92 + ratio * 0.08));
     profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.015, 0.45, 0.995);
     profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.08, 1);
-    return applyTrainConditionToPreview(profile, train);
-  }
-  if (spec.mode === 'passenger_loco') {
+  } else if (spec.mode === 'passenger_loco') {
     const variant = selectedCompositionVariant(train, model) || { stats: {}, capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0 };
     const stats = variant.stats || variant;
     const defaultCars = spec.passengerCars.default;
     const ratio = Number(c.passengerCars || defaultCars) / Math.max(1, defaultCars);
     profile.capacity = Math.max(0, Math.round(profile.capacity * ratio));
-    profile.freight = Math.max(0, Math.round((model?.freight || 0) * Math.min(1.2, 0.65 + Number(c.passengerCars || defaultCars) * 0.08)));
+    profile.freight = Math.max(0, Math.round((sourceModel?.freight || 0) * Math.min(1.2, 0.65 + Number(c.passengerCars || defaultCars) * 0.08)));
     profile.speed = Math.max(30, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.03)));
     profile.energy = round(profile.energy * (0.72 + ratio * 0.28 + Math.max(0, ratio - 1) * 0.08));
     profile.maintenance = round(profile.maintenance * (0.76 + ratio * 0.24 + Math.max(0, ratio - 1) * 0.05));
@@ -3003,25 +3092,41 @@ function previewOperatingProfile(train, model = app.state.balance.trains[train.m
     profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
     profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
     profile.comfort = clamp(profile.comfort + (stats.comfortDelta || 0), 0.08, 1);
-    return applyTrainConditionToPreview(profile, train);
+  } else {
+    const variant = selectedCompositionVariant(train, model) || { stats: {} };
+    const stats = variant.stats || variant;
+    const defaultWagons = spec.freightCars.default;
+    const ratio = Number(c.freightCars || defaultWagons) / Math.max(1, defaultWagons);
+    profile.freight = Math.max(0, Math.round((sourceModel?.freight || 0) * ratio));
+    profile.capacity = Math.max(0, Math.round((sourceModel?.capacity || 0) * Math.max(0.4, 1 - Math.max(0, ratio - 1) * 0.18)));
+    profile.speed = Math.max(25, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.035)));
+    profile.energy = round(profile.energy * (0.7 + ratio * 0.3 + Math.max(0, ratio - 1) * 0.1));
+    profile.maintenance = round(profile.maintenance * (0.74 + ratio * 0.26 + Math.max(0, ratio - 1) * 0.06));
+    profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.022, 0.45, 0.995);
+    profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.05, 1);
+    profile.freight = Math.max(0, Math.round(profile.freight * (stats.capacityMultiplier || 1)));
+    profile.speed = Math.max(25, Math.round(profile.speed * (stats.speedMultiplier || 1)));
+    profile.energy = round(profile.energy * (stats.energyMultiplier || 1));
+    profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
+    profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
   }
-  const variant = selectedCompositionVariant(train, model) || { stats: {} };
-  const stats = variant.stats || variant;
-  const defaultWagons = spec.freightCars.default;
-  const ratio = Number(c.freightCars || defaultWagons) / Math.max(1, defaultWagons);
-  profile.freight = Math.max(0, Math.round((model?.freight || 0) * ratio));
-  profile.capacity = Math.max(0, Math.round((model?.capacity || 0) * Math.max(0.4, 1 - Math.max(0, ratio - 1) * 0.18)));
-  profile.speed = Math.max(25, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.035)));
-  profile.energy = round(profile.energy * (0.7 + ratio * 0.3 + Math.max(0, ratio - 1) * 0.1));
-  profile.maintenance = round(profile.maintenance * (0.74 + ratio * 0.26 + Math.max(0, ratio - 1) * 0.06));
-  profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.022, 0.45, 0.995);
-  profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.05, 1);
-  profile.freight = Math.max(0, Math.round(profile.freight * (stats.capacityMultiplier || 1)));
-  profile.speed = Math.max(25, Math.round(profile.speed * (stats.speedMultiplier || 1)));
-  profile.energy = round(profile.energy * (stats.energyMultiplier || 1));
-  profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
-  profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
-  return applyTrainConditionToPreview(profile, train);
+  for (const key of Object.keys(beforeComposition)) {
+    const delta = Number(profile[key] || 0) - Number(beforeComposition[key] || 0);
+    if (Math.abs(delta) >= 0.0001) metrics[key].steps.push({ label: 'composition', delta, sources: [] });
+  }
+
+  const beforeCondition = { ...profile };
+  applyTrainConditionToPreview(profile, train);
+  for (const key of Object.keys(beforeCondition)) {
+    const delta = Number(profile[key] || 0) - Number(beforeCondition[key] || 0);
+    if (Math.abs(delta) >= 0.0001) metrics[key].steps.push({ label: 'état du train', delta, sources: [] });
+  }
+  for (const key of Object.keys(metrics)) metrics[key].final = Number(profile[key] || 0);
+  return { profile, metrics };
+}
+
+function previewOperatingProfile(train, model = app.state.balance.trains[train.modelId]) {
+  return computeOperatingProfileDetailed(train, model).profile;
 }
 
 function deriveCompositionSummary(train) {
@@ -3252,7 +3357,9 @@ function renderCompositionEditor(train) {
   if (!train) return '<p class="muted">Sélectionne un train à configurer.</p>';
   const model = app.state.balance.trains[train.modelId];
   const spec = trainCompositionSpec(train, model);
-  const profile = previewOperatingProfile(train, model);
+  const detailBundle = computeOperatingProfileDetailed(train, model);
+  const profile = detailBundle.profile;
+  const metricDetails = detailBundle.metrics;
   const composition = train.composition || {};
   const line = trainCurrentLine(train.id);
   const variant = selectedCompositionVariant(train, model);
@@ -3333,13 +3440,13 @@ function renderCompositionEditor(train) {
       ${renderTrainCompositionStrip(train, model, 'large')}
 
       <div class="composition-stat-grid">
-        ${compositionMetric('Voyageurs / train', formatInt(profile.capacity), 'Nombre maximal de voyageurs transportés par train après prise en compte de la composition choisie.', profile.capacity >= (model.capacity || 0) ? 'good-text' : '')}
-        ${compositionMetric('Fret / train', `${formatInt(profile.freight)} t`, 'Tonnage maximal de fret transportable par train avec cette composition.', profile.freight >= (model.freight || 0) ? 'good-text' : '')}
-        ${compositionMetric('Vitesse commerciale', `${formatInt(profile.speed)} km/h`, 'Vitesse de référence retenue en exploitation. Elle influence le temps de rotation, la productivité et la capacité quotidienne.', '')}
-        ${compositionMetric('Portée', `${formatInt(profile.range)} km`, 'Distance maximale admissible pour ce train après composition et recherches. Une ligne plus longue sera refusée.', profile.range >= (model.range || 0) ? 'good-text' : '')}
-        ${compositionMetric('Fiabilité', `${Math.round(profile.reliability * 100)}%`, 'Probabilité de rouler sans incident majeur. Plus elle est basse, plus le risque de panne, retard et perte d’attractivité augmente.', profile.reliability >= 0.88 ? 'good-text' : '')}
-        ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, 'Qualité perçue du service par les voyageurs : Agrément, image et standing. Le confort améliore l’attractivité des lignes voyageurs.', profile.comfort >= 0.75 ? 'good-text' : '')}
-        ${compositionMetric('Énergie', round(profile.energy), 'Consommation énergétique de référence pour cette composition. Une valeur plus élevée alourdit les coûts d’exploitation.', profile.energy <= (model.energy || 0) ? 'good-text' : 'warn-text')}
+        ${compositionMetric('Voyageurs / train', formatInt(profile.capacity), buildMetricTooltip('Voyageurs / train', 'capacity', metricDetails.capacity), profile.capacity >= (model.capacity || 0) ? 'good-text' : '', `Base ${formatInt(metricDetails.capacity.base)}`)}
+        ${compositionMetric('Fret / train', `${formatInt(profile.freight)} t`, buildMetricTooltip('Fret / train', 'freight', metricDetails.freight), profile.freight >= (model.freight || 0) ? 'good-text' : '', `Base ${formatInt(metricDetails.freight.base)} t`)}
+        ${compositionMetric('Vitesse commerciale', `${formatInt(profile.speed)} km/h`, buildMetricTooltip('Vitesse commerciale', 'speed', metricDetails.speed), '', `Base ${formatInt(metricDetails.speed.base)} km/h`)}
+        ${compositionMetric('Portée', `${formatInt(profile.range)} km`, buildMetricTooltip('Portée', 'range', metricDetails.range), profile.range >= (model.range || 0) ? 'good-text' : '', `Base ${formatInt(metricDetails.range.base)} km`)}
+        ${compositionMetric('Fiabilité', `${Math.round(profile.reliability * 100)}%`, buildMetricTooltip('Fiabilité', 'reliability', metricDetails.reliability), profile.reliability >= 0.88 ? 'good-text' : '', `Base ${Math.round(metricDetails.reliability.base * 100)}%`)}
+        ${compositionMetric('Confort', `${Math.round(profile.comfort * 100)}%`, buildMetricTooltip('Confort', 'comfort', metricDetails.comfort), profile.comfort >= 0.75 ? 'good-text' : '', `Base ${Math.round(metricDetails.comfort.base * 100)}%`)}
+        ${compositionMetric('Énergie', round(profile.energy), buildMetricTooltip('Énergie', 'energy', metricDetails.energy), profile.energy <= (model.energy || 0) ? 'good-text' : 'warn-text', `Base ${round(metricDetails.energy.base)}`)}
       </div>
 
       ${renderCompositionMarginalImpact(train, model, spec, profile)}
@@ -3637,20 +3744,32 @@ function researchNodesForEraClient(era) {
 function trainInheritedResearchBonus(model) {
   const modifiers = { speed: 1, range: 1, autonomy: 1, reliability: 1, energy: 1, environment: 1, profitability: 1 };
   const sources = [];
+  const effects = [];
   for (const node of researchNodesForEraClient(trainResearchEra(model))) {
     const level = techLevel(node.id);
     if (level <= 0) continue;
     const units = researchLevelEffectUnitsClient(level);
-    let nodeHasEffect = false;
+    const nodeEffects = [];
     for (const effectText of node.improves || []) {
       for (const effect of parseResearchNumericEffectsClient(effectText)) {
-        modifiers[effect.kind] *= Math.max(0.08, 1 + effect.value * units);
-        nodeHasEffect = true;
+        const multiplier = Math.max(0.08, 1 + effect.value * units);
+        modifiers[effect.kind] *= multiplier;
+        nodeEffects.push({
+          kind: effect.kind,
+          rawValue: effect.value,
+          units,
+          multiplier,
+          signedPercent: signedPercentFromMultiplier(multiplier, effect.kind === 'energy' || effect.kind === 'environment')
+        });
       }
     }
-    if (nodeHasEffect) sources.push({ title: node.title, level });
+    if (nodeEffects.length) {
+      const source = { title: node.title, level, effects: nodeEffects };
+      sources.push(source);
+      for (const item of nodeEffects) effects.push({ ...item, title: node.title, level });
+    }
   }
-  return { modifiers, sources };
+  return { modifiers, sources, effects };
 }
 
 function signedPercentFromMultiplier(multiplier, inverse = false) {
@@ -3660,12 +3779,23 @@ function signedPercentFromMultiplier(multiplier, inverse = false) {
   return `${pct > 0 ? '+' : ''}${pct.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}%`;
 }
 
-function trainEffectiveCatalogRange(model) {
+function effectiveModelWithResearchClient(model) {
   const { modifiers } = trainInheritedResearchBonus(model);
-  const multiplier = model.energyType === 'battery'
+  const rangeMultiplier = model.energyType === 'battery'
     ? modifiers.range * modifiers.autonomy
     : modifiers.range;
-  return Math.max(1, Math.round(Number(model.range || 0) * multiplier));
+  return {
+    ...model,
+    speed: Math.max(20, Math.round(Number(model?.speed || 0) * modifiers.speed)),
+    range: Math.max(1, Math.round(Number(model?.range || 0) * rangeMultiplier)),
+    reliability: clamp(Number(model?.reliability || 0) * modifiers.reliability, 0.18, 0.995),
+    energy: Math.max(0.01, round(Number(model?.energy || 0) * modifiers.energy)),
+    researchModifiers: modifiers
+  };
+}
+
+function trainEffectiveCatalogRange(model) {
+  return effectiveModelWithResearchClient(model).range;
 }
 
 function renderTrainInheritedResearchBonuses(model) {
@@ -3720,7 +3850,8 @@ function renderTrainRequirementPills(model) {
 
 function renderTrainCatalogItem(model, buyable) {
   const reason = trainModelLockedReason(model);
-  const effectiveRange = trainEffectiveCatalogRange(model);
+  const effective = effectiveModelWithResearchClient(model);
+  const effectiveRange = effective.range;
   return `
     <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
       ${renderTrainArt(model)}
@@ -3731,11 +3862,11 @@ function renderTrainCatalogItem(model, buyable) {
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
         <div class="train-stat-grid">
-          ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '')}
-          ${renderTrainStat('Portée', `${formatInt(effectiveRange)} km`, effectiveRange / 1400, effectiveRange >= 900 ? 'good' : '')}
+          ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '', `${effective.speed} km/h`, effective.speed / 420)}
+          ${renderTrainStat('Portée', `${formatInt(model.range)} km`, (model.range || 0) / 1400, effectiveRange >= 900 ? 'good' : '', `${formatInt(effectiveRange)} km`, effectiveRange / 1400)}
           ${renderTrainStat('Voyageurs', `${model.capacity}`, model.capacity / 1100, model.capacity >= 650 ? 'good' : '')}
           ${renderTrainStat('Fret', `${model.freight} t`, model.freight / 2200, model.freight >= 900 ? 'good' : '')}
-          ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, model.reliability >= 0.92 ? 'good' : '')}
+          ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, effective.reliability >= 0.92 ? 'good' : '', `${Math.round(effective.reliability * 100)}%`, effective.reliability)}
           ${renderTrainStat('Confort', `${Math.round(model.comfort * 100)}%`, model.comfort, model.comfort >= 0.8 ? 'good' : '')}
           ${renderTrainStat('Maint./h', maintenanceHourlyRange(model), 1 - Math.min(1, model.maintenance / 1.3), model.maintenance <= 0.45 ? 'good' : 'warn')}
         </div>
@@ -3969,9 +4100,10 @@ function stationPriceFromAnnualPassengers(annualPassengers) {
 }
 
 function stationAcquisitionCost(s) {
+  const annualPassengers = Number(s?.annualPassengers || s?.passengers2024 || 0);
+  if (s?.majorTerminal && Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers) * 50;
   const storedPurchaseCost = Number(s?.purchaseCost || s?.acquisitionCost || 0);
   if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
-  const annualPassengers = Number(s?.annualPassengers || s?.passengers2024 || 0);
   if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
   if (s?.custom) {
     const stored = Number(s.creationCost || s.purchaseCost || 0);

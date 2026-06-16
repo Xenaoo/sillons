@@ -2212,16 +2212,38 @@ button[data-tooltip]:focus-visible::before {
   font-size: 12px;
 }
 .train-stat i {
+  position: relative;
   display: block;
   height: 4px;
+  overflow: hidden;
   border-radius: 999px;
+  background: rgba(217,168,82,.12);
+}
+.train-stat i em,
+.train-stat i strong {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+}
+.train-stat i em {
   background: linear-gradient(90deg, #8b5b29, #d9a852);
 }
-.train-stat.good i {
+.train-stat.good i em {
   background: linear-gradient(90deg, #3f8d60, #6ac58f);
 }
-.train-stat.warn i {
+.train-stat.warn i em {
   background: linear-gradient(90deg, #a06a2e, #e0b34f);
+}
+.train-stat.has-modifier i strong {
+  background: linear-gradient(90deg, rgba(111,225,150,.32), #6fe196);
+}
+.train-stat-modifier {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 800;
 }
 .train-meta {
   display: flex;
@@ -3827,6 +3849,12 @@ input[type="number"] {
   letter-spacing: .04em;
   text-transform: uppercase;
   color: rgba(241, 224, 184, 0.92);
+}
+.composition-metric-secondary {
+  display: block;
+  margin-top: 4px;
+  color: rgba(184, 170, 132, 0.9);
+  font-size: 11px;
 }
 .metric-info {
   width: 20px;

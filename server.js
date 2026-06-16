@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.11.0';
-const STATE_SCHEMA_VERSION = 75;
+const PROJECT_VERSION = 'v62.12.0';
+const STATE_SCHEMA_VERSION = 76;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -1563,7 +1563,7 @@ function stationPriceFromAnnualPassengers(annualPassengers) {
 }
 
 function parisTerminalStationEntry(entry) {
-  const price = stationPriceFromAnnualPassengers(entry.annualPassengers);
+  const price = stationPriceFromAnnualPassengers(entry.annualPassengers) * 50;
   const demand = Math.round(clamp(160 + Math.pow(entry.annualPassengers / 1000000, 0.74) * 58, 220, 1600));
   return {
     id: entry.id,
@@ -2108,7 +2108,9 @@ function normalizeCommuneStation(station) {
     populationSource: station.populationSource || 'geo.api.gouv.fr'
   };
   const annualPassengers = Number(station.annualPassengers || station.passengers2024 || 0);
-  const purchaseCost = Number(station.purchaseCost || station.acquisitionCost || 0);
+  const purchaseCost = station.majorTerminal && Number.isFinite(annualPassengers) && annualPassengers > 0
+    ? stationPriceFromAnnualPassengers(annualPassengers) * 50
+    : Number(station.purchaseCost || station.acquisitionCost || 0);
   if (Number.isFinite(annualPassengers) && annualPassengers > 0) normalized.annualPassengers = Math.round(annualPassengers);
   if (Number.isFinite(Number(station.passengerTrafficYear))) normalized.passengerTrafficYear = Math.round(Number(station.passengerTrafficYear));
   if (Number.isFinite(purchaseCost) && purchaseCost > 0) normalized.purchaseCost = Math.round(purchaseCost);
@@ -2778,9 +2780,10 @@ function actionUpgradeStation(player, payload) {
 
 
 function stationAcquisitionCost(station) {
+  const annualPassengers = Number(station?.annualPassengers || station?.passengers2024 || 0);
+  if (station?.majorTerminal && Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers) * 50;
   const storedPurchaseCost = Number(station?.purchaseCost || station?.acquisitionCost || 0);
   if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
-  const annualPassengers = Number(station?.annualPassengers || station?.passengers2024 || 0);
   if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
   if (station?.custom) {
     const stored = Number(station.creationCost || station.purchaseCost || 0);

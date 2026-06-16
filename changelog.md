@@ -1,3 +1,15 @@
+# Changelog
+
+## Version v62.12.0 — composition détaillée et gares parisiennes revalorisées
+
+- incrément de version : badge interface `v62.12.0`, package `0.6.12` et schéma serveur `76` ;
+- cartes matériel : affichage des statistiques de base et des statistiques réellement modifiées en vert, avec prolongation verte des barres correspondantes ;
+- atelier de composition : statistiques recalculées après application de tous les modificateurs (recherches héritées, composition et état du train) ;
+- atelier de composition : ajout d’infobulles détaillant chaque source de bonus/malus avec code couleur vert/rouge ;
+- correction du bug qui laissait la portée à `0 km` dans le panneau de composition ;
+- revalorisation des grandes gares parisiennes (Austerlitz, Gare de Lyon, Gare du Nord, Gare de l’Est, Saint-Lazare et Montparnasse) avec un prix d’achat multiplié par `50`, y compris en affichage et au calcul réel côté serveur.
+
+
 # CHANGELOG
 
 ## Version v62.11.0 — grandes gares parisiennes et tarifs par fréquentation
