@@ -5,6 +5,8 @@ const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selec
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
 const PROJECT_VERSION = 'v62.0.0';
+const ROUTE_CACHE_MAX_ENTRIES = 2500;
+const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -479,6 +481,24 @@ function markMapProjectionDirty() {
   app.map.stationDrawCache.key = '';
 }
 
+function rememberCacheEntry(cache, key, value, maxEntries) {
+  if (cache.has(key)) cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > maxEntries) {
+    const oldestKey = cache.keys().next().value;
+    cache.delete(oldestKey);
+  }
+  return value;
+}
+
+function getCacheEntry(cache, key) {
+  if (!cache.has(key)) return null;
+  const value = cache.get(key);
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
 function startPanOverlay() {
   if (!app.map.leaflet || !app.map.canvas || app.map.panOverlay.active) return;
   app.map.panOverlay.active = true;
@@ -570,7 +590,7 @@ async function refreshState(first) {
   app.refreshInFlight = true;
   try {
     const response = await fetch('/api/state', { cache: 'no-store', headers: authHeaders() });
-    const data = await response.json();
+    const data = await readJsonResponse(response, 'Reponse serveur invalide.');
     if (response.status === 401) {
       clearAuthState();
       $('#setup')?.classList.remove('hidden');
@@ -914,10 +934,14 @@ async function handleAuthSubmit(event) {
     payload.logo = currentSetupLogoId();
   }
   const url = app.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-  const response = await post(url, payload, { auth: false });
-  if (!response.ok) return toast(response.error || 'Connexion impossible.', 'error');
-  applyAuthResponse(response);
-  toast(app.authMode === 'register' ? 'Compte créé et connecté.' : 'Connexion réussie.', 'ok');
+  try {
+    const response = await post(url, payload, { auth: false });
+    if (!response.ok) return toast(response.error || 'Connexion impossible.', 'error');
+    applyAuthResponse(response);
+    toast(app.authMode === 'register' ? 'Compte créé et connecté.' : 'Connexion réussie.', 'ok');
+  } catch (error) {
+    toast(error.message || 'Connexion impossible.', 'error');
+  }
 }
 
 async function logoutAccount() {
@@ -4702,12 +4726,23 @@ async function post(url, payload, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(useAuth ? authHeaders() : {}) },
     body: JSON.stringify(payload)
   });
-  const data = await response.json();
+  const data = await readJsonResponse(response, 'Reponse serveur invalide.');
   if (response.status === 401) {
     clearAuthState();
     $('#setup')?.classList.remove('hidden');
   }
   return data;
+}
+
+async function readJsonResponse(response, fallbackMessage = 'Reponse invalide.') {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const suffix = response?.status ? ` (${response.status})` : '';
+    throw new Error(`${fallbackMessage}${suffix}`);
+  }
 }
 
 
@@ -4781,7 +4816,11 @@ function openLineModal(lineId) {
           <label>Position d’insertion
             <select id="lineEditorInsertPos">
               <option value="auto" ${app.lineEditor.insertAfter === 'auto' ? 'selected' : ''}>Meilleure position entre deux arrêts</option>
-              ${app.lineEditor.stops.map((id, index) => `<option value="${index}" ${String(index) === String(app.lineEditor.insertAfter) ? 'selected' : ''}>${index === app.lineEditor.stops.length - 1 ? `Prolonger après ${station(id)?.name || id}` : `Après ${station(id)?.name || id}`}</option>`).join('')}
+              ${app.lineEditor.stops.map((id, index) => {
+                const stationName = station(id)?.name || id;
+                const label = index === app.lineEditor.stops.length - 1 ? `Prolonger après ${stationName}` : `Après ${stationName}`;
+                return `<option value="${index}" ${String(index) === String(app.lineEditor.insertAfter) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+              }).join('')}
             </select>
           </label>
           <label>Ajouter un arrêt
@@ -4839,7 +4878,7 @@ function openLineModal(lineId) {
       box.innerHTML = matches.length ? matches.map(s => `
         <button type="button" class="station-suggest-item" data-role="editor" data-station-choice="${escapeAttr(s.id)}">
           <strong>${escapeHtml(s.name)}</strong>
-          <span>${stationMetaLabel(s)}</span>
+          <span>${escapeHtml(stationMetaLabel(s))}</span>
         </button>
       `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
     });
@@ -4974,7 +5013,7 @@ function openChangelogModal() {
   `, { wide: true });
 
   fetch('/api/changelog', { cache: 'no-store' })
-    .then(response => response.json())
+    .then(response => readJsonResponse(response, 'Changelog invalide.'))
     .then(data => {
       if (!data?.ok) throw new Error(data?.error || 'Changelog indisponible.');
       const modalBody = $('#modalBody');
@@ -6328,11 +6367,17 @@ function routeGeometryKey(a, b) {
 }
 
 function geometryForRoute(a, b) {
-  const direct = app.osmRouteCache.get(routeGeometryKey(a, b));
+  const direct = cachedRailGeometryForRoute(a, b);
   if (direct) return direct;
-  const reverse = app.osmRouteCache.get(routeGeometryKey(b, a));
-  if (reverse) return [...reverse].reverse();
   ensureRailwayRouteGeometry(a, b);
+  return null;
+}
+
+function cachedRailGeometryForRoute(a, b) {
+  const direct = getCacheEntry(app.osmRouteCache, routeGeometryKey(a, b));
+  if (direct) return direct;
+  const reverse = getCacheEntry(app.osmRouteCache, routeGeometryKey(b, a));
+  if (reverse) return [...reverse].reverse();
   return null;
 }
 
@@ -6363,7 +6408,7 @@ async function ensureRailwayRouteGeometry(a, b) {
     const query = `
 [out:json][timeout:18];
 (
-  way["railway"~"^(rail|light_rail|subway|tram)$"]["service"!~"^(yard|siding|spur)$"](${south},${west},${north},${east});
+  way["railway"~"^(rail|light_rail|subway|tram|narrow_gauge)$"]["service"!~"^(yard|siding|spur)$"](${south},${west},${north},${east});
 );
 out geom;
 `;
@@ -6377,7 +6422,7 @@ out geom;
     const data = await response.json();
     const coords = buildRailwayPathFromOverpass(data.elements || [], { lat: latA, lon: lonA }, { lat: latB, lon: lonB }, directKm);
     if (coords.length >= 2) {
-      app.osmRouteCache.set(key, coords);
+      rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
       app.routeCache.clear();
       invalidateMapProjection('rail-geometry-loaded');
     }
@@ -6483,17 +6528,17 @@ function polylineGeoDistance(coords) {
 
 function getRoute(a, b) {
   const key = `${a}::${b}`;
-  if (app.routeCache.has(key)) return app.routeCache.get(key);
+  const cached = getCacheEntry(app.routeCache, key);
+  if (cached) return cached;
   const reverseKey = `${b}::${a}`;
-  if (app.routeCache.has(reverseKey)) {
-    const reverse = app.routeCache.get(reverseKey);
+  const reverse = getCacheEntry(app.routeCache, reverseKey);
+  if (reverse) {
     const route = {
       ...reverse,
       ids: [...reverse.ids].reverse(),
       points: [...(reverse.points || [])].reverse()
     };
-    app.routeCache.set(key, route);
-    return route;
+    return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
   const adjacency = routeAdjacencyForClient(a, b);
   const nodes = new Set([...Object.keys(adjacency), a, b]);
@@ -6546,8 +6591,7 @@ function getRoute(a, b) {
     maxSegment: Math.round(maxSegment || 0),
     points
   };
-  app.routeCache.set(key, route);
-  return route;
+  return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
 
 function resolveSegmentPath(a, b) {
@@ -6813,7 +6857,7 @@ function geometryKeyForStops(ids) {
 
 function geometryForStopSequence(ids) {
   const key = geometryKeyForStops(ids);
-  const direct = app.osmRouteCache.get(key);
+  const direct = getCacheEntry(app.osmRouteCache, key);
   if (direct) return direct;
   ensureOsmRouteGeometryForStops(ids);
   return null;
@@ -6827,14 +6871,18 @@ async function ensureOsmRouteGeometryForStops(ids) {
   if (stations.length !== ids.length) return;
   app.osmRoutePending.add(key);
   try {
-    const coords = stations.map(s => `${s.lon},${s.lat}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&continue_straight=true`;
-    const response = await fetch(url, { cache: 'force-cache' });
-    if (!response.ok) throw new Error(`OSRM ${response.status}`);
-    const data = await response.json();
-    const routeCoords = data.routes?.[0]?.geometry?.coordinates;
-    if (Array.isArray(routeCoords) && routeCoords.length >= 2) {
-      app.osmRouteCache.set(key, routeCoords.map(([lon, lat]) => [Number(lon), Number(lat)]).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1])));
+    for (let i = 1; i < ids.length; i++) {
+      await ensureRailwayRouteGeometry(ids[i - 1], ids[i]);
+    }
+    const coords = [];
+    for (let i = 1; i < ids.length; i++) {
+      const segment = cachedRailGeometryForRoute(ids[i - 1], ids[i]);
+      if (!segment?.length) return;
+      if (!coords.length) coords.push(...segment);
+      else coords.push(...segment.slice(1));
+    }
+    if (coords.length >= 2) {
+      rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
       app.routeCache.delete(`multi::${ids.join('::')}`);
     }
   } catch (error) {
@@ -7021,11 +7069,11 @@ function routeHasVisualBacktrack(points) {
 function getRouteForStops(stops) {
   const ids = Array.isArray(stops) ? stops.filter(Boolean) : lineStopsOf(stops);
   const key = `multi::${ids.join('::')}`;
-  if (app.routeCache.has(key)) return app.routeCache.get(key);
+  const cached = getCacheEntry(app.routeCache, key);
+  if (cached) return cached;
   if (ids.length < 2) {
     const single = { ids, distance: 0, maxSegment: 0, points: [] };
-    app.routeCache.set(key, single);
-    return single;
+    return rememberCacheEntry(app.routeCache, key, single, ROUTE_CACHE_MAX_ENTRIES);
   }
 
   let mergedIds = [ids[0]];
@@ -7039,26 +7087,18 @@ function getRouteForStops(stops) {
     distanceTotal += segment.distance || 0;
     maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
 
-    if (ids.length === 2) {
-      if (!points.length) points.push(...segment.points);
-      else points.push(...segment.points.slice(1));
-    }
+    if (!points.length) points.push(...segment.points);
+    else points.push(...segment.points.slice(1));
   }
 
-  if (ids.length > 2) {
-    // Rendu multi-arrêts : on s’appuie sur les points du réseau ferroviaire
-    // résolus par getRoute(), puis on applique une sinuosité douce.
-    // Cela évite les grandes courbes libres qui peuvent couper l’océan.
+  points = cleanRoutePoints(points);
+  if (routeHasVisualBacktrack(points)) {
     const visualIds = [...new Set(mergedIds)];
     points = organicRailSplineThroughStops(visualIds);
-  } else {
-    points = cleanRoutePoints(points);
-    if (routeHasVisualBacktrack(points)) points = organicRailSplineThroughStops(ids);
   }
 
   const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points };
-  app.routeCache.set(key, route);
-  return route;
+  return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
 
 function lineDistance(line) {
@@ -7366,7 +7406,7 @@ function renderStationSuggestions(role, matches, rawValue) {
   box.innerHTML = matches.length ? matches.map(s => `
     <button type="button" class="station-suggest-item" data-role="${role}" data-station-choice="${escapeAttr(s.id)}">
       <strong>${escapeHtml(s.name)}</strong>
-      <span>${role === 'station' ? stationPurchaseMetaLabel(s) : stationMetaLabel(s)}</span>
+      <span>${escapeHtml(role === 'station' ? stationPurchaseMetaLabel(s) : stationMetaLabel(s))}</span>
     </button>
   `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
 }

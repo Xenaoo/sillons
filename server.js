@@ -15,7 +15,10 @@ const PROJECT_VERSION = 'v62.0.0';
 const STATE_SCHEMA_VERSION = 64;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
+const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
+const SNCF_STATION_API_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/liste-des-gares/records';
+const SNCF_STATION_PAGE_SIZE = 100;
 const COMMUNE_DEPARTMENTS = [
   '01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19',
   '2A','2B',
@@ -26,6 +29,7 @@ const COMMUNE_DEPARTMENTS = [
 ];
 const TICK_MS = 2000;
 const SAVE_EVERY_TICKS = 15;
+const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;
 const AUTH_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const AUTH_PASSWORD_MIN_LENGTH = 6;
@@ -139,14 +143,20 @@ let publicWorldCache = { key: '', value: null };
 let communeRefreshPromise = null;
 
 async function ensureCommuneCacheReady(force = false) {
-  const count = Object.keys(communeCache.byId || {}).length;
-  if (!force && count > 0 && communeCache.status !== 'loading') return communeCache;
+  if (!force && communeCacheUsable(communeCache) && communeCache.status !== 'loading') return communeCache;
   if (!communeRefreshPromise) {
     communeRefreshPromise = refreshCommuneCache(force).finally(() => {
       communeRefreshPromise = null;
     });
   }
   return communeRefreshPromise;
+}
+
+function communeCacheUsable(cache = communeCache) {
+  const byId = cache?.byId || {};
+  const count = Object.keys(byId).length;
+  if (count < COMMUNE_CACHE_MIN_READY_COUNT) return false;
+  return ['91345', '91376'].every(code => Boolean(byId[`COM_${code}`] || Object.values(byId).some(s => String(s.code || '') === code)));
 }
 
 async function waitForCommuneCache(maxMs = 3500) {
@@ -806,6 +816,21 @@ function stationRailPlacement(station) {
     };
   }
 
+  const stationLat = Number(station.stationLat);
+  const stationLon = Number(station.stationLon);
+  if (Number.isFinite(stationLat) && Number.isFinite(stationLon)) {
+    return {
+      ...station,
+      originalLat: Number(station.lat),
+      originalLon: Number(station.lon),
+      railLat: stationLat,
+      railLon: stationLon,
+      placement: 'sncf-station',
+      railDistanceKm: round2(haversine(Number(station.lat), Number(station.lon), stationLat, stationLon)),
+      railSource: station.stationSource || 'sncf-liste-des-gares'
+    };
+  }
+
   const snap = nearestRailProjection(station);
   const population = Number(station.population || 0);
   const maxSnapKm = station.custom ? 5 : population >= 50000 ? 12 : population >= 15000 ? 9 : 7;
@@ -814,8 +839,8 @@ function stationRailPlacement(station) {
       ...station,
       originalLat: Number(station.lat),
       originalLon: Number(station.lon),
-      railLat: round2(snap.lat),
-      railLon: round2(snap.lon),
+      railLat: roundCoord(snap.lat),
+      railLon: roundCoord(snap.lon),
       placement: 'rail-snap',
       railDistanceKm: round2(snap.distanceKm),
       railSegment: `${snap.from}-${snap.to}`
@@ -840,7 +865,7 @@ function stationRoutePoint(station) {
 }
 
 function nearestRailAnchorsForStation(station, count = 4) {
-  const point = stationRawPoint(station);
+  const point = stationRoutePoint(station);
   if (!point || !WORLD?.railSegments?.length) return [];
   const ranked = [];
   for (const segment of WORLD.railSegments) {
@@ -861,8 +886,9 @@ function nearestRailAnchorsForStation(station, count = 4) {
 
 function railPlacementStats(stations) {
   const total = stations.length || 0;
-  const snapped = stations.filter(s => s.placement === 'rail-snap' || s.placement === 'station').length;
-  return { total, snapped, percent: total ? Math.round(snapped / total * 100) : 0 };
+  const sncf = stations.filter(s => s.placement === 'sncf-station').length;
+  const snapped = stations.filter(s => s.placement === 'rail-snap' || s.placement === 'station' || s.placement === 'sncf-station').length;
+  return { total, snapped, sncf, percent: total ? Math.round(snapped / total * 100) : 0 };
 }
 
 
@@ -895,7 +921,9 @@ function publicWorld() {
       count: communeStations.length,
       minPopulation: MIN_COMMUNE_POPULATION,
       updatedAt: communeCache.updatedAt,
-      error: communeCache.error || ''
+      error: communeCache.error || '',
+      sncfMatched: communeCache.sncfStats?.matched || 0,
+      sncfStations: communeCache.sncfStats?.totalStations || 0
     },
     railPlacement: railPlacementStats(stations),
     regions: [...new Set([...WORLD.regions, 'Arrêts personnalisés'])].sort()
@@ -978,7 +1006,7 @@ function loadCommuneCache() {
       const normalized = normalizeCommuneStation(station);
       if (normalized) byId[normalized.id] = normalized;
     }
-    return { status: 'ready-cache', updatedAt: parsed.updatedAt || null, byId, error: '' };
+    return { status: 'ready-cache', updatedAt: parsed.updatedAt || null, byId, error: '', sncfStats: parsed.sncfStats || null };
   } catch (error) {
     return { status: 'error', updatedAt: null, byId: {}, error: error.message };
   }
@@ -1029,11 +1057,104 @@ async function fetchCommunesByDepartments() {
   return byId;
 }
 
+async function fetchSncfRailwayStations() {
+  const fields = 'libelle,commune,voyageurs,fret,code_uic,x_wgs84,y_wgs84';
+  const firstUrl = `${SNCF_STATION_API_URL}?select=${encodeURIComponent(fields)}&limit=${SNCF_STATION_PAGE_SIZE}&offset=0`;
+  const first = await fetchJsonWithTimeout(firstUrl, 45000);
+  const total = Math.max(0, Number(first.total_count || 0));
+  const pages = [first];
+  const offsets = [];
+  for (let offset = SNCF_STATION_PAGE_SIZE; offset < total; offset += SNCF_STATION_PAGE_SIZE) offsets.push(offset);
+
+  const concurrency = 6;
+  for (let i = 0; i < offsets.length; i += concurrency) {
+    const chunk = offsets.slice(i, i + concurrency);
+    const results = await Promise.allSettled(chunk.map(offset => {
+      const url = `${SNCF_STATION_API_URL}?select=${encodeURIComponent(fields)}&limit=${SNCF_STATION_PAGE_SIZE}&offset=${offset}`;
+      return fetchJsonWithTimeout(url, 45000);
+    }));
+    for (const result of results) {
+      if (result.status === 'fulfilled') pages.push(result.value);
+      else console.warn('Page gares SNCF indisponible:', result.reason?.message || result.reason);
+    }
+  }
+
+  return pages
+    .flatMap(page => Array.isArray(page.results) ? page.results : [])
+    .map(normalizeSncfRailwayStation)
+    .filter(Boolean);
+}
+
+function normalizeSncfRailwayStation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const lon = Number(raw.x_wgs84 ?? raw.c_geo?.lon ?? raw.geo_point_2d?.lon);
+  const lat = Number(raw.y_wgs84 ?? raw.c_geo?.lat ?? raw.geo_point_2d?.lat);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !isInFranceBounds(lat, lon)) return null;
+  const communeKey = normalizeSearch(raw.commune || '');
+  const label = cleanText(raw.libelle || raw.commune || 'Gare', 64);
+  if (!communeKey || !label) return null;
+  return {
+    communeKey,
+    label,
+    lat,
+    lon,
+    voyageurs: String(raw.voyageurs || '').toUpperCase() === 'O',
+    fret: String(raw.fret || '').toUpperCase() === 'O',
+    codeUic: String(raw.code_uic || '').slice(0, 16)
+  };
+}
+
+function buildSncfStationIndex(stations) {
+  const index = new Map();
+  for (const station of stations || []) {
+    if (!station?.communeKey) continue;
+    if (!index.has(station.communeKey)) index.set(station.communeKey, []);
+    index.get(station.communeKey).push(station);
+  }
+  return index;
+}
+
+function enrichCommunesWithSncfStations(byId, sncfStations) {
+  const index = buildSncfStationIndex(sncfStations);
+  let matched = 0;
+  for (const station of Object.values(byId || {})) {
+    const communeKey = normalizeSearch(station.name || '');
+    const candidates = index.get(communeKey) || [];
+    if (!candidates.length) continue;
+    const communeLat = Number(station.lat);
+    const communeLon = Number(station.lon);
+    const ranked = candidates
+      .map(candidate => ({
+        candidate,
+        distanceKm: haversine(communeLat, communeLon, candidate.lat, candidate.lon),
+        exactLabel: normalizeSearch(candidate.label) === communeKey
+      }))
+      .filter(item => Number.isFinite(item.distanceKm) && item.distanceKm <= 30)
+      .sort((a, b) => {
+        const scoreA = (a.exactLabel ? 1000 : 0) + (a.candidate.voyageurs ? 100 : 0) + (a.candidate.fret ? 20 : 0) - a.distanceKm;
+        const scoreB = (b.exactLabel ? 1000 : 0) + (b.candidate.voyageurs ? 100 : 0) + (b.candidate.fret ? 20 : 0) - b.distanceKm;
+        return scoreB - scoreA;
+      });
+    const best = ranked[0]?.candidate;
+    if (!best) continue;
+    station.stationLat = roundCoord(best.lat);
+    station.stationLon = roundCoord(best.lon);
+    station.stationName = best.label;
+    station.stationUic = best.codeUic;
+    station.stationSource = 'sncf-liste-des-gares';
+    station.hasPassengerStation = best.voyageurs;
+    station.hasFreightStation = best.fret;
+    matched += 1;
+  }
+  return { matched, totalStations: sncfStations.length };
+}
+
 function applyCriticalCommuneFallbacks(byId) {
   const critical = [
     { code: '91103', nom: 'Brétigny-sur-Orge', population: 26658, centre: { coordinates: [2.3059, 48.6114] }, codesPostaux: ['91220'], codeDepartement: '91' },
     { code: '91021', nom: 'Arpajon', population: 11144, centre: { coordinates: [2.2467, 48.5896] }, codesPostaux: ['91290'], codeDepartement: '91' },
     { code: '91345', nom: 'Longjumeau', population: 21700, centre: { coordinates: [2.2943, 48.6951] }, codesPostaux: ['91160'], codeDepartement: '91' },
+    { code: '91376', nom: 'Marolles-en-Hurepoix', population: 5708, centre: { coordinates: [2.2992, 48.5641] }, codesPostaux: ['91630'], codeDepartement: '91' },
     { code: '14258', nom: 'Falaise', population: 8000, centre: { coordinates: [-0.1970, 48.8920] }, codesPostaux: ['14700'], codeDepartement: '14' }
   ];
   for (const commune of critical) addCommuneToIndex(byId, commune);
@@ -1042,7 +1163,7 @@ function applyCriticalCommuneFallbacks(byId) {
 
 async function refreshCommuneCache(force = false) {
   const ageMs = communeCache.updatedAt ? Date.now() - Number(communeCache.updatedAt) : Infinity;
-  if (!force && Object.keys(communeCache.byId || {}).length && ageMs < 7 * 24 * 3600 * 1000) {
+  if (!force && communeCacheUsable(communeCache) && ageMs < 7 * 24 * 3600 * 1000) {
     communeCache.status = 'ready-cache';
     return communeCache;
   }
@@ -1075,17 +1196,30 @@ async function refreshCommuneCache(force = false) {
     }
 
     byId = applyCriticalCommuneFallbacks(byId);
-    communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '' };
+    const coverageCount = Object.keys(byId).length;
+    if (coverageCount < COMMUNE_CACHE_MIN_READY_COUNT) {
+      throw new Error(`Couverture communes incomplete: ${coverageCount}/${COMMUNE_CACHE_MIN_READY_COUNT}`);
+    }
+    let sncfStats = { matched: 0, totalStations: 0, error: '' };
+    try {
+      const sncfStations = await fetchSncfRailwayStations();
+      sncfStats = enrichCommunesWithSncfStations(byId, sncfStations);
+    } catch (error) {
+      sncfStats.error = error.message;
+      console.warn('Enrichissement gares SNCF indisponible:', error.message);
+    }
+    communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '', sncfStats };
     _routeCache.clear();
     invalidatePublicWorldCache();
     fs.mkdirSync(path.dirname(COMMUNE_CACHE_FILE), { recursive: true });
     fs.writeFileSync(COMMUNE_CACHE_FILE, JSON.stringify({
       updatedAt: communeCache.updatedAt,
       minPopulation: MIN_COMMUNE_POPULATION,
-      source: 'geo.api.gouv.fr communes + fallback departements',
+      source: 'geo.api.gouv.fr communes + fallback departements + SNCF liste-des-gares',
+      sncfStats,
       stations: Object.values(byId)
     }, null, 2));
-    console.log(`Communes jouables chargées: ${Object.keys(byId).length}`);
+    console.log(`Communes jouables chargées: ${Object.keys(byId).length} (${sncfStats.matched || 0} gares SNCF associées)`);
     return communeCache;
   } catch (error) {
     communeCache.status = Object.keys(communeCache.byId || {}).length ? 'ready-cache-error' : 'error';
@@ -1143,9 +1277,11 @@ function normalizeCommuneStation(station) {
   if (!station || typeof station !== 'object') return null;
   const lat = Number(station.lat);
   const lon = Number(station.lon);
+  const stationLat = Number(station.stationLat);
+  const stationLon = Number(station.stationLon);
   const population = Number(station.population || 0);
   if (!station.id || population < MIN_COMMUNE_POPULATION || !Number.isFinite(lat) || !Number.isFinite(lon) || !isInFranceBounds(lat, lon)) return null;
-  return {
+  const normalized = {
     id: String(station.id),
     code: String(station.code || '').slice(0, 12),
     name: cleanText(station.name || 'Commune', 38),
@@ -1161,6 +1297,16 @@ function normalizeCommuneStation(station) {
     commune: true,
     populationSource: station.populationSource || 'geo.api.gouv.fr'
   };
+  if (Number.isFinite(stationLat) && Number.isFinite(stationLon) && isInFranceBounds(stationLat, stationLon)) {
+    normalized.stationLat = stationLat;
+    normalized.stationLon = stationLon;
+    normalized.stationName = cleanText(station.stationName || station.name || 'Gare', 64);
+    normalized.stationUic = String(station.stationUic || '').slice(0, 16);
+    normalized.stationSource = station.stationSource || 'sncf-liste-des-gares';
+    normalized.hasPassengerStation = Boolean(station.hasPassengerStation);
+    normalized.hasFreightStation = Boolean(station.hasFreightStation);
+  }
+  return normalized;
 }
 
 
@@ -4013,10 +4159,14 @@ function routeAdjacencyFor(a, b) {
     if (!station) continue;
     adjacency[id] ||= [];
     const anchors = nearestRailAnchorsForStation(station, station.commune ? 6 : 4);
+    const stationPoint = stationRoutePoint(station) || stationRawPoint(station);
     const nearest = anchors.length
       ? anchors.map(anchorId => ({ id: anchorId }))
       : WORLD.stations
-          .map(s => ({ id: s.id, d: haversine(station.lat, station.lon, s.lat, s.lon) }))
+          .map(s => {
+            const candidatePoint = stationRoutePoint(s) || stationRawPoint(s);
+            return { id: s.id, d: candidatePoint && stationPoint ? haversine(stationPoint.lat, stationPoint.lon, candidatePoint.lat, candidatePoint.lon) : Infinity };
+          })
           .sort((x, y) => x.d - y.d)
           .slice(0, station.commune ? 4 : 3);
     for (const n of nearest) {
@@ -4029,6 +4179,24 @@ function routeAdjacencyFor(a, b) {
 
 const _routeCache = new Map();
 
+function getRouteCache(key) {
+  if (!_routeCache.has(key)) return null;
+  const value = _routeCache.get(key);
+  _routeCache.delete(key);
+  _routeCache.set(key, value);
+  return value;
+}
+
+function rememberRouteCache(key, route) {
+  if (_routeCache.has(key)) _routeCache.delete(key);
+  _routeCache.set(key, route);
+  while (_routeCache.size > ROUTE_CACHE_MAX_ENTRIES) {
+    const oldestKey = _routeCache.keys().next().value;
+    _routeCache.delete(oldestKey);
+  }
+  return route;
+}
+
 
 function distanceBetween(a, b) {
   return routeBetween(a, b).distance;
@@ -4038,7 +4206,8 @@ function routeBetweenStops(stops) {
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, distance: 0, maxSegment: 0 };
   const key = `multi::${ids.join('::')}`;
-  if (_routeCache.has(key)) return _routeCache.get(key);
+  const cached = getRouteCache(key);
+  if (cached) return cached;
 
   let mergedIds = [ids[0]];
   let distance = 0;
@@ -4053,20 +4222,19 @@ function routeBetweenStops(stops) {
   }
 
   const route = { ids: mergedIds, distance: Math.round(distance), maxSegment: Math.round(maxSegment) };
-  _routeCache.set(key, route);
-  return route;
+  return rememberRouteCache(key, route);
 }
 
 function routeBetween(a, b) {
   if (a === b) return { ids: [a], distance: 0, maxSegment: 0 };
   const key = `${a}::${b}`;
-  if (_routeCache.has(key)) return _routeCache.get(key);
+  const cached = getRouteCache(key);
+  if (cached) return cached;
   const reverseKey = `${b}::${a}`;
-  if (_routeCache.has(reverseKey)) {
-    const reverse = _routeCache.get(reverseKey);
+  const reverse = getRouteCache(reverseKey);
+  if (reverse) {
     const route = { ...reverse, ids: [...reverse.ids].reverse() };
-    _routeCache.set(key, route);
-    return route;
+    return rememberRouteCache(key, route);
   }
 
   const adjacency = routeAdjacencyFor(a, b);
@@ -4124,8 +4292,7 @@ function routeBetween(a, b) {
     distance: Math.round(dist[b] || 0),
     maxSegment: Math.round(maxSegment || 0)
   };
-  _routeCache.set(key, route);
-  return route;
+  return rememberRouteCache(key, route);
 }
 
 function effectiveTrainRange(player, model, routeInfo) {
@@ -4170,6 +4337,7 @@ function clamp(value, min, max) {
 }
 
 function round2(value) { return Math.round(value * 100) / 100; }
+function roundCoord(value) { return Math.round(Number(value) * 1000000) / 1000000; }
 function money(value) { return `${Math.round(value).toLocaleString('fr-FR')} €`; }
 function formatCycles(value) {
   const cycles = Math.max(1, Math.ceil(Number(value || 1)));
