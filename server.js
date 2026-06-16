@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.50.0';
-const STATE_SCHEMA_VERSION = 53;
+const PROJECT_VERSION = 'v60.50.1';
+const STATE_SCHEMA_VERSION = 54;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -1180,7 +1180,7 @@ function createPlayer(input) {
     reputation: 50,
     co2: 0,
     energyStrategy: 'spot',
-    resources: normalizeResources(),
+    resources: normalizeResources({ coal: 100 }),
     staff: {
       drivers: 0,
       controllers: 0,

@@ -5633,3 +5633,26 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ===== v60.50.1 — RH : sous-effectif rouge intégral ===== */
+.staff-card-compact.bad,
+.tab-content .staff-card-compact.bad,
+.tab-content .list-item.staff-card-compact.bad {
+  border-color: rgba(239,68,68,.62) !important;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(239,68,68,.30), transparent 42%),
+    linear-gradient(180deg, rgba(127,29,29,.42), rgba(45,8,12,.78)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(239,68,68,.28),
+    0 0 18px rgba(127,29,29,.18) !important;
+}
+.staff-card-compact.bad:hover,
+.tab-content .list-item.staff-card-compact.bad:hover {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(239,68,68,.36), transparent 42%),
+    linear-gradient(180deg, rgba(127,29,29,.50), rgba(45,8,12,.84)) !important;
+}
+.staff-card-compact.bad .staff-meter > i {
+  background: linear-gradient(90deg, #7f1d1d, #ef4444) !important;
+}

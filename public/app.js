@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.50.0';
+const PROJECT_VERSION = 'v60.50.1';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -1607,32 +1607,16 @@ function staffRoleLabel(label, count = 1) {
 
 function staffActionTooltip(role, count, kind) {
   const def = app.state.balance.staff[role];
-  const impact = staffRoleImpact(role);
-  const need = Math.ceil(staffNeed(role));
-  const owned = Number(app.state.me?.staff?.[role] || 0);
-  const nextCount = kind === 'hire' ? owned + count : Math.max(0, owned - count);
-  const nextStatus = nextCount >= need ? 'Effectif suffisant' : 'Sous-effectif';
   if (kind === 'hire') {
     return [
       `Action : Recruter ${count} ${staffRoleLabel(def.label, count)}`,
       `Coût immédiat : ${money(def.hireCost * count)}`,
-      `Salaire ajouté : ${staffSalaryPerHour(def, count)}/h`,
-      '---------------------------------------------',
-      `Besoin actuel : ${need}`,
-      `Effectif après action : ${nextCount}`,
-      `Statut après action : ${nextStatus}`,
-      `Effet métier : ${impact.title}`,
-      `Impact : ${impact.effects.join(' ')}`
+      `Salaire ajouté : ${staffSalaryPerHour(def, count)}`
     ].join('\n');
   }
   return [
     `Action : Licencier ${count} ${staffRoleLabel(def.label, count)}`,
-    `Salaire retiré : ${staffSalaryPerHour(def, count)}/h`,
-    '---------------------------------------------',
-    `Besoin actuel : ${need}`,
-    `Effectif après action : ${nextCount}`,
-    `Statut après action : ${nextStatus}`,
-    `Risque : Une équipe insuffisante dégrade l’exploitation.`
+    `Salaire retiré : ${staffSalaryPerHour(def, count)}`
   ].join('\n');
 }
 
@@ -3483,14 +3467,13 @@ function staffRoleTooltip(role, count) {
   const need = Math.ceil(staffNeed(role));
   const status = staffStatus(role, count);
   return [
-    `Métier : ${def.label}`,
-    `Besoin estimé : ${need}`,
+    `${def.label}`,
+    `Besoin actuel : ${need}`,
     `Effectif actuel : ${Number(count || 0)}`,
-    `Couverture : ${status.pct}%`,
     `Statut : ${status.label}`,
     '---------------------------------------------',
-    `Rôle : ${impact.title}`,
-    `Effets : ${impact.effects.join(' ')}`
+    `Apport réel : ${impact.title}`,
+    ...impact.effects.map(effect => `• ${effect}`)
   ].join('\n');
 }
 
@@ -3498,7 +3481,7 @@ function staffRoleTooltip(role, count) {
 function renderStaff() {
   const me = app.state.me;
   return `
-    ${renderSectionHero('RESSOURCES HUMAINES', 'Gestion des équipes', 'Pilote les métiers essentiels : conduite, contrôle, maintenance, régulation, gares et infrastructure.', ART.tabs.staff, ['3 par rangée', 'Couverture', 'Coût fixe'])}
+    ${renderSectionHero('RESSOURCES HUMAINES', 'Gestion des équipes', 'Pilote les métiers essentiels : conduite, contrôle, maintenance, régulation, gares et infrastructure.', ART.tabs.staff, [])}
 
     <div class="card staff-dashboard-card">
       <div class="staff-dashboard-head">
@@ -3506,7 +3489,6 @@ function renderStaff() {
           <h2>Ressources humaines</h2>
           <p class="muted small">Les besoins sont calculés selon les lignes actives, les gares exploitées, le parc et les kilomètres à entretenir.</p>
         </div>
-        <span class="tag">${staffOrder.length} métiers</span>
       </div>
       <div class="staff-grid-compact">
         ${staffOrder.map(role => renderStaffRole(role, me.staff[role] || 0)).join('')}
@@ -3522,7 +3504,7 @@ function renderStaffRole(role, count) {
   const impact = staffRoleImpact(role);
   const progress = Math.min(100, Math.round((count / Math.max(1, need)) * 100));
   return `
-    <div class="list-item staff-card staff-card-compact ${status.cls}">
+    <div class="list-item staff-card staff-card-compact ${status.cls}" ${tooltipAttr(staffRoleTooltip(role, count))}>
       <div class="item-title staff-compact-title">
         <strong>${escapeHtml(def.label)}</strong>
         <span class="tag ${status.cls}">${count}/${need}</span>
@@ -3532,7 +3514,6 @@ function renderStaffRole(role, count) {
       <div class="staff-compact-kv">
         <span>Salaire</span><b>${staffSalaryPerHour(def)}</b>
         <span>Recrutement</span><b>${money(def.hireCost)}</b>
-        <span>Couverture</span><b>${Math.round(staffRatio(role, count) * 100)}%</b>
       </div>
       <div class="actions staff-compact-actions">
         <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire'))} ${count <= 0 ? 'disabled' : ''}>-1</button>

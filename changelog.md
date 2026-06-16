@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Version v60.50.1 — correction RH et charbon de départ
+
+- Incrément de version de cette passe : badge interface `v60.50.1`, package `0.4.42` et schéma d’état serveur `54` ;
+- Correction visuelle des vignettes RH : lorsqu’un métier est en sous-effectif par rapport au besoin estimé, toute la vignette est désormais teintée en rouge ;
+- Suppression de la ligne `Couverture` dans les vignettes RH ;
+- Suppression des pastilles d’en-tête visibles dans l’onglet `RH` ;
+- Simplification des infobulles des boutons `-1`, `+1` et `+5` : elles affichent uniquement le résultat direct de l’action ;
+- Ajout d’une infobulle dédiée sur chaque vignette métier, décrivant l’apport réel du métier dans le moteur du jeu ;
+- Correction de l’affichage des salaires dans les infobulles RH pour éviter le doublon `/h/h` ;
+- Le départ de jeu préparé contient maintenant seulement `100` unités de charbon ;
+- Les nouvelles compagnies créées démarrent également avec `100` unités de charbon.
+
 ## Version v60.50.0 — RH lisible et typage fiable des lignes
 
 - Incrément de version de cette passe : badge interface `v60.50.0`, package `0.4.41` et schéma d’état serveur `53` ;
