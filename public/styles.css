@@ -6022,3 +6022,17 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== v61.3.0 — budget recettes/dépenses en colonnes ===== */
+.budget-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .budget-two-column {
+    grid-template-columns: 1fr;
+  }
+}

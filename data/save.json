@@ -1,5 +1,5 @@
 {
-  "version": 60,
+  "version": 61,
   "createdAt": 1781511648911,
   "now": 1781598190868,
   "day": 421,
@@ -232,22 +232,32 @@
     {
       "day": 339,
       "text": "Météo difficile : la ponctualité devient plus fragile."
-    },
-    {
-      "day": 408,
-      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
-    },
-    {
-      "day": 420,
-      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
     }
   ],
   "customStations": {},
-  "users": {},
+  "users": {
+    "testuser": {
+      "id": "bc07a7ec-c590-4d4c-929b-62616c062c4b",
+      "username": "testuser",
+      "usernameKey": "testuser",
+      "playerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
+      "passwordSalt": "fd0b9a8d071f3002320e9a8c78dd0d2e",
+      "passwordHash": "54eda780aec0eb5fad28c40f29b499cc528263c5484a7bd278ce6b375c6197dc96951581706402edf64cb4acc9fa66d89e73be573c1ab4cc073b6c0063fee9fe",
+      "sessions": {
+        "c8f5ed0d71b97e7c4896efd36fa4f7a66c1295f88db01d08f55645905e5fa7e0": {
+          "createdAt": 1781610790087,
+          "lastSeenAt": 1781610790087,
+          "expiresAt": 1784202790087
+        }
+      },
+      "createdAt": 1781610790087,
+      "lastLoginAt": 1781610790087
+    }
+  },
   "players": {
     "4c7dfa51-225a-487a-aa42-1b0776c4e1d5": {
       "id": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-      "name": "Compagnie des Sillons",
+      "name": "TestCo",
       "color": "#60a5fa",
       "logo": "steam_front",
       "region": "France",
@@ -311,7 +321,7 @@
             "targetCondition": 0,
             "startedDay": null,
             "cost": 0,
-            "lastServiceDay": null
+            "lastServiceDay": 1
           }
         }
       ],
@@ -396,10 +406,14 @@
         {
           "day": 1,
           "text": "Stock de départ ajouté : 2 000 unités de charbon."
+        },
+        {
+          "day": 421,
+          "text": "Compte joueur créé : Cette compagnie est maintenant liée à ton identifiant."
         }
       ],
       "createdAt": 1781511648911,
-      "lastSeen": 1781511648911,
+      "lastSeen": 1781610790031,
       "tutorial": {
         "enabled": true,
         "completed": false,

@@ -1865,7 +1865,13 @@ function stationUpgradeTooltip(station, asset, upgrade) {
     maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
     depot: 'permet le stationnement et améliore la portée pratique des trains vapeur sur les itinéraires qui passent par cette gare.'
   };
-  return `${upgrade.label} à ${station.name}. Coût : ${money(upgrade.cost)}. Effet : ${effects[upgrade.kind] || 'Amélioration de la gare.'}`;
+  const nextAsset = { ...(asset || {}) };
+  if (upgrade.kind === 'level') nextAsset.level = upgrade.label === 'Acheter' ? 1 : Number(nextAsset.level || 1) + 1;
+  if (upgrade.kind === 'commerce') nextAsset.commerce = Number(nextAsset.commerce || 0) + 1;
+  if (upgrade.kind === 'maintenance') nextAsset.maintenance = Number(nextAsset.maintenance || 0) + 1;
+  if (upgrade.kind === 'depot') nextAsset.depot = true;
+  const nextCost = stationOperatingCostBreakdown(nextAsset).total;
+  return `${upgrade.label} à ${station.name}. Coût immédiat : ${money(upgrade.cost)}. Coût d’exploitation après amélioration : ${moneyPerHour(nextCost)}. Effet : ${effects[upgrade.kind] || 'Amélioration de la gare.'}`;
 }
 
 function staffRoleLabel(label, count = 1) {
@@ -2270,8 +2276,10 @@ function renderLineInsightPanels(line) {
           <span class="expense">Énergie <b>${lineMoney(finance.energyCost)}</b></span>
           <span class="expense">Maintenance train <b>${lineMoney(finance.maintenanceCost)}</b></span>
           <span class="expense">Entretien ligne <b>${lineMoney(finance.lineInfrastructureCost)}</b></span>
-          <span class="expense">Exploitation commerciale <b>${lineMoney(finance.commercialOperatingCost)}</b></span>
-          <span class="expense">Péages <b>${lineMoney(finance.accessCost)}</b></span>
+          <span class="expense">Vente & distribution <b>${lineMoney(finance.commercialSalesCost)}</b></span>
+          <span class="expense">Contrôle & fraude <b>${lineMoney(finance.commercialControlCost)}</b></span>
+          <span class="expense">Organisation commerciale <b>${lineMoney(finance.commercialAdministrationCost)}</b></span>
+          <span class="expense">Péage <b>${lineMoney(finance.accessCost)}</b></span>
         </div>
       </section>
 
@@ -3605,6 +3613,7 @@ function renderSelectedStation(s) {
         <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
         <span>Dépôt</span><b>${asset?.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset?.electrified ? 'Oui' : 'Non'}</b>
+        ${asset ? stationOperatingCostRows(asset) : ''}
       </div>
       <div class="actions station-upgrades">
         ${upgrades.map(up => `
@@ -3674,6 +3683,29 @@ function stationUpgradeCost(s, asset, kind) {
   return 0;
 }
 
+function economyValue(key, fallback = 0) {
+  const value = Number(app.state?.balance?.economy?.[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function stationOperatingCostBreakdown(asset = {}) {
+  const level = Number(asset.level || 0) * economyValue('stationLevelCost', 58);
+  const commerce = Number(asset.commerce || 0) * economyValue('stationCommerceCost', 64);
+  const maintenance = Number(asset.maintenance || 0) * economyValue('stationMaintenanceCost', 92);
+  const depot = asset.depot ? economyValue('stationDepotCost', 150) : 0;
+  return { level, commerce, maintenance, depot, total: level + commerce + maintenance + depot };
+}
+
+function stationOperatingCostRows(asset = {}) {
+  const cost = stationOperatingCostBreakdown(asset);
+  return `
+    <span>Coût/h commerces</span><b>${moneyPerHour(cost.commerce)}</b>
+    <span>Coût/h atelier</span><b>${moneyPerHour(cost.maintenance)}</b>
+    <span>Coût/h dépôt</span><b>${moneyPerHour(cost.depot)}</b>
+    <span>Coût/h total gare</span><b>${moneyPerHour(cost.total)}</b>
+  `;
+}
+
 function renderStationAsset(s, asset) {
   const lines = app.state.me.lines.filter(l => lineStopsOf(l).includes(s.id)).length;
   return `
@@ -3685,6 +3717,7 @@ function renderStationAsset(s, asset) {
         <span>Atelier</span><b>${asset.maintenance}</b>
         <span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset.electrified ? 'Oui' : 'Non'}</b>
+        ${stationOperatingCostRows(asset)}
       </div>
       <div class="actions"><button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir sur carte</button></div>
     </div>
@@ -3973,11 +4006,11 @@ function renderResearch() {
           </div>
           <div class="progress research-progress"><i data-research-progress data-research-key="${escapeAttr(researchProjectKey(project))}" data-end-at="${Math.round(project.endAt || 0)}" data-duration-ms="${Math.round(project.durationMs || 1)}" data-work-rate="${Number(project.workRate || 1)}" data-last-progress="${round(researchProgressPercent(project))}" style="width:${round(researchProgressPercent(project))}%"></i></div>
           <div class="research-project-footer">
-            <p class="small muted">Projet en cours. Coût engagé : ${money(project.costMoney || 0)}. La formation et les technologies d’exploitation accélèrent le laboratoire.</p>
+            <p class="small muted">Projet en cours. Coût initial engagé : ${money(project.costMoney || 0)}. Pendant toute la durée de la recherche, le laboratoire ajoute aussi ${moneyPerHour(economyValue('researchLabBaseCost', 180))} aux dépenses/h.</p>
             <button class="danger research-cancel-btn" data-action="cancel-research" data-source="active" data-id="${escapeAttr(project.nodeId)}" data-level="${Number(project.targetLevel || 1)}" ${tooltipAttr(`Annule ${project.title || project.nodeId} et rembourse ${money(project.costMoney || 0)}. Les recherches en file qui dépendaient de ce projet seront aussi annulées et remboursées.`)}>Annuler</button>
           </div>
         </div>
-      ` : '<p class="small muted">Aucun projet actif. Lance une recherche pour engager le laboratoire.</p>'}
+      ` : `<p class="small muted">Aucun projet actif. Lancer une recherche applique un coût initial, puis ajoute ${moneyPerHour(economyValue('researchLabBaseCost', 180))} aux dépenses/h jusqu’à la fin du projet.</p>`}
       ${renderResearchQueue(me)}
       <hr>
       ${next ? `
@@ -4367,9 +4400,11 @@ function renderBudget() {
   const expenseTotal = Number(me.stats.lastExpenses || 0);
   const net = Number(me.stats.lastProfit || 0);
   const variable = Number(b.variableLineCost || 0);
-  const shared = Number(b.sharedCosts || 0);
   const knownVariableBase = Number(b.energyCost || 0) + Number(b.trainMaintenanceCost || 0) + Number(b.lineInfrastructureCost || 0) + Number(b.accessCost || 0);
   const commercialOperatingCost = Number(b.commercialOperatingCost || Math.max(0, variable - knownVariableBase));
+  const commercialSalesCost = Number(b.commercialSalesCost || commercialOperatingCost * 0.42);
+  const commercialControlCost = Number(b.commercialControlCost || commercialOperatingCost * 0.28);
+  const commercialAdministrationCost = Number(b.commercialAdministrationCost || commercialOperatingCost * 0.30);
   const operatingMargin = revenueTotal > 0 ? Math.round((net / revenueTotal) * 100) : 0;
 
   return `
@@ -4388,26 +4423,31 @@ function renderBudget() {
       ${budgetRawRow('Dette totale', money(me.debt), me.debt > 0 ? 'bad-text' : 'good-text')}
     `, net >= 0 ? `+${moneyPerHour(net)}` : moneyPerHour(net))}
 
-    ${budgetSection('revenues', 'Recettes', `
-      ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Prix des billets encaissés')}
-      ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'Commerces et services associés')}
-      ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
-      ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
-      ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
-    `, moneyPerHour(revenueTotal))}
+    <div class="budget-two-column">
+      ${budgetSection('revenues', 'Recettes', `
+        ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Prix des billets encaissés')}
+        ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'Commerces et services associés')}
+        ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
+        ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
+        ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
+        ${budgetRow('Droits de passage', b.passageRightsRevenue || 0, 'revenue', 'Revenus payés par les autres joueurs quand ils empruntent tes lignes')}
+      `, moneyPerHour(revenueTotal))}
 
-    ${budgetSection('expenses', 'Dépenses', `
-      ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
-      ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
-      ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Coût proportionnel aux kilomètres exploités')}
-      ${budgetRow('Exploitation commerciale', commercialOperatingCost, 'expense', 'Frais progressifs liés aux volumes encaissés : vente, exploitation, contrôle et organisation commerciale')}
-      ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'Accès au réseau')}
-      ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
-      ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
-      ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
-      ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
-      ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Projet de recherche actif')}
-    `, moneyPerHour(expenseTotal))}
+      ${budgetSection('expenses', 'Dépenses', `
+        ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
+        ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
+        ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Entretien infrastructure triplé, partagé entre joueurs qui utilisent les mêmes tronçons')}
+        ${budgetRow('Péage', b.accessCost || 0, 'expense', 'Coût payé quand ta ligne emprunte un tronçon déjà utilisé par un autre joueur')}
+        ${budgetRow('Vente & distribution', commercialSalesCost, 'expense', 'Distribution commerciale, billetterie et canaux de vente')}
+        ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Contrôle à bord, prévention fraude et litiges voyageurs')}
+        ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Planification commerciale, support, information et gestion opérationnelle')}
+        ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
+        ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
+        ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
+        ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
+        ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Coût/h du laboratoire pendant un projet actif')}
+      `, moneyPerHour(expenseTotal))}
+    </div>
 
     ${budgetSection('lines', 'Détail par ligne', renderBudgetLineDetail(), `${me.lines.filter(line => line.active).length} ligne${me.lines.filter(line => line.active).length > 1 ? 's' : ''}`)}
   `;

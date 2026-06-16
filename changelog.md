@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Version v61.3.0 — dépenses clarifiées, péages et coûts partagés
+
+- incrément de version de cette passe : badge interface `v61.3.0`, package `0.5.5` et schéma serveur `61` ;
+- triplement du coût d’entretien des lignes ;
+- partage du coût d’entretien d’un tronçon entre les joueurs qui utilisent le même tronçon ;
+- séparation des `Péages` côté dépenses et des `Droits de passage` côté recettes ;
+- les droits de passage sont maintenant alimentés par les autres joueurs qui empruntent des tronçons déjà utilisés par ta compagnie ;
+- remplacement du poste vague `Exploitation commerciale` par trois postes détaillés : `Vente & distribution`, `Contrôle & fraude`, `Organisation commerciale` ;
+- affichage des sections `Recettes` et `Dépenses` côte à côte dans l’onglet Budget sur les écrans assez larges ;
+- ajout d’une indication claire en R&D : un coût/h de laboratoire s’ajoute pendant toute la durée d’un projet actif ;
+- ajout dans l’onglet Gares du coût/h lié aux commerces, aux ateliers et aux dépôts.
+
 ## Version v61.2.0 — budget simplifié et dépenses regroupées
 
 - incrément de version de cette passe : badge interface `v61.2.0`, package `0.5.4` et schéma serveur `60` ;

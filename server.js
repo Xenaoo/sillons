@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.2.0';
-const STATE_SCHEMA_VERSION = 60;
+const PROJECT_VERSION = 'v61.3.0';
+const STATE_SCHEMA_VERSION = 61;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -46,7 +46,7 @@ const ECONOMY = Object.freeze({
   freightRevenueMultiplier: 1.0,
   energyCostMultiplier: 0.42,
   maintenanceCostMultiplier: 0.75,
-  lineInfrastructureMaintenancePerKm: 4.2,
+  lineInfrastructureMaintenancePerKm: 12.6,
   lineCommercialCostThreshold: 700,
   lineCommercialCostRate: 0.92,
   staffCostDivisor: 82,
@@ -2180,9 +2180,10 @@ function simulateTick() {
   updateMarket();
   updateEvents();
   const lineMarkets = buildLineMarkets();
+  const infrastructureUsage = buildInfrastructureUsage();
   const passageRightsLedger = new Map();
   for (const player of Object.values(state.players)) {
-    simulatePlayer(player, lineMarkets, passageRightsLedger);
+    simulatePlayer(player, lineMarkets, passageRightsLedger, { infrastructureUsage });
   }
   applyPassageRightsLedger(passageRightsLedger);
   maybeCreateNpc();
@@ -2208,10 +2209,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   const staffNeeds = computeStaffNeeds(player);
   const driverCoverage = driverCoverageForNeed(player, staffNeeds.drivers);
   const lineInfrastructureMultiplier = clamp(1.22 - staffing.engineers * 0.22, 0.78, 1.18);
-  const totalOwnedLineKm = player.lines
-    .filter(line => line?.active && lineStops(line).length >= 2)
-    .reduce((sum, line) => sum + lineDistance(line), 0);
-  const totalLineInfrastructurePool = totalOwnedLineKm * ECONOMY.lineInfrastructureMaintenancePerKm * lineInfrastructureMultiplier;
+  const infrastructureUsage = options.infrastructureUsage || buildInfrastructureUsage();
   const policy = BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
   const maintenanceCapacity = 1 + (player.staff.mechanics || 0) * 0.08 + totalMaintenance(player) * 0.12 + techLevel(player, 'electric_standardized_maintenance') * 0.16 + techLevel(player, 'steam_workshops') * 0.1;
   const eventFactor = currentEventFactor();
@@ -2277,6 +2275,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           dispatchRevenueBoost: 0,
           lineInfrastructureCost: 0,
           commercialOperatingCost: 0,
+          commercialSalesCost: 0,
+          commercialControlCost: 0,
+          commercialAdministrationCost: 0,
           energyCost: 0,
           maintenanceCost: 0,
           accessCost: 0,
@@ -2404,11 +2405,14 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const lineRevenue = serviceRevenue * dispatchRevenueFactor;
     const energyCost = computeEnergyCost(player, operatingModel, distance, effectiveFrequency, line.electrified);
     const maintenanceCost = operatingModel.maintenance * distance * effectiveFrequency * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
-    const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance);
+    const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance, infrastructureUsage);
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
-    const lineInfrastructureCost = totalOwnedLineKm > 0 ? totalLineInfrastructurePool * (distance / totalOwnedLineKm) : 0;
+    const lineInfrastructureCost = computeLineInfrastructureCost(player, line, lineInfrastructureMultiplier, infrastructureUsage);
     const commercialOperatingCost = Math.max(0, lineRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
+    const commercialSalesCost = commercialOperatingCost * 0.42;
+    const commercialControlCost = commercialOperatingCost * 0.28;
+    const commercialAdministrationCost = commercialOperatingCost * 0.30;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
     const contribution = lineRevenue - variableExpenses;
     revenue += lineRevenue;
@@ -2485,6 +2489,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - serviceRevenue)),
         lineInfrastructureCost: Math.round(lineInfrastructureCost),
         commercialOperatingCost: Math.round(commercialOperatingCost),
+        commercialSalesCost: Math.round(commercialSalesCost),
+        commercialControlCost: Math.round(commercialControlCost),
+        commercialAdministrationCost: Math.round(commercialAdministrationCost),
         energyCost: Math.round(energyCost),
         resourceType: resourceCheck.type,
         resourceConsumptionPerHour: round2(resourceCheck.amountPerHour || 0),
@@ -2574,6 +2581,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     acc.trainMaintenanceCost += Number(finance.maintenanceCost || 0);
     acc.lineInfrastructureCost += Number(finance.lineInfrastructureCost || 0);
     acc.commercialOperatingCost += Number(finance.commercialOperatingCost || 0);
+    acc.commercialSalesCost += Number(finance.commercialSalesCost || 0);
+    acc.commercialControlCost += Number(finance.commercialControlCost || 0);
+    acc.commercialAdministrationCost += Number(finance.commercialAdministrationCost || 0);
     acc.accessCost += Number(finance.accessCost || 0);
     acc.variableExpenses += Number(finance.variableExpenses || 0);
     return acc;
@@ -2586,6 +2596,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     trainMaintenanceCost: 0,
     lineInfrastructureCost: 0,
     commercialOperatingCost: 0,
+    commercialSalesCost: 0,
+    commercialControlCost: 0,
+    commercialAdministrationCost: 0,
     accessCost: 0,
     variableExpenses: 0
   });
@@ -2600,7 +2613,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     trainMaintenanceCost: Math.round(lineFinanceTotals.trainMaintenanceCost),
     lineInfrastructureCost: Math.round(lineFinanceTotals.lineInfrastructureCost),
     commercialOperatingCost: Math.round(lineFinanceTotals.commercialOperatingCost),
+    commercialSalesCost: Math.round(lineFinanceTotals.commercialSalesCost),
+    commercialControlCost: Math.round(lineFinanceTotals.commercialControlCost),
+    commercialAdministrationCost: Math.round(lineFinanceTotals.commercialAdministrationCost),
     accessCost: Math.round(lineFinanceTotals.accessCost),
+    passageRightsRevenue: 0,
     staffCost: Math.round(staffCost),
     stationCost: Math.round(stationCost),
     debtCost: Math.round(debtCost),
@@ -3524,31 +3541,32 @@ function lineStopsOwnershipProblem(stops) {
   return '';
 }
 
-function computePassageRights(player, line, model, distance) {
-  const stops = lineStops(line);
-  const external = [];
-  for (const stopId of stops) {
-    const owner = stationOwnerInfo(stopId);
-    if (!owner || owner.player.id === player.id) continue;
-    external.push({ stationId: stopId, owner: owner.player, asset: owner.asset });
-  }
-  if (!external.length) return { total: 0, allocations: [] };
-
-  const base = 0.018 * distance * line.frequency * (model.capacity + model.freight * 0.8);
-  const total = base * (external.length / Math.max(1, stops.length));
-  const weighted = external.map(item => ({
-    ...item,
-    weight: 1 + (item.asset.level || 1) * 0.18 + (item.asset.commerce || 0) * 0.08 + (item.asset.maintenance || 0) * 0.05
-  }));
-  const weightSum = weighted.reduce((sum, item) => sum + item.weight, 0) || 1;
+function computePassageRights(player, line, model, distance, infrastructureUsage = null) {
+  const usage = infrastructureUsage || buildInfrastructureUsage();
   const byOwner = new Map();
+  let total = 0;
 
-  for (const item of weighted) {
-    const amount = total * item.weight / weightSum;
-    const prev = byOwner.get(item.owner.id) || { ownerId: item.owner.id, amount: 0, stations: [] };
-    prev.amount += amount;
-    prev.stations.push(item.stationId);
-    byOwner.set(item.owner.id, prev);
+  for (const segment of lineSegments(line)) {
+    const entry = usage.get(segment.key);
+    if (!entry) continue;
+    const otherOwners = [...new Set((entry.entries || [])
+      .map(item => item.playerId)
+      .filter(ownerId => ownerId && ownerId !== player.id))];
+    if (!otherOwners.length) continue;
+
+    const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
+    const segmentAmount = 0.0065 * segment.distance * Math.max(1, Number(line.frequency || 1)) * capacityBase;
+    total += segmentAmount;
+
+    const amountPerOwner = segmentAmount / otherOwners.length;
+    for (const ownerId of otherOwners) {
+      const owner = state.players[ownerId];
+      if (!owner) continue;
+      const current = byOwner.get(ownerId) || { ownerId, amount: 0, segments: [] };
+      current.amount += amountPerOwner;
+      current.segments.push(segment.key);
+      byOwner.set(ownerId, current);
+    }
   }
 
   return {
@@ -3582,6 +3600,8 @@ function applyPassageRightsLedger(ledger) {
     owner.stats.profit += amount;
     owner.stats.lastRevenue += amount;
     owner.stats.lastProfit += amount;
+    owner.stats.lastBreakdown = owner.stats.lastBreakdown || {};
+    owner.stats.lastBreakdown.passageRightsRevenue = Math.round(Number(owner.stats.lastBreakdown.passageRightsRevenue || 0) + amount);
   }
 }
 
@@ -3608,6 +3628,57 @@ function lineRouteName(stops) {
 
 function lineDistance(line) {
   return routeBetweenStops(lineStops(line)).distance;
+}
+
+function lineSegmentKey(a, b) {
+  const left = String(a || '').trim();
+  const right = String(b || '').trim();
+  return [left, right].sort().join('::');
+}
+
+function lineSegments(line) {
+  const stops = lineStops(line);
+  const segments = [];
+  for (let i = 1; i < stops.length; i++) {
+    const from = stops[i - 1];
+    const to = stops[i];
+    if (!from || !to || from === to) continue;
+    segments.push({
+      from,
+      to,
+      key: lineSegmentKey(from, to),
+      distance: Math.max(1, distanceBetween(from, to))
+    });
+  }
+  return segments;
+}
+
+function buildInfrastructureUsage() {
+  const usage = new Map();
+  for (const player of Object.values(state.players || {})) {
+    for (const line of player.lines || []) {
+      if (!line?.active) continue;
+      for (const segment of lineSegments(line)) {
+        const entry = usage.get(segment.key) || { distance: segment.distance, users: new Set(), entries: [] };
+        entry.distance = Math.max(entry.distance || 0, segment.distance || 0);
+        entry.users.add(player.id);
+        entry.entries.push({ playerId: player.id, lineId: line.id });
+        usage.set(segment.key, entry);
+      }
+    }
+  }
+  return usage;
+}
+
+function computeLineInfrastructureCost(player, line, multiplier = 1, infrastructureUsage = null) {
+  const usage = infrastructureUsage || buildInfrastructureUsage();
+  let total = 0;
+  for (const segment of lineSegments(line)) {
+    const entry = usage.get(segment.key);
+    const sharedUsers = Math.max(1, entry?.users?.size || 1);
+    total += segment.distance * ECONOMY.lineInfrastructureMaintenancePerKm * multiplier / sharedUsers;
+  }
+  return total;
 }
 
 function lineRouteInfo(line) {
@@ -4075,7 +4146,13 @@ function buildBalance() {
     maintenancePolicies,
     maintenanceActions,
     techTree,
-    public: { epochs, trains, staff, energyStrategies, maintenancePolicies, maintenanceActions, techTree, techLabels: {
+    public: { epochs, trains, staff, energyStrategies, maintenancePolicies, maintenanceActions, techTree, economy: {
+      researchLabBaseCost: ECONOMY.researchLabBaseCost,
+      stationLevelCost: ECONOMY.stationLevelCost,
+      stationCommerceCost: ECONOMY.stationCommerceCost,
+      stationMaintenanceCost: ECONOMY.stationMaintenanceCost,
+      stationDepotCost: ECONOMY.stationDepotCost
+    }, techLabels: {
       traction: 'Traction',
       energy: 'Énergie',
       operations: 'Exploitation',
