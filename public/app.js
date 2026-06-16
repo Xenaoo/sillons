@@ -4410,13 +4410,6 @@ function renderBudget() {
   return `
     ${renderSectionHero('BUDGET', 'Lecture financière complète', 'Analyse les revenus, les dépenses et le résultat net de la compagnie avec des catégories réductibles.', ART.tabs.budget, ['Résultat', 'Revenus', 'Dépenses'])}
 
-    <div class="budget-summary-grid">
-      ${metric('Recettes /h', moneyPerHour(revenueTotal), 'good-text')}
-      ${metric('Dépenses /h', moneyPerHour(expenseTotal), 'bad-text')}
-      ${metric('Résultat /h', moneyPerHour(net), net >= 0 ? 'good-text' : 'bad-text')}
-      ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text')}
-    </div>
-
     ${budgetSection('result', 'Résultat et structure financière', `
       ${budgetRow('Résultat net courant', net, 'net', 'Recettes - dépenses')}
       ${budgetRawRow('Trésorerie disponible', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}

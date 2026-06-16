@@ -6036,3 +6036,13 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== v61.3.1 — correctifs budget et contrôleurs ===== */
+.map-controls #zoomResetBtn {
+  display: inline-grid;
+  place-items: center;
+  text-align: center;
+  min-width: 58px;
+  padding-inline: 10px;
+  line-height: 1;
+}

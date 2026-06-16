@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.3.0';
-const STATE_SCHEMA_VERSION = 61;
+const PROJECT_VERSION = 'v61.3.1';
+const STATE_SCHEMA_VERSION = 62;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -2371,10 +2371,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const scoredShares = [passengerMarket?.share, freightMarket?.share].filter(Number.isFinite);
     if (scoredShares.length) marketScore += scoredShares.reduce((sum, share) => sum + share, 0) / scoredShares.length;
 
-    const crewFactor = Math.min(staffing.controllers, staffing.dispatchers);
+    const controllerCoverage = lineNeeds.controllers > 0 ? clamp(Number(player.staff.controllers || 0) / lineNeeds.controllers, 0, 1) : 1;
+    const crewFactor = staffing.dispatchers;
     const stationFactor = lineStationFactor(player, line);
     const capacityFactor = Math.min(1, crewFactor * stationFactor);
-    const fareComplianceFactor = clamp(0.76 + staffing.controllers * 0.24, 0.72, 1.06);
+    const fareComplianceFactor = 1 + controllerCoverage * 0.15;
     const stationAgentFlowFactor = clamp(0.76 + staffing.stationAgents * 0.24, 0.72, 1.08);
     const dispatchRevenueFactor = clamp(0.78 + staffing.dispatchers * 0.22, 0.76, 1.07);
     const maxPax = operatingModel.capacity * effectiveFrequency * capacityFactor;
@@ -2398,7 +2399,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     setLineTicketPrice(line, effectiveTicketPrice, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
-    const ticketRevenue = linePax * effectiveTicketPrice * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier * fareComplianceFactor;
+    const baseTicketRevenue = linePax * effectiveTicketPrice * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
+    const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
     const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
@@ -2409,10 +2411,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
     const lineInfrastructureCost = computeLineInfrastructureCost(player, line, lineInfrastructureMultiplier, infrastructureUsage);
-    const commercialOperatingCost = Math.max(0, lineRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
-    const commercialSalesCost = commercialOperatingCost * 0.42;
-    const commercialControlCost = commercialOperatingCost * 0.28;
-    const commercialAdministrationCost = commercialOperatingCost * 0.30;
+    const commercialBaseRevenue = baseTicketRevenue + ancillaryRevenue + freightRevenue;
+    const grossCommercialOperatingCost = Math.max(0, commercialBaseRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
+    const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.08);
+    const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.22);
+    const commercialAdministrationCost = grossCommercialOperatingCost * 0.30;
+    const commercialOperatingCost = commercialSalesCost + commercialControlCost + commercialAdministrationCost;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
     const contribution = lineRevenue - variableExpenses;
     revenue += lineRevenue;
@@ -2735,7 +2739,7 @@ function computeLineAttractivenessDetails(player, line, model, train, distance, 
   const repBoost = 0.5 + player.reputation / 100;
   const conditionBoost = 0.35 + train.condition;
   const staffBoost = market === 'passengers'
-    ? Math.min(staffing.drivers, staffing.controllers, staffing.dispatchers, 1.25)
+    ? Math.min(staffing.drivers, staffing.dispatchers, 1.25)
     : Math.min(staffing.drivers, staffing.dispatchers, staffing.mechanics + 0.08, 1.25);
   const stationBoost = Math.min(1.24, lineStationFactor(player, line));
   const opsBoost = (1 + Math.min(0.1, techLevel(player, 'block_signaling') * 0.02)) * (1 + Math.min(0.12, techLevel(player, 'centralized_control') * 0.024));

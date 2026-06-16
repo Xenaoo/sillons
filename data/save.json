@@ -1,5 +1,5 @@
 {
-  "version": 61,
+  "version": 62,
   "createdAt": 1781511648911,
   "now": 1781598190868,
   "day": 421,
@@ -235,25 +235,7 @@
     }
   ],
   "customStations": {},
-  "users": {
-    "testuser": {
-      "id": "bc07a7ec-c590-4d4c-929b-62616c062c4b",
-      "username": "testuser",
-      "usernameKey": "testuser",
-      "playerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-      "passwordSalt": "fd0b9a8d071f3002320e9a8c78dd0d2e",
-      "passwordHash": "54eda780aec0eb5fad28c40f29b499cc528263c5484a7bd278ce6b375c6197dc96951581706402edf64cb4acc9fa66d89e73be573c1ab4cc073b6c0063fee9fe",
-      "sessions": {
-        "c8f5ed0d71b97e7c4896efd36fa4f7a66c1295f88db01d08f55645905e5fa7e0": {
-          "createdAt": 1781610790087,
-          "lastSeenAt": 1781610790087,
-          "expiresAt": 1784202790087
-        }
-      },
-      "createdAt": 1781610790087,
-      "lastLoginAt": 1781610790087
-    }
-  },
+  "users": {},
   "players": {
     "4c7dfa51-225a-487a-aa42-1b0776c4e1d5": {
       "id": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",

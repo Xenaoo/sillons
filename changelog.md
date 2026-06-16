@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Version v61.3.1 — correction contrôleurs et nettoyage Budget
+
+- incrément de version de cette passe : badge interface `v61.3.1`, package `0.5.6` et schéma serveur `62` ;
+- suppression du bandeau de synthèse `Recettes / Dépenses / Résultat / Marge` dans l’onglet Budget ;
+- centrage du bouton `France` dans les contrôles de carte ;
+- correction de l’effet des Contrôleurs : ils ne multiplient plus la capacité, l’attractivité ni les bénéfices de façon excessive ;
+- l’effet des Contrôleurs est plafonné à +15 % de revenus voyageurs lorsque l’effectif nécessaire est atteint ;
+- les Contrôleurs réduisent désormais les dépenses `Vente & distribution` et `Contrôle & fraude`, au lieu de les augmenter mécaniquement ;
+- les dépenses commerciales sont calculées sur la base commerciale hors bonus de contrôle, afin d’éviter les incohérences de budget.
+
 ## Version v61.3.0 — dépenses clarifiées, péages et coûts partagés
 
 - incrément de version de cette passe : badge interface `v61.3.0`, package `0.5.5` et schéma serveur `61` ;
