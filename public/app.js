@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.0.0';
+const PROJECT_VERSION = 'v62.1.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -42,6 +42,7 @@ const app = {
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
+  admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
   mapPref: 'show',
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
@@ -1448,8 +1449,25 @@ function animateCashDeltaFromStates(previousState, nextState) {
   }
 }
 
+function syncAdminTabVisibility() {
+  const button = $('#adminTabBtn');
+  if (!button) return;
+  const isAdmin = Boolean(app.state?.auth?.isAdmin);
+  button.classList.toggle('hidden', !isAdmin);
+  if (!isAdmin && app.activeTab === 'admin') app.activeTab = 'overview';
+}
+
+function isAdminSession() {
+  return Boolean(app.state?.auth?.isAdmin && app.state?.admin);
+}
+
 function renderTabs() {
   if (!app.state) return;
+  syncAdminTabVisibility();
+  if (app.activeTab === 'admin' && !app.state.auth?.isAdmin) {
+    app.activeTab = 'overview';
+    localStorage.setItem('sillons.activeTab', app.activeTab);
+  }
   $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === app.activeTab));
   const content = $('#tabContent');
   const side = $('.side.panel');
@@ -1473,12 +1491,114 @@ function renderTabs() {
     research: renderResearch,
     resources: renderResources,
     market: renderMarket,
-    budget: renderBudget
+    budget: renderBudget,
+    admin: renderAdmin
   };
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
   if (app.activeTab === 'stations') refreshStationSearchWidgets();
   setTimeout(renderTutorialOverlay, 0);
+}
+
+function renderAdmin() {
+  if (!isAdminSession()) {
+    return `<div class="card"><h2>Admin</h2><p class="muted">Accès réservé au compte Xenao.</p></div>`;
+  }
+  const players = app.state.admin.players || [];
+  if (!players.length) return `<div class="card"><h2>Admin</h2><p class="muted">Aucun joueur à administrer.</p></div>`;
+  let selected = players.find(p => p.id === app.admin.selectedPlayerId) || players[0];
+  app.admin.selectedPlayerId = selected.id;
+  localStorage.setItem('sillons.adminSelectedPlayer', selected.id);
+  const logRows = (selected.loginHistory || []).map(entry => `
+    <tr>
+      <td>${escapeHtml(formatDateTime(entry.at))}</td>
+      <td>${escapeHtml(entry.ip || '—')}</td>
+      <td>${escapeHtml(entry.userAgent || '—')}</td>
+    </tr>
+  `).join('');
+  const rawJson = escapeHtml(JSON.stringify(selected.rawPlayer || {}, null, 2));
+  return `
+    ${renderSectionHero('ADMINISTRATION', 'Console Xenao', 'Pilote les comptes joueurs, corrige leur progression et consulte les connexions horodatées enregistrées côté serveur.', ART.tabs.budget, ['Accès privé', `${players.length} joueurs`, `${selected.loginCount || 0} connexions`])}
+    <div class="admin-grid">
+      <section class="card admin-list-card">
+        <h2>Comptes joueurs</h2>
+        <div class="admin-player-list">
+          ${players.map(player => `
+            <button type="button" class="admin-player-row ${player.id === selected.id ? 'active' : ''}" data-action="admin-select-player" data-id="${escapeAttr(player.id)}">
+              <span><strong>${escapeHtml(player.name)}</strong><em>${escapeHtml(player.username || 'IA / sans compte')}</em></span>
+              <b>${money(player.cash)}</b>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+      <section class="card admin-detail-card">
+        <div class="admin-detail-head">
+          <div>
+            <h2>${escapeHtml(selected.name)}</h2>
+            <p class="muted small">Identifiant : ${escapeHtml(selected.username || 'aucun')} · ID joueur : <code>${escapeHtml(selected.id)}</code></p>
+          </div>
+          <span class="tag ${selected.isAdmin ? 'good' : ''}">${selected.isAdmin ? 'Admin' : 'Joueur'}</span>
+        </div>
+        <div class="card-grid">
+          ${metric('Trésorerie', money(selected.cash))}
+          ${metric('Dette', money(selected.debt))}
+          ${metric('Lignes actives', `${selected.activeLines}/${selected.lines}`)}
+          ${metric('Connexions', selected.loginCount || 0)}
+        </div>
+        <div class="admin-action-panel">
+          <label>Nom de compagnie
+            <input id="adminCompanyName" maxlength="28" value="${escapeAttr(selected.name)}">
+          </label>
+          <label>Trésorerie exacte
+            <input id="adminCash" type="number" step="1000" value="${Number(selected.cash || 0)}">
+          </label>
+          <label>Ajouter / retirer
+            <input id="adminCashDelta" type="number" step="1000" placeholder="ex : 1000000 ou -500000">
+          </label>
+          <div class="actions">
+            <button class="primary" data-action="admin-save-quick" data-id="${escapeAttr(selected.id)}">Enregistrer nom + trésorerie</button>
+            <button data-action="admin-add-cash" data-id="${escapeAttr(selected.id)}">Appliquer variation</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <section class="card">
+      <h2>Connexions horodatées</h2>
+      <p class="muted small">Le journal est alimenté à chaque connexion réussie. Les anciennes sauvegardes récupèrent au moins la dernière connexion connue.</p>
+      <div class="admin-log-wrap">
+        <table class="admin-log-table">
+          <thead><tr><th>Date</th><th>IP</th><th>Navigateur</th></tr></thead>
+          <tbody>${logRows || '<tr><td colspan="3">Aucune connexion enregistrée.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Édition avancée du joueur</h2>
+      <p class="muted small">Zone volontairement puissante : modifie le JSON puis enregistre. Le serveur remigre la compagnie pour éviter les champs essentiels cassés.</p>
+      <textarea id="adminRawPlayerJson" class="admin-json-editor" spellcheck="false">${rawJson}</textarea>
+      <div class="actions">
+        <button class="primary" data-action="admin-save-json" data-id="${escapeAttr(selected.id)}">Enregistrer le JSON joueur</button>
+      </div>
+    </section>
+  `;
+}
+
+async function adminUpdatePlayer(payload) {
+  const data = await post('/api/admin/player', payload);
+  if (!data.ok) {
+    toast(data.error || 'Modification admin refusée.', 'error');
+    return data;
+  }
+  app.state = data.state || app.state;
+  toast(data.message || 'Modification admin enregistrée.', 'ok');
+  renderAll(true);
+  return data;
+}
+
+function formatDateTime(value) {
+  const date = new Date(Number(value || 0));
+  if (!Number.isFinite(date.getTime())) return '—';
+  return date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
 }
 
 function renderOverview() {
@@ -4573,6 +4693,33 @@ function onTabContentClick(event) {
     return;
   }
   const action = button.dataset.action;
+  if (action === 'admin-select-player') {
+    app.admin.selectedPlayerId = button.dataset.id || '';
+    localStorage.setItem('sillons.adminSelectedPlayer', app.admin.selectedPlayerId);
+    renderAll();
+    return;
+  }
+  if (action === 'admin-save-quick') {
+    return adminUpdatePlayer({
+      targetPlayerId: button.dataset.id,
+      name: $('#adminCompanyName')?.value || '',
+      cash: Number($('#adminCash')?.value || 0)
+    });
+  }
+  if (action === 'admin-add-cash') {
+    const raw = $('#adminCashDelta')?.value || '';
+    if (!raw.trim()) return toast('Saisis une variation de trésorerie.', 'error');
+    return adminUpdatePlayer({ targetPlayerId: button.dataset.id, cashDelta: Number(raw) });
+  }
+  if (action === 'admin-save-json') {
+    try {
+      const rawPlayer = JSON.parse($('#adminRawPlayerJson')?.value || '{}');
+      return adminUpdatePlayer({ targetPlayerId: button.dataset.id, rawPlayer });
+    } catch (error) {
+      toast(`JSON invalide : ${error.message}`, 'error');
+      return;
+    }
+  }
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
 if (action === 'select-composition-train') {
@@ -6133,10 +6280,36 @@ function nearestRailAnchorsForStationClient(station, count = 4) {
   return anchors;
 }
 
+function stationsShareProjectedRailSegmentClient(a, b) {
+  const sa = station(a);
+  const sb = station(b);
+  if (!sa || !sb) return false;
+  if (sa.railSegment && sb.railSegment && sa.railSegment === sb.railSegment) return true;
+  if (sa.stationUic && sb.stationUic && sa.stationUic === sb.stationUic) return true;
+  return false;
+}
+
+function addLocalRouteShortcutClient(adjacency, a, b) {
+  if (!a || !b || a === b) return;
+  const sa = station(a);
+  const sb = station(b);
+  if (!sa || !sb) return;
+  const direct = stationRouteDistanceClient(sa, sb);
+  if (!Number.isFinite(direct) || direct <= 0) return;
+  const allowDirect = direct <= 45 || stationsShareProjectedRailSegmentClient(a, b);
+  if (!allowDirect) return;
+  adjacency[a] ||= [];
+  adjacency[b] ||= [];
+  if (!adjacency[a].includes(b)) adjacency[a].push(b);
+  if (!adjacency[b].includes(a)) adjacency[b].push(a);
+}
+
 function routeAdjacencyForClient(a, b) {
   const base = app.state?.world?.railAdjacency || {};
   const adjacency = {};
   for (const [id, list] of Object.entries(base)) adjacency[id] = [...list];
+
+  addLocalRouteShortcutClient(adjacency, a, b);
 
   for (const id of [a, b]) {
     if (!id || adjacency[id]) continue;
@@ -6405,6 +6578,14 @@ async function ensureRailwayRouteGeometry(a, b) {
 
   app.osmRoutePending.add(key);
   try {
+    const sncf = await fetchSncfRouteGeometry(a, b);
+    if (sncf?.length >= 2) {
+      rememberCacheEntry(app.osmRouteCache, key, sncf, OSM_ROUTE_CACHE_MAX_ENTRIES);
+      app.routeCache.clear();
+      invalidateMapProjection('sncf-rail-geometry-loaded');
+      return;
+    }
+
     const query = `
 [out:json][timeout:18];
 (
@@ -6430,6 +6611,23 @@ out geom;
     // Non bloquant : le graphe ferroviaire interne reste utilisé.
   } finally {
     app.osmRoutePending.delete(key);
+  }
+}
+
+async function fetchSncfRouteGeometry(a, b) {
+  try {
+    const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}`, {
+      cache: 'force-cache',
+      headers: authHeaders()
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const coords = Array.isArray(data.geometry) ? data.geometry : [];
+    return coords
+      .map(pair => [Number(pair[0]), Number(pair[1])])
+      .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+  } catch {
+    return [];
   }
 }
 
@@ -6576,6 +6774,12 @@ function getRoute(a, b) {
     ids = [a, b];
     dist[b] = directRailDistance(a, b);
   }
+  const direct = directRailDistance(a, b);
+  if (direct > 0 && Number.isFinite(dist[b]) && dist[b] > Math.max(35, direct * 2.35) && direct <= 85) {
+    ids = [a, b];
+    dist[b] = direct;
+  }
+
   let maxSegment = 0;
   let points = [];
   for (let i = 1; i < ids.length; i++) {

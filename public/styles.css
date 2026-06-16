@@ -6046,3 +6046,143 @@ dialog.modal--wide {
   padding-inline: 10px;
   line-height: 1;
 }
+
+/* ===== v62.1.0 — panneau admin Xenao ===== */
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-player-list {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.admin-player-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(217,168,82,.16);
+  background: rgba(3,8,18,.32);
+  color: #f4e3bd;
+}
+
+.admin-player-row:hover,
+.admin-player-row.active {
+  border-color: rgba(217,168,82,.55);
+  background: rgba(217,168,82,.12);
+}
+
+.admin-player-row span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-player-row strong,
+.admin-player-row em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-player-row em {
+  font-size: 11px;
+  color: #b8aa84;
+  font-style: normal;
+}
+
+.admin-player-row b {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.admin-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.admin-action-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(217,168,82,.13);
+  background: rgba(3,8,18,.28);
+}
+
+.admin-action-panel label {
+  display: grid;
+  gap: 5px;
+  color: #b8aa84;
+  font-size: 12px;
+}
+
+.admin-action-panel input,
+.admin-json-editor {
+  width: 100%;
+  border: 1px solid rgba(217,168,82,.2);
+  border-radius: 12px;
+  background: rgba(3,8,18,.45);
+  color: #f4e3bd;
+  padding: 9px 10px;
+}
+
+.admin-json-editor {
+  min-height: 360px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.admin-log-wrap {
+  overflow: auto;
+  max-height: 360px;
+  border-radius: 14px;
+  border: 1px solid rgba(217,168,82,.12);
+}
+
+.admin-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.admin-log-table th,
+.admin-log-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(217,168,82,.1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-log-table th {
+  color: #f4e3bd;
+  background: rgba(217,168,82,.08);
+  position: sticky;
+  top: 0;
+}
+
+.admin-log-table td {
+  color: #b8aa84;
+}
+
+@media (max-width: 980px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## Version v62.1.0 — administration Xenao et tracés SNCF RFN
+
+- incrément de version : badge interface `v62.1.0`, package `0.6.1` et schéma serveur `65` ;
+- attribution de `10 000 000 €` de trésorerie à la compagnie `Raphaële` dans `data/save.json` ;
+- ajout d’un panneau `Admin` visible et utilisable uniquement par le compte `Xenao` ;
+- ajout d’une API admin protégée permettant de modifier chaque compagnie : nom, trésorerie exacte, variation de trésorerie et JSON joueur avancé ;
+- ajout d’un journal de connexions horodatées par compte, conservant les 250 dernières connexions avec date, IP et navigateur quand disponibles ;
+- exposition du tableau de bord admin uniquement dans l’état public envoyé au compte `Xenao`, sans diffuser les hashs de mots de passe ;
+- bascule de la source gares SNCF vers `gares-de-voyageurs`, avec lecture des coordonnées GPS `position_geographique`, du code commune et du code UIC quand ils sont disponibles ;
+- ajout d’un chargement serveur des géométries `formes-des-lignes-du-rfn` en GeoJSON, avec cache local, graphe ferroviaire et calcul d’itinéraire RFN entre deux gares ;
+- le client demande maintenant d’abord la géométrie RFN au serveur avant d’utiliser les fallbacks Overpass ou internes ;
+- correction des distances incohérentes entre gares proches : ajout de raccourcis locaux cohérents et garde-fou de distance pour éviter des détours absurdes comme Dreux — Vernouillet affiché à environ 149 km.
+
 ## Version v62.0.0 — refonte ferroviaire de la carte
 
 - incrément majeur de version : badge interface `v62.0.0`, package `0.6.0` et schéma serveur `64` ;

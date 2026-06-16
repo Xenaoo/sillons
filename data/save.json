@@ -1,5 +1,5 @@
 {
-  "version": 64,
+  "version": 65,
   "createdAt": 1781511648911,
   "now": 1781617410878,
   "day": 46665,
@@ -294,7 +294,14 @@
         }
       },
       "createdAt": 1781529287009,
-      "lastLoginAt": 1781601325332
+      "lastLoginAt": 1781601325332,
+      "loginHistory": [
+        {
+          "at": 1781601325332,
+          "userAgent": "",
+          "ip": ""
+        }
+      ]
     },
     "laplusbelle": {
       "id": "b5547139-7509-4da3-9560-60ba8a0ab3f3",
@@ -311,7 +318,14 @@
         }
       },
       "createdAt": 1781598832108,
-      "lastLoginAt": 1781598832108
+      "lastLoginAt": 1781598832108,
+      "loginHistory": [
+        {
+          "at": 1781598832108,
+          "userAgent": "",
+          "ip": ""
+        }
+      ]
     }
   },
   "players": {
@@ -1728,7 +1742,7 @@
       "color": "#ffb5f0",
       "logo": "semaphore",
       "region": "France",
-      "cash": 58607.89999999579,
+      "cash": 10000000,
       "debt": 0,
       "epoch": 0,
       "research": 1,

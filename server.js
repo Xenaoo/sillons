@@ -11,14 +11,17 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.0.0';
-const STATE_SCHEMA_VERSION = 64;
+const PROJECT_VERSION = 'v62.1.0';
+const STATE_SCHEMA_VERSION = 65;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
-const SNCF_STATION_API_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/liste-des-gares/records';
+const SNCF_STATION_API_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/gares-de-voyageurs/records';
 const SNCF_STATION_PAGE_SIZE = 100;
+const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
+const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
+const ADMIN_USERNAME_KEY = 'xenao';
 const COMMUNE_DEPARTMENTS = [
   '01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19',
   '2A','2B',
@@ -202,14 +205,14 @@ server.listen(PORT, HOST, () => {
 async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
     const body = await readBody(req);
-    const result = registerAccount(body);
+    const result = registerAccount(body, req);
     sendJson(res, result.ok ? 200 : 400, result);
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
     const body = await readBody(req);
-    const result = loginAccount(body);
+    const result = loginAccount(body, req);
     sendJson(res, result.ok ? 200 : 401, result);
     return;
   }
@@ -237,6 +240,27 @@ async function handleApi(req, res, url) {
     } catch (error) {
       sendJson(res, 500, { ok: false, error: `Changelog indisponible : ${error.message}` });
     }
+    return;
+  }
+
+
+  if (req.method === 'GET' && url.pathname === '/api/sncf/route-geometry') {
+    const from = url.searchParams.get('from') || '';
+    const to = url.searchParams.get('to') || '';
+    const geometry = await sncfRouteGeometryForStations(from, to);
+    sendJson(res, 200, { ok: true, from, to, geometry, source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'fallback' });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/admin/player') {
+    const body = await readBody(req);
+    const auth = authenticateRequest(req, url, body);
+    if (!isAdminUser(auth?.user)) {
+      sendJson(res, 403, { ok: false, error: 'Accès admin refusé.' });
+      return;
+    }
+    const result = adminUpdatePlayer(body || {}, auth.user);
+    sendJson(res, result.ok ? 200 : 400, { ...result, state: publicState(auth.user.playerId, auth.user) });
     return;
   }
 
@@ -387,6 +411,47 @@ function createUserRecord(username, password, playerId) {
   };
 }
 
+
+function normalizeLoginHistory(raw, fallbackLastLoginAt = null) {
+  const values = Array.isArray(raw) ? raw : [];
+  const cleaned = values
+    .map(entry => {
+      const at = Number(entry?.at ?? entry?.time ?? entry);
+      if (!Number.isFinite(at) || at <= 0) return null;
+      return {
+        at,
+        userAgent: cleanOptionalText(entry?.userAgent || '', 140),
+        ip: cleanOptionalText(entry?.ip || '', 80)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.at - b.at);
+  const fallback = Number(fallbackLastLoginAt || 0);
+  if (!cleaned.length && Number.isFinite(fallback) && fallback > 0) cleaned.push({ at: fallback, userAgent: '', ip: '' });
+  return cleaned.slice(-250);
+}
+
+function clientIpFromRequest(req) {
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || String(req?.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+}
+
+function recordUserLogin(user, req = null) {
+  if (!user) return;
+  user.loginHistory = normalizeLoginHistory(user.loginHistory, user.lastLoginAt);
+  user.loginHistory.push({
+    at: Date.now(),
+    userAgent: cleanOptionalText(req?.headers?.['user-agent'] || '', 140),
+    ip: cleanOptionalText(clientIpFromRequest(req), 80)
+  });
+  user.loginHistory = user.loginHistory.slice(-250);
+  user.lastLoginAt = user.loginHistory[user.loginHistory.length - 1]?.at || Date.now();
+}
+
+function isAdminUser(user) {
+  return String(user?.usernameKey || '').toLowerCase() === ADMIN_USERNAME_KEY;
+}
+
 function normalizeUsers(raw = {}) {
   const out = {};
   const entries = Array.isArray(raw) ? raw.map(u => [u?.usernameKey || u?.username, u]) : Object.entries(raw || {});
@@ -413,7 +478,8 @@ function normalizeUsers(raw = {}) {
       passwordHash: String(value.passwordHash),
       sessions,
       createdAt: Number(value.createdAt || now),
-      lastLoginAt: value.lastLoginAt || null
+      lastLoginAt: value.lastLoginAt || null,
+      loginHistory: normalizeLoginHistory(value.loginHistory, value.lastLoginAt)
     };
   }
   return out;
@@ -426,7 +492,7 @@ function verifyPassword(user, password) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
-function issueSession(user) {
+function issueSession(user, req = null) {
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = sha256(token);
   user.sessions = user.sessions && typeof user.sessions === 'object' ? user.sessions : {};
@@ -435,7 +501,7 @@ function issueSession(user) {
     lastSeenAt: Date.now(),
     expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_MS
   };
-  user.lastLoginAt = Date.now();
+  recordUserLogin(user, req);
   return token;
 }
 
@@ -474,6 +540,7 @@ function authPayload(user, token) {
     token,
     username: user.username,
     playerId: user.playerId,
+    isAdmin: isAdminUser(user),
     expiresAt: user.sessions?.[sha256(token)]?.expiresAt || null
   };
 }
@@ -543,7 +610,7 @@ function updateClaimedPlayerIdentity(player, body = {}) {
   return player;
 }
 
-function registerAccount(body = {}) {
+function registerAccount(body = {}, req = null) {
   const parsed = normalizeUsername(body.username);
   if (!parsed.ok) return { ok: false, error: parsed.error };
   const passError = passwordError(body.password);
@@ -559,13 +626,13 @@ function registerAccount(body = {}) {
       logo: body.logo
     });
   const user = createUserRecord(parsed.username, body.password, player.id);
-  const token = issueSession(user);
+  const token = issueSession(user, req);
   state.users[parsed.key] = user;
   saveState();
   return { ok: true, auth: authPayload(user, token), playerId: player.id, state: publicState(player.id, user) };
 }
 
-function loginAccount(body = {}) {
+function loginAccount(body = {}, req = null) {
   const parsed = normalizeUsername(body.username);
   if (!parsed.ok) return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
   state.users = normalizeUsers(state.users || {});
@@ -577,9 +644,292 @@ function loginAccount(body = {}) {
     const player = createPlayer({ name: body.companyName || `Compagnie ${user.username}` });
     user.playerId = player.id;
   }
-  const token = issueSession(user);
+  const token = issueSession(user, req);
   saveState();
   return { ok: true, auth: authPayload(user, token), playerId: user.playerId, state: publicState(user.playerId, user) };
+}
+
+
+function buildAdminDashboard() {
+  const usersByPlayer = new Map();
+  for (const user of Object.values(state.users || {})) {
+    usersByPlayer.set(user.playerId, user);
+  }
+  const players = Object.values(state.players || {}).map(player => {
+    const user = usersByPlayer.get(player.id) || null;
+    const history = normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).slice(-80).reverse();
+    const sessions = Object.values(user?.sessions || {}).filter(session => Number(session.expiresAt || 0) > Date.now());
+    return {
+      id: player.id,
+      name: player.name,
+      cash: Math.round(Number(player.cash || 0)),
+      debt: Math.round(Number(player.debt || 0)),
+      score: Math.round(scorePlayer(player)),
+      lines: Array.isArray(player.lines) ? player.lines.length : 0,
+      activeLines: Array.isArray(player.lines) ? player.lines.filter(l => l.active).length : 0,
+      trains: Array.isArray(player.trains) ? player.trains.length : 0,
+      username: user?.username || '',
+      usernameKey: user?.usernameKey || '',
+      isAdmin: isAdminUser(user),
+      createdAt: player.createdAt || null,
+      lastSeen: player.lastSeen || null,
+      lastLoginAt: user?.lastLoginAt || null,
+      loginCount: normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).length,
+      activeSessions: sessions.length,
+      loginHistory: history,
+      rawPlayer: player
+    };
+  }).sort((a, b) => (b.isAdmin - a.isAdmin) || String(a.name).localeCompare(String(b.name), 'fr'));
+  return { players, generatedAt: Date.now() };
+}
+
+function adminFindPlayer(payload = {}) {
+  const targetPlayerId = String(payload.targetPlayerId || payload.playerId || '').trim();
+  if (targetPlayerId && state.players[targetPlayerId]) return state.players[targetPlayerId];
+  const usernameKey = String(payload.usernameKey || payload.username || '').trim().toLowerCase();
+  const user = usernameKey ? state.users?.[usernameKey] : null;
+  if (user?.playerId && state.players[user.playerId]) return state.players[user.playerId];
+  return null;
+}
+
+function adminUpdatePlayer(payload = {}, adminUser = null) {
+  const target = adminFindPlayer(payload);
+  if (!target) return fail('Compte joueur introuvable.');
+  const beforeName = target.name;
+
+  if (payload.rawPlayer && typeof payload.rawPlayer === 'object') {
+    const replacement = migratePlayer({ ...payload.rawPlayer, id: target.id }, target.id);
+    state.players[target.id] = replacement;
+  }
+
+  const player = state.players[target.id];
+  if (payload.cash !== undefined && payload.cash !== '') {
+    const cash = Number(payload.cash);
+    if (!Number.isFinite(cash)) return fail('Montant de trésorerie invalide.');
+    player.cash = Math.round(cash);
+  }
+  if (payload.cashDelta !== undefined && payload.cashDelta !== '') {
+    const delta = Number(payload.cashDelta);
+    if (!Number.isFinite(delta)) return fail('Variation de trésorerie invalide.');
+    player.cash = Math.round(Number(player.cash || 0) + delta);
+  }
+  if (payload.name !== undefined) {
+    player.name = cleanText(payload.name || player.name, 28);
+  }
+  if (payload.color !== undefined) {
+    player.color = validateColor(payload.color) || player.color;
+  }
+  if (payload.reputation !== undefined && payload.reputation !== '') {
+    player.reputation = clamp(Number(payload.reputation || 0), 0, 100);
+  }
+
+  player.lastSeen = Date.now();
+  notify(player, `Modification admin appliquée par ${adminUser?.username || 'admin'}.`);
+  state.news.push({ day: state.day, text: `Administration : ${beforeName} a été mis à jour.` });
+  state.news = state.news.slice(-60);
+  saveState();
+  return ok('Modification admin enregistrée.');
+}
+
+let sncfRailLinesCache = null;
+let sncfRailLinesLoadedAt = 0;
+
+async function loadSncfRailShapeLines() {
+  if (sncfRailLinesCache?.length) return sncfRailLinesCache;
+  try {
+    if (fs.existsSync(SNCF_RFN_CACHE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SNCF_RFN_CACHE_FILE, 'utf8'));
+      if (Array.isArray(parsed.lines) && parsed.lines.length) {
+        sncfRailLinesCache = parsed.lines;
+        sncfRailLinesLoadedAt = Number(parsed.updatedAt || Date.now());
+        return sncfRailLinesCache;
+      }
+    }
+  } catch (error) {
+    console.warn('Cache RFN SNCF illisible:', error.message);
+  }
+
+  const geojson = await fetchJsonWithTimeout(SNCF_RFN_GEOJSON_URL, 120000);
+  const lines = extractGeoJsonRailLines(geojson)
+    .filter(line => line.coords.length >= 2)
+    .map(line => ({ ...line, bounds: geoLineBounds(line.coords) }));
+  if (!lines.length) throw new Error('Aucune géométrie RFN exploitable.');
+  sncfRailLinesCache = lines;
+  sncfRailLinesLoadedAt = Date.now();
+  try {
+    fs.writeFileSync(SNCF_RFN_CACHE_FILE, JSON.stringify({ updatedAt: sncfRailLinesLoadedAt, source: 'formes-des-lignes-du-rfn', lines }, null, 0));
+  } catch (error) {
+    console.warn('Cache RFN SNCF non écrit:', error.message);
+  }
+  return sncfRailLinesCache;
+}
+
+function extractGeoJsonRailLines(geojson) {
+  const features = Array.isArray(geojson?.features) ? geojson.features : Array.isArray(geojson) ? geojson : [];
+  const lines = [];
+  for (const feature of features) {
+    const geometry = feature?.geometry || feature?.geo_shape || feature;
+    const properties = feature?.properties || feature?.fields || feature || {};
+    const status = String(properties.mnemo || properties.MNEMO || properties.statut || properties.status || '').toUpperCase();
+    const rejected = /FERM|DÉPOS|DEPOS|HORS|ABANDON|NON\s*EXPLOIT/.test(status);
+    for (const coords of geometryToLineStrings(geometry)) {
+      const clean = coords
+        .map(pair => [Number(pair[0]), Number(pair[1])])
+        .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && isInFranceBounds(lat, lon));
+      if (clean.length >= 2 && !rejected) lines.push({ coords: clean, status });
+    }
+  }
+  return lines;
+}
+
+function geometryToLineStrings(geometry) {
+  if (!geometry || typeof geometry !== 'object') return [];
+  const type = geometry.type;
+  const coords = geometry.coordinates;
+  if (type === 'LineString' && Array.isArray(coords)) return [coords];
+  if (type === 'MultiLineString' && Array.isArray(coords)) return coords;
+  if (type === 'Feature') return geometryToLineStrings(geometry.geometry);
+  if (type === 'GeometryCollection' && Array.isArray(geometry.geometries)) return geometry.geometries.flatMap(geometryToLineStrings);
+  return [];
+}
+
+function geoLineBounds(coords) {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lon, lat] of coords || []) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return { minLon, maxLon, minLat, maxLat };
+}
+
+function boundsIntersects(a, b) {
+  return a.minLon <= b.maxLon && a.maxLon >= b.minLon && a.minLat <= b.maxLat && a.maxLat >= b.minLat;
+}
+
+function rfnCoordKey(lon, lat) {
+  return `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
+}
+
+async function sncfRouteGeometryForStations(fromId, toId) {
+  const from = stationById(fromId);
+  const to = stationById(toId);
+  if (!from || !to) return [];
+  const start = stationRoutePoint(from) || stationRawPoint(from);
+  const end = stationRoutePoint(to) || stationRawPoint(to);
+  if (!start || !end) return [];
+  const directKm = haversine(start.lat, start.lon, end.lat, end.lon);
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 520) return [];
+
+  try {
+    const lines = await loadSncfRailShapeLines();
+    const pad = Math.min(1.25, Math.max(0.08, directKm / 130));
+    const bbox = {
+      minLat: Math.min(start.lat, end.lat) - pad,
+      maxLat: Math.max(start.lat, end.lat) + pad,
+      minLon: Math.min(start.lon, end.lon) - pad,
+      maxLon: Math.max(start.lon, end.lon) + pad
+    };
+    const relevant = lines.filter(line => boundsIntersects(line.bounds, bbox));
+    const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm);
+    return geometry || [];
+  } catch (error) {
+    console.warn('Géométrie SNCF RFN indisponible:', error.message);
+    return [];
+  }
+}
+
+function buildPathFromRailShapeLines(lines, start, end, directKm) {
+  const graph = new Map();
+  const coordsByKey = new Map();
+  function addNode(lon, lat) {
+    const key = rfnCoordKey(lon, lat);
+    coordsByKey.set(key, [lon, lat]);
+    if (!graph.has(key)) graph.set(key, []);
+    return key;
+  }
+  for (const line of lines || []) {
+    const coords = line.coords || [];
+    for (let i = 1; i < coords.length; i++) {
+      const [lonA, latA] = coords[i - 1];
+      const [lonB, latB] = coords[i];
+      const a = addNode(lonA, latA);
+      const b = addNode(lonB, latB);
+      if (a === b) continue;
+      const weight = haversine(latA, lonA, latB, lonB);
+      graph.get(a).push([b, weight]);
+      graph.get(b).push([a, weight]);
+    }
+  }
+  if (graph.size < 2) return [];
+  const startKey = nearestRfnNodeKey(coordsByKey, start);
+  const endKey = nearestRfnNodeKey(coordsByKey, end);
+  if (!startKey || !endKey || startKey === endKey) return [];
+  const startGap = pointToCoordDistance(start, coordsByKey.get(startKey));
+  const endGap = pointToCoordDistance(end, coordsByKey.get(endKey));
+  const maxGap = Math.min(14, Math.max(3.5, directKm * 0.18));
+  if (startGap > maxGap || endGap > maxGap) return [];
+  const ids = dijkstraWeightedGraph(graph, startKey, endKey, 9000);
+  if (ids.length < 2) return [];
+  const path = ids.map(id => coordsByKey.get(id)).filter(Boolean);
+  const distance = polylineDistanceKm(path);
+  if (distance <= 0 || distance > Math.max(35, directKm * 3.15)) return [];
+  return [[start.lon, start.lat], ...path, [end.lon, end.lat]];
+}
+
+function nearestRfnNodeKey(coordsByKey, point) {
+  let best = null;
+  for (const [key, [lon, lat]] of coordsByKey.entries()) {
+    const distance = haversine(point.lat, point.lon, lat, lon);
+    if (!best || distance < best.distance) best = { key, distance };
+  }
+  return best?.key || null;
+}
+
+function pointToCoordDistance(point, coord) {
+  if (!point || !coord) return Infinity;
+  return haversine(point.lat, point.lon, coord[1], coord[0]);
+}
+
+function dijkstraWeightedGraph(graph, startKey, endKey, maxVisited = 5000) {
+  const dist = new Map([[startKey, 0]]);
+  const prev = new Map();
+  const visited = new Set();
+  while (visited.size < Math.min(maxVisited, graph.size)) {
+    let current = null;
+    let best = Infinity;
+    for (const key of graph.keys()) {
+      if (visited.has(key)) continue;
+      const d = dist.get(key) ?? Infinity;
+      if (d < best) { best = d; current = key; }
+    }
+    if (!current || current === endKey || !Number.isFinite(best)) break;
+    visited.add(current);
+    for (const [next, weight] of graph.get(current) || []) {
+      if (visited.has(next)) continue;
+      const alt = best + weight;
+      if (alt < (dist.get(next) ?? Infinity)) {
+        dist.set(next, alt);
+        prev.set(next, current);
+      }
+    }
+  }
+  if (!dist.has(endKey)) return [];
+  const out = [endKey];
+  let cur = endKey;
+  while (prev.has(cur)) {
+    cur = prev.get(cur);
+    out.push(cur);
+  }
+  out.reverse();
+  return out;
+}
+
+function polylineDistanceKm(coords) {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) total += haversine(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+  return total;
 }
 
 function mimeType(file) {
@@ -827,7 +1177,7 @@ function stationRailPlacement(station) {
       railLon: stationLon,
       placement: 'sncf-station',
       railDistanceKm: round2(haversine(Number(station.lat), Number(station.lon), stationLat, stationLon)),
-      railSource: station.stationSource || 'sncf-liste-des-gares'
+      railSource: station.stationSource || 'sncf-gares-de-voyageurs'
     };
   }
 
@@ -1058,10 +1408,10 @@ async function fetchCommunesByDepartments() {
 }
 
 async function fetchSncfRailwayStations() {
-  const fields = 'libelle,commune,voyageurs,fret,code_uic,x_wgs84,y_wgs84';
+  const fields = 'id_gare,nom,trigramme,segment_drg,position_geographique,code_commune,code_uic';
   const firstUrl = `${SNCF_STATION_API_URL}?select=${encodeURIComponent(fields)}&limit=${SNCF_STATION_PAGE_SIZE}&offset=0`;
   const first = await fetchJsonWithTimeout(firstUrl, 45000);
-  const total = Math.max(0, Number(first.total_count || 0));
+  const total = Math.max(0, Number(first.total_count || first.nhits || 0));
   const pages = [first];
   const offsets = [];
   for (let offset = SNCF_STATION_PAGE_SIZE; offset < total; offset += SNCF_STATION_PAGE_SIZE) offsets.push(offset);
@@ -1080,36 +1430,59 @@ async function fetchSncfRailwayStations() {
   }
 
   return pages
-    .flatMap(page => Array.isArray(page.results) ? page.results : [])
+    .flatMap(page => Array.isArray(page.results) ? page.results : Array.isArray(page.records) ? page.records.map(r => r.fields || r) : [])
     .map(normalizeSncfRailwayStation)
     .filter(Boolean);
 }
 
+function geoPointFromSncfRecord(raw) {
+  const point = raw.position_geographique || raw.geo_point_2d || raw.c_geo || raw.coordonnees_geographiques;
+  if (Array.isArray(point) && point.length >= 2) return { lat: Number(point[0]), lon: Number(point[1]) };
+  if (point && typeof point === 'object') {
+    const lat = Number(point.lat ?? point.latitude ?? point.y);
+    const lon = Number(point.lon ?? point.lng ?? point.longitude ?? point.x);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+  }
+  const lat = Number(raw.latitude ?? raw.lat ?? raw.y_wgs84);
+  const lon = Number(raw.longitude ?? raw.lon ?? raw.x_wgs84);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
 function normalizeSncfRailwayStation(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const lon = Number(raw.x_wgs84 ?? raw.c_geo?.lon ?? raw.geo_point_2d?.lon);
-  const lat = Number(raw.y_wgs84 ?? raw.c_geo?.lat ?? raw.geo_point_2d?.lat);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !isInFranceBounds(lat, lon)) return null;
-  const communeKey = normalizeSearch(raw.commune || '');
-  const label = cleanText(raw.libelle || raw.commune || 'Gare', 64);
-  if (!communeKey || !label) return null;
+  const point = geoPointFromSncfRecord(raw);
+  if (!point || !isInFranceBounds(point.lat, point.lon)) return null;
+  const label = cleanText(raw.nom || raw.nom_gare || raw.libelle || raw.commune || 'Gare', 80);
+  const codeCommune = String(raw.code_commune || raw.code_insee || '').trim();
+  const communeKey = normalizeSearch(raw.commune || label || '');
+  const codeUic = Array.isArray(raw.code_uic) ? raw.code_uic.join(',') : String(raw.code_uic || '');
+  if (!label || (!codeCommune && !communeKey)) return null;
   return {
     communeKey,
+    codeCommune,
     label,
-    lat,
-    lon,
-    voyageurs: String(raw.voyageurs || '').toUpperCase() === 'O',
-    fret: String(raw.fret || '').toUpperCase() === 'O',
-    codeUic: String(raw.code_uic || '').slice(0, 16)
+    lat: point.lat,
+    lon: point.lon,
+    voyageurs: true,
+    fret: false,
+    trigramme: String(raw.trigramme || '').slice(0, 12),
+    segmentDrg: Array.isArray(raw.segment_drg) ? raw.segment_drg.join(', ') : String(raw.segment_drg || ''),
+    codeUic: codeUic.slice(0, 64),
+    idGare: String(raw.id_gare || '').slice(0, 40)
   };
 }
 
 function buildSncfStationIndex(stations) {
-  const index = new Map();
+  const index = { byCommuneCode: new Map(), byName: new Map() };
   for (const station of stations || []) {
-    if (!station?.communeKey) continue;
-    if (!index.has(station.communeKey)) index.set(station.communeKey, []);
-    index.get(station.communeKey).push(station);
+    if (station?.codeCommune) {
+      if (!index.byCommuneCode.has(station.codeCommune)) index.byCommuneCode.set(station.codeCommune, []);
+      index.byCommuneCode.get(station.codeCommune).push(station);
+    }
+    if (station?.communeKey) {
+      if (!index.byName.has(station.communeKey)) index.byName.set(station.communeKey, []);
+      index.byName.get(station.communeKey).push(station);
+    }
   }
   return index;
 }
@@ -1118,8 +1491,12 @@ function enrichCommunesWithSncfStations(byId, sncfStations) {
   const index = buildSncfStationIndex(sncfStations);
   let matched = 0;
   for (const station of Object.values(byId || {})) {
+    const communeCode = String(station.code || station.communeCode || '').trim();
     const communeKey = normalizeSearch(station.name || '');
-    const candidates = index.get(communeKey) || [];
+    const candidates = [
+      ...(communeCode ? index.byCommuneCode.get(communeCode) || [] : []),
+      ...(communeKey ? index.byName.get(communeKey) || [] : [])
+    ].filter((item, idx, arr) => arr.indexOf(item) === idx);
     if (!candidates.length) continue;
     const communeLat = Number(station.lat);
     const communeLon = Number(station.lon);
@@ -1127,12 +1504,13 @@ function enrichCommunesWithSncfStations(byId, sncfStations) {
       .map(candidate => ({
         candidate,
         distanceKm: haversine(communeLat, communeLon, candidate.lat, candidate.lon),
-        exactLabel: normalizeSearch(candidate.label) === communeKey
+        exactLabel: normalizeSearch(candidate.label) === communeKey,
+        exactCode: communeCode && candidate.codeCommune === communeCode
       }))
-      .filter(item => Number.isFinite(item.distanceKm) && item.distanceKm <= 30)
+      .filter(item => Number.isFinite(item.distanceKm) && item.distanceKm <= 45)
       .sort((a, b) => {
-        const scoreA = (a.exactLabel ? 1000 : 0) + (a.candidate.voyageurs ? 100 : 0) + (a.candidate.fret ? 20 : 0) - a.distanceKm;
-        const scoreB = (b.exactLabel ? 1000 : 0) + (b.candidate.voyageurs ? 100 : 0) + (b.candidate.fret ? 20 : 0) - b.distanceKm;
+        const scoreA = (a.exactCode ? 2000 : 0) + (a.exactLabel ? 500 : 0) - a.distanceKm;
+        const scoreB = (b.exactCode ? 2000 : 0) + (b.exactLabel ? 500 : 0) - b.distanceKm;
         return scoreB - scoreA;
       });
     const best = ranked[0]?.candidate;
@@ -1141,12 +1519,12 @@ function enrichCommunesWithSncfStations(byId, sncfStations) {
     station.stationLon = roundCoord(best.lon);
     station.stationName = best.label;
     station.stationUic = best.codeUic;
-    station.stationSource = 'sncf-liste-des-gares';
-    station.hasPassengerStation = best.voyageurs;
-    station.hasFreightStation = best.fret;
+    station.stationTrigramme = best.trigramme;
+    station.stationSource = 'sncf-gares-de-voyageurs';
+    station.hasPassengerStation = true;
     matched += 1;
   }
-  return { matched, totalStations: sncfStations.length };
+  return { matched, totalStations: sncfStations.length, source: 'gares-de-voyageurs' };
 }
 
 function applyCriticalCommuneFallbacks(byId) {
@@ -1215,7 +1593,7 @@ async function refreshCommuneCache(force = false) {
     fs.writeFileSync(COMMUNE_CACHE_FILE, JSON.stringify({
       updatedAt: communeCache.updatedAt,
       minPopulation: MIN_COMMUNE_POPULATION,
-      source: 'geo.api.gouv.fr communes + fallback departements + SNCF liste-des-gares',
+      source: 'geo.api.gouv.fr communes + fallback departements + SNCF gares-de-voyageurs',
       sncfStats,
       stations: Object.values(byId)
     }, null, 2));
@@ -1302,7 +1680,7 @@ function normalizeCommuneStation(station) {
     normalized.stationLon = stationLon;
     normalized.stationName = cleanText(station.stationName || station.name || 'Gare', 64);
     normalized.stationUic = String(station.stationUic || '').slice(0, 16);
-    normalized.stationSource = station.stationSource || 'sncf-liste-des-gares';
+    normalized.stationSource = station.stationSource || 'sncf-gares-de-voyageurs';
     normalized.hasPassengerStation = Boolean(station.hasPassengerStation);
     normalized.hasFreightStation = Boolean(station.hasFreightStation);
   }
@@ -1374,7 +1752,7 @@ function publicState(playerId, authUser = null) {
   return {
     ok: true,
     serverTime: Date.now(),
-    auth: authUser ? { username: authUser.username, playerId: authUser.playerId } : null,
+    auth: authUser ? { username: authUser.username, playerId: authUser.playerId, isAdmin: isAdminUser(authUser) } : null,
     world: publicWorld(),
     balance: BALANCE.public,
     game: {
@@ -1387,7 +1765,8 @@ function publicState(playerId, authUser = null) {
       playerCount: Object.keys(state.players).length
     },
     players,
-    me
+    me,
+    admin: isAdminUser(authUser) ? buildAdminDashboard() : null
   };
 }
 
@@ -4153,6 +4532,8 @@ function routeAdjacencyFor(a, b) {
   const adjacency = {};
   for (const [id, list] of Object.entries(WORLD.railAdjacency || {})) adjacency[id] = [...list];
 
+  addLocalRouteShortcut(adjacency, a, b);
+
   for (const id of [a, b]) {
     if (!id || WORLD.stationIndex[id]) continue;
     const station = stationById(id);
@@ -4175,6 +4556,31 @@ function routeAdjacencyFor(a, b) {
     }
   }
   return adjacency;
+}
+
+
+function stationsShareProjectedRailSegment(a, b) {
+  const pa = stationRailPlacement(stationById(a));
+  const pb = stationRailPlacement(stationById(b));
+  if (!pa || !pb) return false;
+  if (pa.railSegment && pb.railSegment && pa.railSegment === pb.railSegment) return true;
+  if (pa.stationUic && pb.stationUic && pa.stationUic === pb.stationUic) return true;
+  return false;
+}
+
+function addLocalRouteShortcut(adjacency, a, b) {
+  if (!a || !b || a === b) return;
+  const sa = stationById(a);
+  const sb = stationById(b);
+  if (!sa || !sb) return;
+  const direct = edgeDistance(a, b);
+  if (!Number.isFinite(direct) || direct <= 0) return;
+  const allowDirect = direct <= 45 || stationsShareProjectedRailSegment(a, b);
+  if (!allowDirect) return;
+  adjacency[a] ||= [];
+  adjacency[b] ||= [];
+  if (!adjacency[a].includes(b)) adjacency[a].push(b);
+  if (!adjacency[b].includes(a)) adjacency[b].push(a);
 }
 
 const _routeCache = new Map();
@@ -4282,6 +4688,12 @@ function routeBetween(a, b) {
     dist[b] = edgeDistance(a, b);
   }
 
+  const direct = edgeDistance(a, b);
+  if (direct > 0 && Number.isFinite(dist[b]) && dist[b] > Math.max(35, direct * 2.35) && direct <= 85) {
+    ids = [a, b];
+    dist[b] = direct;
+  }
+
   let maxSegment = 0;
   for (let i = 1; i < ids.length; i++) {
     maxSegment = Math.max(maxSegment, edgeDistance(ids[i - 1], ids[i]));
@@ -4330,6 +4742,10 @@ function validateColor(value) {
 
 function cleanText(value, max) {
   return String(value).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) || 'Compagnie';
+}
+
+function cleanOptionalText(value, max) {
+  return String(value || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 function clamp(value, min, max) {
