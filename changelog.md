@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v60.51.0 — usure progressive, immobilisation et rééquilibrage économique
+
+- incrément de version de cette passe : badge interface `v60.51.0`, package `0.4.44` et schéma d’état serveur `56` ;
+- refonte du rythme d’usure des trains : un matériel en service passe désormais de 100 % à 0 % sur une base de 12 à 36 heures selon sa génération, avec modulation par l’intensité de service, la politique de maintenance, les mainteneurs et les recherches ;
+- l’état du train influe maintenant directement sur sa vitesse effective et sa fiabilité : plus l’état baisse, plus la vitesse, la ponctualité et l’attractivité se dégradent ;
+- à 0 %, le train est immobilisé : la ligne associée ne transporte plus de voyageurs ou de fret, ne génère plus de recettes et n’affiche plus de train animé sur la carte ;
+- l’onglet `Parc > Maintenance` affiche désormais l’état du train au niveau de la barre d’état, avec le temps estimé avant immobilisation à 0 % ;
+- suppression de l’ancien affichage de l’état en haut à droite de la carte de train, remplacé par un statut de disponibilité plus clair ;
+- rééquilibrage économique de début de jeu : recettes voyageurs plus contenues, coûts de maintenance et d’infrastructure plus structurants, objectif d’une première ligne autour d’environ 1 M€/h de recettes et quelques centaines de milliers d’euros/h de marge nette en exploitation correcte ;
+- sauvegarde de départ ajustée : train initial remis à 100 %, effectif initial aligné sur les besoins de la ligne Caen → Bayeux et stock de charbon conservé à 100 unités.
+
 ## Version v60.50.2 — correction inscription mobile
 
 - Incrément de version de cette passe : badge interface `v60.50.2`, package `0.4.43` et schéma d’état serveur `55` ;

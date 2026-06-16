@@ -1,5 +1,5 @@
 {
-  "version": 54,
+  "version": 56,
   "createdAt": 1781511648911,
   "now": 1781598190868,
   "day": 421,
@@ -274,16 +274,16 @@
       "co2": 10503.052560000058,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 99.95142333333327,
+        "coal": 100,
         "diesel": 0,
         "electricityOrder": 0
       },
       "staff": {
-        "drivers": 4,
+        "drivers": 1,
         "controllers": 1,
-        "stationAgents": 2,
+        "stationAgents": 1,
         "mechanics": 1,
-        "dispatchers": 0,
+        "dispatchers": 1,
         "engineers": 0
       },
       "trains": [
@@ -291,8 +291,8 @@
           "id": "starter-steam-030-mixte",
           "modelId": "steam_030_mixte",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.7642324799999805,
-          "age": 429,
+          "condition": 1,
+          "age": 0,
           "acquiredDay": 1,
           "composition": {
             "mode": "passenger_loco",
@@ -311,7 +311,7 @@
             "targetCondition": 0,
             "startedDay": null,
             "cost": 0,
-            "lastServiceDay": 1
+            "lastServiceDay": null
           }
         }
       ],
@@ -333,105 +333,6 @@
           "active": true,
           "electrified": false,
           "createdDay": 1,
-          "stats": {
-            "passengers": 122,
-            "freightTons": 0,
-            "revenue": 413,
-            "expenses": 514,
-            "profit": -101,
-            "punctuality": 35,
-            "satisfaction": 44.2,
-            "share": 100,
-            "status": "ok",
-            "staffing": {
-              "needs": {
-                "drivers": 1,
-                "controllers": 1,
-                "stationAgents": 1,
-                "mechanics": 1,
-                "dispatchers": 1,
-                "engineers": 0
-              },
-              "driverCoverage": 100,
-              "allocatedDrivers": 1,
-              "requiredDrivers": 1,
-              "effectiveFrequency": 2,
-              "requestedFrequency": 2
-            },
-            "market": {
-              "passengerDemand": 368,
-              "freightDemand": 199,
-              "passengerShare": 100,
-              "freightShare": null,
-              "passengerRank": 1,
-              "freightRank": null,
-              "passengerCompetitors": 0,
-              "freightCompetitors": 0,
-              "passengerLeader": {
-                "companyName": "Compagnie des Sillons",
-                "lineCode": "Caen → Bayeux",
-                "score": 0.41
-              },
-              "freightLeader": null,
-              "passengerScore": 0.41,
-              "freightScore": null,
-              "passengerDemandCapture": 31.59,
-              "freightDemandCapture": null
-            },
-            "attractiveness": {
-              "passenger": {
-                "market": "passengers",
-                "score": 0.41,
-                "factors": {
-                  "price": 78.57,
-                  "frequency": 40.82,
-                  "speed": 31.11,
-                  "comfortOrCapacity": 62.25,
-                  "reputation": 33.33,
-                  "condition": 82.57,
-                  "staff": 40,
-                  "stations": 85,
-                  "operations": 100
-                }
-              },
-              "freight": null
-            },
-            "capacity": {
-              "passengers": 143,
-              "freightTons": 73,
-              "passengerLoad": 85.27,
-              "freightLoad": 0,
-              "crewFactor": 40,
-              "stationFactor": 85,
-              "capacityFactor": 34,
-              "driverCoverage": 100,
-              "effectiveFrequency": 2,
-              "requestedFrequency": 2,
-              "trainComposition": "3 voiture(s) · Standard"
-            },
-            "finance": {
-              "ticketPrice": 3,
-              "farePerKm": 0.12,
-              "ticketRevenue": 434,
-              "ancillaryRevenue": 43,
-              "freightRevenue": 0,
-              "dispatchRevenueBoost": 0,
-              "lineInfrastructureCost": 3,
-              "energyCost": 0,
-              "resourceType": "coal",
-              "resourceConsumptionPerHour": 5.83,
-              "maintenanceCost": 24,
-              "accessCost": 0,
-              "passageRights": 0,
-              "variableExpenses": 27,
-              "contribution": 386,
-              "allocatedOverhead": 487,
-              "netProfit": -101,
-              "margin": 93.49,
-              "totalExpenses": 514,
-              "netMargin": -24.39
-            }
-          },
           "name": "Caen → Bayeux"
         }
       ],
@@ -457,9 +358,9 @@
         "revenue": 225483,
         "expenses": 201805,
         "profit": 23553,
-        "lastRevenue": 471,
-        "lastExpenses": 514,
-        "lastProfit": -42,
+        "lastRevenue": 0,
+        "lastExpenses": 0,
+        "lastProfit": 0,
         "punctuality": 35,
         "satisfaction": 44.2,
         "marketShare": 1,

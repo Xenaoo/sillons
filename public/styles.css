@@ -5750,3 +5750,33 @@ dialog.modal--wide {
     padding: 14px;
   }
 }
+
+/* ===== v60.51.0 — état maintenance affiché sur la barre ===== */
+.train-condition-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin: 8px 0 5px;
+  font-size: 12px;
+}
+
+.train-condition-head span {
+  color: #b8aa84;
+}
+
+.train-condition-head b {
+  font-size: 12px;
+}
+
+.train-condition-bar.good > i {
+  background: linear-gradient(90deg, #d9a852, #6ac58f);
+}
+
+.train-condition-bar.warn > i {
+  background: linear-gradient(90deg, #d9a852, #e0b34f);
+}
+
+.train-condition-bar.bad > i {
+  background: linear-gradient(90deg, #7f1d1d, #e97b72);
+}

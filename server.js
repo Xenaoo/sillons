@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v60.50.2';
-const STATE_SCHEMA_VERSION = 55;
+const PROJECT_VERSION = 'v60.51.0';
+const STATE_SCHEMA_VERSION = 56;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -42,11 +42,11 @@ const COMPANY_LOGOS = ["steam_front", "winged_wheel", "semaphore", "royal_track"
 const ECONOMY = Object.freeze({
   passengerDemandMultiplier: 2.85,
   freightDemandMultiplier: 1.8,
-  passengerRevenueMultiplier: 1.12,
-  freightRevenueMultiplier: 1.22,
+  passengerRevenueMultiplier: 0.86,
+  freightRevenueMultiplier: 1.0,
   energyCostMultiplier: 0.42,
-  maintenanceCostMultiplier: 0.48,
-  lineInfrastructureMaintenancePerKm: 0.12,
+  maintenanceCostMultiplier: 0.75,
+  lineInfrastructureMaintenancePerKm: 4.2,
   staffCostDivisor: 82,
   debtInterestPerTick: 0.00012,
   stationLevelCost: 58,
@@ -2168,11 +2168,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     if (!line.active) continue;
     const train = player.trains.find(t => t.id === line.trainId);
     if (!train) continue;
-    if (train.maintenance?.active) {
-      line.stats = { passengers: 0, freightTons: 0, revenue: 0, expenses: 0, profit: 0, punctuality: 0, satisfaction: 20, share: 0, status: 'maintenance' };
-      continue;
-    }
     const model = BALANCE.trains[train.modelId];
+    if (!model) continue;
     const operatingModel = getTrainOperatingProfile(train, model, player);
     const stops = lineStops(line);
     const from = stationById(stops[0]);
@@ -2191,6 +2188,53 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       effectiveFrequency: round2(effectiveFrequency),
       requestedFrequency: Number(line.frequency || 0)
     };
+    if (train.maintenance?.active || trainConditionValue(train) <= 0) {
+      const stoppedForCondition = trainConditionValue(train) <= 0;
+      line.stats = {
+        passengers: 0,
+        freightTons: 0,
+        revenue: 0,
+        expenses: 0,
+        profit: 0,
+        punctuality: 0,
+        satisfaction: stoppedForCondition ? 4 : 20,
+        share: 0,
+        status: stoppedForCondition ? 'train-out-of-service' : 'maintenance',
+        staffing: lineStaffingStats,
+        capacity: {
+          passengers: 0,
+          freightTons: 0,
+          passengerLoad: null,
+          freightLoad: null,
+          crewFactor: 0,
+          stationFactor: round2(lineStationFactor(player, line) * 100),
+          capacityFactor: 0,
+          driverCoverage: round2(lineDriverCoverage * 100),
+          effectiveFrequency: 0,
+          requestedFrequency: Number(line.frequency || 0),
+          trainComposition: operatingModel.compositionSummary
+        },
+        finance: {
+          ticketPrice: Math.round(lineTicketPrice(line, distance)),
+          farePerKm: round2(lineTicketPrice(line, distance) / Math.max(1, distance)),
+          ticketRevenue: 0,
+          ancillaryRevenue: 0,
+          freightRevenue: 0,
+          dispatchRevenueBoost: 0,
+          lineInfrastructureCost: 0,
+          energyCost: 0,
+          maintenanceCost: 0,
+          accessCost: 0,
+          passageRights: 0,
+          variableExpenses: 0,
+          contribution: 0,
+          allocatedOverhead: 0,
+          netProfit: 0,
+          margin: 0
+        }
+      };
+      continue;
+    }
     if (lineDriverCoverage <= 0) {
       line.stats = {
         passengers: 0,
@@ -2314,11 +2358,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     revenue += lineRevenue;
     expenses += variableExpenses;
 
-    const wearBase = (distance * effectiveFrequency / 120000) * (1.15 - Math.min(0.35, maintenanceCapacity / 20));
-    const mechanicWearFactor = clamp(1.16 - staffing.mechanics * 0.16, 0.74, 1.14);
-    const techWear = (1 - Math.min(0.14, techLevel(player, 'electric_standardized_maintenance') * 0.025)) * (1 - Math.min(0.1, techLevel(player, 'steam_workshops') * 0.018));
-    const wear = wearBase * mechanicWearFactor * policy.wearMultiplier * techWear;
-    const projectedCondition = clamp(train.condition - wear, 0.12, 1);
+    const wear = computeTrainWearPerTick(player, train, model, effectiveLine, operatingModel, staffing, policy);
+    const projectedCondition = clamp(train.condition - wear, 0, 1);
     if (!dryRun) {
       train.condition = projectedCondition;
       train.age += 1;
@@ -2716,7 +2757,7 @@ function computePlayerResourceFlow(player) {
   for (const line of player.lines || []) {
     if (!line.active) continue;
     const train = player.trains.find(t => t.id === line.trainId);
-    if (!train || train.maintenance?.active) continue;
+    if (!train || train.maintenance?.active || trainConditionValue(train) <= 0) continue;
     const model = BALANCE.trains[train.modelId];
     if (!model) continue;
     const operatingModel = getTrainOperatingProfile(train, model, player);
@@ -2827,6 +2868,54 @@ function researchOperatingCost(player) {
 function computeCo2(model, distance, frequency) {
   const factor = { coal: 4.2, diesel: 2.7, electricity: 0.45, hydrogen: 0.2, battery: 0.15 }[model.energyType] || 1;
   return model.energy * distance * frequency * factor * (model.co2Multiplier || 1) / 100;
+}
+
+function trainBaseWearLifetimeHours(model) {
+  const generation = clamp(Math.floor(Number(model?.unlockEpoch || 0)), 0, 6);
+  return clamp(12 + generation * 4, 12, 36);
+}
+
+function trainConditionValue(train) {
+  return clamp(Number(train?.condition ?? 1), 0, 1);
+}
+
+function trainConditionPerformanceFactor(train) {
+  const condition = trainConditionValue(train);
+  if (condition <= 0) return 0;
+  return clamp(0.35 + condition * 0.65, 0.35, 1);
+}
+
+function computeTrainWearPerTick(player, train, model, line, profile = null, staffing = null, policy = null) {
+  if (!train || !model || !line?.active || train.maintenance?.active || trainConditionValue(train) <= 0) return 0;
+  const activeProfile = profile || getTrainOperatingProfile(train, model, player);
+  const activeStaffing = staffing || computeStaffing(player);
+  const activePolicy = policy || BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
+  const baseHours = trainBaseWearLifetimeHours(model);
+  const frequencyFactor = clamp(Number(line.frequency || 0) / 2, 0.75, 1.35);
+  const distanceFactor = clamp(lineDistance(line) / 26, 0.8, 1.35);
+  const maintenanceLoad = clamp(Number(activeProfile.maintenance || model.maintenance || 0.5) / Math.max(0.25, Number(model.maintenance || 0.5)), 0.85, 1.22);
+  const mechanicFactor = clamp(1.1 - Number(activeStaffing.mechanics || 0) * 0.1, 0.82, 1.12);
+  const techWear = (1 - Math.min(0.12, techLevel(player, 'electric_standardized_maintenance') * 0.02)) * (1 - Math.min(0.08, techLevel(player, 'steam_workshops') * 0.014));
+  const intensity = frequencyFactor * distanceFactor * maintenanceLoad * mechanicFactor * (activePolicy.wearMultiplier || 1) * techWear;
+  const effectiveHours = clamp(baseHours / Math.max(0.1, intensity), 12, 36);
+  return (TICK_MS / 3600000) / effectiveHours;
+}
+
+function trainMaintenanceProjection(player, train, model, profile = null) {
+  const line = player?.lines?.find(l => l.active && l.trainId === train?.id);
+  const baseHours = trainBaseWearLifetimeHours(model);
+  if (!line) return { active: false, baseHours, hoursToZero: null, label: 'Non affecté' };
+  if (train?.maintenance?.active) return { active: false, baseHours, hoursToZero: null, label: 'En atelier' };
+  if (trainConditionValue(train) <= 0) return { active: false, baseHours, hoursToZero: 0, label: 'Immobilisé' };
+  const wearPerTick = computeTrainWearPerTick(player, train, model, line, profile);
+  if (wearPerTick <= 0) return { active: false, baseHours, hoursToZero: null, label: 'Aucune usure' };
+  return {
+    active: true,
+    baseHours,
+    hoursToZero: round2(trainConditionValue(train) / wearPerTick / ticksPerRealHour()),
+    wearPerHour: round2(wearPerTick * ticksPerRealHour() * 100),
+    label: 'En service'
+  };
 }
 
 
@@ -3158,6 +3247,21 @@ function modelWithEraResearch(player, model) {
   };
 }
 
+function applyTrainConditionToProfile(profile, train) {
+  const factor = trainConditionPerformanceFactor(train);
+  if (factor <= 0) {
+    profile.speed = 0;
+    profile.reliability = 0;
+    profile.conditionSpeedFactor = 0;
+    return profile;
+  }
+  profile.nominalSpeed = profile.speed;
+  profile.speed = Math.max(5, Math.round(profile.speed * factor));
+  profile.reliability = clamp(profile.reliability * (0.25 + factor * 0.75), 0.05, 0.995);
+  profile.conditionSpeedFactor = round2(factor);
+  return profile;
+}
+
 function getTrainOperatingProfile(train, model, player = null) {
   const sourceModel = modelWithEraResearch(player, model);
   const composition = ensureTrainComposition(train, sourceModel);
@@ -3175,7 +3279,7 @@ function getTrainOperatingProfile(train, model, player = null) {
     profile.comfort = clamp(sourceModel.comfort - Math.max(0, ratio - 1) * 0.01, 0.08, 1);
     profile.variant = null;
     profile.compositionSummary = `${composition.powerUnits} engin(s) moteur(s)`;
-    return profile;
+    return applyTrainConditionToProfile(profile, train);
   }
   if (spec.mode === 'passenger_loco') {
     const variant = compositionVariantForMode('passenger_loco', composition.passengerVariant);
@@ -3196,7 +3300,7 @@ function getTrainOperatingProfile(train, model, player = null) {
     profile.comfort = clamp(profile.comfort + variant.comfortDelta, 0.08, 1);
     profile.variant = { id: variant.id, name: variant.name, shortLabel: variant.shortLabel, asset: variant.asset };
     profile.compositionSummary = `${composition.passengerCars} voiture(s) · ${variant.shortLabel}`;
-    return profile;
+    return applyTrainConditionToProfile(profile, train);
   }
   const variant = compositionVariantForMode('freight_loco', composition.freightVariant);
   const defaultWagons = spec.freightCars.default;
@@ -3216,7 +3320,7 @@ function getTrainOperatingProfile(train, model, player = null) {
   profile.freightRevenueMultiplier = variant.revenueMultiplier || 1;
   profile.variant = { id: variant.id, name: variant.name, shortLabel: variant.shortLabel, cargoType: variant.cargoType || null, asset: variant.asset };
   profile.compositionSummary = `${composition.freightCars} wagon(s) · ${variant.shortLabel}`;
-  return profile;
+  return applyTrainConditionToProfile(profile, train);
 }
 
 function publicTrain(train, player = null) {
@@ -3239,8 +3343,11 @@ function publicTrain(train, player = null) {
       reliability: profile.reliability,
       comfort: profile.comfort,
       variant: profile.variant || null,
-      freightRevenueMultiplier: profile.freightRevenueMultiplier || 1
-    }
+      freightRevenueMultiplier: profile.freightRevenueMultiplier || 1,
+      conditionSpeedFactor: profile.conditionSpeedFactor ?? 1,
+      nominalSpeed: profile.nominalSpeed || profile.speed
+    },
+    maintenanceProjection: trainMaintenanceProjection(player, train, model, profile)
   };
 }
 
@@ -3263,7 +3370,7 @@ function normalizeTrain(raw, ownerId) {
   if (!raw || typeof raw !== 'object') return null;
   raw.id = raw.id || crypto.randomUUID();
   raw.ownerId = raw.ownerId || ownerId;
-  raw.condition = clamp(Number(raw.condition ?? 0.9), 0.05, 1);
+  raw.condition = clamp(Number(raw.condition ?? 0.9), 0, 1);
   raw.age = Math.max(0, Math.floor(Number(raw.age || 0)));
   raw.acquiredDay = raw.acquiredDay || state.day || 1;
   const m = raw.maintenance && typeof raw.maintenance === 'object' ? raw.maintenance : {};

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v60.50.2';
+const PROJECT_VERSION = 'v60.51.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -2131,7 +2131,9 @@ function renderLineItem(line) {
       ? { cls: 'bad', label: 'Ressource insuffisante' }
       : line.stats?.status === 'maintenance'
         ? { cls: 'warn', label: 'Maintenance' }
-        : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
+        : line.stats?.status === 'train-out-of-service'
+          ? { cls: 'bad', label: 'Train immobilisé' }
+          : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
   const shortStops = stops.length > 4
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);
@@ -2292,6 +2294,44 @@ function selectedCompositionVariant(train, model = app.state.balance.trains[trai
   return variants.find(v => v.id === selectedId) || variants[0] || null;
 }
 
+function trainConditionPerformanceFactorClient(train) {
+  const condition = clamp(Number(train?.condition ?? 1), 0, 1);
+  if (condition <= 0) return 0;
+  return clamp(0.35 + condition * 0.65, 0.35, 1);
+}
+
+function applyTrainConditionToPreview(profile, train) {
+  const factor = trainConditionPerformanceFactorClient(train);
+  if (factor <= 0) {
+    profile.nominalSpeed = profile.speed;
+    profile.speed = 0;
+    profile.reliability = 0;
+    profile.conditionSpeedFactor = 0;
+    return profile;
+  }
+  profile.nominalSpeed = profile.speed;
+  profile.speed = Math.max(5, Math.round(profile.speed * factor));
+  profile.reliability = clamp(profile.reliability * (0.25 + factor * 0.75), 0.05, 0.995);
+  profile.conditionSpeedFactor = round(factor);
+  return profile;
+}
+
+function formatMaintenanceCountdown(hours) {
+  if (hours == null || !Number.isFinite(Number(hours))) return '—';
+  const h = Math.max(0, Number(hours));
+  if (h <= 0) return 'Maintenance requise';
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} min`;
+  if (h < 48) return `${round(h)} h`;
+  return `${round(h / 24)} j`;
+}
+
+function trainProjectionLabel(train) {
+  const projection = train?.maintenanceProjection || {};
+  if (train?.maintenance?.active) return 'En atelier';
+  if (Number(train?.condition || 0) <= 0) return 'Maintenance requise';
+  return `0% dans ${formatMaintenanceCountdown(projection.hoursToZero)}`;
+}
+
 function previewOperatingProfile(train, model = app.state.balance.trains[train.modelId]) {
   const spec = trainCompositionSpec(train, model);
   const c = train?.composition || {};
@@ -2314,7 +2354,7 @@ function previewOperatingProfile(train, model = app.state.balance.trains[train.m
     profile.maintenance = round(profile.maintenance * ratio * (0.92 + ratio * 0.08));
     profile.reliability = clamp(profile.reliability - Math.max(0, ratio - 1) * 0.015, 0.45, 0.995);
     profile.comfort = clamp(profile.comfort - Math.max(0, ratio - 1) * 0.01, 0.08, 1);
-    return profile;
+    return applyTrainConditionToPreview(profile, train);
   }
   if (spec.mode === 'passenger_loco') {
     const variant = selectedCompositionVariant(train, model) || { stats: {}, capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0 };
@@ -2334,7 +2374,7 @@ function previewOperatingProfile(train, model = app.state.balance.trains[train.m
     profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
     profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
     profile.comfort = clamp(profile.comfort + (stats.comfortDelta || 0), 0.08, 1);
-    return profile;
+    return applyTrainConditionToPreview(profile, train);
   }
   const variant = selectedCompositionVariant(train, model) || { stats: {} };
   const stats = variant.stats || variant;
@@ -2352,7 +2392,7 @@ function previewOperatingProfile(train, model = app.state.balance.trains[train.m
   profile.energy = round(profile.energy * (stats.energyMultiplier || 1));
   profile.maintenance = round(profile.maintenance * (stats.maintenanceMultiplier || 1));
   profile.reliability = clamp(profile.reliability + (stats.reliabilityDelta || 0), 0.45, 0.995);
-  return profile;
+  return applyTrainConditionToPreview(profile, train);
 }
 
 function deriveCompositionSummary(train) {
@@ -2830,7 +2870,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
         <div class="fleet-card-heading">
           <div>
             <h2>Parc de la compagnie</h2>
-            <p class="muted small">Lance les interventions depuis les cartes de matériel. Un train en maintenance est immobilisé pendant la durée indiquée.</p>
+            <p class="muted small">Lance les interventions depuis les cartes de matériel. Un train usé perd en vitesse et en ponctualité. À 0 %, il est immobilisé et sa ligne ne produit plus rien.</p>
           </div>
           <span class="tag">${me.trains.length} unité(s)</span>
         </div>
@@ -3100,10 +3140,14 @@ function renderOwnedTrain(train) {
       <div class="owned-train-body">
         <div class="item-title">
           <strong>${escapeHtml(model.name)}</strong>
-          <span class="tag ${inMaint ? 'warn' : conditionClass}">${inMaint ? `Atelier ${formatCycles(maint.daysLeft)}` : `État ${condition}%`}</span>
+          <span class="tag ${inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : ''}">${inMaint ? 'En atelier' : condition <= 0 ? 'Immobilisé' : line ? 'En service' : 'Libre'}</span>
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
-        <div class="progress"><i style="width:${condition}%"></i></div>
+        <div class="train-condition-head">
+          <span>État ${condition}%</span>
+          <b class="${conditionClass}-text">${escapeHtml(trainProjectionLabel(train))}</b>
+        </div>
+        <div class="progress train-condition-bar ${conditionClass}"><i style="width:${condition}%"></i></div>
         <div class="kv" style="margin-top:8px">
           <span>Affectation</span><b>${line ? escapeHtml(linePublicName(line)) : 'Libre'}</b>
           <span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b>
@@ -3140,7 +3184,7 @@ function renderMaintenanceButton(train, model, action) {
   const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
   const disabled = locked || targetCondition <= train.condition + 0.005;
   return `
-    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : Immobilise le train pendant l’intervention, puis remonte son état et réduit les risques de retard/panne.`)} ${disabled ? 'disabled' : ''}>
+    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : Immobilise le train pendant l’intervention, puis remonte son état, sa vitesse effective et sa ponctualité.`)} ${disabled ? 'disabled' : ''}>
       <strong>${escapeHtml(action.name)}</strong>
       <span>${preview}</span>
       ${locked ? `<em>${escapeHtml(locked)}</em>` : ''}
@@ -5021,8 +5065,8 @@ function drawAllLines(ctx, lite = false) {
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
       if (lite) continue;
       const train = (player.trains || []).find(t => t.id === line.trainId);
-      if (!train || train.maintenance?.active) continue;
-      if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage') continue;
+      if (!train || train.maintenance?.active || Number(train.condition || 0) <= 0) continue;
+      if (line.stats?.status === 'resource-shortage' || line.stats?.status === 'driver-shortage' || line.stats?.status === 'train-out-of-service') continue;
       const model = app.state.balance.trains[train.modelId];
       drawTrainSprite(ctx, route.points, player.color, visualLineWithEffectiveFrequency(line), model, own, train);
     }
