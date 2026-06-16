@@ -6463,3 +6463,105 @@ dialog.modal--wide {
   font-style: normal;
   font-size: 0.78rem;
 }
+
+/* ===== V62.14 : édition lignes, revente composition et actions critiques ===== */
+.composition-train-item {
+  overflow: hidden;
+}
+.composition-train-select {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.composition-train-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.composition-sell-train-btn {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+.composition-train-head .tag {
+  min-width: 0;
+  max-width: min(46%, 138px);
+}
+.line-editor-subtitle > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.line-editor-subtitle .tag {
+  flex: 0 0 auto;
+}
+.line-train-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  padding: 10px 12px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(217,168,82,.08), transparent 34%),
+    linear-gradient(180deg, rgba(8, 18, 36, 0.92), rgba(4, 10, 22, 0.88));
+}
+.line-train-choice:hover {
+  border-color: rgba(242, 202, 120, 0.48);
+  box-shadow: 0 10px 24px rgba(0,0,0,.22);
+}
+.line-train-choice.selected {
+  border-color: rgba(111, 225, 150, 0.78);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(111,225,150,.12), transparent 34%),
+    linear-gradient(180deg, rgba(9, 32, 30, 0.90), rgba(4, 14, 20, 0.90));
+  box-shadow: 0 0 0 1px rgba(111,225,150,.16) inset, 0 12px 28px rgba(0,0,0,.24);
+}
+.line-train-choice input {
+  accent-color: #6fe196;
+  margin: 0;
+}
+.line-train-choice-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #07131d;
+  font-weight: 900;
+  background: rgba(148, 163, 184, .16);
+  border: 1px solid rgba(148, 163, 184, .25);
+}
+.line-train-choice.selected .line-train-choice-check {
+  background: linear-gradient(180deg, #9bf2b3, #5fd68a);
+  border-color: rgba(111,225,150,.8);
+}
+.line-train-choice-main {
+  min-width: 0;
+}
+.line-train-choice-main b {
+  color: #f4e6bd;
+  font-size: 13px;
+}
+.line-train-choice-main em {
+  color: #b8aa84;
+  font-size: 11px;
+}
+.line-card-modern-actions .close-line-btn {
+  border-color: rgba(255, 67, 103, 0.88);
+  background: linear-gradient(180deg, rgba(172, 25, 55, 0.98), rgba(104, 12, 32, 0.98));
+  color: #ffe8ee;
+  box-shadow: 0 0 0 1px rgba(255, 67, 103, .22) inset, 0 10px 24px rgba(120, 15, 38, .34);
+  font-weight: 900;
+}
+.line-card-modern-actions .close-line-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 0 0 1px rgba(255, 100, 132, .40) inset, 0 14px 32px rgba(150, 20, 50, .45);
+}

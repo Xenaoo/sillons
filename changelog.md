@@ -1,5 +1,16 @@
 # Changelog
 
+## Version v62.14.0 — composition, fermeture de ligne et péages de niveau
+
+- incrément de version : badge interface `v62.14.0`, package `0.6.14` et schéma serveur `78` ;
+- correction des statistiques catalogue : les flèches vertes ne sont plus affichées quand aucune valeur modifiée n’est fournie ;
+- amélioration visuelle de la sélection multi-trains dans le menu de modification de ligne ;
+- recadrage des noms de ligne longs dans Parc → Composition pour éviter les débordements ;
+- ajout d’un bouton de vente des trains inutilisés directement dans Parc → Composition ;
+- ajout d’une confirmation avant fermeture d’une ligne ;
+- renforcement visuel du bouton `Fermer` sur les lignes ;
+- augmentation des péages de gare selon le niveau de gare : `+12,5%` par niveau au-dessus du niveau 1, en plus des bonus commerces, ateliers et dépôt.
+
 ## Version v62.13.0 — barres de bonus lisibles et recherches rééquilibrées
 
 - incrément de version : badge interface `v62.13.0`, package `0.6.13` et schéma serveur `77` ;

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.13.0';
+const PROJECT_VERSION = 'v62.14.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -2686,7 +2686,7 @@ function renderLineItem(line) {
         <button data-action="electrify-line" data-id="${line.id}" ${tooltipAttr(line.electrified ? 'Cette ligne est déjà électrifiée.' : lineElectrificationTooltip(line))} ${line.electrified || !canElectrify ? 'disabled' : ''}>
           ${line.electrified ? 'Électrifiée' : `Électrifier · ${money(electrifyCost)}`}
         </button>
-        <button class="danger" data-action="close-line" data-id="${line.id}" ${tooltipAttr('Ferme la ligne. Le train est libéré et la ligne ne génère plus de revenus.')} ${line.active ? '' : 'disabled'}>Fermer</button>
+        <button class="danger close-line-btn" data-action="close-line" data-id="${line.id}" ${tooltipAttr('Ferme la ligne. Le train est libéré et la ligne ne génère plus de revenus.')} ${line.active ? '' : 'disabled'}>Fermer</button>
       </div>
   `;
 
@@ -2732,21 +2732,21 @@ function trainStrengths(model) {
 }
 
 function formatTrainStatModifier(baseDisplay, modifiedDisplay) {
-  if (baseDisplay == null || modifiedDisplay == null) return '';
-  const base = String(baseDisplay);
-  const next = String(modifiedDisplay);
-  return base === next ? '' : `<small class="train-stat-modifier good-text">→ ${escapeHtml(next)}</small>`;
+  if (baseDisplay == null || modifiedDisplay == null || modifiedDisplay === '') return '';
+  const base = String(baseDisplay).trim();
+  const next = String(modifiedDisplay).trim();
+  return !next || base === next ? '' : `<small class="train-stat-modifier good-text">→ ${escapeHtml(next)}</small>`;
 }
 
 function renderTrainStat(label, value, ratio, cls = '', modifiedValue = '', modifiedRatio = null) {
   const pct = Math.max(4, Math.min(100, Math.round(ratio * 100)));
   const extraPct = modifiedRatio == null ? pct : Math.max(pct, Math.min(100, Math.round(modifiedRatio * 100)));
   const addPct = Math.max(0, extraPct - pct);
-  const hasModifier = modifiedValue && String(modifiedValue) !== String(value) && addPct > 0;
+  const hasModifier = modifiedValue !== '' && modifiedValue != null && String(modifiedValue) !== String(value) && addPct > 0;
   return `
     <div class="train-stat ${cls} ${hasModifier ? 'has-modifier' : ''}">
       <span>${escapeHtml(label)}</span>
-      <b>${escapeHtml(String(value))}${formatTrainStatModifier(value, modifiedValue)}</b>
+      <b>${escapeHtml(String(value))}${hasModifier ? formatTrainStatModifier(value, modifiedValue) : ''}</b>
       <i><em style="width:${pct}%"></em>${hasModifier ? `<strong style="left:${pct}%; width:${addPct}%"></strong>` : ''}</i>
     </div>`;
 }
@@ -2939,6 +2939,22 @@ function renderCompositionCostSummary(train) {
       <span>Valeur voitures/wagons actuelle : <b>${money(value)}</b></span>
       <span class="small muted">Tout ajout est facturé. Tout retrait est remboursé à 78% de sa valeur, corrigé par l’usure du train (${condition}%).</span>
     </div>`;
+}
+
+function trainResaleEstimateClient(train, model = app.state.balance.trains[train.modelId]) {
+  if (!train || !model) return 0;
+  const defaultMode = compositionDefaultModeForModelClient(model);
+  const defaultSpec = buildClientCompositionSpec(model, defaultMode);
+  const defaultComposition = defaultMode === 'multiple_unit'
+    ? { mode: defaultMode, powerUnits: defaultSpec.powerUnits.default }
+    : defaultMode === 'freight_loco'
+      ? { mode: defaultMode, freightCars: defaultSpec.freightCars.default, freightVariant: 'covered' }
+      : { mode: defaultMode, passengerCars: defaultSpec.passengerCars.default, passengerVariant: 'standard' };
+  const defaultCompositionValue = compositionAssetValueClient(model, defaultComposition, defaultMode);
+  const baseTractionValue = Math.max(Math.round(Number(model.price || 0) * 0.42), Math.round(Number(model.price || 0) - defaultCompositionValue));
+  const currentCompositionValue = compositionAssetValueClient(model, train.composition || defaultComposition, train.composition?.mode || defaultMode);
+  const capitalValue = Math.max(0, baseTractionValue + currentCompositionValue);
+  return Math.max(5000, Math.round(capitalValue * (0.45 - Math.min(0.3, Number(train.age || 0) / 1000)) * clamp(Number(train.condition || 0), 0, 1)));
 }
 
 function trainConditionPerformanceFactorClient(train) {
@@ -3240,19 +3256,28 @@ function renderCompositionTrainListItem(train) {
   const profile = previewOperatingProfile(train, model);
   const active = app.selectedCompositionTrainId === train.id;
   const line = trainCurrentLine(train.id);
+  const inMaint = !!train.maintenance?.active;
+  const canSell = !line && !inMaint;
+  const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
+  const sellEstimate = trainResaleEstimateClient(train, model);
   return `
-    <button type="button" class="composition-train-item ${active ? 'active' : ''}" data-action="select-composition-train" data-id="${train.id}">
-      <div class="composition-train-head">
-        <strong>${escapeHtml(model.name)}</strong>
-        <span class="tag">${line ? escapeHtml(linePublicName(line)) : 'Libre'}</span>
+    <article class="composition-train-item ${active ? 'active' : ''}">
+      <button type="button" class="composition-train-select" data-action="select-composition-train" data-id="${train.id}">
+        <div class="composition-train-head">
+          <strong>${escapeHtml(model.name)}</strong>
+          <span class="tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
+        </div>
+        <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
+        <div class="composition-mini-stats">
+          <b>${formatInt(profile.capacity)} voy.</b>
+          <b>${formatInt(profile.freight)} t</b>
+          <b>${formatInt(profile.range)} km</b>
+        </div>
+      </button>
+      <div class="composition-train-actions">
+        <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${train.id}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : 'Impossible : train en maintenance.')}>Vendre</button>
       </div>
-      <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
-      <div class="composition-mini-stats">
-        <b>${formatInt(profile.capacity)} voy.</b>
-        <b>${formatInt(profile.freight)} t</b>
-        <b>${formatInt(profile.range)} km</b>
-      </div>
-    </button>
+    </article>
   `;
 }
 
@@ -5145,7 +5170,15 @@ if (action === 'save-train-composition') {
   return doAction('updateTrainComposition', payload);
 }
     if (action === 'buy-train') return doAction('buyTrain', { modelId: button.dataset.id });
-  if (action === 'sell-train') return doAction('sellTrain', { trainId: button.dataset.id });
+  if (action === 'sell-train') {
+    const train = app.state.me.trains.find(t => t.id === button.dataset.id);
+    const model = train ? app.state.balance.trains[train.modelId] : null;
+    const estimate = train && model ? trainResaleEstimateClient(train, model) : 0;
+    if (!window.confirm(`Vendre ${train ? trainName(train) : 'ce train'} ?${estimate ? `
+
+Valeur estimée : ${money(estimate)}.` : ''}`)) return;
+    return doAction('sellTrain', { trainId: button.dataset.id });
+  }
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
@@ -5157,7 +5190,13 @@ if (action === 'save-train-composition') {
     }
     return;
   }
-  if (action === 'close-line') return doAction('closeLine', { lineId: button.dataset.id });
+  if (action === 'close-line') {
+    const line = app.state.me.lines.find(l => l.id === button.dataset.id);
+    if (!window.confirm(`Fermer ${line ? linePublicName(line) : 'cette ligne'} ?
+
+Les trains seront libérés et la ligne ne générera plus de revenus.`)) return;
+    return doAction('closeLine', { lineId: button.dataset.id });
+  }
   if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
   if (action === 'edit-line') return openLineModal(button.dataset.id);
   if (action === 'remove-waypoint') { removeDraftWaypoint(button.dataset.index); return; }
@@ -5334,13 +5373,19 @@ function openLineModal(lineId) {
     const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
     app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
     app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
+    const selectedTrainCount = app.lineEditor.trainIds.length;
     const trainChoices = freeOrCurrent.map(t => {
       const selected = app.lineEditor.trainIds.includes(t.id);
       const profile = previewOperatingProfile(t, app.state.balance.trains[t.modelId]);
+      const model = app.state.balance.trains[t.modelId];
       return `
-        <label class="line-train-choice ${selected ? 'selected' : ''}">
+        <label class="line-train-choice ${selected ? 'selected' : ''}" title="${escapeAttr(trainName(t))}">
           <input type="checkbox" class="edit-line-train-check" value="${escapeAttr(t.id)}" ${selected ? 'checked' : ''}>
-          <span><b>${escapeHtml(trainName(t))}</b><em>${formatInt(profile.capacity)} voy. · ${formatInt(profile.freight)} t · ${formatInt(profile.range)} km</em></span>
+          <span class="line-train-choice-check">${selected ? '✓' : ''}</span>
+          <span class="line-train-choice-main">
+            <b>${escapeHtml(trainName(t))}</b>
+            <em>${escapeHtml(model?.type || 'Matériel')} · ${formatInt(profile.capacity)} voy. · ${formatInt(profile.freight)} t · ${formatInt(profile.range)} km</em>
+          </span>
         </label>`;
     }).join('');
     return `
@@ -5353,8 +5398,11 @@ function openLineModal(lineId) {
       </div>
       <div class="line-editor-train-picker">
         <div class="line-editor-subtitle">
-          <strong>Trains affectés à cette ligne</strong>
-          <span class="small muted">Coche plusieurs trains libres pour augmenter la capacité de la ligne.</span>
+          <div>
+            <strong>Trains affectés à cette ligne</strong>
+            <span class="small muted">Coche plusieurs trains libres pour augmenter la capacité de la ligne.</span>
+          </div>
+          <span class="tag ${selectedTrainCount ? 'good' : 'warn'}">${selectedTrainCount} sélectionné${selectedTrainCount > 1 ? 's' : ''}</span>
         </div>
         <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre.</p>'}</div>
       </div>

@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.13.0';
-const STATE_SCHEMA_VERSION = 77;
+const PROJECT_VERSION = 'v62.14.0';
+const STATE_SCHEMA_VERSION = 78;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -5002,8 +5002,9 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
     const ownerInfo = stationOwnerInfo(stopId);
     if (!ownerInfo || ownerInfo.player.id === player.id) continue;
     const asset = ownerInfo.asset || { level: 1, commerce: 0, maintenance: 0, depot: false };
+    const stationLevel = clamp(Number(asset.level || 1), 1, 5);
     const qualityFactor = 1
-      + clamp(Number(asset.level || 1), 1, 5) * 0.10
+      + Math.max(0, stationLevel - 1) * 0.125
       + clamp(Number(asset.commerce || 0), 0, 4) * 0.04
       + clamp(Number(asset.maintenance || 0), 0, 4) * 0.025
       + (asset.depot ? 0.06 : 0);
