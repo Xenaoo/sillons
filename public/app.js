@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v61.1.1';
+const PROJECT_VERSION = 'v61.2.0';
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -4368,18 +4368,12 @@ function renderBudget() {
   const net = Number(me.stats.lastProfit || 0);
   const variable = Number(b.variableLineCost || 0);
   const shared = Number(b.sharedCosts || 0);
-  const knownRevenue = Number(b.ticketRevenue || 0) + Number(b.ancillaryRevenue || 0) + Number(b.freightRevenue || 0) + Number(b.dispatchRevenueBoost || 0) + Number(b.stationRevenue || 0);
-  const otherRevenue = Math.max(0, revenueTotal - knownRevenue);
   const knownVariableBase = Number(b.energyCost || 0) + Number(b.trainMaintenanceCost || 0) + Number(b.lineInfrastructureCost || 0) + Number(b.accessCost || 0);
   const commercialOperatingCost = Number(b.commercialOperatingCost || Math.max(0, variable - knownVariableBase));
-  const knownVariable = knownVariableBase + commercialOperatingCost;
-  const residualVariable = Math.max(0, variable - knownVariable);
-  const knownShared = Number(b.staffCost || 0) + Number(b.stationCost || 0) + Number(b.debtCost || 0) + Number(b.idleTrainCost || 0) + Number(b.researchCost || 0);
-  const residualShared = Math.max(0, shared - knownShared);
   const operatingMargin = revenueTotal > 0 ? Math.round((net / revenueTotal) * 100) : 0;
 
   return `
-    ${renderSectionHero('BUDGET', 'Lecture financière complète', 'Analyse les recettes, dépenses variables, charges fixes et résultats de la compagnie avec des catégories réductibles.', ART.tabs.budget, ['Recettes', 'Dépenses', 'Marge'])}
+    ${renderSectionHero('BUDGET', 'Lecture financière complète', 'Analyse les revenus, les dépenses et le résultat net de la compagnie avec des catégories réductibles.', ART.tabs.budget, ['Résultat', 'Revenus', 'Dépenses'])}
 
     <div class="budget-summary-grid">
       ${metric('Recettes /h', moneyPerHour(revenueTotal), 'good-text')}
@@ -4388,41 +4382,32 @@ function renderBudget() {
       ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text')}
     </div>
 
+    ${budgetSection('result', 'Résultat et structure financière', `
+      ${budgetRow('Résultat net courant', net, 'net', 'Recettes - dépenses')}
+      ${budgetRawRow('Trésorerie disponible', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}
+      ${budgetRawRow('Dette totale', money(me.debt), me.debt > 0 ? 'bad-text' : 'good-text')}
+    `, net >= 0 ? `+${moneyPerHour(net)}` : moneyPerHour(net))}
+
     ${budgetSection('revenues', 'Recettes', `
       ${budgetRow('Billets voyageurs', b.ticketRevenue || 0, 'revenue', 'Prix des billets encaissés')}
       ${budgetRow('Services voyageurs', b.ancillaryRevenue || 0, 'revenue', 'Commerces et services associés')}
       ${budgetRow('Fret', b.freightRevenue || 0, 'revenue', 'Tonnage transporté')}
       ${budgetRow('Bonus régulation', b.dispatchRevenueBoost || 0, 'revenue', 'Effet des Régulateurs')}
       ${budgetRow('Revenus des gares', b.stationRevenue || 0, 'revenue', 'Gares possédées')}
-      ${otherRevenue > 0 ? budgetRow('Ajustement de revenus', otherRevenue, 'revenue', 'Écart temporaire entre le dernier tick et le détail par poste') : ''}
     `, moneyPerHour(revenueTotal))}
 
-    ${budgetSection('variable-costs', 'Dépenses variables d’exploitation', `
+    ${budgetSection('expenses', 'Dépenses', `
       ${budgetRow('Énergie', b.energyCost || 0, 'expense', 'Électricité ou ressources consommées')}
       ${budgetRow('Maintenance matériel roulant', b.trainMaintenanceCost || 0, 'expense', 'Usure liée aux circulations')}
       ${budgetRow('Entretien des lignes', b.lineInfrastructureCost || 0, 'expense', 'Coût proportionnel aux kilomètres exploités')}
       ${budgetRow('Exploitation commerciale', commercialOperatingCost, 'expense', 'Frais progressifs liés aux volumes encaissés : vente, exploitation, contrôle et organisation commerciale')}
       ${budgetRow('Péages / droits de passage', b.accessCost || 0, 'expense', 'Accès au réseau')}
-      ${residualVariable > 0 ? budgetRow('Écart variable temporaire', residualVariable, 'expense', 'Écart transitoire avant recalcul complet du prochain tick serveur') : ''}
-    `, moneyPerHour(variable))}
-
-    ${budgetSection('fixed-costs', 'Charges fixes', `
       ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
       ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
       ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
       ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
       ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Projet de recherche actif')}
-      ${residualShared > 0 ? budgetRow('Écart de charges fixes temporaire', residualShared, 'expense', 'Écart transitoire avant recalcul complet du prochain tick serveur') : ''}
-    `, moneyPerHour(shared))}
-
-    ${budgetSection('result', 'Résultat et structure financière', `
-      ${budgetRow('Résultat net courant', net, 'net', 'Recettes - dépenses')}
-      ${budgetRawRow('Trésorerie disponible', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}
-      ${budgetRawRow('Dette totale', money(me.debt), me.debt > 0 ? 'bad-text' : 'good-text')}
-      ${budgetRawRow('Recettes cumulées', money(me.stats.revenue), 'good-text')}
-      ${budgetRawRow('Dépenses cumulées', money(me.stats.expenses), 'bad-text')}
-      ${budgetRawRow('Profit cumulé', money(me.stats.profit), me.stats.profit >= 0 ? 'good-text' : 'bad-text')}
-    `, net >= 0 ? `+${moneyPerHour(net)}` : moneyPerHour(net))}
+    `, moneyPerHour(expenseTotal))}
 
     ${budgetSection('lines', 'Détail par ligne', renderBudgetLineDetail(), `${me.lines.filter(line => line.active).length} ligne${me.lines.filter(line => line.active).length > 1 ? 's' : ''}`)}
   `;

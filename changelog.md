@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Version v61.2.0 — budget simplifié et dépenses regroupées
+
+- incrément de version de cette passe : badge interface `v61.2.0`, package `0.5.4` et schéma serveur `60` ;
+- suppression définitive des lignes `Écart variable temporaire` et `Écart de charges fixes temporaire` dans l’onglet `Budget` ;
+- regroupement des anciennes sections `Dépenses variables d’exploitation` et `Charges fixes` dans une section unique `Dépenses` ;
+- déplacement de la section `Résultat et structure financière` en haut de la page, juste après les indicateurs de synthèse ;
+- retrait des lignes `Recettes cumulées`, `Dépenses cumulées` et `Profit cumulé` de cette section ;
+- conservation du détail utile : résultat net courant, trésorerie disponible, dette totale, recettes, dépenses et détail par ligne.
+
 ## Version v61.1.1 — budget détaillé et libellés financiers corrigés
 
 - incrément de version de cette passe : badge interface `v61.1.1`, package `0.5.3` et schéma serveur `59` ;
