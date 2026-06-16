@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v62.18.0 — restauration largeur panneau
+
+- incrément de version : badge interface `v62.18.0`, package `0.6.18` et schéma serveur `82` ;
+- correction du layout carte/panneau : retour à une grille propre en deux colonnes, sans colonne vide centrale ;
+- le panneau de droite reprend toute la largeur disponible à droite de la carte ;
+- la flèche est repositionnée en overlay sur la séparation carte/panneau, sans consommer une colonne de largeur ;
+- le mode réduit conserve un panneau à environ un quart de la fenêtre sans casser l’affichage ;
+- renforcement du redimensionnement visuel de la carte : le conteneur OSM et le canvas occupent bien 100 % de leur colonne.
+
 ## Version v62.17.0 — correction panneau latéral et trains du joueur
 
 - incrément de version : badge interface `v62.17.0`, package `0.6.17` et schéma serveur `81` ;

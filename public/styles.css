@@ -6984,3 +6984,96 @@ dialog.modal--wide {
     display: none !important;
   }
 }
+
+
+/* ===== V62.18 : restauration layout carte/panneau en 2 colonnes ===== */
+.layout,
+.layout.map-visible,
+.layout.map-hidden {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: clamp(520px, 38vw, 820px) minmax(0, 1fr) !important;
+  gap: 14px !important;
+  padding: 14px !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+  transition: grid-template-columns 220ms ease !important;
+}
+.layout.side-collapsed,
+.layout.map-visible.side-collapsed,
+.layout.map-hidden.side-collapsed {
+  grid-template-columns: minmax(0, 1fr) clamp(285px, 25vw, 360px) !important;
+}
+.layout .map-section,
+.layout.map-visible .map-section,
+.layout.map-hidden .map-section {
+  display: flex !important;
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+.layout .side.panel,
+.layout.map-visible .side.panel,
+.layout.map-hidden .side.panel {
+  display: flex !important;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+.panel-collapse-btn {
+  position: absolute !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  top: 50% !important;
+  left: calc(14px + clamp(520px, 38vw, 820px) + 7px) !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+  justify-self: auto !important;
+  align-self: auto !important;
+  margin: 0 !important;
+  z-index: 80 !important;
+}
+.layout.side-collapsed .panel-collapse-btn {
+  left: calc(100% - 14px - clamp(285px, 25vw, 360px) - 7px) !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+}
+.osm-map,
+#osmMap,
+#osmMap.leaflet-container {
+  width: 100% !important;
+  max-width: none !important;
+}
+.layout .tab-content {
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+}
+@media (max-width: 1100px) {
+  .layout,
+  .layout.map-visible,
+  .layout.map-hidden,
+  .layout.side-collapsed,
+  .layout.map-visible.side-collapsed,
+  .layout.map-hidden.side-collapsed {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    overflow: visible !important;
+  }
+  .layout .map-section,
+  .layout .side.panel {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    margin: 0 !important;
+  }
+  .panel-collapse-btn {
+    display: none !important;
+  }
+}
