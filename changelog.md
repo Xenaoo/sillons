@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## Version v61.3.2 — revenus voyageurs plafonnés et effets RH encadrés
+
+- incrément de version de cette passe : badge interface `v61.3.2`, package `0.5.7` et schéma serveur `63` ;
+- refonte du calcul des revenus voyageurs : les billets encaissés sont désormais calculés à partir des voyageurs transportés, de la distance tarifaire, du prix unitaire au kilomètre et d’un facteur de demande plafonné ;
+- baisse du multiplicateur global des recettes voyageurs afin d’éviter les revenus extravagants sur une seule ligne ;
+- plafonnement plus strict du prix du billet sur les longues distances ;
+- amortissement tarifaire des très longues lignes : au-delà d’un seuil, la distance continue de compter mais moins fortement ;
+- effet des Contrôleurs maintenu à +15 % maximum sur les billets lorsque l’effectif requis est atteint ;
+- les Contrôleurs réduisent davantage les dépenses `Vente & distribution` et `Contrôle & fraude`, au lieu de gonfler mécaniquement les coûts commerciaux ;
+- centrage renforcé du bouton `France` dans les contrôles de carte.
+
 ## Version v61.3.1 — correction contrôleurs et nettoyage Budget
 
 - incrément de version de cette passe : badge interface `v61.3.1`, package `0.5.6` et schéma serveur `62` ;

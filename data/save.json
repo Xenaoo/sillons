@@ -1,20 +1,20 @@
 {
   "version": 62,
   "createdAt": 1781511648911,
-  "now": 1781598190868,
-  "day": 421,
-  "eraYear": 1885,
+  "now": 1781612470452,
+  "day": 526,
+  "eraYear": 1893,
   "tickSpeed": 2000,
   "market": {
-    "coal": 1.53,
+    "coal": 1.55,
     "diesel": 4.39,
-    "electricity": 0.51,
-    "hydrogen": 2.04,
-    "battery": 0.29,
-    "steel": 1.09,
-    "labor": 0.69,
-    "demand": 0.74,
-    "freight": 1.22
+    "electricity": 0.46,
+    "hydrogen": 1.93,
+    "battery": 0.4,
+    "steel": 1.15,
+    "labor": 0.77,
+    "demand": 0.91,
+    "freight": 1.2
   },
   "events": [
     {
@@ -23,13 +23,6 @@
       "passenger": 1,
       "freight": 0.96,
       "remaining": 7
-    },
-    {
-      "kind": "expo",
-      "title": "Grand événement national : Hausse temporaire des déplacements longue distance.",
-      "passenger": 1.14,
-      "freight": 1.02,
-      "remaining": 9
     }
   ],
   "news": [
@@ -232,6 +225,46 @@
     {
       "day": 339,
       "text": "Météo difficile : la ponctualité devient plus fragile."
+    },
+    {
+      "day": 429,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 444,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 449,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 452,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 456,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 467,
+      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+    },
+    {
+      "day": 470,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
+    },
+    {
+      "day": 495,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 499,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 521,
+      "text": "Tension sur les marchés de l’énergie : Les coûts de traction augmentent."
     }
   ],
   "customStations": {},
@@ -243,7 +276,7 @@
       "color": "#60a5fa",
       "logo": "steam_front",
       "region": "France",
-      "cash": 10022789.588958278,
+      "cash": 10025960.218557036,
       "debt": 0,
       "epoch": 0,
       "research": 1,
@@ -263,10 +296,10 @@
       "researchQueue": [],
       "maintenancePolicy": "standard",
       "reputation": 0,
-      "co2": 10503.052560000058,
+      "co2": 13073.729760000077,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 100,
+        "coal": 99.65996333333287,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -283,8 +316,8 @@
           "id": "starter-steam-030-mixte",
           "modelId": "steam_030_mixte",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 1,
-          "age": 0,
+          "condition": 0.995138888888892,
+          "age": 105,
           "acquiredDay": 1,
           "composition": {
             "mode": "passenger_loco",
@@ -325,7 +358,110 @@
           "active": true,
           "electrified": false,
           "createdDay": 1,
-          "name": "Caen → Bayeux"
+          "name": "Caen → Bayeux",
+          "stats": {
+            "passengers": 179,
+            "freightTons": 0,
+            "revenue": 627,
+            "expenses": 685,
+            "profit": -59,
+            "punctuality": 86.83,
+            "satisfaction": 41.8,
+            "share": 100,
+            "status": "ok",
+            "staffing": {
+              "needs": {
+                "drivers": 1,
+                "controllers": 1,
+                "stationAgents": 1,
+                "mechanics": 1,
+                "dispatchers": 1,
+                "engineers": 0
+              },
+              "driverCoverage": 100,
+              "allocatedDrivers": 1,
+              "requiredDrivers": 1,
+              "effectiveFrequency": 2,
+              "requestedFrequency": 2
+            },
+            "market": {
+              "passengerDemand": 397,
+              "freightDemand": 192,
+              "passengerShare": 100,
+              "freightShare": null,
+              "passengerRank": 1,
+              "freightRank": null,
+              "passengerCompetitors": 0,
+              "freightCompetitors": 0,
+              "passengerLeader": {
+                "companyName": "TestCo",
+                "lineCode": "Caen → Bayeux",
+                "score": 1.23
+              },
+              "freightLeader": null,
+              "passengerScore": 1.23,
+              "freightScore": null,
+              "passengerDemandCapture": 48.63,
+              "freightDemandCapture": null
+            },
+            "attractiveness": {
+              "passenger": {
+                "market": "passengers",
+                "score": 1.23,
+                "factors": {
+                  "price": 78.57,
+                  "frequency": 40.82,
+                  "speed": 31.11,
+                  "comfortOrCapacity": 62.25,
+                  "reputation": 33.33,
+                  "condition": 99.64,
+                  "staff": 100,
+                  "stations": 85,
+                  "operations": 100
+                }
+              },
+              "freight": null
+            },
+            "capacity": {
+              "passengers": 420,
+              "freightTons": 214,
+              "passengerLoad": 42.63,
+              "freightLoad": 0,
+              "crewFactor": 125,
+              "stationFactor": 85,
+              "capacityFactor": 100,
+              "driverCoverage": 100,
+              "effectiveFrequency": 2,
+              "requestedFrequency": 2,
+              "trainComposition": "3 voiture(s) · Standard"
+            },
+            "finance": {
+              "ticketPrice": 3,
+              "farePerKm": 0.12,
+              "ticketRevenue": 531,
+              "ancillaryRevenue": 63,
+              "freightRevenue": 0,
+              "dispatchRevenueBoost": 33,
+              "lineInfrastructureCost": 310,
+              "commercialOperatingCost": 0,
+              "commercialSalesCost": 0,
+              "commercialControlCost": 0,
+              "commercialAdministrationCost": 0,
+              "energyCost": 0,
+              "resourceType": "coal",
+              "resourceConsumptionPerHour": 5.83,
+              "maintenanceCost": 28,
+              "accessCost": 0,
+              "passageRights": 0,
+              "variableExpenses": 337,
+              "contribution": 289,
+              "allocatedOverhead": 348,
+              "netProfit": -59,
+              "margin": 46.14,
+              "totalExpenses": 685,
+              "netMargin": -9.36
+            }
+          }
         }
       ],
       "stations": {
@@ -345,35 +481,40 @@
         }
       },
       "stats": {
-        "passengers": 58661,
+        "passengers": 78034,
         "freightTons": 0,
-        "revenue": 225483,
-        "expenses": 201805,
-        "profit": 23553,
-        "lastRevenue": 0,
-        "lastExpenses": 0,
-        "lastProfit": 0,
-        "punctuality": 35,
-        "satisfaction": 44.2,
+        "revenue": 300590,
+        "expenses": 273730,
+        "profit": 26725,
+        "lastRevenue": 695,
+        "lastExpenses": 685,
+        "lastProfit": 10,
+        "punctuality": 86.83,
+        "satisfaction": 41.8,
         "marketShare": 1,
         "lastBreakdown": {
-          "lineRevenue": 413,
-          "stationRevenue": 58,
-          "ticketRevenue": 434,
-          "ancillaryRevenue": 43,
+          "lineRevenue": 627,
+          "stationRevenue": 68,
+          "ticketRevenue": 531,
+          "ancillaryRevenue": 63,
           "freightRevenue": 0,
-          "dispatchRevenueBoost": 0,
+          "dispatchRevenueBoost": 33,
           "energyCost": 0,
-          "trainMaintenanceCost": 24,
-          "lineInfrastructureCost": 3,
+          "trainMaintenanceCost": 28,
+          "lineInfrastructureCost": 310,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
-          "staffCost": 371,
+          "passageRightsRevenue": 0,
+          "staffCost": 232,
           "stationCost": 116,
           "debtCost": 0,
           "idleTrainCost": 0,
           "researchCost": 0,
-          "variableLineCost": 27,
-          "sharedCosts": 487
+          "variableLineCost": 337,
+          "sharedCosts": 348
         }
       },
       "notifications": [
@@ -427,7 +568,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 42.43999999999971,
+      "reputation": 40.54999999999964,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -468,7 +609,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -517,7 +663,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 43.15999999999974,
+      "reputation": 41.26999999999967,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -558,7 +704,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -611,7 +762,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 43.771999999999764,
+      "reputation": 41.88199999999969,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -652,7 +803,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -705,7 +861,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 44.22199999999978,
+      "reputation": 42.33199999999971,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -746,7 +902,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -799,7 +960,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 44.833999999999804,
+      "reputation": 42.94399999999973,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -840,7 +1001,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -893,7 +1059,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 45.53599999999983,
+      "reputation": 43.64599999999976,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -934,7 +1100,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -987,7 +1158,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 46.09399999999985,
+      "reputation": 44.20399999999978,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1028,7 +1199,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -1081,7 +1257,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 46.705999999999875,
+      "reputation": 44.8159999999998,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1122,7 +1298,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,
@@ -1175,7 +1356,7 @@
       "researchProject": null,
       "researchQueue": [],
       "maintenancePolicy": "standard",
-      "reputation": 47.209999999999894,
+      "reputation": 45.31999999999982,
       "co2": 0,
       "energyStrategy": "spot",
       "resources": {
@@ -1216,7 +1397,12 @@
           "energyCost": 0,
           "trainMaintenanceCost": 0,
           "lineInfrastructureCost": 0,
+          "commercialOperatingCost": 0,
+          "commercialSalesCost": 0,
+          "commercialControlCost": 0,
+          "commercialAdministrationCost": 0,
           "accessCost": 0,
+          "passageRightsRevenue": 0,
           "staffCost": 0,
           "stationCost": 0,
           "debtCost": 0,

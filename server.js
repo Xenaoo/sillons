@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v61.3.1';
-const STATE_SCHEMA_VERSION = 62;
+const PROJECT_VERSION = 'v61.3.2';
+const STATE_SCHEMA_VERSION = 63;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
@@ -42,7 +42,9 @@ const COMPANY_LOGOS = ["steam_front", "winged_wheel", "semaphore", "royal_track"
 const ECONOMY = Object.freeze({
   passengerDemandMultiplier: 2.85,
   freightDemandMultiplier: 1.8,
-  passengerRevenueMultiplier: 0.86,
+  passengerRevenueMultiplier: 0.52,
+  passengerFarePerKmCap: 0.12,
+  passengerLongDistanceDampingKm: 320,
   freightRevenueMultiplier: 1.0,
   energyCostMultiplier: 0.42,
   maintenanceCostMultiplier: 0.75,
@@ -1385,9 +1387,9 @@ function actionUpdateTrainComposition(player, payload) {
 
 function ticketPriceCeiling(distance) {
   const km = Math.max(1, Number(distance || 0));
-  // Plafond progressif : les petites lignes restent cohérentes,
-  // les longues lignes peuvent monter jusqu'au plafond absolu de 50 €.
-  return Math.round(Math.min(TICKET_PRICE_CAP_ABSOLUTE, Math.max(8, 6 + km * 0.32)));
+  // Plafond plus strict : le billet reste lié à la distance, sans devenir extravagant
+  // sur les longues lignes.
+  return Math.round(Math.min(35, Math.max(6, 4 + km * 0.13)));
 }
 
 function clampTicketPrice(price, distance) {
@@ -1447,6 +1449,34 @@ function lineTicketPrice(line, distance = lineDistance(line)) {
 function lineEffectiveTariff(line, distance = lineDistance(line)) {
   const routeDistance = Math.max(1, Number(distance || 0));
   return lineTicketPrice(line, routeDistance) / routeDistance;
+}
+
+function effectivePassengerPricedDistance(distance) {
+  const km = Math.max(1, Number(distance || 0));
+  const dampAt = ECONOMY.passengerLongDistanceDampingKm || 320;
+  return Math.min(km, dampAt) + Math.max(0, km - dampAt) * 0.35;
+}
+
+function computePassengerTicketRevenue(linePax, distance, line, routeDemand, maxPax, controllerCoverage, profitabilityMultiplier = 1) {
+  const passengers = Math.max(0, Number(linePax || 0));
+  if (passengers <= 0) {
+    return { ticketRevenue: 0, unitFare: 0, pricedDistance: effectivePassengerPricedDistance(distance), demandFactor: 1, controllerRevenueBoost: 0 };
+  }
+  const km = Math.max(1, Number(distance || 0));
+  const unitFare = clamp(lineEffectiveTariff(line, km), 0.02, ECONOMY.passengerFarePerKmCap || 0.12);
+  const pricedDistance = effectivePassengerPricedDistance(km);
+  const demandPressure = Number(routeDemand?.passengers || 0) / Math.max(1, Number(maxPax || 0));
+  const demandFactor = clamp(0.88 + demandPressure * 0.08, 0.88, 1.04);
+  const baseRevenue = passengers * pricedDistance * unitFare * demandFactor * Math.max(0.1, Number(profitabilityMultiplier || 1)) * ECONOMY.passengerRevenueMultiplier;
+  const controllerRevenueBoost = clamp(Number(controllerCoverage || 0), 0, 1) * 0.15;
+  return {
+    ticketRevenue: baseRevenue * (1 + controllerRevenueBoost),
+    baseTicketRevenue: baseRevenue,
+    unitFare,
+    pricedDistance,
+    demandFactor,
+    controllerRevenueBoost
+  };
 }
 
 function actionCreateLine(player, payload) {
@@ -2396,11 +2426,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     }
 
     const effectiveTicketPrice = lineTicketPrice(line, distance);
-    const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
+    const effectiveTariff = lineEffectiveTariff(line, distance);
     setLineTicketPrice(line, effectiveTicketPrice, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
-    const baseTicketRevenue = linePax * effectiveTicketPrice * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
-    const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
+    const ticketRevenueDetails = computePassengerTicketRevenue(linePax, distance, line, routeDemand, maxPax, controllerCoverage, profitabilityMultiplier);
+    const baseTicketRevenue = ticketRevenueDetails.baseTicketRevenue || 0;
+    const ticketRevenue = ticketRevenueDetails.ticketRevenue || 0;
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
     const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
@@ -2413,8 +2444,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const lineInfrastructureCost = computeLineInfrastructureCost(player, line, lineInfrastructureMultiplier, infrastructureUsage);
     const commercialBaseRevenue = baseTicketRevenue + ancillaryRevenue + freightRevenue;
     const grossCommercialOperatingCost = Math.max(0, commercialBaseRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
-    const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.08);
-    const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.22);
+    const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.15);
+    const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.35);
     const commercialAdministrationCost = grossCommercialOperatingCost * 0.30;
     const commercialOperatingCost = commercialSalesCost + commercialControlCost + commercialAdministrationCost;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
@@ -2487,6 +2518,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       finance: {
         ticketPrice: Math.round(effectiveTicketPrice),
         farePerKm: round2(effectiveTariff),
+        pricedDistance: round2(ticketRevenueDetails.pricedDistance || distance),
+        demandFareFactor: round2(ticketRevenueDetails.demandFactor || 1),
+        controllerRevenueBoost: round2((ticketRevenueDetails.controllerRevenueBoost || 0) * 100),
         ticketRevenue: Math.round(ticketRevenue),
         ancillaryRevenue: Math.round(ancillaryRevenue),
         freightRevenue: Math.round(freightRevenue),
