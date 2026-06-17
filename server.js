@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -11,18 +12,22 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.25.0';
-const STATE_SCHEMA_VERSION = 89;
+const PROJECT_VERSION = 'v62.26.0';
+const STATE_SCHEMA_VERSION = 90;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
-const MIN_COMMUNE_POPULATION = 5000;
-const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
-const COMMUNE_CACHE_SOURCE_VERSION = 6;
+const MIN_COMMUNE_POPULATION = 0;
+const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
+const COMMUNE_CACHE_SOURCE_VERSION = 8;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
-const SNCF_STATION_API_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/gares-de-voyageurs/records';
-const SNCF_STATION_EXPORT_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/gares-de-voyageurs/exports/json';
+const SNCF_STATION_DATASET = 'liste-des-gares';
+const SNCF_STATION_API_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/records`;
+const SNCF_STATION_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/exports/json`;
 const SNCF_STATION_PAGE_SIZE = 100;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
+const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
+const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
+const POPULATION_TABULAR_PAGE_SIZE = 200;
 const ADMIN_USERNAME_KEY = 'xenao';
 const LEGACY_STATION_COMMUNE_IDS = Object.freeze({
   PAR: 'PAR_GARE_DU_NORD', COM_75056: 'PAR_GARE_DU_NORD', LYO: 'COM_69123', MAR: 'COM_13055', LIL: 'COM_59350', BOR: 'COM_33063', NAN: 'COM_44109', STR: 'COM_67482', REN: 'COM_35238', TOU: 'COM_31555',
@@ -99,6 +104,114 @@ const PARIS_TERMINAL_STATIONS = Object.freeze([
 const PARIS_TERMINAL_SOURCE = 'sncf-gares-de-voyageurs + frequentation-gares-2024';
 const PARIS_COMMUNE_POPULATION = 2133111;
 
+const DEPARTMENT_NAME_TO_CODE = Object.freeze({
+  AIN: '01',
+  AISNE: '02',
+  ALLIER: '03',
+  'ALPES-DE-HAUTE-PROVENCE': '04',
+  'HAUTES-ALPES': '05',
+  'ALPES-MARITIMES': '06',
+  ARDECHE: '07',
+  ARDENNES: '08',
+  ARIEGE: '09',
+  AUBE: '10',
+  AUDE: '11',
+  AVEYRON: '12',
+  'BOUCHES-DU-RHONE': '13',
+  CALVADOS: '14',
+  CANTAL: '15',
+  CHARENTE: '16',
+  'CHARENTE-MARITIME': '17',
+  CHER: '18',
+  CORREZE: '19',
+  'CORSE-DU-SUD': '2A',
+  'HAUTE-CORSE': '2B',
+  "COTE-D'OR": '21',
+  'COTES-D\'ARMOR': '22',
+  CREUSE: '23',
+  DORDOGNE: '24',
+  DOUBS: '25',
+  DROME: '26',
+  EURE: '27',
+  'EURE-ET-LOIR': '28',
+  FINISTERE: '29',
+  GARD: '30',
+  'HAUTE-GARONNE': '31',
+  GERS: '32',
+  GIRONDE: '33',
+  HERAULT: '34',
+  'ILLE-ET-VILAINE': '35',
+  INDRE: '36',
+  'INDRE-ET-LOIRE': '37',
+  ISERE: '38',
+  JURA: '39',
+  LANDES: '40',
+  'LOIR-ET-CHER': '41',
+  LOIRE: '42',
+  'HAUTE-LOIRE': '43',
+  'LOIRE-ATLANTIQUE': '44',
+  LOIRET: '45',
+  LOT: '46',
+  'LOT-ET-GARONNE': '47',
+  LOZERE: '48',
+  'MAINE-ET-LOIRE': '49',
+  MANCHE: '50',
+  MARNE: '51',
+  'HAUTE-MARNE': '52',
+  MAYENNE: '53',
+  'MEURTHE-ET-MOSELLE': '54',
+  MEUSE: '55',
+  MORBIHAN: '56',
+  MOSELLE: '57',
+  NIEVRE: '58',
+  NORD: '59',
+  OISE: '60',
+  ORNE: '61',
+  'PAS-DE-CALAIS': '62',
+  'PUY-DE-DOME': '63',
+  'PYRENEES-ATLANTIQUES': '64',
+  'HAUTES-PYRENEES': '65',
+  'PYRENEES-ORIENTALES': '66',
+  'BAS-RHIN': '67',
+  'HAUT-RHIN': '68',
+  RHONE: '69',
+  'HAUTE-SAONE': '70',
+  'SAONE-ET-LOIRE': '71',
+  SARTHE: '72',
+  SAVOIE: '73',
+  'HAUTE-SAVOIE': '74',
+  PARIS: '75',
+  'SEINE-MARITIME': '76',
+  'SEINE-ET-MARNE': '77',
+  YVELINES: '78',
+  'DEUX-SEVRES': '79',
+  SOMME: '80',
+  TARN: '81',
+  'TARN-ET-GARONNE': '82',
+  VAR: '83',
+  VAUCLUSE: '84',
+  VENDEE: '85',
+  VIENNE: '86',
+  'HAUTE-VIENNE': '87',
+  VOSGES: '88',
+  YONNE: '89',
+  'TERRITOIRE-DE-BELFORT': '90',
+  ESSONNE: '91',
+  'HAUTS-DE-SEINE': '92',
+  'SEINE-SAINT-DENIS': '93',
+  'VAL-DE-MARNE': '94',
+  "VAL-D'OISE": '95'
+});
+
+const LEGACY_EXPLICIT_STATION_UIC_IDS = Object.freeze({
+  PAR_AUSTERLITZ: '87547000',
+  PAR_MONTPARNASSE: '87391003',
+  PAR_GARE_DE_LYON: '87686006',
+  PAR_GARE_DU_NORD: '87271007',
+  PAR_GARE_DE_L_EST: '87113001',
+  PAR_SAINT_LAZARE: '87384008'
+});
+
 const PASSENGER_COMPOSITION_VARIANTS = Object.freeze({
   standard: { id: 'standard', name: 'Standard', shortLabel: 'Standard', description: 'Voiture polyvalente équilibrée pour la majorité des lignes voyageurs.', asset: '/assets/composition/variants/passenger_standard.png', capacityMultiplier: 1, speedMultiplier: 1, energyMultiplier: 1, maintenanceMultiplier: 1, reliabilityDelta: 0, comfortDelta: 0 },
   commuter: { id: 'commuter', name: 'Banlieue dense', shortLabel: 'Banlieue', description: 'Plus de places debout et de portes, idéale pour les lignes tendues du quotidien.', asset: '/assets/composition/variants/passenger_commuter.png', capacityMultiplier: 1.18, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.05, reliabilityDelta: -0.008, comfortDelta: -0.1 },
@@ -169,8 +282,10 @@ function compositionVariantUnlockedForPlayer(player, model, variant) {
 
 const WORLD = buildWorld();
 const BALANCE = buildBalance();
+let stationAliasMap = new Map();
 let state = loadOrCreateState();
 let communeCache = loadCommuneCache();
+remapStateStationAliases();
 let tickCount = 0;
 let publicWorldCache = { key: '', value: null };
 let communeRefreshPromise = null;
@@ -190,7 +305,7 @@ function communeCacheUsable(cache = communeCache) {
   const byId = cache?.byId || {};
   const count = Object.keys(byId).length;
   if (count < COMMUNE_CACHE_MIN_READY_COUNT) return false;
-  return ['91345', '91376'].every(code => Boolean(byId[`COM_${code}`] || Object.values(byId).some(s => String(s.code || '') === code)));
+  return Object.values(byId).some(station => station?.hasPassengerStation) && Object.values(byId).some(station => station?.hasFreightStation);
 }
 
 async function waitForCommuneCache(maxMs = 3500) {
@@ -287,7 +402,15 @@ async function handleApi(req, res, url) {
     const from = url.searchParams.get('from') || '';
     const to = url.searchParams.get('to') || '';
     const geometry = await sncfRouteGeometryForStations(from, to);
-    sendJson(res, 200, { ok: true, from, to, geometry, source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'fallback' });
+    sendJson(res, 200, {
+      ok: true,
+      from,
+      to,
+      geometry,
+      distance: Math.round(polylineDistanceKm(geometry || [])),
+      pointCount: Array.isArray(geometry) ? geometry.length : 0,
+      source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'none'
+    });
     return;
   }
 
@@ -324,7 +447,7 @@ async function handleApi(req, res, url) {
     const playerId = auth?.user?.playerId || body.playerId || '';
     const playerBefore = state.players?.[playerId] || null;
     const cashBefore = Number(playerBefore?.cash);
-    const result = applyAction(playerId, body.type, body.payload || {});
+    const result = await applyAction(playerId, body.type, body.payload || {});
     const playerAfter = state.players?.[playerId] || null;
     const cashAfter = Number(playerAfter?.cash);
     const cashDelta = Number.isFinite(cashBefore) && Number.isFinite(cashAfter)
@@ -780,12 +903,87 @@ function sncfRouteCacheKey(a, b) {
 
 function rememberSncfRouteGeometry(key, geometry) {
   if (sncfRouteGeometryResultCache.has(key)) sncfRouteGeometryResultCache.delete(key);
-  sncfRouteGeometryResultCache.set(key, Array.isArray(geometry) ? geometry : []);
+  sncfRouteGeometryResultCache.set(key, simplifyGeoPolyline(Array.isArray(geometry) ? geometry : []));
   while (sncfRouteGeometryResultCache.size > SNCF_ROUTE_GEOMETRY_CACHE_MAX) {
     const oldest = sncfRouteGeometryResultCache.keys().next().value;
     sncfRouteGeometryResultCache.delete(oldest);
   }
   return sncfRouteGeometryResultCache.get(key);
+}
+
+function geoPointDistanceToSegment(point, a, b) {
+  const lon = Number(point?.[0]);
+  const lat = Number(point?.[1]);
+  const lonA = Number(a?.[0]);
+  const latA = Number(a?.[1]);
+  const lonB = Number(b?.[0]);
+  const latB = Number(b?.[1]);
+  if (![lon, lat, lonA, latA, lonB, latB].every(Number.isFinite)) return 0;
+  const scale = Math.cos(((latA + latB) / 2) * Math.PI / 180) || 1;
+  const x = lon * scale;
+  const y = lat;
+  const ax = lonA * scale;
+  const ay = latA;
+  const bx = lonB * scale;
+  const by = latB;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 0) return Math.hypot(x - ax, y - ay);
+  const t = clamp(((x - ax) * dx + (y - ay) * dy) / lenSq, 0, 1);
+  return Math.hypot(x - (ax + dx * t), y - (ay + dy * t));
+}
+
+function rdpGeoPolyline(points, epsilon) {
+  if (!Array.isArray(points) || points.length <= 2) return points || [];
+  let bestIndex = -1;
+  let bestDistance = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const distance = geoPointDistanceToSegment(points[i], first, last);
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+    }
+  }
+  if (bestDistance <= epsilon || bestIndex < 0) return [first, last];
+  const left = rdpGeoPolyline(points.slice(0, bestIndex + 1), epsilon);
+  const right = rdpGeoPolyline(points.slice(bestIndex), epsilon);
+  return left.slice(0, -1).concat(right);
+}
+
+function decimateGeoPolyline(points, maxPoints) {
+  if (!Array.isArray(points) || points.length <= maxPoints) return points || [];
+  const out = [points[0]];
+  const step = (points.length - 2) / Math.max(1, maxPoints - 2);
+  for (let i = 1; i < maxPoints - 1; i += 1) {
+    out.push(points[Math.max(1, Math.min(points.length - 2, Math.round(i * step)))]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+function simplifyGeoPolyline(points, maxPoints = 900) {
+  const clean = [];
+  for (const point of points || []) {
+    if (!Array.isArray(point) || point.length < 2) continue;
+    const lon = Number(point[0]);
+    const lat = Number(point[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const previous = clean[clean.length - 1];
+    if (previous && Math.abs(previous[0] - lon) < 0.000001 && Math.abs(previous[1] - lat) < 0.000001) continue;
+    clean.push([roundCoord(lon), roundCoord(lat)]);
+  }
+  if (clean.length <= maxPoints) return clean;
+  const working = clean.length > 6000 ? decimateGeoPolyline(clean, 3000) : clean;
+  let epsilon = 0.00003;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const simplified = rdpGeoPolyline(working, epsilon);
+    if (simplified.length <= maxPoints) return simplified;
+    epsilon *= 1.8;
+  }
+  return decimateGeoPolyline(working, maxPoints);
 }
 
 async function loadSncfRailShapeLines() {
@@ -886,7 +1084,7 @@ async function sncfRouteGeometryForStations(fromId, toId) {
   const end = stationRoutePoint(to) || stationRawPoint(to);
   if (!start || !end) return [];
   const directKm = haversine(start.lat, start.lon, end.lat, end.lon);
-  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return [];
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 1300) return [];
 
   try {
     const lines = await loadSncfRailShapeLines();
@@ -1045,6 +1243,42 @@ function polylineDistanceKm(coords) {
   return total;
 }
 
+async function realRailRouteBetweenStops(stops) {
+  const ids = sanitizeStopsPayload(stops, null, null);
+  if (ids.length < 2) return { ids, distance: 0, maxSegment: 0, segments: [], missing: null };
+
+  const segments = [];
+  let distance = 0;
+  let maxSegment = 0;
+  for (let i = 1; i < ids.length; i += 1) {
+    const from = ids[i - 1];
+    const to = ids[i];
+    const geometry = await sncfRouteGeometryForStations(from, to);
+    const segmentDistance = polylineDistanceKm(geometry || []);
+    if (!Array.isArray(geometry) || geometry.length < 2 || !Number.isFinite(segmentDistance) || segmentDistance <= 0) {
+      return {
+        ids: [],
+        distance: 0,
+        maxSegment: 0,
+        segments,
+        missing: { from, to }
+      };
+    }
+    const rounded = Math.max(1, Math.round(segmentDistance));
+    segments.push({ from, to, distance: rounded });
+    distance += segmentDistance;
+    maxSegment = Math.max(maxSegment, segmentDistance);
+  }
+
+  return {
+    ids,
+    distance: Math.round(distance),
+    maxSegment: Math.round(maxSegment),
+    segments,
+    missing: null
+  };
+}
+
 function mimeType(file) {
   const ext = path.extname(file).toLowerCase();
   return {
@@ -1118,7 +1352,81 @@ function migrateState(loaded) {
 
 function currentStationId(id) {
   const raw = String(id || '').trim();
-  return LEGACY_STATION_COMMUNE_IDS[raw] || raw;
+  if (!raw) return '';
+  const legacy = LEGACY_STATION_COMMUNE_IDS[raw] || raw;
+  return stationAliasMap.get(legacy) || stationAliasMap.get(raw) || legacy;
+}
+
+function stationAliasScore(station, hintName = '') {
+  if (!station) return -Infinity;
+  const hint = stationDedupName(hintName);
+  const name = stationDedupName(station.name || station.stationName || '');
+  const passenger = station.hasPassengerStation ? 2000 : 0;
+  const freight = station.hasFreightStation ? 250 : 0;
+  const demand = Number(station.population || station.baseDemand || 0);
+  const exact = hint && name === hint ? 5000 : 0;
+  const partial = hint && (name.includes(hint) || hint.includes(name)) ? 1200 : 0;
+  return passenger + freight + exact + partial + Math.min(1500, demand / 1200);
+}
+
+function bestStationAliasCandidate(stations, hintName = '') {
+  return [...(stations || [])]
+    .sort((a, b) => stationAliasScore(b, hintName) - stationAliasScore(a, hintName)
+      || String(a.name || '').localeCompare(String(b.name || ''), 'fr'))
+    [0] || null;
+}
+
+function rebuildStationAliasMap(byId = {}) {
+  const aliases = new Map();
+  const stations = Object.values(byId || {});
+  const byCommune = new Map();
+  const byUic = new Map();
+
+  for (const station of stations) {
+    if (!station?.id) continue;
+    const code = stationCommuneCode(station);
+    if (code) {
+      const key = `COM_${String(code).replace(/[^A-Za-z0-9]/g, '')}`;
+      if (!byCommune.has(key)) byCommune.set(key, []);
+      byCommune.get(key).push(station);
+    }
+    const uic = String(station.stationUic || station.codeUic || '').split(',')[0].trim();
+    if (uic) {
+      byUic.set(uic, station);
+      aliases.set(uic, station.id);
+      aliases.set(`GARE_${uic}`, station.id);
+    }
+  }
+
+  for (const [legacyId, uic] of Object.entries(LEGACY_EXPLICIT_STATION_UIC_IDS)) {
+    const station = byUic.get(uic);
+    if (station?.id) aliases.set(legacyId, station.id);
+  }
+
+  for (const [communeId, candidates] of byCommune.entries()) {
+    const best = bestStationAliasCandidate(candidates);
+    if (best?.id) aliases.set(communeId, best.id);
+  }
+
+  for (const [legacyId, communeId] of Object.entries(LEGACY_STATION_COMMUNE_IDS)) {
+    if (aliases.has(legacyId)) continue;
+    const explicit = aliases.get(communeId);
+    if (explicit) {
+      aliases.set(legacyId, explicit);
+      continue;
+    }
+    const candidates = byCommune.get(communeId) || [];
+    const hint = WORLD.stationIndex?.[legacyId]?.name || WORLD.stationIndex?.[communeId]?.name || '';
+    const best = bestStationAliasCandidate(candidates, hint);
+    if (best?.id) aliases.set(legacyId, best.id);
+  }
+
+  stationAliasMap = aliases;
+  return aliases;
+}
+
+function remapStateStationAliases() {
+  for (const player of Object.values(state?.players || {})) migrateLegacyStationReferences(player);
 }
 
 function migrateLegacyStationReferences(player) {
@@ -1424,7 +1732,9 @@ function railPlacementStats(stations) {
 function stationPhysicalKey(station) {
   if (!station) return '';
   const uic = String(station.stationUic || station.codeUic || '').split(',')[0].trim();
+  const gaia = String(station.stationIdGare || station.idGare || '').trim();
   if (station.multiStation && uic) return `uic:${uic}`;
+  if (station.multiStation && gaia) return `gaia:${gaia}`;
   const code = stationCommuneCode(station);
   if (code) return `code:${code}`;
   if (uic) return `uic:${uic}`;
@@ -1456,15 +1766,14 @@ function deduplicatePublicStations(stations, existingStations = []) {
 
 
 function publicWorld() {
-  const customIds = Object.keys(state.customStations || {}).sort().join(',');
+  const customIds = '';
   const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
   const communeCount = Object.keys(communeCache.byId || {}).length;
   const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}:${customIds}`;
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
-  const customStations = Object.values(state.customStations || {});
-  const useAuthoritativeCommunes = Object.keys(communeCache.byId || {}).length >= COMMUNE_CACHE_MIN_READY_COUNT;
-  const baseStations = useAuthoritativeCommunes ? [] : enrichBaseStationsWithPopulation(WORLD.stations).map(stationRailPlacement);
+  const customStations = [];
+  const baseStations = [];
   const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement), baseStations);
   const publicStationsWithoutCustom = [...baseStations, ...communeStations];
   const customFiltered = deduplicatePublicStations(customStations.map(stationRailPlacement), publicStationsWithoutCustom);
@@ -1489,7 +1798,7 @@ function publicWorld() {
       duplicateStationCandidates: communeCache.sncfStats?.duplicateStationCandidates || 0
     },
     railPlacement: railPlacementStats(stations),
-    regions: [...new Set([...WORLD.regions, 'Arrêts personnalisés'])].sort()
+    regions: [...new Set(WORLD.regions)].sort()
   };
   publicWorldCache = { key: cacheKey, value: world };
   return world;
@@ -1637,9 +1946,9 @@ function loadCommuneCache() {
       const normalized = normalizeCommuneStation(station);
       if (normalized) byId[normalized.id] = normalized;
     }
-    const parisTerminals = applyParisTerminalStations(byId);
+    rebuildStationAliasMap(byId);
     const sourceVersion = Number(parsed.sourceVersion || 0);
-    const missingAuthoritativePlacement = Object.values(byId).some(s => s.hasPassengerStation && (!Number.isFinite(Number(s.stationLat)) || !Number.isFinite(Number(s.stationLon)))) || !parsed.sncfStats;
+    const missingAuthoritativePlacement = Object.values(byId).some(s => (s.hasPassengerStation || s.hasFreightStation) && (!Number.isFinite(Number(s.stationLat)) || !Number.isFinite(Number(s.stationLon)))) || !parsed.sncfStats;
     const status = sourceVersion >= COMMUNE_CACHE_SOURCE_VERSION && !missingAuthoritativePlacement ? 'ready-cache' : 'stale-cache';
     return { status, updatedAt: parsed.updatedAt || null, byId, error: '', sncfStats: parsed.sncfStats || null, sourceVersion };
   } catch (error) {
@@ -1654,9 +1963,67 @@ async function fetchJsonWithTimeout(url, timeoutMs = 60000) {
     const response = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json', 'User-Agent': 'Sillons/1.0 (+local game data refresh)' } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
+  } catch (error) {
+    return fetchJsonWithNativeRequest(url, timeoutMs, error);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function fetchJsonWithNativeRequest(url, timeoutMs = 60000, originalError = null, redirectDepth = 0) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    const transport = parsed.protocol === 'http:' ? http : https;
+    const request = transport.get(parsed, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Sillons/1.0 (+local game data refresh)'
+      }
+    }, response => {
+      const status = Number(response.statusCode || 0);
+      const location = response.headers.location;
+      if (status >= 300 && status < 400 && location && redirectDepth < 4) {
+        response.resume();
+        const nextUrl = new URL(location, parsed).toString();
+        fetchJsonWithNativeRequest(nextUrl, timeoutMs, originalError, redirectDepth + 1).then(resolve, reject);
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        reject(new Error(`HTTP ${status}`));
+        return;
+      }
+      const chunks = [];
+      response.setEncoding('utf8');
+      response.on('data', chunk => chunks.push(chunk));
+      response.on('end', () => {
+        try {
+          resolve(JSON.parse(chunks.join('')));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error(`HTTP native timeout after ${timeoutMs}ms`));
+    });
+    request.on('error', error => {
+      if (originalError) {
+        error.message = `${error.message} (fetch fallback after: ${originalError.message})`;
+      }
+      reject(error);
+    });
+  });
+}
+
+function delayMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function addCommuneToIndex(byId, commune) {
@@ -1682,7 +2049,7 @@ async function fetchCommunesByDepartments() {
     const chunk = COMMUNE_DEPARTMENTS.slice(i, i + concurrency);
     const results = await Promise.allSettled(chunk.map(dep => {
       const url = `https://geo.api.gouv.fr/departements/${encodeURIComponent(dep)}/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json`;
-      return fetchJsonWithTimeout(url, 30000);
+      return fetchJsonWithNativeRequest(url, 30000);
     }));
     for (const result of results) {
       if (result.status !== 'fulfilled') continue;
@@ -1696,13 +2063,13 @@ async function fetchSncfRailwayStations() {
   try {
     const exported = await fetchJsonWithTimeout(SNCF_STATION_EXPORT_URL, 90000);
     const stations = sncfRecordsFromPayload(exported).map(normalizeSncfRailwayStation).filter(Boolean);
-    if (stations.length >= 2500) return stations;
-    console.warn(`Export complet gares SNCF incomplet: ${stations.length} entrée(s), bascule pagination.`);
+    if (stations.length >= COMMUNE_CACHE_MIN_READY_COUNT) return stations;
+    console.warn(`Export complet liste-des-gares incomplet: ${stations.length} entrée(s), bascule pagination.`);
   } catch (error) {
-    console.warn('Export complet gares SNCF indisponible:', error.message);
+    console.warn('Export complet liste-des-gares indisponible:', error.message);
   }
 
-  const fields = 'id_gare,nom_gare,trigramme,segment_drg,position_geographique,code_commune,code_uic';
+  const fields = 'code_uic,libelle,fret,voyageurs,code_ligne,rg_troncon,pk,commune,departemen,idreseau,idgaia,x_wgs84,y_wgs84,c_geo';
   const firstUrl = `${SNCF_STATION_API_URL}?select=${encodeURIComponent(fields)}&limit=${SNCF_STATION_PAGE_SIZE}&offset=0`;
   const first = await fetchJsonWithTimeout(firstUrl, 45000);
   const total = Math.max(0, Number(first.total_count || first.nhits || 0));
@@ -1719,7 +2086,7 @@ async function fetchSncfRailwayStations() {
     }));
     for (const result of results) {
       if (result.status === 'fulfilled') pages.push(result.value);
-      else console.warn('Page gares SNCF indisponible:', result.reason?.message || result.reason);
+      else console.warn('Page liste-des-gares indisponible:', result.reason?.message || result.reason);
     }
   }
 
@@ -1773,27 +2140,332 @@ function normalizeSncfRailwayStation(raw) {
   const point = geoPointFromSncfRecord(raw);
   if (!point || !isInFranceBounds(point.lat, point.lon)) return null;
   const label = cleanText(firstStringField(raw, [
-    'nom_gare', 'Nom_Gare', 'Nom gare', 'nom', 'Nom', 'libelle', 'libelle_gare', 'Libelle', 'gare', 'Gare', 'nom_long'
+    'libelle', 'Libelle', 'nom_gare', 'Nom_Gare', 'Nom gare', 'nom', 'Nom', 'libelle_gare', 'gare', 'Gare', 'nom_long'
   ]) || firstStringField(raw, ['commune', 'nom_commune']) || 'Gare', 80);
+  const communeName = firstStringField(raw, ['commune', 'nom_commune', 'Nom_Commune', 'ville', 'localite']) || label || '';
+  const departementName = firstStringField(raw, ['departemen', 'departement', 'département', 'Departement', 'Département']);
   const codeCommune = firstStringField(raw, [
     'code_commune', 'Code_Commune', 'Code Commune', 'code_insee', 'codeinsee', 'insee', 'code_insee_commune', 'commune_code'
   ]).replace(/[^0-9AB]/gi, '').toUpperCase();
-  const communeKey = normalizeSearch(firstStringField(raw, ['commune', 'nom_commune', 'Nom_Commune', 'ville', 'localite']) || label || '');
+  const communeKey = normalizeNameKey(communeName);
   const rawUic = raw.code_uic ?? raw.Code_UIC ?? raw['Code_UIC'] ?? raw.uic ?? raw.UIC;
   const codeUic = Array.isArray(rawUic) ? rawUic.join(',') : String(rawUic || '');
-  if (!label || (!codeCommune && !communeKey)) return null;
+  const voyageurs = /^o(ui)?$/i.test(firstStringField(raw, ['voyageurs', 'Voyageurs']));
+  const fret = /^o(ui)?$/i.test(firstStringField(raw, ['fret', 'Fret']));
+  if (!label || (!voyageurs && !fret)) return null;
   return {
     communeKey,
+    communeName: cleanText(communeName, 80),
+    departementName: cleanOptionalText(departementName, 80),
     codeCommune,
     label,
     lat: point.lat,
     lon: point.lon,
-    voyageurs: true,
-    fret: false,
+    voyageurs,
+    fret,
     trigramme: firstStringField(raw, ['trigramme', 'Trigramme', 'code_gare']).slice(0, 12),
     segmentDrg: firstStringField(raw, ['segment_drg', 'Segment_DRG', 'Segment(s) DRG']),
     codeUic: codeUic.slice(0, 64),
-    idGare: firstStringField(raw, ['id_gare', 'Id_Gare', 'Id gare', 'id', 'recordid']).slice(0, 40)
+    idGare: firstStringField(raw, ['idgaia', 'id_gaia', 'id_gare', 'Id_Gare', 'Id gare', 'id', 'recordid']).slice(0, 64),
+    idReseau: firstStringField(raw, ['idreseau', 'id_reseau']).slice(0, 24),
+    codeLigne: firstStringField(raw, ['code_ligne', 'Code Ligne']).slice(0, 16),
+    rgTroncon: Number(raw.rg_troncon ?? raw.RG_TRONCON ?? 0),
+    pk: firstStringField(raw, ['pk', 'PK']).slice(0, 24)
+  };
+}
+
+function sncfStationGroupKey(station) {
+  const uic = String(station?.codeUic || '').split(',')[0].trim();
+  if (uic) return `uic:${uic}`;
+  if (station?.idGare) return `gaia:${station.idGare}`;
+  return `coord:${normalizeNameKey(station?.label)}:${roundCoord(station?.lat)}:${roundCoord(station?.lon)}`;
+}
+
+function safeStationIdPart(value, max = 48) {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, max);
+}
+
+function stationIdFromSncfGroup(groupKey, primary) {
+  const uic = String(primary?.codeUic || '').split(',')[0].trim();
+  if (uic) return `GARE_${safeStationIdPart(uic, 20)}`;
+  if (primary?.idGare) return `GAIA_${safeStationIdPart(primary.idGare, 48)}`;
+  return `GARE_${crypto.createHash('sha1').update(String(groupKey)).digest('hex').slice(0, 12)}`;
+}
+
+function choosePrimarySncfStation(records) {
+  const list = (records || []).filter(Boolean);
+  if (!list.length) return null;
+  const avgLat = list.reduce((sum, item) => sum + Number(item.lat || 0), 0) / list.length;
+  const avgLon = list.reduce((sum, item) => sum + Number(item.lon || 0), 0) / list.length;
+  return [...list].sort((a, b) => {
+    const passengerDelta = Number(Boolean(b.voyageurs)) - Number(Boolean(a.voyageurs));
+    if (passengerDelta) return passengerDelta;
+    const freightDelta = Number(Boolean(b.fret)) - Number(Boolean(a.fret));
+    if (freightDelta) return freightDelta;
+    const da = haversine(avgLat, avgLon, a.lat, a.lon);
+    const db = haversine(avgLat, avgLon, b.lat, b.lon);
+    return da - db || Number(a.rgTroncon || 0) - Number(b.rgTroncon || 0);
+  })[0];
+}
+
+function departmentCodeFromName(name) {
+  const key = String(name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[’]/g, "'")
+    .replace(/\s+/g, '-')
+    .trim();
+  return DEPARTMENT_NAME_TO_CODE[key] || '';
+}
+
+function normalizePopulationRecord(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const code = String(raw.codgeo || raw.code || '').trim();
+  const name = cleanOptionalText(raw.libgeo || raw.nom || '', 100);
+  const dep = String(raw.dep || '').trim();
+  const population = ['p23_pop', 'p22_pop', 'p21_pop', 'p20_pop', 'p19_pop']
+    .map(field => Number(raw[field]))
+    .find(value => Number.isFinite(value) && value >= 0);
+  if (!code || !name || !Number.isFinite(population)) return null;
+  return {
+    code,
+    name,
+    dep,
+    population: Math.round(population),
+    nameKey: normalizeNameKey(name),
+    sourceField: Number.isFinite(Number(raw.p23_pop)) ? 'p23_pop' : Number.isFinite(Number(raw.p22_pop)) ? 'p22_pop' : 'population'
+  };
+}
+
+function makePopulationRecord({ code, name, dep, population, sourceField = 'p23_pop' }) {
+  const cleanName = cleanOptionalText(name, 100);
+  const roundedPopulation = Math.max(0, Math.round(Number(population || 0)));
+  if (!code || !cleanName || !Number.isFinite(roundedPopulation)) return null;
+  return {
+    code: String(code),
+    name: cleanName,
+    dep: String(dep || ''),
+    population: roundedPopulation,
+    nameKey: normalizeNameKey(cleanName),
+    sourceField
+  };
+}
+
+function addAggregatedPlmPopulationRecords(records) {
+  const out = [...(records || [])];
+  const existingCodes = new Set(out.map(record => record.code).filter(Boolean));
+  const configs = [
+    { code: '75056', name: 'Paris', dep: '75', key: 'paris', minParts: 20 },
+    { code: '69123', name: 'Lyon', dep: '69', key: 'lyon', minParts: 9 },
+    { code: '13055', name: 'Marseille', dep: '13', key: 'marseille', minParts: 16 }
+  ];
+
+  for (const config of configs) {
+    if (existingCodes.has(config.code)) continue;
+    const parts = out.filter(record =>
+      record.dep === config.dep
+      && String(record.nameKey || '').startsWith(`${config.key} `)
+      && String(record.nameKey || '').endsWith(' arrondissement')
+    );
+    if (parts.length < config.minParts) continue;
+    const aggregate = makePopulationRecord({
+      code: config.code,
+      name: config.name,
+      dep: config.dep,
+      population: parts.reduce((sum, record) => sum + Number(record.population || 0), 0),
+      sourceField: 'p23_pop arrondissements'
+    });
+    if (aggregate) {
+      out.push(aggregate);
+      existingCodes.add(aggregate.code);
+    }
+  }
+
+  return out;
+}
+
+async function fetchPopulationMunicipalePage(page, attempt = 1) {
+  const url = `${POPULATION_TABULAR_API_URL}?page=${page}&page_size=${POPULATION_TABULAR_PAGE_SIZE}`;
+  try {
+    return await fetchJsonWithNativeRequest(url, 45000);
+  } catch (error) {
+    if (attempt >= 3) throw error;
+    await delayMs(250 * attempt);
+    return fetchPopulationMunicipalePage(page, attempt + 1);
+  }
+}
+
+function buildPopulationIndex(records, source) {
+  const byCode = new Map();
+  const byDeptName = new Map();
+  const byName = new Map();
+  for (const record of records || []) {
+    byCode.set(record.code, record);
+    if (record.dep && record.nameKey) byDeptName.set(`${record.dep}:${record.nameKey}`, record);
+    if (record.nameKey) {
+      if (!byName.has(record.nameKey)) byName.set(record.nameKey, []);
+      byName.get(record.nameKey).push(record);
+    }
+  }
+  return { records, byCode, byDeptName, byName, source };
+}
+
+async function fetchDataGouvPopulationMunicipaleIndex() {
+  const first = await fetchPopulationMunicipalePage(1);
+  const total = Math.max(0, Number(first?.meta?.total || 0));
+  const pages = [first];
+  const pageCount = Math.ceil(total / POPULATION_TABULAR_PAGE_SIZE);
+  const pageNumbers = [];
+  for (let page = 2; page <= pageCount; page += 1) pageNumbers.push(page);
+
+  const failedPages = [];
+  const concurrency = 6;
+  for (let i = 0; i < pageNumbers.length; i += concurrency) {
+    const chunk = pageNumbers.slice(i, i + concurrency);
+    const results = await Promise.allSettled(chunk.map(fetchPopulationMunicipalePage));
+    for (let index = 0; index < results.length; index += 1) {
+      const result = results[index];
+      if (result.status === 'fulfilled') pages.push(result.value);
+      else {
+        failedPages.push(chunk[index]);
+        console.warn('Page population municipale indisponible:', result.reason?.message || result.reason);
+      }
+    }
+  }
+
+  for (const page of failedPages) {
+    try {
+      pages.push(await fetchPopulationMunicipalePage(page, 1));
+    } catch (error) {
+      console.warn(`Page population municipale ${page} toujours indisponible:`, error.message || error);
+    }
+  }
+
+  const rawRecords = pages
+    .flatMap(page => Array.isArray(page?.data) ? page.data : [])
+    .map(normalizePopulationRecord)
+    .filter(Boolean);
+  if (total && rawRecords.length < Math.floor(total * 0.98)) {
+    throw new Error(`DonnÃ©es population municipales incomplÃ¨tes: ${rawRecords.length}/${total}`);
+  }
+  const records = addAggregatedPlmPopulationRecords(rawRecords);
+  return buildPopulationIndex(records, 'data.gouv.fr population municipale p23_pop');
+}
+
+function normalizeGeoApiPopulationRecord(station) {
+  return makePopulationRecord({
+    code: station.code,
+    name: station.name,
+    dep: station.codeDepartement,
+    population: station.population,
+    sourceField: 'geo.api.gouv.fr population'
+  });
+}
+
+async function fetchGeoApiPopulationIndex() {
+  const byId = await fetchCommunesByDepartments();
+  const records = Object.values(byId)
+    .map(normalizeGeoApiPopulationRecord)
+    .filter(Boolean);
+  if (records.length < 30000) throw new Error(`Fallback population geo.api.gouv.fr incomplet: ${records.length}/30000`);
+  return buildPopulationIndex(records, 'geo.api.gouv.fr population communale fallback');
+}
+
+async function fetchPopulationMunicipaleIndex() {
+  try {
+    return await fetchDataGouvPopulationMunicipaleIndex();
+  } catch (error) {
+    console.warn('Population data.gouv.fr indisponible, fallback geo.api.gouv.fr:', error.message || error);
+    return fetchGeoApiPopulationIndex();
+  }
+}
+
+function populationForSncfStation(station, populationIndex) {
+  if (!station || !populationIndex) return null;
+  if (station.codeCommune && populationIndex.byCode.has(station.codeCommune)) return populationIndex.byCode.get(station.codeCommune);
+  const dep = departmentCodeFromName(station.departementName);
+  const key = dep && station.communeKey ? `${dep}:${station.communeKey}` : '';
+  if (key && populationIndex.byDeptName.has(key)) return populationIndex.byDeptName.get(key);
+  const sameName = populationIndex.byName.get(station.communeKey) || [];
+  return sameName.length === 1 ? sameName[0] : null;
+}
+
+function buildStationsFromSncfList(sncfStations, populationIndex) {
+  const groups = new Map();
+  for (const record of sncfStations || []) {
+    const key = sncfStationGroupKey(record);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(record);
+  }
+
+  const stations = [];
+  let populationMatched = 0;
+  let duplicateRecords = 0;
+  for (const [groupKey, records] of groups.entries()) {
+    const primary = choosePrimarySncfStation(records);
+    if (!primary) continue;
+    duplicateRecords += Math.max(0, records.length - 1);
+    const population = populationForSncfStation(primary, populationIndex);
+    if (population) populationMatched += 1;
+    const inhabitants = Math.max(0, Number(population?.population || 0));
+    const populationSourceLabel = populationIndex?.source || 'population municipale';
+    const hasPassengerStation = records.some(record => record.voyageurs);
+    const hasFreightStation = records.some(record => record.fret);
+    const baseDemand = hasPassengerStation
+      ? (inhabitants > 0 ? passengerDemandFromPopulation(inhabitants) : 90)
+      : (inhabitants > 0 ? Math.max(35, Math.round(passengerDemandFromPopulation(inhabitants) * 0.35)) : 35);
+    const freight = Math.round(clamp((inhabitants > 0 ? Math.sqrt(inhabitants) * 0.62 : 30) + (hasFreightStation ? 42 : 0), 10, 190));
+    const tourism = Math.round(clamp(30 + (inhabitants > 0 ? Math.log10(Math.max(inhabitants, 1)) * 12 : 8), 35, 120));
+    const codeLignes = [...new Set(records.map(record => record.codeLigne).filter(Boolean))].sort();
+    stations.push(normalizeCommuneStation({
+      id: stationIdFromSncfGroup(groupKey, primary),
+      code: population?.code || primary.codeCommune || '',
+      name: primary.label,
+      lat: roundCoord(primary.lat),
+      lon: roundCoord(primary.lon),
+      population: inhabitants,
+      region: hasPassengerStation && hasFreightStation ? 'Gare voyageurs et fret' : hasPassengerStation ? 'Gare voyageurs' : 'Gare fret',
+      codesPostaux: [],
+      codeDepartement: population?.dep || departmentCodeFromName(primary.departementName),
+      baseDemand,
+      freight,
+      tourism,
+      commune: true,
+      realStation: true,
+      multiStation: true,
+      allowSameCommuneStation: true,
+      populationSource: population ? `${populationSourceLabel} (${population.sourceField})` : 'population municipale non rapprochée',
+      communeName: primary.communeName,
+      stationLat: roundCoord(primary.lat),
+      stationLon: roundCoord(primary.lon),
+      stationName: primary.label,
+      stationUic: String(primary.codeUic || '').split(',')[0].trim(),
+      stationTrigramme: primary.trigramme || '',
+      stationIdGare: primary.idGare || primary.idReseau || '',
+      stationSource: 'sncf-liste-des-gares',
+      hasPassengerStation,
+      hasFreightStation,
+      stationKind: hasPassengerStation && hasFreightStation ? 'mixed' : hasPassengerStation ? 'passenger' : 'freight',
+      codeLignes,
+      sourceRecords: records.length
+    }));
+  }
+
+  return {
+    stations: stations.filter(Boolean).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr')),
+    stats: {
+      source: SNCF_STATION_DATASET,
+      totalRecords: sncfStations.length,
+      groupedStations: groups.size,
+      duplicateRecords,
+      populationMatched,
+      populationTotal: populationIndex?.records?.length || 0,
+      populationSource: populationIndex?.source || ''
+    }
   };
 }
 
@@ -1983,49 +2655,28 @@ async function refreshCommuneCache(force = false) {
 
   communeCache.status = 'loading';
   try {
-    let byId = {};
-    let primaryError = null;
-
-    try {
-      byId = await fetchCommunesPrimary();
-    } catch (error) {
-      primaryError = error;
-      console.warn('Source communes principale indisponible:', error.message);
-    }
-
-    const primaryCount = Object.keys(byId).length;
-    const hasLongjumeau = Object.values(byId).some(s => String(s.code || '') === '91345' || stationDedupName(s.name) === 'longjumeau');
-    if (primaryCount < 1500 || !hasLongjumeau) {
-      try {
-        const byDepartment = await fetchCommunesByDepartments();
-        if (Object.keys(byDepartment).length > primaryCount) byId = byDepartment;
-        else {
-          for (const station of Object.values(byDepartment)) byId[station.id] = station;
-        }
-      } catch (error) {
-        console.warn('Source communes départementale indisponible:', error.message);
-        if (primaryError && !primaryCount) throw primaryError;
-      }
-    }
-
-    byId = applyCriticalCommuneFallbacks(byId);
+    const [populationIndex, sncfStations] = await Promise.all([
+      fetchPopulationMunicipaleIndex(),
+      fetchSncfRailwayStations()
+    ]);
+    const built = buildStationsFromSncfList(sncfStations, populationIndex);
+    const byId = {};
+    for (const station of built.stations) byId[station.id] = station;
     const coverageCount = Object.keys(byId).length;
     if (coverageCount < COMMUNE_CACHE_MIN_READY_COUNT) {
-      throw new Error(`Couverture communes incomplete: ${coverageCount}/${COMMUNE_CACHE_MIN_READY_COUNT}`);
+      throw new Error(`Couverture gares SNCF incomplete: ${coverageCount}/${COMMUNE_CACHE_MIN_READY_COUNT}`);
     }
-    let sncfStats = { matched: 0, totalStations: 0, error: '' };
-    try {
-      const sncfStations = await fetchSncfRailwayStations();
-      sncfStats = enrichCommunesWithSncfStations(byId, sncfStations);
-    } catch (error) {
-      sncfStats.error = error.message;
-      console.warn('Enrichissement gares SNCF indisponible:', error.message);
-    }
-    const parisTerminals = applyParisTerminalStations(byId);
-    sncfStats.parisTerminals = parisTerminals;
-    const placementAudit = auditStationPlacements(byId);
-    sncfStats.placementAudit = placementAudit;
-    communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '', sncfStats };
+    const sncfStats = {
+      ...built.stats,
+      totalStations: coverageCount,
+      matched: built.stats.populationMatched,
+      source: SNCF_STATION_DATASET,
+      populationSource: built.stats.populationSource || 'population-municipale-des-communes-france-entiere',
+      populationResourceId: POPULATION_TABULAR_RESOURCE_ID
+    };
+    communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '', sncfStats, sourceVersion: COMMUNE_CACHE_SOURCE_VERSION };
+    rebuildStationAliasMap(byId);
+    remapStateStationAliases();
     _routeCache.clear();
     invalidatePublicWorldCache();
     fs.mkdirSync(path.dirname(COMMUNE_CACHE_FILE), { recursive: true });
@@ -2033,11 +2684,11 @@ async function refreshCommuneCache(force = false) {
       updatedAt: communeCache.updatedAt,
       minPopulation: MIN_COMMUNE_POPULATION,
       sourceVersion: COMMUNE_CACHE_SOURCE_VERSION,
-      source: 'geo.api.gouv.fr communes + fallback departements + SNCF gares-de-voyageurs',
+      source: 'SNCF liste-des-gares + data.gouv.fr population municipale des communes',
       sncfStats,
       stations: Object.values(byId)
     }, null, 2));
-    console.log(`Communes jouables chargées: ${Object.keys(byId).length} (${sncfStats.matched || 0} gares SNCF associées)`);
+    console.log(`Gares SNCF jouables chargées: ${Object.keys(byId).length} (${sncfStats.matched || 0} populations communales rapprochées)`);
     return communeCache;
   } catch (error) {
     communeCache.status = Object.keys(communeCache.byId || {}).length ? 'ready-cache-error' : 'error';
@@ -2099,22 +2750,29 @@ function normalizeCommuneStation(station) {
   const stationLon = Number(station.stationLon);
   const population = Number(station.population || 0);
   if (!station.id || population < MIN_COMMUNE_POPULATION || !Number.isFinite(lat) || !Number.isFinite(lon) || !isInFranceBounds(lat, lon)) return null;
+  const providedDemand = Number(station.baseDemand);
+  const baseDemand = population > 0
+    ? passengerDemandFromPopulation(population)
+    : (Number.isFinite(providedDemand) && providedDemand > 0 ? providedDemand : 70);
   const normalized = {
     id: String(station.id),
     code: String(station.code || '').slice(0, 12),
-    name: cleanText(station.name || 'Commune', 38),
+    name: cleanText(station.name || 'Gare', 48),
     lat,
     lon,
     population: Math.round(population),
-    region: cleanText(station.region || 'Ville française', 40),
+    region: cleanText(station.region || 'Gare RFN', 48),
     codesPostaux: Array.isArray(station.codesPostaux) ? station.codesPostaux.slice(0, 8) : [],
     codeDepartement: String(station.codeDepartement || '').slice(0, 4),
-    baseDemand: passengerDemandFromPopulation(population),
+    baseDemand: Math.round(clamp(baseDemand, 0, 1600)),
     freight: clamp(Number(station.freight || Math.sqrt(population) * 0.65), 0, 170),
     tourism: clamp(Number(station.tourism || 35), 0, 120),
-    commune: true,
-    populationSource: station.populationSource || 'geo.api.gouv.fr'
+    commune: Boolean(station.commune),
+    populationSource: station.populationSource || 'data.gouv.fr population municipale'
   };
+  if (station.realStation) normalized.realStation = true;
+  if (Array.isArray(station.codeLignes)) normalized.codeLignes = station.codeLignes.slice(0, 16).map(code => String(code).slice(0, 16));
+  if (Number.isFinite(Number(station.sourceRecords))) normalized.sourceRecords = Math.max(1, Math.round(Number(station.sourceRecords)));
   const annualPassengers = Number(station.annualPassengers || station.passengers2024 || 0);
   const purchaseCost = station.majorTerminal && Number.isFinite(annualPassengers) && annualPassengers > 0
     ? stationPriceFromAnnualPassengers(annualPassengers) * 50
@@ -2123,6 +2781,7 @@ function normalizeCommuneStation(station) {
   if (Number.isFinite(Number(station.passengerTrafficYear))) normalized.passengerTrafficYear = Math.round(Number(station.passengerTrafficYear));
   if (Number.isFinite(purchaseCost) && purchaseCost > 0) normalized.purchaseCost = Math.round(purchaseCost);
   if (station.stationKind) normalized.stationKind = cleanText(station.stationKind, 40);
+  if (station.communeName) normalized.communeName = cleanText(station.communeName, 80);
   if (station.majorTerminal) normalized.majorTerminal = true;
   if (station.multiStation) normalized.multiStation = true;
   if (station.allowSameCommuneStation) normalized.allowSameCommuneStation = true;
@@ -2132,8 +2791,8 @@ function normalizeCommuneStation(station) {
     normalized.stationName = cleanText(station.stationName || station.name || 'Gare', 64);
     normalized.stationUic = String(station.stationUic || '').slice(0, 16);
     normalized.stationTrigramme = String(station.stationTrigramme || '').slice(0, 12);
-    normalized.stationIdGare = String(station.stationIdGare || station.stationUic || '').slice(0, 40);
-    normalized.stationSource = station.stationSource || 'sncf-gares-de-voyageurs';
+    normalized.stationIdGare = String(station.stationIdGare || station.stationUic || '').slice(0, 64);
+    normalized.stationSource = station.stationSource || 'sncf-liste-des-gares';
     normalized.hasPassengerStation = Boolean(station.hasPassengerStation);
     normalized.hasFreightStation = Boolean(station.hasFreightStation);
   }
@@ -2162,6 +2821,16 @@ function searchCommuneStations(query, limit = 30) {
 
 function normalizeSearch(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function normalizeNameKey(value) {
+  return normalizeSearch(value)
+    .replace(/\bste?\b/g, 'saint')
+    .replace(/\bsaints\b/g, 'saint')
+    .replace(/\bsainte\b/g, 'saint')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizeCustomStations(raw) {
@@ -2365,7 +3034,7 @@ function createPlayer(input) {
 }
 
 
-function applyAction(playerId, type, payload) {
+async function applyAction(playerId, type, payload) {
   const player = state.players[playerId];
   if (!player) return { ok: false, error: 'Joueur introuvable.' };
   player.lastSeen = Date.now();
@@ -2399,7 +3068,7 @@ function applyAction(playerId, type, payload) {
 
   const handler = handlers[type];
   if (!handler) return { ok: false, error: 'Action inconnue.' };
-  const result = handler();
+  const result = await handler();
   if (result.ok) saveState();
   return result;
 }
@@ -2568,15 +3237,17 @@ function lineEffectiveTariff(line, distance = lineDistance(line)) {
   return lineTicketPrice(line, routeDistance) / routeDistance;
 }
 
-function actionCreateLine(player, payload) {
+async function actionCreateLine(player, payload) {
   const rawStops = sanitizeStopsPayload(payload.stops, payload.from, payload.to);
-  const stops = payload.preserveOrder ? rawStops : coherentStopOrder(rawStops);
+  const stops = rawStops;
   const trainId = String(payload.trainId || '');
   const service = ['passengers', 'freight', 'mixed'].includes(payload.service) ? payload.service : 'passengers';
   const frequency = 1;
 
   const invalidReason = validateLineStops(stops);
   if (invalidReason) return fail(invalidReason);
+  const serviceStopProblem = validateLineStopService(stops, service);
+  if (serviceStopProblem) return fail(serviceStopProblem);
   const train = player.trains.find(t => t.id === trainId);
   if (!train) return fail('Train introuvable.');
   if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
@@ -2585,9 +3256,12 @@ function actionCreateLine(player, payload) {
   const operatingModel = getTrainOperatingProfile(train, model, player);
   if (!lineServiceCompatibleWithProfile(service, operatingModel)) return fail('Ce train n’est pas compatible avec ce type de service.');
 
-  const routeInfo = routeBetweenStops(stops);
+  const routeInfo = await realRailRouteBetweenStops(stops);
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
-    return fail('Aucun itinéraire ferroviaire connu entre ces arrêts.', 'Choisis des gares reliées au réseau, ou ajoute une liaison dans buildRailGraph() côté serveur.');
+    const missing = routeInfo.missing;
+    const from = missing ? stationById(missing.from)?.name || missing.from : '';
+    const to = missing ? stationById(missing.to)?.name || missing.to : '';
+    return fail('Aucun itinéraire RFN réel entre ces gares.', missing ? `Segment introuvable dans formes-des-lignes-du-rfn : ${from} → ${to}.` : 'Choisis des gares reliées par le Réseau Ferré National.');
   }
   const ownershipProblem = lineStopsOwnershipProblem(stops);
   if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
@@ -2606,7 +3280,7 @@ function actionCreateLine(player, payload) {
   if (!canPay(player, setupCost)) return fail(`Trésorerie insuffisante. Coût de lancement: ${money(setupCost)}.`);
 
   player.cash -= setupCost;
-  const line = createLineInstance(player, stops, trainId, service, frequency, ticketPrice, routeInfo.distance);
+  const line = createLineInstance(player, stops, trainId, service, frequency, ticketPrice, routeInfo);
   player.lines.push(line);
   markTutorialAction(player, 'createLine');
   notify(player, `Nouvelle ligne ouverte : ${lineStopsNames(stops)}.`);
@@ -2631,7 +3305,7 @@ function refreshPlayerLineStatsNow(player) {
 }
 
 
-function actionUpdateLine(player, payload) {
+async function actionUpdateLine(player, payload) {
   const line = player.lines.find(l => l.id === payload.lineId);
   if (!line) return fail('Ligne introuvable.');
   normalizeLine(line);
@@ -2641,7 +3315,7 @@ function actionUpdateLine(player, payload) {
   let nextStops = currentStops;
   if (Array.isArray(payload.stops)) {
     const rawStops = sanitizeStopsPayload(payload.stops, null, null);
-    nextStops = payload.preserveOrder ? rawStops : coherentStopOrder(rawStops);
+    nextStops = rawStops;
   }
 
   const requestedService = payload.service !== undefined ? String(payload.service || '').trim() : line.service;
@@ -2656,12 +3330,23 @@ function actionUpdateLine(player, payload) {
 
   const invalidReason = validateLineStops(nextStops);
   if (invalidReason) return fail(invalidReason);
+  const serviceStopProblem = validateLineStopService(nextStops, nextService);
+  if (serviceStopProblem) return fail(serviceStopProblem);
   if (!nextTrainIds.length) return fail('Sélectionne au moins un train pour cette ligne.');
 
-  const routeInfo = routeBetweenStops(nextStops);
-  if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de calculer un itinéraire pour cette suite d’arrêts.');
+  const routeInfo = await realRailRouteBetweenStops(nextStops);
+  if (!routeInfo.ids.length || routeInfo.distance <= 0) {
+    const missing = routeInfo.missing;
+    const from = missing ? stationById(missing.from)?.name || missing.from : '';
+    const to = missing ? stationById(missing.to)?.name || missing.to : '';
+    return fail('Impossible de calculer un itinéraire RFN réel pour cette suite d’arrêts.', missing ? `Segment introuvable dans formes-des-lignes-du-rfn : ${from} → ${to}.` : '');
+  }
   const ownershipProblem = lineStopsOwnershipProblem(nextStops);
   if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
+  if (!Array.isArray(payload.stops) && (!Number.isFinite(Number(line.distance)) || !Array.isArray(line.routeSegments) || !line.routeSegments.length)) {
+    applyValidatedRouteToLine(line, routeInfo);
+    changedOperationalData = true;
+  }
 
   const selectedTrains = [];
   for (const trainId of nextTrainIds) {
@@ -2689,6 +3374,7 @@ function actionUpdateLine(player, payload) {
   if (Array.isArray(payload.stops)) {
     const preservedTicketPrice = lineTicketPrice(line, lineDistance(line));
     line.stops = [...nextStops];
+    applyValidatedRouteToLine(line, routeInfo);
     normalizeLine(line);
     if (payload.ticketPrice === undefined && payload.tariff === undefined) setLineTicketPrice(line, preservedTicketPrice, lineDistance(line));
     changedOperationalData = true;
@@ -2738,7 +3424,7 @@ function actionUpgradeStation(player, payload) {
 
   const currentOwner = stationOwnerInfo(stationId);
   if (currentOwner && currentOwner.player.id !== player.id) {
-    return fail(`${station.name} appartient déjà à ${currentOwner.player.name}.`, 'Choisis une ville non possédée ou développe tes propres gares.');
+    return fail(`${station.name} appartient déjà à ${currentOwner.player.name}.`, 'Choisis une gare non possédée ou développe tes propres gares.');
   }
 
   const wasUnowned = !currentOwner;
@@ -2929,45 +3615,7 @@ function customStationCreationCost(lat, lon) {
 }
 
 function actionCreateCustomStation(player, payload) {
-  const lat = Number(payload.lat);
-  const lon = Number(payload.lon);
-  const name = cleanText(payload.name || 'Nouvel arrêt', 38);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return fail('Coordonnées invalides.');
-  if (!isInFranceBounds(lat, lon)) return fail('Point hors zone.', 'Choisis un emplacement situé en France métropolitaine ou en Corse.');
-  if (name.length < 2) return fail('Nom trop court.');
-
-  const quote = customStationCreationCost(lat, lon);
-  const creationCost = quote.cost;
-  if (!canPay(player, creationCost)) return fail(`Trésorerie insuffisante. Coût de création : ${money(creationCost)}.`);
-
-  const id = `OSM_${crypto.randomUUID().slice(0, 8)}`;
-  const baseDemand = quote.demand;
-  const freight = quote.freight;
-  const tourism = quote.tourism;
-  const station = {
-    id,
-    name,
-    lat,
-    lon,
-    region: 'Arrêts personnalisés',
-    baseDemand,
-    freight,
-    tourism,
-    custom: true,
-    ownerId: player.id,
-    createdDay: state.day,
-    creationCost,
-    pricingSource: 'nearby-stations'
-  };
-  state.customStations ||= {};
-  state.customStations[id] = station;
-  player.cash -= creationCost;
-  player.stations[id] = { level: 1, depot: false, commerce: 0, maintenance: 0, electrified: false };
-  _routeCache.clear();
-  invalidatePublicWorldCache();
-  notify(player, `Nouvel arrêt personnalisé créé : ${name} pour ${money(creationCost)}.`);
-  state.news.push({ day: state.day, text: `${player.name} ouvre un nouvel arrêt à ${name}.` });
-  return ok('Arrêt personnalisé créé.');
+  return fail('Création de gare désactivée.', 'Les points jouables sont maintenant limités aux gares réelles du Réseau Ferré National.');
 }
 
 function estimateDemandFromLocation(lat, lon) {
@@ -3547,6 +4195,21 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const from = stationById(stops[0]);
     const to = stationById(stops[stops.length - 1]);
     const distance = lineDistance(line);
+    if (!from || !to || !Number.isFinite(distance) || distance <= 0) {
+      line.stats = {
+        passengers: 0,
+        freightTons: 0,
+        revenue: 0,
+        expenses: 0,
+        profit: 0,
+        punctuality: 0,
+        satisfaction: 0,
+        share: 0,
+        status: 'invalid-route',
+        message: 'Itinéraire RFN ou gare réelle introuvable après mise à jour des données.'
+      };
+      continue;
+    }
     const lineNeeds = computeLineStaffNeeds(player, line);
     const lineDriverCoverage = lineNeeds.drivers > 0 ? driverCoverage : 1;
     const allocatedDrivers = lineNeeds.drivers > 0 ? lineNeeds.drivers * lineDriverCoverage : 0;
@@ -4921,10 +5584,28 @@ function normalizeTrain(raw, ownerId) {
 }
 
 
-function createLineInstance(player, stops, trainId, service, frequency, ticketPrice, knownDistance = null) {
+function applyValidatedRouteToLine(line, routeInfo) {
+  if (!line || !routeInfo) return line;
+  const distance = Math.max(0, Math.round(Number(routeInfo.distance || 0)));
+  if (distance > 0) line.distance = distance;
+  if (Number.isFinite(Number(routeInfo.maxSegment))) line.maxSegment = Math.max(0, Math.round(Number(routeInfo.maxSegment || 0)));
+  if (Array.isArray(routeInfo.segments)) {
+    line.routeSegments = routeInfo.segments
+      .map(segment => ({
+        from: currentStationId(segment.from),
+        to: currentStationId(segment.to),
+        distance: Math.max(1, Math.round(Number(segment.distance || 0)))
+      }))
+      .filter(segment => segment.from && segment.to && segment.from !== segment.to && segment.distance > 0);
+  }
+  return line;
+}
+
+function createLineInstance(player, stops, trainId, service, frequency, ticketPrice, knownRoute = null) {
   const normalizedStops = sanitizeStopsPayload(stops, null, null);
   const count = player.lines.length + 1;
-  return normalizeLine({
+  const routeDistance = Number(knownRoute?.distance || knownRoute || routeBetweenStops(normalizedStops).distance);
+  return normalizeLine(applyValidatedRouteToLine({
     id: crypto.randomUUID(),
     code: `${player.name.substring(0, 3).toUpperCase()}-${String(count).padStart(3, '0')}`,
     from: normalizedStops[0],
@@ -4935,12 +5616,13 @@ function createLineInstance(player, stops, trainId, service, frequency, ticketPr
     service,
     frequency,
     ticketPrice,
-    tariff: tariffFromTicketPrice(ticketPrice, Math.max(1, Number(knownDistance || routeBetweenStops(normalizedStops).distance))),
+    distance: Math.max(1, Math.round(routeDistance || 0)),
+    tariff: tariffFromTicketPrice(ticketPrice, Math.max(1, Number(routeDistance || 0))),
     active: true,
     electrified: false,
     createdDay: state.day,
     stats: { passengers: 0, freightTons: 0, revenue: 0, expenses: 0, profit: 0, punctuality: 100, satisfaction: 50, share: 0 }
-  });
+  }, knownRoute && typeof knownRoute === 'object' ? knownRoute : null));
 }
 
 function lineStops(line) {
@@ -5038,6 +5720,19 @@ function validateLineStops(stops) {
   return '';
 }
 
+function validateLineStopService(stops, service) {
+  for (const stopId of stops || []) {
+    const station = stationById(stopId);
+    if (!station) return `Gare inconnue : ${stopId}.`;
+    const passengerOk = Boolean(station.hasPassengerStation);
+    const freightOk = Boolean(station.hasFreightStation);
+    if (service === 'passengers' && !passengerOk) return `${station.name} n’est pas une gare voyageurs.`;
+    if (service === 'freight' && !freightOk) return `${station.name} n’est pas une gare fret.`;
+    if (service === 'mixed' && (!passengerOk || !freightOk)) return `${station.name} ne permet pas un service mixte voyageurs + fret.`;
+  }
+  return '';
+}
+
 function stationOwnerInfo(stationId) {
   for (const candidate of activePlayers()) {
     if (candidate?.stations?.[stationId]) {
@@ -5058,7 +5753,7 @@ function lineStopsOwnershipProblem(stops) {
     const station = stationById(stopId);
     if (!station) return `Arrêt invalide : ${stopId}.`;
     if (!stationOwnerInfo(stopId)) {
-      return `Impossible d’ouvrir cette ligne : ${station.name} n’appartient à aucune compagnie. Achète d’abord cette ville dans l’onglet Gares.`;
+      return `Impossible d’ouvrir cette ligne : ${station.name} n’appartient à aucune compagnie. Achète d’abord cette gare dans l’onglet Gares.`;
     }
   }
   return '';
@@ -5145,6 +5840,8 @@ function normalizeLine(line) {
   line.stops = stops.length >= 2 ? stops : [line.from, line.to].filter(Boolean);
   line.from = line.stops[0];
   line.to = line.stops[line.stops.length - 1];
+  if (Number.isFinite(Number(line.distance))) line.distance = Math.max(0, Math.round(Number(line.distance)));
+  if (Number.isFinite(Number(line.maxSegment))) line.maxSegment = Math.max(0, Math.round(Number(line.maxSegment)));
   normalizeLineTrainIds(line);
   line.name = lineRouteName(line.stops);
   if (!line.stats) line.stats = { passengers: 0, freightTons: 0, revenue: 0, expenses: 0, profit: 0, punctuality: 100, satisfaction: 50, share: 0 };
@@ -5162,6 +5859,8 @@ function lineRouteName(stops) {
 }
 
 function lineDistance(line) {
+  const stored = Number(line?.distance);
+  if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
   return routeBetweenStops(lineStops(line)).distance;
 }
 
@@ -5172,12 +5871,27 @@ function lineSegmentKey(a, b) {
 }
 
 function linePathIds(line) {
+  if (Array.isArray(line?.routeSegments) && line.routeSegments.length) {
+    const ids = [line.routeSegments[0].from];
+    for (const segment of line.routeSegments) ids.push(segment.to);
+    return [...new Set(ids.map(id => String(id || '').trim()).filter(Boolean))];
+  }
   const route = routeBetweenStops(lineStops(line));
   const ids = Array.isArray(route?.ids) && route.ids.length ? route.ids : lineStops(line);
   return [...new Set(ids.map(id => String(id || '').trim()).filter(Boolean))];
 }
 
 function lineSegments(line) {
+  if (Array.isArray(line?.routeSegments) && line.routeSegments.length) {
+    return line.routeSegments
+      .map(segment => ({
+        from: currentStationId(segment.from),
+        to: currentStationId(segment.to),
+        key: lineSegmentKey(segment.from, segment.to),
+        distance: Math.max(1, Math.round(Number(segment.distance || 0)))
+      }))
+      .filter(segment => segment.from && segment.to && segment.from !== segment.to && segment.distance > 0);
+  }
   const stops = linePathIds(line);
   const segments = [];
   for (let i = 1; i < stops.length; i++) {
@@ -5616,7 +6330,7 @@ function nearestStation(stationId, maxKm, preferredRegion) {
 
 function stationById(id) {
   const canonical = currentStationId(id);
-  return communeCache.byId?.[canonical] || state.customStations?.[canonical] || WORLD.stationIndex[canonical] || WORLD.stationIndex[id] || communeCache.byId?.[id] || state.customStations?.[id] || null;
+  return communeCache.byId?.[canonical] || communeCache.byId?.[id] || null;
 }
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## Version v62.26.0 — gares réelles et itinéraires RFN obligatoires
+
+- incrément de version : badge interface `v62.26.0`, package `0.6.26` et schéma serveur `90` ;
+- remplacement du modèle communes par les gares réelles de `liste-des-gares`, avec coordonnées SNCF exactes, UIC/GAIA, nature voyageurs/fret et codes lignes RFN ;
+- suppression de la notion de ville de moins ou plus de `5 000` habitants : les points jouables sont des gares SNCF réelles uniquement ;
+- rapprochement de la demande avec la population municipale communale issue de data.gouv.fr, avec agrégation Paris/Lyon/Marseille par arrondissements et fallback de cache local si l’API tabulaire est indisponible ;
+- création de gares personnalisées désactivée côté client et côté serveur ;
+- création et modification de ligne bloquées quand aucun itinéraire réel n’est trouvé dans `formes-des-lignes-du-rfn` entre deux arrêts ;
+- suppression des fallbacks visuels fictifs côté client : une ligne sans géométrie RFN reste en attente ou introuvable ;
+- validation voyageurs/fret par gare : une ligne voyageurs exige des gares voyageurs, une ligne fret exige des gares fret, une ligne mixte exige les deux ;
+- optimisation carte : filtrage viewport des gares dessinables, cache de signature de liste, simplification serveur des polylignes RFN et réduction des recalculs quand une géométrie arrive.
+
 ## Version v62.25.0 — restauration des tracés RFN précis
 
 - incrément de version : badge interface `v62.25.0`, package `0.6.25` et schéma serveur `89` ;

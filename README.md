@@ -20,13 +20,13 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 
 - Serveur Node.js natif, sans Express ni Socket.io.
 - Interface web HTML/CSS/JS.
-- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, points de villes/gares reconstruits depuis les données officielles, géométries SNCF RFN quand elles sont disponibles et fallback sinueux adouci pour les liaisons sans tracé officiel.
+- Carte de France avec contours métropolitains détaillés, Corse incluse, réseau ferré de fond, gares réelles issues de SNCF Open Data et tracés calculés sur les géométries RFN officielles.
 - Multijoueur par état serveur partagé et polling.
 - Création de compagnie.
 - Achat de matériel roulant.
 - Création de lignes voyageurs, fret ou mixtes.
 - Gestion de fréquence, tarifs, revenus et fréquence effective selon la couverture conducteurs.
-- Gares améliorables avec prix affiché dans les fiches/infobulles, niveaux maximums, sélection persistante, création personnalisée payante avec validation, et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
+- Gares améliorables avec prix affiché dans les fiches/infobulles, niveaux maximums, sélection persistante, et revente avec remboursement de la gare, des niveaux, commerces, ateliers et dépôts.
 - Salariés : conducteurs, contrôleurs, agents de gare, mainteneurs, régulateurs, ingénieurs.
 - Énergie : charbon, diesel, électricité, hydrogène, batteries.
 - Recherche et progression d’époque ralentie par des seuils élevés de trafic cumulé, sans délai temporel artificiel.
@@ -40,12 +40,12 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 
 Le serveur utilise les données SNCF Open Data lorsque l’accès réseau est disponible :
 
-- `gares-de-voyageurs` pour récupérer les gares voyageurs, leurs coordonnées GPS, leur code commune et leur code UIC ;
-- `geo.api.gouv.fr/communes` pour placer les communes jouables qui n’ont pas de gare voyageurs connue ;
+- `liste-des-gares` pour récupérer les gares voyageurs et fret, leurs coordonnées GPS exactes, leur code UIC/GAIA et leurs lignes RFN ;
+- `population-municipale-des-communes-france-entiere` sur data.gouv.fr pour rapprocher chaque gare de la population municipale de sa commune ;
 - `formes-des-lignes-du-rfn` pour calculer des géométries de route suivant les lignes du Réseau Ferré National.
 
-Le cache `data/communes-5000-population.json` est reconstruit dès que son format est obsolète, afin d’éviter les anciens placements manuels. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si les API ou le réseau sont indisponibles, le jeu reste lançable avec le dernier cache local et ses fallbacks de tracé adoucis.
+Le cache `data/communes-5000-population.json` conserve le nom historique du fichier mais contient désormais uniquement des gares réelles. Les anciennes communes jouables hors gare et la création de gares personnalisées sont désactivées. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si un segment n’a pas de tracé RFN exploitable, la création ou la modification de ligne est refusée au lieu de générer un itinéraire fictif.
 
 ## Notes
 
-Ce projet est un MVP autonome côté serveur Node.js. Le client peut charger Leaflet et des données SNCF/Overpass en ligne pour enrichir la carte, mais le jeu reste lançable localement avec ses données internes si ces services ne répondent pas.
+Ce projet est un MVP autonome côté serveur Node.js. Le client peut charger Leaflet et les caches SNCF locaux pour enrichir la carte, mais les lignes jouables restent limitées aux gares et itinéraires RFN validés côté serveur.

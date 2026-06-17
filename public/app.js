@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.25.0';
+const PROJECT_VERSION = 'v62.26.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -95,6 +95,7 @@ const app = {
   lastRenderKey: '',
   lastNotificationKey: '',
   stationListCache: { source: null, signature: '', deduped: [] },
+  stationSignatureCache: { source: null, signature: '' },
   selectedCompositionTrainId: localStorage.getItem('sillons.selectedCompositionTrainId') || '',
   compositionEditorModes: loadJson('sillons.compositionEditorModes', {}),
   compositionScrollState: loadJson('sillons.compositionScrollState', {}),
@@ -117,7 +118,7 @@ const TUTORIAL_STEPS = [
   { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
   { id: 'lines-tab', target: '#tabs [data-tab="lines"]', title: 'Créer une ligne', body: 'Clique sur Lignes. C’est le cœur du jeu : une ligne relie des gares, utilise un train et produit des recettes.', wait: 'activeTab:lines' },
   { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train et prix.', wait: 'linesSubtab:create' },
-  { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. La recherche accepte les gares principales et les villes jouables.', action: 'Continuer' },
+  { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. La recherche accepte uniquement les gares réelles du réseau.', action: 'Continuer' },
   { id: 'line-to', target: '#lineToSearch', tab: 'lines', subtab: 'create', title: 'Choisir le terminus', body: 'Renseigne la destination. Une ligne courte est préférable au début pour limiter l’usure, le charbon et les coûts.', action: 'Continuer' },
   { id: 'line-train', target: '#lineTrain', tab: 'lines', subtab: 'create', title: 'Affecter un train', body: 'Sélectionne le train libre à utiliser. Un train en maintenance ou à 0 % d’état ne peut pas produire de trafic.', action: 'Continuer' },
   { id: 'line-price', target: '#lineTicketPrice', tab: 'lines', subtab: 'create', title: 'Fixer le prix', body: 'Un prix trop élevé réduit l’attractivité. Cherche un équilibre entre volume de voyageurs et recette par billet.', action: 'Continuer' },
@@ -840,11 +841,16 @@ function updateIsoClass() {
 }
 
 function enableStationPlacement() {
+  toast('Création désactivée : seules les gares réelles SNCF sont jouables.');
+  $('#addStopBtn')?.classList.add('hidden');
+  $('#cancelStopBtn')?.classList.add('hidden');
+  $('#mapHint').textContent = 'Clique une gare réelle du Réseau Ferré National.';
+  return;
   app.map.stationPlacement = true;
   app.map.creatingCustomStation = false;
   $('#addStopBtn')?.classList.add('hidden');
   $('#cancelStopBtn')?.classList.remove('hidden');
-  $('#mapHint').textContent = 'Mode création : Clique n’importe où sur la carte pour créer un nouvel arrêt jouable.';
+  $('#mapHint').textContent = 'Création désactivée : seules les gares réelles SNCF sont jouables.';
   const container = app.map.leaflet?.getContainer();
   container?.classList.add('placing-stop');
   app.map.leaflet?.dragging?.disable?.();
@@ -853,9 +859,9 @@ function enableStationPlacement() {
 function disableStationPlacement() {
   app.map.stationPlacement = false;
   app.map.creatingCustomStation = false;
-  $('#addStopBtn')?.classList.remove('hidden');
+  $('#addStopBtn')?.classList.add('hidden');
   $('#cancelStopBtn')?.classList.add('hidden');
-  $('#mapHint').textContent = 'Clique une gare, ou active “Créer arrêt” puis clique n’importe où en France.';
+  $('#mapHint').textContent = 'Clique une gare réelle du Réseau Ferré National.';
   const container = app.map.leaflet?.getContainer();
   container?.classList.remove('placing-stop');
   app.map.leaflet?.dragging?.enable?.();
@@ -2119,7 +2125,7 @@ function lineElectrificationTooltip(line) {
 function stationUpgradeTooltip(station, asset, upgrade) {
   const effects = {
     level: upgrade.label === 'Acheter'
-      ? 'achète la ville, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
+      ? 'achète la gare, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
       : 'augmente la capacité et l’attractivité de la gare ; débloque une meilleure base pour les autres améliorations.',
     commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.',
     maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
@@ -2282,7 +2288,7 @@ function renderStationSearchField(role, label, stationId, query = '') {
 function renderLines() {
   const me = app.state.me;
   const status = app.state.world.communesStatus;
-  const communeTag = status ? `${formatInt(status.count || 0)} villes` : 'Villes';
+  const communeTag = status ? `${formatInt(status.count || 0)} gares` : 'Gares';
   const active = ['create', 'manage'].includes(app.activeLinesSubtab) ? app.activeLinesSubtab : 'create';
 
   return `
@@ -2333,6 +2339,9 @@ function renderLineDistanceCalculator(draft = app.lineDraft) {
 }
 
 function renderLineDistanceCalculatorContent(data) {
+  if (!data.directDistance || !data.preparedDistance) {
+    return `<span>Calculateur de distance</span><b>${escapeHtml(data.label)} : itinéraire RFN en cours ou introuvable</b>`;
+  }
   const viaText = data.preparedDistance !== data.directDistance
     ? ` · avec arrêts préparés : ${formatInt(data.preparedDistance)} km`
     : '';
@@ -2392,7 +2401,7 @@ function renderCreateLinePanel() {
               <b>${draft.waypoints.length ? `${draft.waypoints.length} ajouté(s)` : 'Optionnel'}</b>
             </summary>
             <div class="line-advanced-body">
-              <p class="muted small">Ajoute une ville desservie entre le départ et le terminus. Le jeu la place à la meilleure position, puis tu peux corriger l’ordre dans l’onglet Modifier.</p>
+              <p class="muted small">Ajoute une gare desservie entre le départ et le terminus. Le jeu conserve l’ordre préparé pour vérifier le parcours RFN réel.</p>
               ${renderStationSearchField('via', 'Ajouter une desserte', draft.viaCandidate, draft.viaQuery)}
               <button type="button" id="addWaypointBtn" class="primary" ${tooltipAttr('Ajoute cette gare comme arrêt intermédiaire dans le parcours préparé.')}>Ajouter cette desserte</button>
               ${draft.waypoints.length ? `<div class="line-waypoint-list">${draft.waypoints.map((id, index) => renderWaypointChip(id, index)).join('')}</div>` : '<p class="muted small">Aucune desserte intermédiaire ajoutée.</p>'}
@@ -4069,7 +4078,7 @@ function renderStations() {
               <div id="lineStationSuggestions" class="station-suggestions" role="listbox"></div>
             </div>
           </label>
-          <label class="station-sort-inline">Tri des villes
+          <label class="station-sort-inline">Tri des gares
             <select id="stationSort">
               ${stationSortOptions(app.stationSortMode)}
             </select>
@@ -4181,13 +4190,13 @@ function renderSelectedStation(s) {
       </div>
       <div class="actions station-upgrades">
         ${upgrades.map(up => `
-          <button data-action="upgrade-station" data-kind="${up.kind}" data-id="${s.id}" ${tooltipAttr(lockedByOwner ? `Cette ville appartient déjà à ${owner.player.name}.` : stationUpgradeTooltip(s, preview, up))} ${lockedByOwner || up.maxed || cash < up.cost ? 'disabled' : ''}>
+          <button data-action="upgrade-station" data-kind="${up.kind}" data-id="${s.id}" ${tooltipAttr(lockedByOwner ? `Cette gare appartient déjà à ${owner.player.name}.` : stationUpgradeTooltip(s, preview, up))} ${lockedByOwner || up.maxed || cash < up.cost ? 'disabled' : ''}>
             ${escapeHtml(up.label)} <span>${!asset && up.kind !== 'level' ? 'Verrouillé' : up.maxed ? 'Max' : money(up.cost)}</span>
           </button>
         `).join('')}
         ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${activeStationUsersClient(s.id).length ? 'disabled' : ''}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
       </div>
-      ${lockedByOwner ? `<p class="muted small">Cette ville est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Ville possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : Acheter la ville. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+      ${lockedByOwner ? `<p class="muted small">Cette gare est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Gare possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : acheter la gare. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
     </div>
   `;
 }
@@ -5670,7 +5679,7 @@ function openLineModal(lineId) {
           <strong>${escapeHtml(s.name)}</strong>
           <span>${escapeHtml(stationMetaLabel(s))}</span>
         </button>
-      `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
+      `).join('') : '<div class="station-suggest-empty">Aucune gare trouvée.</div>';
     });
     $('#editorStopSuggestions').addEventListener('click', event => {
       const btn = event.target.closest('[data-station-choice]');
@@ -6618,6 +6627,13 @@ function drawableStations(lite = false) {
     .filter(line => line.active)
     .flatMap(line => lineStopsOf(line)));
   const candidates = [];
+  const bounds = app.map.leaflet?.getBounds?.();
+  const viewport = bounds ? {
+    west: bounds.getWest() - 0.18,
+    east: bounds.getEast() + 0.18,
+    south: bounds.getSouth() - 0.12,
+    north: bounds.getNorth() + 0.12
+  } : null;
 
   for (const s of dedupedStations(app.state.world.stations)) {
     const asset = me?.stations?.[s.id];
@@ -6625,6 +6641,11 @@ function drawableStations(lite = false) {
     const served = servedStationIds.has(s.id);
     if (lite && !selected && !asset && !s.custom) continue;
     if (!shouldDrawStation(s, asset, selected)) continue;
+    if (viewport && !selected && !asset) {
+      const lat = stationRouteLat(s);
+      const lon = stationRouteLon(s);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < viewport.south || lat > viewport.north || lon < viewport.west || lon > viewport.east) continue;
+    }
     const p = projectStationPoint(s);
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     if (p.x < -40 || p.x > app.map.width + 40 || p.y < -40 || p.y > app.map.height + 40) continue;
@@ -7170,12 +7191,15 @@ function pointer(event, sourceCanvas = app.map.canvas) {
 
 function stationListSignature(list) {
   const stations = Array.isArray(list) ? list : [];
+  if (app.stationSignatureCache.source === list) return app.stationSignatureCache.signature;
   const ids = stations.map(s => `${s?.id || ''}:${s?.code || s?.communeCode || ''}:${s?.population || 0}`).join('|');
   let hash = 0;
   for (let i = 0; i < ids.length; i += 1) hash = ((hash << 5) - hash + ids.charCodeAt(i)) | 0;
   const customCount = stations.reduce((count, s) => count + (s?.custom ? 1 : 0), 0);
   const communes = app.state?.world?.communesStatus || {};
-  return `${stations.length}:${hash}:${ids.length}:${customCount}:${communes.status || ''}:${communes.updatedAt || ''}:${communes.count || 0}`;
+  const signature = `${stations.length}:${hash}:${ids.length}:${customCount}:${communes.status || ''}:${communes.updatedAt || ''}:${communes.count || 0}`;
+  app.stationSignatureCache = { source: list, signature };
+  return signature;
 }
 
 function dedupedStations(list = app.state?.world?.stations || []) {
@@ -7304,7 +7328,7 @@ async function ensureRailwayRouteGeometry(a, b) {
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
   const directKm = stationRouteDistanceClient(sa, sb);
-  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return;
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 1300) return;
 
   const latA = stationRouteLat(sa), lonA = stationRouteLon(sa);
   const latB = stationRouteLat(sb), lonB = stationRouteLon(sb);
@@ -7324,44 +7348,18 @@ async function ensureRailwayRouteGeometry(a, b) {
       foundGeometry = true;
       app.routeCache.clear();
       invalidateMapProjection('sncf-rail-geometry-loaded');
+      if (app.activeTab === 'lines') updateLinePreview();
       return;
     }
-
-    const pad = Math.min(0.42, Math.max(0.055, directKm / 760));
-    const south = Math.min(latA, latB) - pad;
-    const north = Math.max(latA, latB) + pad;
-    const west = Math.min(lonA, lonB) - pad;
-    const east = Math.max(lonA, lonB) + pad;
-    const bboxArea = Math.abs(north - south) * Math.abs(east - west);
-    if (bboxArea > 4.6) return;
-
-    const query = `
-[out:json][timeout:18];
-(
-  way["railway"~"^(rail|light_rail|subway|tram|narrow_gauge)$"]["service"!~"^(yard|siding|spur)$"](${south},${west},${north},${east});
-);
-out geom;
-`;
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-      body: `data=${encodeURIComponent(query)}`,
-      cache: 'force-cache'
-    });
-    if (!response.ok) throw new Error(`rail geometry ${response.status}`);
-    const data = await response.json();
-    const coords = buildRailwayPathFromOverpass(data.elements || [], { lat: latA, lon: lonA }, { lat: latB, lon: lonB }, directKm);
-    if (coords.length >= 2) {
-      rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
-      foundGeometry = true;
-      app.routeCache.clear();
-      invalidateMapProjection('rail-geometry-loaded');
-    }
   } catch (error) {
-    // Non bloquant : le graphe ferroviaire interne reste utilisé.
+    // Non bloquant : le serveur refusera de toute façon les créations sans RFN.
   } finally {
     if (!foundGeometry) markRouteGeometryMissing(key);
     app.osmRoutePending.delete(key);
+    if (!foundGeometry && app.activeTab === 'lines') {
+      app.routeCache.clear();
+      updateLinePreview();
+    }
   }
 }
 
@@ -7489,61 +7487,21 @@ function getRoute(a, b) {
     };
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
-  const adjacency = routeAdjacencyForClient(a, b);
-  const nodes = new Set([...Object.keys(adjacency), a, b]);
-  const dist = {};
-  const prev = {};
-  const unvisited = new Set(nodes);
-  for (const n of nodes) dist[n] = Number.POSITIVE_INFINITY;
-  dist[a] = 0;
 
-  while (unvisited.size) {
-    let u = null;
-    let best = Number.POSITIVE_INFINITY;
-    for (const n of unvisited) {
-      if (dist[n] < best) { best = dist[n]; u = n; }
-    }
-    if (!u || u === b || !Number.isFinite(best)) break;
-    unvisited.delete(u);
-    for (const v of adjacency[u] || []) {
-      if (!unvisited.has(v)) continue;
-      const alt = dist[u] + directRailDistance(u, v);
-      if (alt < dist[v]) {
-        dist[v] = alt;
-        prev[v] = u;
-      }
-    }
+  const geometry = geometryForRoute(a, b);
+  if (!geometry?.length) {
+    const route = { ids: [a, b].filter(Boolean), distance: 0, maxSegment: 0, points: [], pending: !routeGeometryMarkedMissing(routeGeometryKey(a, b)) };
+    return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
 
-  let ids = [];
-  if (Number.isFinite(dist[b])) {
-    let cur = b;
-    ids.push(cur);
-    while (prev[cur]) { cur = prev[cur]; ids.push(cur); }
-    ids.reverse();
-  } else {
-    ids = [a, b];
-    dist[b] = directRailDistance(a, b);
-  }
-  const direct = directRailDistance(a, b);
-  if (direct > 0 && Number.isFinite(dist[b]) && dist[b] > Math.max(35, direct * 2.35) && direct <= 85) {
-    ids = [a, b];
-    dist[b] = direct;
-  }
-
-  let maxSegment = 0;
-  let points = [];
-  for (let i = 1; i < ids.length; i++) {
-    maxSegment = Math.max(maxSegment, directRailDistance(ids[i - 1], ids[i]));
-    const segment = resolveSegmentPath(ids[i - 1], ids[i]);
-    if (!points.length) points.push(...segment);
-    else points.push(...segment.slice(1));
-  }
-  if (!points.length && ids.length) points = ids.map(id => station(id)).filter(Boolean).map(projectStationPoint);
+  const points = geometry
+    .map(([lon, lat]) => project(lon, lat))
+    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+  const distance = Math.round(polylineGeoDistance(geometry));
   const route = {
-    ids,
-    distance: Math.round(dist[b] || 0),
-    maxSegment: Math.round(maxSegment || 0),
+    ids: [a, b],
+    distance,
+    maxSegment: distance,
     points
   };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
@@ -7559,9 +7517,7 @@ function resolveSegmentPath(a, b) {
     if (projected.length >= 2) return projected;
   }
 
-  const start = projectStationPoint(sa);
-  const end = projectStationPoint(sb);
-  return fallbackSinuousRailSegmentPath(a, b, start, end);
+  return [];
 }
 
 function fallbackSinuousRailSegmentPath(a, b, start, end) {
@@ -7693,12 +7649,25 @@ function stationOwnerClient(stationId) {
   return null;
 }
 
+function validateLineStopServiceClient(stops, service) {
+  for (const stopId of stops || []) {
+    const s = station(stopId);
+    if (!s) return `Gare inconnue : ${stopId}.`;
+    const passengerOk = Boolean(s.hasPassengerStation);
+    const freightOk = Boolean(s.hasFreightStation);
+    if (service === 'passengers' && !passengerOk) return `${s.name} n’est pas une gare voyageurs.`;
+    if (service === 'freight' && !freightOk) return `${s.name} n’est pas une gare fret.`;
+    if (service === 'mixed' && (!passengerOk || !freightOk)) return `${s.name} ne permet pas un service mixte voyageurs + fret.`;
+  }
+  return '';
+}
+
 function lineOwnershipProblemClient(stops) {
   const ids = Array.isArray(stops) ? stops : [];
   for (const stopId of ids) {
     const s = station(stopId);
     if (!s) return `Arrêt invalide : ${stopId}.`;
-    if (!stationOwnerClient(stopId)) return `${s.name} n’appartient à aucune compagnie. Achète d’abord cette ville dans l’onglet Gares.`;
+    if (!stationOwnerClient(stopId)) return `${s.name} n’appartient à aucune compagnie. Achète d’abord cette gare dans l’onglet Gares.`;
   }
   return '';
 }
@@ -8118,6 +8087,10 @@ function getRouteForStops(stops) {
 
   for (let i = 1; i < ids.length; i++) {
     const segment = getRoute(ids[i - 1], ids[i]);
+    if (!segment.distance || !segment.points?.length) {
+      const route = { ids, distance: 0, maxSegment: 0, points: [], pending: Boolean(segment.pending) };
+      return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
+    }
     mergedIds.push(...segment.ids.slice(1));
     distanceTotal += segment.distance || 0;
     maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
@@ -8135,6 +8108,8 @@ function getRouteForStops(stops) {
 }
 
 function lineDistance(line) {
+  const stored = Number(line?.distance);
+  if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
   return getRouteForStops(lineStopsOf(line)).distance || 0;
 }
 
@@ -8440,7 +8415,7 @@ function renderStationSuggestions(role, matches, rawValue) {
       <strong>${escapeHtml(s.name)}</strong>
       <span>${escapeHtml(role === 'station' ? stationPurchaseMetaLabel(s) : stationMetaLabel(s))}</span>
     </button>
-  `).join('') : '<div class="station-suggest-empty">Aucune ville trouvée.</div>';
+  `).join('') : '<div class="station-suggest-empty">Aucune gare trouvée.</div>';
 }
 
 function findStationMatches(query, limit = 12, sortMode = '') {
@@ -8644,6 +8619,7 @@ function updateLinePreview(sourceId = '') {
   if (!box || !app.state?.me) return;
   const stops = buildLineDraftStops();
   const trainId = $('#lineTrain')?.value;
+  const service = $('#lineService')?.value || app.lineDraft.service || 'passengers';
   const train = app.state.me.trains.find(t => t.id === trainId);
   const model = train ? app.state.balance.trains[train.modelId] : null;
   const button = $('#createLineBtn');
@@ -8666,8 +8642,23 @@ function updateLinePreview(sourceId = '') {
     if (button) button.disabled = true;
     return;
   }
+  const serviceStopProblem = validateLineStopServiceClient(stops, service);
+  if (serviceStopProblem) {
+    box.className = 'line-preview bad small';
+    box.textContent = serviceStopProblem;
+    if (button) button.disabled = true;
+    return;
+  }
 
   const route = getRouteForStops(stops);
+  if (!route.distance) {
+    box.className = 'line-preview bad small';
+    box.textContent = route.pending
+      ? 'Calcul de l’itinéraire RFN en cours. Patiente quelques secondes avant validation.'
+      : 'Aucun itinéraire réel trouvé dans le RFN pour cette suite de gares.';
+    if (button) button.disabled = true;
+    return;
+  }
   const ticketPrice = syncLineDraftTicket(route.distance);
   refreshLineTicketInput(route.distance, ticketPrice, sourceId);
 
