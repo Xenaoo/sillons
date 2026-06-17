@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.24.0';
-const STATE_SCHEMA_VERSION = 88;
+const PROJECT_VERSION = 'v62.25.0';
+const STATE_SCHEMA_VERSION = 89;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -214,6 +214,14 @@ process.on('SIGINT', () => {
   saveState();
   process.exit(0);
 });
+
+function warmSncfRailShapeLinesCache() {
+  loadSncfRailShapeLines()
+    .then(lines => console.log(`Cache RFN SNCF prêt : ${lines.length} géométrie(s).`))
+    .catch(error => console.warn('Préchargement RFN SNCF différé :', error.message));
+}
+
+setTimeout(warmSncfRailShapeLinesCache, 0);
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -873,12 +881,12 @@ async function sncfRouteGeometryForStations(fromId, toId) {
 
   const from = stationById(fromKey);
   const to = stationById(toKey);
-  if (!from || !to) return rememberSncfRouteGeometry(key, []);
+  if (!from || !to) return [];
   const start = stationRoutePoint(from) || stationRawPoint(from);
   const end = stationRoutePoint(to) || stationRawPoint(to);
-  if (!start || !end) return rememberSncfRouteGeometry(key, []);
+  if (!start || !end) return [];
   const directKm = haversine(start.lat, start.lon, end.lat, end.lon);
-  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return rememberSncfRouteGeometry(key, []);
+  if (!Number.isFinite(directKm) || directKm <= 0 || directKm > 900) return [];
 
   try {
     const lines = await loadSncfRailShapeLines();
@@ -902,10 +910,10 @@ async function sncfRouteGeometryForStations(fromId, toId) {
       if (tighter.length >= 1) relevant.splice(0, relevant.length, ...tighter);
     }
     const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm);
-    return rememberSncfRouteGeometry(key, geometry || []);
+    return geometry?.length ? rememberSncfRouteGeometry(key, geometry) : [];
   } catch (error) {
     console.warn('Géométrie SNCF RFN indisponible:', error.message);
-    return rememberSncfRouteGeometry(key, []);
+    return [];
   }
 }
 

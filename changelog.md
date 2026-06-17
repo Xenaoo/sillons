@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.25.0 — restauration des tracés RFN précis
+
+- incrément de version : badge interface `v62.25.0`, package `0.6.25` et schéma serveur `89` ;
+- correction du rendu des tracés : les géométries détaillées RFN/SNCF ne sont plus remplacées par une spline organique de sécurité ;
+- les tracés conservent les points détaillés du RFN quand ils existent ;
+- les échecs temporaires de chargement RFN/Overpass ne sont plus mémorisés définitivement côté client ;
+- le serveur ne met plus en cache permanent les réponses RFN vides lorsque le cache officiel n’est pas encore prêt ;
+- ajout d’un préchargement RFN serveur en arrière-plan au démarrage ;
+- la carte reste allégée : les gares restent masquées sauf noms des gares possédées au zoom maximal.
+
 ## Version v62.24.0 — carte allégée et rééquilibrage économique
 
 - incrément de version : badge interface `v62.24.0`, package `0.6.24` et schéma serveur `88` ;

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.24.0';
+const PROJECT_VERSION = 'v62.25.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -77,7 +77,7 @@ const app = {
   routeCache: new Map(),
   osmRouteCache: new Map(),
   osmRoutePending: new Set(),
-  osmRouteMissing: new Set(),
+  osmRouteMissing: new Map(),
   lineDraft: loadJson('sillons.lineDraft', {}),
   stationSearch: { query: '', candidateId: '' },
   stationSortMode: localStorage.getItem('sillons.stationSortMode') || 'alpha',
@@ -7271,7 +7271,7 @@ function geometryForRoute(a, b) {
   const direct = cachedRailGeometryForRoute(a, b);
   if (direct) return direct;
   const key = routeGeometryKey(a, b);
-  if (!app.osmRouteMissing.has(key) && !app.osmRouteMissing.has(routeGeometryKey(b, a))) ensureRailwayRouteGeometry(a, b);
+  if (!routeGeometryMarkedMissing(key) && !routeGeometryMarkedMissing(routeGeometryKey(b, a))) ensureRailwayRouteGeometry(a, b);
   return null;
 }
 
@@ -7283,9 +7283,23 @@ function cachedRailGeometryForRoute(a, b) {
   return null;
 }
 
+function routeGeometryMarkedMissing(key) {
+  const at = Number(app.osmRouteMissing?.get?.(key) || 0);
+  if (!at) return false;
+  if (Date.now() - at > 45000) {
+    app.osmRouteMissing.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function markRouteGeometryMissing(key) {
+  app.osmRouteMissing.set(key, Date.now());
+}
+
 async function ensureRailwayRouteGeometry(a, b) {
   const key = routeGeometryKey(a, b);
-  if (app.osmRoutePending.has(key) || app.osmRouteMissing.has(key) || app.osmRouteMissing.has(routeGeometryKey(b, a))) return;
+  if (app.osmRoutePending.has(key) || routeGeometryMarkedMissing(key) || routeGeometryMarkedMissing(routeGeometryKey(b, a))) return;
   if (app.osmRoutePending.size >= 3) return;
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
@@ -7305,6 +7319,8 @@ async function ensureRailwayRouteGeometry(a, b) {
     const sncf = await fetchSncfRouteGeometry(a, b);
     if (sncf?.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, sncf, OSM_ROUTE_CACHE_MAX_ENTRIES);
+      app.osmRouteMissing.delete(key);
+      app.osmRouteMissing.delete(routeGeometryKey(b, a));
       foundGeometry = true;
       app.routeCache.clear();
       invalidateMapProjection('sncf-rail-geometry-loaded');
@@ -7344,7 +7360,7 @@ out geom;
   } catch (error) {
     // Non bloquant : le graphe ferroviaire interne reste utilisé.
   } finally {
-    if (!foundGeometry) app.osmRouteMissing.add(key);
+    if (!foundGeometry) markRouteGeometryMissing(key);
     app.osmRoutePending.delete(key);
   }
 }
@@ -7539,7 +7555,8 @@ function resolveSegmentPath(a, b) {
 
   const geometry = geometryForRoute(a, b);
   if (geometry?.length >= 2) {
-    return geometry.map(([lon, lat]) => project(lon, lat)).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+    const projected = geometry.map(([lon, lat]) => project(lon, lat)).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (projected.length >= 2) return projected;
   }
 
   const start = projectStationPoint(sa);
@@ -8110,11 +8127,9 @@ function getRouteForStops(stops) {
   }
 
   points = cleanRoutePoints(points);
-  if (routeHasVisualBacktrack(points)) {
-    const visualIds = [...new Set(mergedIds)];
-    points = organicRailSplineThroughStops(visualIds);
-  }
-
+  // Ne plus remplacer un tracé détaillé par une spline organique.
+  // Cette ancienne sécurité était utile pour certains fallbacks, mais elle pouvait
+  // dégrader un vrai parcours RFN en le simplifiant visuellement.
   const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
