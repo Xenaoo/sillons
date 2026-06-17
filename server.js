@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.18.0';
-const STATE_SCHEMA_VERSION = 82;
+const PROJECT_VERSION = 'v62.19.0';
+const STATE_SCHEMA_VERSION = 83;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -3520,6 +3520,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   const driverCoverage = driverCoverageForNeed(player, staffNeeds.drivers);
   const lineInfrastructureMultiplier = clamp(1.22 - staffing.engineers * 0.22, 0.78, 1.18);
   const infrastructureUsage = options.infrastructureUsage || buildInfrastructureUsage();
+  const sillonUsage = options.sillonUsage || buildSillonUsage();
   const policy = BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
   const maintenanceCapacity = 1 + (player.staff.mechanics || 0) * 0.08 + totalMaintenance(player) * 0.12 + techLevel(player, 'electric_standardized_maintenance') * 0.16 + techLevel(player, 'steam_workshops') * 0.1;
   const eventFactor = currentEventFactor();
@@ -3545,7 +3546,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const lineNeeds = computeLineStaffNeeds(player, line);
     const lineDriverCoverage = lineNeeds.drivers > 0 ? driverCoverage : 1;
     const allocatedDrivers = lineNeeds.drivers > 0 ? lineNeeds.drivers * lineDriverCoverage : 0;
-    const effectiveLine = lineWithEffectiveFrequency(line, lineDriverCoverage);
+    const sillonInfo = computeLineSillonLimit(player, line, sillonUsage);
+    const effectiveLine = lineWithEffectiveFrequency(line, lineDriverCoverage, sillonInfo);
     const effectiveFrequency = Number(effectiveLine.frequency || 0);
     const lineStaffingStats = {
       needs: lineNeeds,
@@ -3553,7 +3555,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       allocatedDrivers: round2(allocatedDrivers),
       requiredDrivers: lineNeeds.drivers,
       effectiveFrequency: round2(effectiveFrequency),
-      requestedFrequency: Number(line.frequency || 0)
+      requestedFrequency: Number(line.frequency || 0),
+      sillons: sillonStatsPayload(sillonInfo)
     };
     if (!bundle) {
       const stoppedForCondition = assignedTrains.every(t => trainConditionValue(t) <= 0);
@@ -3579,7 +3582,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           driverCoverage: round2(lineDriverCoverage * 100),
           effectiveFrequency: 0,
           requestedFrequency: Number(line.frequency || 0),
-          trainComposition: operatingModel.compositionSummary
+          trainComposition: operatingModel.compositionSummary,
+          sillons: sillonStatsPayload(sillonInfo)
         },
         finance: {
           ticketPrice: Math.round(lineTicketPrice(line, distance)),
@@ -3631,7 +3635,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           driverCoverage: 0,
           effectiveFrequency: 0,
           requestedFrequency: Number(line.frequency || 0),
-          trainComposition: operatingModel.compositionSummary
+          trainComposition: operatingModel.compositionSummary,
+          sillons: sillonStatsPayload(sillonInfo)
         }
       };
       continue;
@@ -3661,7 +3666,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           driverCoverage: round2(lineDriverCoverage * 100),
           effectiveFrequency: round2(effectiveFrequency),
           requestedFrequency: Number(line.frequency || 0),
-          trainComposition: operatingModel.compositionSummary
+          trainComposition: operatingModel.compositionSummary,
+          sillons: sillonStatsPayload(sillonInfo)
         },
         resource: {
           type: resourceCheck.type,
@@ -3772,7 +3778,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       punctuality: round2(punctuality),
       satisfaction: round2(satisfaction),
       share: round2((scoredShares.reduce((sum, share) => sum + share, 0) / Math.max(1, scoredShares.length)) * 100),
-      status: lineDriverCoverage < 0.999 ? 'driver-shortage' : 'ok',
+      status: lineDriverCoverage < 0.999 ? 'driver-shortage' : (sillonInfo.constrained ? 'sillon-limited' : 'ok'),
       staffing: lineStaffingStats,
       market: {
         passengerDemand: Math.round(routeDemand.passengers),
@@ -4392,10 +4398,14 @@ function driverCoverageForNeed(player, need = null) {
   return clamp(Number(player.staff?.drivers || 0) / required, 0, 1);
 }
 
-function lineWithEffectiveFrequency(line, driverCoverage) {
+function lineWithEffectiveFrequency(line, driverCoverage, sillonInfo = null) {
   const coverage = clamp(Number(driverCoverage), 0, 1);
-  if (coverage >= 0.999) return line;
-  return { ...line, frequency: Math.max(0, Number(line.frequency || 0) * coverage) };
+  const requested = Math.max(0, Number(line?.frequency || 0));
+  const driverLimited = requested * coverage;
+  const sillonLimited = sillonInfo ? Math.max(0, Number(sillonInfo.maxFrequency ?? requested)) : requested;
+  const effective = Math.max(0, Math.min(driverLimited, sillonLimited));
+  if (Math.abs(effective - requested) < 0.001) return line;
+  return { ...line, frequency: effective };
 }
 
 function computeStaffing(player) {
@@ -5043,11 +5053,14 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
   }
 
   const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
-  const frequency = Math.max(1, Number(line.frequency || 1));
+  const frequency = Math.max(0, Number(line.frequency || 0));
+  if (frequency <= 0) {
+    return { total: 0, infrastructureTotal: 0, stationTotal: 0, allocations: [] };
+  }
 
-  // Le péage ne dépend plus des tronçons partagés. On ne paie que lorsqu'une ligne
-  // dessert concrètement une gare possédée par une autre compagnie.
-  for (const stopId of [...new Set(lineStops(line))]) {
+  // Péage de gare : payé quand la ligne dessert une gare tierce
+  // OU quand son itinéraire calculé passe visuellement par cette gare sans arrêt commercial.
+  for (const stopId of [...new Set(linePathIds(line))]) {
     const ownerInfo = stationOwnerInfo(stopId);
     if (!ownerInfo || ownerInfo.player.id === player.id) continue;
     const asset = ownerInfo.asset || { level: 1, commerce: 0, maintenance: 0, depot: false };
@@ -5073,6 +5086,7 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
     }))
   };
 }
+
 function recordPassageRights(ledger, payer, line, rights) {
   if (!ledger || !rights?.allocations?.length) return;
   for (const allocation of rights.allocations) {
@@ -5132,8 +5146,14 @@ function lineSegmentKey(a, b) {
   return [left, right].sort().join('::');
 }
 
+function linePathIds(line) {
+  const route = routeBetweenStops(lineStops(line));
+  const ids = Array.isArray(route?.ids) && route.ids.length ? route.ids : lineStops(line);
+  return [...new Set(ids.map(id => String(id || '').trim()).filter(Boolean))];
+}
+
 function lineSegments(line) {
-  const stops = lineStops(line);
+  const stops = linePathIds(line);
   const segments = [];
   for (let i = 1; i < stops.length; i++) {
     const from = stops[i - 1];
@@ -5147,6 +5167,134 @@ function lineSegments(line) {
     });
   }
   return segments;
+}
+
+function segmentCapacityPerHour(segment) {
+  const a = stationById(segment.from);
+  const b = stationById(segment.to);
+  const distance = Math.max(1, Number(segment.distance || distanceBetween(segment.from, segment.to) || 1));
+  const demandA = Number(a?.baseDemand || a?.population || 0);
+  const demandB = Number(b?.baseDemand || b?.population || 0);
+  const maxDemand = Math.max(demandA, demandB);
+  const sumDemand = demandA + demandB;
+  const codeA = String(a?.code || a?.postal || '');
+  const codeB = String(b?.code || b?.postal || '');
+  const parisOrDense = /^75/.test(codeA) || /^75/.test(codeB) || /^9[1-5]/.test(codeA) || /^9[1-5]/.test(codeB) || /^PAR_/.test(String(a?.id || '')) || /^PAR_/.test(String(b?.id || ''));
+
+  let capacity = 10;
+  if (parisOrDense && distance <= 45) capacity = 28;
+  else if (sumDemand >= 450000 || maxDemand >= 260000) capacity = 24;
+  else if (sumDemand >= 180000 || maxDemand >= 90000) capacity = 18;
+  else if (sumDemand >= 70000 || maxDemand >= 35000) capacity = 14;
+  else if (distance >= 140 && sumDemand < 40000) capacity = 5;
+  else if (distance >= 85 && sumDemand < 70000) capacity = 7;
+  else if (distance <= 22 && sumDemand >= 30000) capacity = 12;
+
+  return clamp(Math.round(capacity), 2, 32);
+}
+
+function buildSillonUsage() {
+  const usage = new Map();
+  for (const player of activePlayers()) {
+    for (const line of player.lines || []) {
+      if (!line?.active) continue;
+      const requested = Math.max(0, Number(line.frequency || 0));
+      for (const segment of lineSegments(line)) {
+        const capacity = segmentCapacityPerHour(segment);
+        const entry = usage.get(segment.key) || {
+          key: segment.key,
+          from: segment.from,
+          to: segment.to,
+          distance: segment.distance,
+          capacity,
+          used: 0,
+          entries: []
+        };
+        entry.capacity = Math.min(Number(entry.capacity || capacity), capacity);
+        entry.distance = Math.max(entry.distance || 0, segment.distance || 0);
+        entry.used += requested;
+        entry.entries.push({ playerId: player.id, lineId: line.id, frequency: requested });
+        usage.set(segment.key, entry);
+      }
+    }
+  }
+  return usage;
+}
+
+function computeLineSillonLimit(player, line, usage = null) {
+  const requested = Math.max(0, Number(line?.frequency || 0));
+  const sillonUsage = usage || buildSillonUsage();
+  const segments = lineSegments(line);
+  if (!segments.length) {
+    return {
+      requestedFrequency: requested,
+      maxFrequency: requested,
+      effectiveFrequency: requested,
+      constrained: false,
+      bottleneck: null,
+      segments: []
+    };
+  }
+
+  let maxFrequency = Number.POSITIVE_INFINITY;
+  let bottleneck = null;
+  const details = [];
+  for (const segment of segments) {
+    const capacity = segmentCapacityPerHour(segment);
+    const entry = sillonUsage.get(segment.key);
+    const ownRequested = (entry?.entries || [])
+      .filter(item => item.playerId === player.id && item.lineId === line.id)
+      .reduce((sum, item) => sum + Number(item.frequency || 0), 0);
+    const usedByOthers = Math.max(0, Number(entry?.used || 0) - ownRequested);
+    const available = Math.max(0, capacity - usedByOthers);
+    const detail = {
+      key: segment.key,
+      from: segment.from,
+      to: segment.to,
+      fromName: stationById(segment.from)?.name || segment.from,
+      toName: stationById(segment.to)?.name || segment.to,
+      capacity,
+      usedByOthers: round2(usedByOthers),
+      available: round2(available),
+      requested
+    };
+    details.push(detail);
+    if (available < maxFrequency) {
+      maxFrequency = available;
+      bottleneck = detail;
+    }
+  }
+
+  if (!Number.isFinite(maxFrequency)) maxFrequency = requested;
+  const effectiveFrequency = Math.max(0, Math.min(requested, maxFrequency));
+  return {
+    requestedFrequency: round2(requested),
+    maxFrequency: round2(maxFrequency),
+    effectiveFrequency: round2(effectiveFrequency),
+    constrained: effectiveFrequency + 0.001 < requested,
+    bottleneck,
+    segments: details
+  };
+}
+
+function sillonStatsPayload(info) {
+  if (!info) return null;
+  return {
+    requestedFrequency: round2(info.requestedFrequency || 0),
+    maxFrequency: round2(info.maxFrequency || 0),
+    effectiveFrequency: round2(info.effectiveFrequency || 0),
+    constrained: Boolean(info.constrained),
+    bottleneck: info.bottleneck ? {
+      key: info.bottleneck.key,
+      from: info.bottleneck.from,
+      to: info.bottleneck.to,
+      fromName: info.bottleneck.fromName,
+      toName: info.bottleneck.toName,
+      capacity: round2(info.bottleneck.capacity || 0),
+      usedByOthers: round2(info.bottleneck.usedByOthers || 0),
+      available: round2(info.bottleneck.available || 0)
+    } : null
+  };
 }
 
 function buildInfrastructureUsage() {

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.18.0';
+const PROJECT_VERSION = 'v62.19.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -2660,6 +2660,29 @@ function renderLineFactorBars(details) {
   `;
 }
 
+function lineSillonLabel(line) {
+  const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
+  if (!sillons) return '';
+  const max = Number(sillons.maxFrequency ?? 0);
+  const effective = Number(sillons.effectiveFrequency ?? line?.stats?.capacity?.effectiveFrequency ?? line?.frequency ?? 0);
+  const requested = Number(sillons.requestedFrequency ?? line?.frequency ?? 0);
+  const bottleneck = sillons.bottleneck ? `${sillons.bottleneck.fromName || sillons.bottleneck.from} → ${sillons.bottleneck.toName || sillons.bottleneck.to}` : '';
+  return [
+    `Sillons : ${round(effective)}/${round(requested)} trains/h`,
+    Number.isFinite(max) ? `Max ligne : ${round(max)} trains/h` : '',
+    bottleneck ? `Tronçon limitant : ${bottleneck}` : ''
+  ].filter(Boolean).join(' · ');
+}
+
+function renderLineSillonMini(line) {
+  const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
+  if (!sillons) return '';
+  const cls = sillons.constrained ? 'warn-text' : 'good-text';
+  const value = `${round(sillons.effectiveFrequency ?? line.frequency)}/${round(sillons.requestedFrequency ?? line.frequency)} /h`;
+  const tip = lineSillonLabel(line);
+  return `<div><span>Sillons</span><b class="${cls}" ${tooltipAttr(tip)}>${escapeHtml(value)}</b></div>`;
+}
+
 function renderLineItem(line) {
   const stops = lineStopsOf(line);
   const assignedTrains = lineAssignedTrainsClient(line);
@@ -2676,11 +2699,13 @@ function renderLineItem(line) {
     ? { cls: 'bad', label: 'Conducteurs insuffisants' }
     : line.stats?.status === 'resource-shortage'
       ? { cls: 'bad', label: 'Ressource insuffisante' }
-      : line.stats?.status === 'maintenance'
-        ? { cls: 'warn', label: 'Maintenance' }
-        : line.stats?.status === 'train-out-of-service'
-          ? { cls: 'bad', label: 'Train immobilisé' }
-          : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
+      : line.stats?.status === 'sillon-limited'
+        ? { cls: 'warn', label: 'Sillons limités' }
+        : line.stats?.status === 'maintenance'
+          ? { cls: 'warn', label: 'Maintenance' }
+          : line.stats?.status === 'train-out-of-service'
+            ? { cls: 'bad', label: 'Train immobilisé' }
+            : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
   const shortStops = stops.length > 4
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);
@@ -2690,6 +2715,7 @@ function renderLineItem(line) {
       <span>Train <b>${escapeHtml(trainLabel)}</b></span>
       <span>Distance <b>${formatInt(lineDistance(line))} km</b></span>
       <span>Fréq. <b>${line.frequency}</b></span>
+      <span>Sillons <b>${escapeHtml(String(round(line.stats?.capacity?.sillons?.effectiveFrequency ?? line.frequency)))}/${escapeHtml(String(round(line.stats?.capacity?.sillons?.requestedFrequency ?? line.frequency)))}</b></span>
       <span>Net /h <b class="${profitCls}">${moneyPerHour(profit)}</b></span>
     </div>
   `;
@@ -2704,6 +2730,7 @@ function renderLineItem(line) {
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
         <div><span>Fréq.</span><b>${line.frequency}</b></div>
+        ${renderLineSillonMini(line)}
         <div><span>Billet moyen</span><b>${money(ticketPrice)}</b></div>
         <div><span>Attractivite</span><b>${escapeHtml(String(lineAttractivenessLabel(line)))}</b></div>
         <div><span>Net estimé /h</span><b class="${profitCls}">${moneyPerHour(profit)}</b></div>

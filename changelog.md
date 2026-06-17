@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.19.0 — sillons ferroviaires et péages de passage
+
+- incrément de version : badge interface `v62.19.0`, package `0.6.19` et schéma serveur `83` ;
+- ajout d’un système de sillons par tronçon : chaque segment possède une capacité maximale en trains/h ;
+- une ligne peut emprunter un tronçon déjà utilisé, mais sa fréquence effective est plafonnée par le tronçon le plus contraint ;
+- les calculs d’exploitation utilisent la fréquence réellement disponible après limitation des sillons : capacité, revenus, énergie, maintenance et usure ;
+- les cartes de lignes affichent la fréquence sillons effective/demandée et le tronçon limitant en infobulle ;
+- les péages de gare restent conservés et s’appliquent maintenant aussi aux gares traversées visuellement par l’itinéraire, même lorsqu’elles ne sont pas ajoutées comme arrêt commercial ;
+- les coûts d’infrastructure utilisent les segments réels du parcours calculé, y compris les gares intermédiaires implicites.
+
 ## Version v62.18.0 — restauration largeur panneau
 
 - incrément de version : badge interface `v62.18.0`, package `0.6.18` et schéma serveur `82` ;
