@@ -1,3 +1,11 @@
+## Version v64.7.0 — rendu RFN global des lignes longues
+
+- incrément de version : badge interface `v64.7.0`, version serveur/client `v64.7.0`, package `64.7.0` et schéma serveur `115` ;
+- rendu carte des lignes : utilisation prioritaire d'une géométrie RFN globale départ → terminus quand elle passe bien par les arrêts de la ligne dans le bon ordre ;
+- ajout d'une validation client de la géométrie globale : chaque arrêt doit être proche du tracé et apparaître dans l'ordre de desserte avant que le tracé global ne remplace les segments ;
+- conservation d'un fallback par segments gare à gare lorsque la géométrie globale ne respecte pas la suite d'arrêts ;
+- invalidation du cache local RFN navigateur afin d'écarter les anciens tracés assemblés et trop simplifiés.
+
 ## Version v64.6.4 — correctif démarrage après nettoyage des anciens points
 
 - incrément de version : badge interface `v64.6.4`, version serveur/client `v64.6.4`, package `64.6.4` et schéma serveur `114` ;
