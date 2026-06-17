@@ -1,10 +1,16 @@
-## Version v64.7.0 — rendu RFN global des lignes longues
+## Version v64.8.1 — retour au rendu RFN segmenté avant v64.7.0
 
-- incrément de version : badge interface `v64.7.0`, version serveur/client `v64.7.0`, package `64.7.0` et schéma serveur `115` ;
-- rendu carte des lignes : utilisation prioritaire d'une géométrie RFN globale départ → terminus quand elle passe bien par les arrêts de la ligne dans le bon ordre ;
-- ajout d'une validation client de la géométrie globale : chaque arrêt doit être proche du tracé et apparaître dans l'ordre de desserte avant que le tracé global ne remplace les segments ;
-- conservation d'un fallback par segments gare à gare lorsque la géométrie globale ne respecte pas la suite d'arrêts ;
-- invalidation du cache local RFN navigateur afin d'écarter les anciens tracés assemblés et trop simplifiés.
+- incrément de version : badge interface `v64.8.1`, version serveur/client `v64.8.1`, package `64.8.1` et schéma serveur `117` ;
+- rollback ciblé : annulation des modifications de rendu RFN introduites en `v64.7.0` pour revenir au comportement segmenté précédent ;
+- cache RFN client : retour à la clé `sncf-geometry-v1` afin de ne plus utiliser les géométries globales validées de `v64.7.0` ;
+- conservation de la modification `v64.8.0` : les lignes peuvent toujours être créées ou modifiées sans achat préalable des gares desservies.
+
+## Version v64.8.0 — création de lignes sans achat préalable des gares
+
+- incrément de version : badge interface `v64.8.0`, version serveur/client `v64.8.0`, package `64.8.0` et schéma serveur `116` ;
+- création de ligne : suppression du blocage client qui imposait d’acheter chaque gare avant de pouvoir la desservir ;
+- modification de ligne : alignement du contrôle client avec la logique serveur, les gares libres sont valides tant qu’elles existent dans le monde et qu’un itinéraire RFN réel est trouvé ;
+- prévisualisation de ligne : indication explicite que les gares libres peuvent être utilisées sans achat préalable, les péages restant réservés aux gares possédées par une autre compagnie.
 
 ## Version v64.6.4 — correctif démarrage après nettoyage des anciens points
 

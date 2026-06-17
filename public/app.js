@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.7.0';
+const PROJECT_VERSION = 'v64.8.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v2';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v1';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -8545,10 +8545,10 @@ function validateLineStopServiceClient(stops, service) {
 function lineOwnershipProblemClient(stops) {
   const ids = Array.isArray(stops) ? stops : [];
   for (const stopId of ids) {
-    const s = station(stopId);
-    if (!s) return `Arrêt invalide : ${stopId}.`;
-    if (!stationOwnerClient(stopId)) return `${s.name} n’appartient à aucune compagnie. Achète d’abord cette gare dans l’onglet Gares.`;
+    if (!station(stopId)) return `Arrêt invalide : ${stopId}.`;
   }
+  // Les gares libres peuvent être desservies sans achat préalable.
+  // Le propriétaire d'une gare, s'il existe, sert uniquement au calcul des péages.
   return '';
 }
 
@@ -8746,187 +8746,32 @@ function geometryKeyForStops(ids) {
 function geometryForStopSequence(ids) {
   const key = geometryKeyForStops(ids);
   const direct = getCacheEntry(app.osmRouteCache, key);
-  if (direct && routeGeometryMatchesStopSequence(direct, ids).ok) return direct;
-  if (direct) app.osmRouteCache.delete(key);
+  if (direct) return direct;
   ensureOsmRouteGeometryForStops(ids);
   return null;
 }
 
-function localKmPoint(coord, originLat) {
-  const lon = Number(coord?.[0]);
-  const lat = Number(coord?.[1]);
-  const cos = Math.cos((Number(originLat) || lat || 46.5) * Math.PI / 180);
-  return {
-    x: lon * 111.320 * cos,
-    y: lat * 110.574
-  };
-}
-
-function stationRouteCoord(id) {
-  const s = station(id);
-  if (!s) return null;
-  const lon = stationRouteLon(s);
-  const lat = stationRouteLat(s);
-  return [lon, lat].every(Number.isFinite) ? [lon, lat] : null;
-}
-
-function closestMeasureOnGeometryKm(geometry, point) {
-  if (!Array.isArray(geometry) || geometry.length < 2 || !Array.isArray(point)) return null;
-  const originLat = Number(point[1]) || 46.5;
-  const p = localKmPoint(point, originLat);
-  let cumulative = 0;
-  let best = null;
-  for (let i = 1; i < geometry.length; i++) {
-    const aCoord = geometry[i - 1];
-    const bCoord = geometry[i];
-    const segKm = haversineClient(Number(aCoord[1]), Number(aCoord[0]), Number(bCoord[1]), Number(bCoord[0]));
-    if (!Number.isFinite(segKm) || segKm <= 0) continue;
-    const a = localKmPoint(aCoord, originLat);
-    const b = localKmPoint(bCoord, originLat);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy;
-    const t = len2 > 0 ? clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / len2, 0, 1) : 0;
-    const qx = a.x + dx * t;
-    const qy = a.y + dy * t;
-    const distance = Math.hypot(p.x - qx, p.y - qy);
-    const measure = cumulative + segKm * t;
-    if (!best || distance < best.distance) best = { distance, measure, index: i - 1, t };
-    cumulative += segKm;
-  }
-  return best ? { ...best, total: cumulative } : null;
-}
-
-function routeGeometryMatchesStopSequence(geometry, ids) {
-  if (!Array.isArray(geometry) || geometry.length < 2 || !Array.isArray(ids) || ids.length < 2) {
-    return { ok: false, reason: 'missing-geometry' };
-  }
-  const matches = [];
-  for (const id of ids) {
-    const point = stationRouteCoord(id);
-    if (!point) return { ok: false, reason: 'missing-station', id };
-    const match = closestMeasureOnGeometryKm(geometry, point);
-    if (!match) return { ok: false, reason: 'missing-match', id };
-    matches.push({ id, ...match });
-  }
-
-  const maxDistanceKm = 5;
-  const tooFar = matches.find(item => item.distance > maxDistanceKm);
-  if (tooFar) return { ok: false, reason: 'station-too-far', id: tooFar.id, distance: tooFar.distance };
-
-  for (let i = 1; i < matches.length; i++) {
-    // Tolérance courte pour les haltes très proches, mais refus d'un ordre de
-    // desserte franchement inversé sur la géométrie globale.
-    if (matches[i].measure + 1.25 < matches[i - 1].measure) {
-      return { ok: false, reason: 'stop-order-mismatch', id: matches[i].id };
-    }
-  }
-
-  const segmentMeasures = [];
-  for (let i = 1; i < matches.length; i++) {
-    segmentMeasures.push(Math.max(0, matches[i].measure - matches[i - 1].measure));
-  }
-  return {
-    ok: true,
-    distance: Math.round(matches[matches.length - 1].total || polylineGeoDistance(geometry)),
-    maxSegment: Math.round(Math.max(...segmentMeasures, 0)),
-    matches
-  };
-}
-
-function routeFromStopSequenceGeometry(ids, geometry) {
-  const validation = routeGeometryMatchesStopSequence(geometry, ids);
-  if (!validation.ok) return null;
-  const points = cleanRoutePoints(geometry
-    .map(([lon, lat]) => project(lon, lat))
-    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y)));
-  if (points.length < 2) return null;
-  return {
-    ids,
-    distance: Math.round(polylineGeoDistance(geometry)),
-    maxSegment: validation.maxSegment || 0,
-    points,
-    source: 'sncf-sequence'
-  };
-}
-
-async function fetchValidatedStopSequenceGeometry(ids) {
-  if (!Array.isArray(ids) || ids.length < 2) return [];
-  const geometry = await fetchSncfRouteGeometry(ids[0], ids[ids.length - 1]);
-  return geometry?.length >= 2 && routeGeometryMatchesStopSequence(geometry, ids).ok ? geometry : [];
-}
-
-function mergeRouteGeometryChunks(chunks) {
-  const coords = [];
-  for (const chunk of chunks || []) {
-    if (!Array.isArray(chunk) || chunk.length < 2) continue;
-    if (!coords.length) coords.push(...chunk);
-    else coords.push(...chunk.slice(1));
-  }
-  return coords;
-}
-
-async function buildChunkedStopSequenceGeometry(ids) {
-  const chunks = [];
-  let index = 0;
-  const maxStopsPerChunk = 15;
-  while (index < ids.length - 1) {
-    let bestGeometry = null;
-    let bestEnd = index + 1;
-    const farthest = Math.min(ids.length - 1, index + maxStopsPerChunk - 1);
-    for (let end = farthest; end > index + 1; end--) {
-      const candidateIds = ids.slice(index, end + 1);
-      const candidate = await fetchValidatedStopSequenceGeometry(candidateIds);
-      if (candidate?.length >= 2) {
-        bestGeometry = candidate;
-        bestEnd = end;
-        break;
-      }
-    }
-
-    if (!bestGeometry) {
-      await ensureRailwayRouteGeometry(ids[index], ids[index + 1]);
-      bestGeometry = cachedRailGeometryForRoute(ids[index], ids[index + 1]);
-      bestEnd = index + 1;
-    }
-
-    if (!bestGeometry?.length) return [];
-    chunks.push(bestGeometry);
-    index = bestEnd;
-  }
-  const merged = mergeRouteGeometryChunks(chunks);
-  return merged.length >= 2 && routeGeometryMatchesStopSequence(merged, ids).ok ? merged : [];
-}
-
 async function ensureOsmRouteGeometryForStops(ids) {
-  if (!Array.isArray(ids) || ids.length < 2) return;
+  if (!app.map.leaflet || !Array.isArray(ids) || ids.length < 2) return;
   const key = geometryKeyForStops(ids);
   if (app.osmRoutePending.has(key)) return;
   const stations = ids.map(id => station(id)).filter(Boolean);
   if (stations.length !== ids.length) return;
   app.osmRoutePending.add(key);
   try {
-    // Priorité au tracé RFN global départ → terminus : il est souvent beaucoup
-    // plus détaillé que la somme de petits tronçons gare par gare. On ne le garde
-    // que s'il passe près des arrêts demandés dans le bon ordre.
-    const global = await fetchValidatedStopSequenceGeometry(ids);
-    if (global?.length >= 2) {
-      rememberCacheEntry(app.osmRouteCache, key, global, OSM_ROUTE_CACHE_MAX_ENTRIES);
-      app.routeCache.delete(`multi::${ids.join('::')}`);
-      invalidateMapProjection('sncf-full-sequence-geometry-loaded');
-      if (app.activeTab === 'lines') updateLinePreview();
-      return;
+    for (let i = 1; i < ids.length; i++) {
+      await ensureRailwayRouteGeometry(ids[i - 1], ids[i]);
     }
-
-    // Si le départ → terminus complet ne respecte pas tous les arrêts, on cherche
-    // les plus grands sous-parcours RFN valides. Cela évite de revenir trop vite
-    // aux micro-segments gare à gare qui simplifient excessivement les courbes.
-    const chunked = await buildChunkedStopSequenceGeometry(ids);
-    if (chunked?.length >= 2) {
-      rememberCacheEntry(app.osmRouteCache, key, chunked, OSM_ROUTE_CACHE_MAX_ENTRIES);
+    const coords = [];
+    for (let i = 1; i < ids.length; i++) {
+      const segment = cachedRailGeometryForRoute(ids[i - 1], ids[i]);
+      if (!segment?.length) return;
+      if (!coords.length) coords.push(...segment);
+      else coords.push(...segment.slice(1));
+    }
+    if (coords.length >= 2) {
+      rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
       app.routeCache.delete(`multi::${ids.join('::')}`);
-      invalidateMapProjection('sncf-chunked-sequence-geometry-loaded');
-      if (app.activeTab === 'lines') updateLinePreview();
     }
   } catch (error) {
     // Non bloquant : on garde l'itinéraire ferroviaire de secours.
@@ -9119,37 +8964,30 @@ function getRouteForStops(stops) {
     return rememberCacheEntry(app.routeCache, key, single, ROUTE_CACHE_MAX_ENTRIES);
   }
 
-  const sequenceGeometry = geometryForStopSequence(ids);
-  const sequenceRoute = sequenceGeometry ? routeFromStopSequenceGeometry(ids, sequenceGeometry) : null;
-  if (sequenceRoute) return rememberCacheEntry(app.routeCache, key, sequenceRoute, ROUTE_CACHE_MAX_ENTRIES);
-
   let mergedIds = [ids[0]];
   let distanceTotal = 0;
   let maxSegment = 0;
   let points = [];
-  let pending = false;
 
   for (let i = 1; i < ids.length; i++) {
     const segment = getRoute(ids[i - 1], ids[i]);
     if (!segment.distance || !segment.points?.length) {
-      pending = pending || Boolean(segment.pending);
-      const route = { ids, distance: 0, maxSegment: 0, points: [], pending };
+      const route = { ids, distance: 0, maxSegment: 0, points: [], pending: Boolean(segment.pending) };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
     }
     mergedIds.push(...segment.ids.slice(1));
     distanceTotal += segment.distance || 0;
     maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
-    pending = pending || Boolean(segment.pending);
 
     if (!points.length) points.push(...segment.points);
     else points.push(...segment.points.slice(1));
   }
 
   points = cleanRoutePoints(points);
-  // Fallback seulement : si le tracé RFN global validé n'est pas encore chargé,
-  // on conserve temporairement l'assemblage des segments courts. Dès que le
-  // tracé global arrive, le cache multi:: est invalidé et la carte est redessinée.
-  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points, pending };
+  // Ne plus remplacer un tracé détaillé par une spline organique.
+  // Cette ancienne sécurité était utile pour certains fallbacks, mais elle pouvait
+  // dégrader un vrai parcours RFN en le simplifiant visuellement.
+  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
 
@@ -9716,7 +9554,7 @@ function updateLinePreview(sourceId = '') {
   }
   const routeText = stops.map(id => station(id)?.name || id).join(' → ');
   const rightsText = lineExternalRightsLabel(stops);
-  const base = `Distance réseau : ${formatInt(route.distance)} km · Billet moyen : ${money(ticketPrice)} · Tronçon le plus long : ${formatInt(route.maxSegment)} km · ${stops.length} arrêt(s).${rightsText ? ` ${rightsText}` : ''}`;
+  const base = `Distance réseau : ${formatInt(route.distance)} km · Billet moyen : ${money(ticketPrice)} · Tronçon le plus long : ${formatInt(route.maxSegment)} km · ${stops.length} arrêt(s).${rightsText ? ` ${rightsText}` : ' Gares libres utilisables sans achat préalable.'}`;
   const effective = effectiveTrainRangeClient(train, model);
   const ok = route.distance <= effective;
   const detail = ok
