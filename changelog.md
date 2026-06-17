@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v64.1.2 — correction réelle du scroll Composition
+
+- incrément de version : badge interface `v64.1.2`, package `64.1.2` et schéma serveur `99` ;
+- verrouillage de l’onglet Parc > Compositions en mode hauteur fixe quand l’atelier est ouvert ;
+- la carte `Trains de la compagnie` devient un conteneur flex à hauteur contrainte ;
+- seule la liste `.composition-group-list` défile dans le panneau de gauche ;
+- ajout d’une interception roue/tactile en capture pour empêcher le scroll parent de prendre la main sur le panneau Composition ;
+- suppression de la dépendance au scroll général de `#tabContent` sur desktop dans ce sous-menu.
+
 ## Version v64.1.1 — correctif définitif du scroll Composition
 
 - incrément de version : badge interface `v64.1.1`, package `64.1.1` et schéma serveur `98` ;

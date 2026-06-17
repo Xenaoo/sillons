@@ -8022,3 +8022,127 @@ dialog.modal--wide {
     line-height: 1.12;
   }
 }
+
+
+/* ===== V64.1.2 : verrouillage du scroll indépendant du panneau Composition ===== */
+#tabContent.composition-scroll-mode,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+#tabContent.composition-scroll-mode > .hero-card,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] > .hero-card {
+  margin-bottom: 0 !important;
+}
+
+#tabContent.composition-scroll-mode .fleet-workspace,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-workspace {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-layout,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout {
+  display: grid !important;
+  grid-template-columns: minmax(300px, 430px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+#tabContent.composition-scroll-mode .composition-kpi-card,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-kpi-card {
+  display: grid !important;
+  grid-column: 1 / -1 !important;
+  grid-row: 1 !important;
+  margin-bottom: 0 !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-list-card,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  overscroll-behavior: contain !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-editor,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-editor {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+#tabContent.composition-scroll-mode .composition-group-list,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-group-list {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  padding-right: 8px;
+}
+
+@media (max-width: 1180px) {
+  #tabContent.composition-scroll-mode .composition-refit-layout,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout {
+    grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  #tabContent.composition-scroll-mode,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] {
+    overflow: auto !important;
+  }
+  #tabContent.composition-scroll-mode .fleet-workspace,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-workspace,
+  #tabContent.composition-scroll-mode .composition-refit-layout,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  #tabContent.composition-scroll-mode .composition-refit-layout,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  #tabContent.composition-scroll-mode .composition-refit-list-card,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    height: min(72dvh, 720px) !important;
+    max-height: min(72dvh, 720px) !important;
+  }
+  #tabContent.composition-scroll-mode .composition-refit-editor,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-editor {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+}

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.1';
+const PROJECT_VERSION = 'v64.1.2';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -1209,48 +1209,82 @@ function bindCompositionIndependentScroll(root) {
   root.dataset.compositionScrollBound = '1';
 
   root.addEventListener('wheel', event => {
-    if (event.target?.closest?.('select')) return;
-    const list = compositionScrollContainerFromTarget(event.target);
-    if (!list) return;
-    adjustCompositionRefitScroll();
-    if (!compositionListCanScroll(list)) return;
-    if (scrollCompositionListBy(list, event.deltaY)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    handleCompositionWheel(event);
   }, { passive: false });
 
   root.addEventListener('touchstart', event => {
-    const touch = event.touches?.[0];
-    if (!touch) return;
-    const list = compositionScrollContainerFromTarget(event.target);
-    if (!list || !compositionListCanScroll(list)) {
-      app.compositionTouchScroll = null;
-      return;
-    }
-    app.compositionTouchScroll = {
-      id: touch.identifier,
-      y: touch.clientY,
-      list
-    };
+    handleCompositionTouchStart(event);
   }, { passive: true });
 
   root.addEventListener('touchmove', event => {
-    const state = app.compositionTouchScroll;
-    if (!state?.list || !compositionListCanScroll(state.list)) return;
-    const touches = Array.from(event.touches || []);
-    const touch = touches.find(item => item.identifier === state.id) || touches[0];
-    if (!touch) return;
-    const delta = state.y - touch.clientY;
-    state.y = touch.clientY;
-    if (scrollCompositionListBy(state.list, delta)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    handleCompositionTouchMove(event);
   }, { passive: false });
 
   root.addEventListener('touchend', () => { app.compositionTouchScroll = null; }, { passive: true });
   root.addEventListener('touchcancel', () => { app.compositionTouchScroll = null; }, { passive: true });
+
+  if (!document.documentElement.dataset.compositionGlobalScrollBound) {
+    document.documentElement.dataset.compositionGlobalScrollBound = '1';
+    document.addEventListener('wheel', event => {
+      if (!event.target?.closest?.('.composition-refit-list-card')) return;
+      handleCompositionWheel(event);
+    }, { passive: false, capture: true });
+    document.addEventListener('touchstart', event => {
+      if (!event.target?.closest?.('.composition-refit-list-card')) return;
+      handleCompositionTouchStart(event);
+    }, { passive: true, capture: true });
+    document.addEventListener('touchmove', event => {
+      if (!event.target?.closest?.('.composition-refit-list-card')) return;
+      handleCompositionTouchMove(event);
+    }, { passive: false, capture: true });
+    document.addEventListener('touchend', () => { app.compositionTouchScroll = null; }, { passive: true, capture: true });
+    document.addEventListener('touchcancel', () => { app.compositionTouchScroll = null; }, { passive: true, capture: true });
+  }
+}
+
+function handleCompositionWheel(event) {
+  if (event.defaultPrevented) return;
+  if (event.target?.closest?.('select')) return;
+  const list = compositionScrollContainerFromTarget(event.target);
+  if (!list) return;
+  adjustCompositionRefitScroll();
+  if (!compositionListCanScroll(list)) return;
+  if (scrollCompositionListBy(list, event.deltaY)) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+  }
+}
+
+function handleCompositionTouchStart(event) {
+  const touch = event.touches?.[0];
+  if (!touch) return;
+  const list = compositionScrollContainerFromTarget(event.target);
+  adjustCompositionRefitScroll();
+  if (!list || !compositionListCanScroll(list)) {
+    app.compositionTouchScroll = null;
+    return;
+  }
+  app.compositionTouchScroll = {
+    id: touch.identifier,
+    y: touch.clientY,
+    list
+  };
+}
+
+function handleCompositionTouchMove(event) {
+  const state = app.compositionTouchScroll;
+  if (!state?.list || !compositionListCanScroll(state.list)) return;
+  const touches = Array.from(event.touches || []);
+  const touch = touches.find(item => item.identifier === state.id) || touches[0];
+  if (!touch) return;
+  const delta = state.y - touch.clientY;
+  state.y = touch.clientY;
+  if (scrollCompositionListBy(state.list, delta)) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+  }
 }
 
 function scheduleCompositionRefitScrollAdjustment() {
@@ -1264,24 +1298,50 @@ function scheduleCompositionRefitScrollAdjustment() {
 }
 
 function adjustCompositionRefitScroll() {
-  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return;
+  const content = document.querySelector('#tabContent');
+  const compositionActive = app.activeTab === 'fleet' && app.activeFleetSubtab === 'composition';
+  if (content) {
+    content.classList.toggle('composition-scroll-mode', compositionActive);
+    content.dataset.fleetSubtab = app.activeTab === 'fleet' ? (app.activeFleetSubtab || '') : '';
+  }
+  if (!compositionActive) return;
+
+  const workspace = document.querySelector('.fleet-workspace');
+  const layout = document.querySelector('.composition-refit-layout');
   const card = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   if (!card || !list) return;
 
   const viewportHeight = Math.max(480, Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
+  const bottomSafe = window.matchMedia?.('(max-width: 700px)')?.matches ? 10 : 16;
+
+  if (content) {
+    content.style.overflow = 'hidden';
+    content.style.minHeight = '0';
+  }
+  if (workspace) {
+    workspace.style.minHeight = '0';
+    workspace.style.overflow = 'hidden';
+  }
+  if (layout) {
+    const layoutRect = layout.getBoundingClientRect();
+    const layoutHeight = Math.max(360, Math.floor(viewportHeight - layoutRect.top - bottomSafe));
+    layout.style.height = `${layoutHeight}px`;
+    layout.style.maxHeight = `${layoutHeight}px`;
+    layout.style.overflow = 'hidden';
+  }
+
   const cardRect = card.getBoundingClientRect();
-  const bottomSafe = window.matchMedia?.('(max-width: 700px)')?.matches ? 12 : 18;
-  const availableCardHeight = Math.max(420, Math.floor(viewportHeight - cardRect.top - bottomSafe));
+  const availableCardHeight = Math.max(360, Math.floor(viewportHeight - cardRect.top - bottomSafe));
   card.style.setProperty('--composition-list-card-height', `${availableCardHeight}px`);
   card.style.height = `${availableCardHeight}px`;
   card.style.maxHeight = `${availableCardHeight}px`;
+  card.style.overflow = 'hidden';
 
-  const listRect = list.getBoundingClientRect();
-  const refreshedCardRect = card.getBoundingClientRect();
   const cardStyle = window.getComputedStyle(card);
   const cardPaddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
-  const availableListHeight = Math.max(180, Math.floor(refreshedCardRect.bottom - listRect.top - cardPaddingBottom));
+  const listRect = list.getBoundingClientRect();
+  const availableListHeight = Math.max(160, Math.floor(cardRect.top + availableCardHeight - listRect.top - cardPaddingBottom));
   list.style.setProperty('--composition-group-list-height', `${availableListHeight}px`);
   list.style.height = `${availableListHeight}px`;
   list.style.maxHeight = `${availableListHeight}px`;
@@ -1764,6 +1824,7 @@ function renderTabs() {
     side.style.setProperty('--menu-bg', `url("${menuImage}")`);
   }
   content.dataset.tab = app.activeTab;
+  content.dataset.fleetSubtab = app.activeTab === 'fleet' ? (app.activeFleetSubtab || '') : '';
   if (!app.state.me) {
     if (side) side.style.setProperty('--menu-bg', `url("${ART.tabs.overview}")`);
     content.innerHTML = `<div class="card"><h2>Créer une compagnie</h2><p class="muted">La partie commence après création de la compagnie.</p></div>`;
