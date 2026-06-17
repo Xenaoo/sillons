@@ -7158,3 +7158,92 @@ dialog.modal--wide {
 .finance-summary-grid {
   margin-bottom: 10px;
 }
+
+/* ===== v62.26.1 : correctifs mobile et lisibilité carte ===== */
+@media (max-width: 1100px) {
+  body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  .layout,
+  .layout.map-visible,
+  .layout.map-hidden,
+  .layout.side-collapsed,
+  .layout.map-visible.side-collapsed,
+  .layout.map-hidden.side-collapsed {
+    height: auto !important;
+    min-height: calc(100dvh - 72px) !important;
+    overflow: visible !important;
+    align-items: start !important;
+  }
+  .layout .map-section,
+  .layout.map-visible .map-section,
+  .layout.map-hidden .map-section {
+    height: min(58dvh, 560px) !important;
+    min-height: 360px !important;
+    flex: 0 0 auto !important;
+  }
+  .osm-map,
+  #osmMap {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .layout .side.panel,
+  .layout.map-visible .side.panel,
+  .layout.map-hidden .side.panel {
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .layout .tab-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    height: auto !important;
+    min-height: 64px !important;
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+  }
+  .brand span {
+    display: none !important;
+  }
+  .layout,
+  .layout.map-visible,
+  .layout.map-hidden,
+  .layout.side-collapsed,
+  .layout.map-visible.side-collapsed,
+  .layout.map-hidden.side-collapsed {
+    padding: 8px !important;
+    gap: 10px !important;
+    min-height: calc(100dvh - 64px) !important;
+  }
+  .map-toolbar {
+    min-height: 48px !important;
+    padding: 7px 9px !important;
+    gap: 7px !important;
+  }
+  .map-toolbar .legend {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .map-controls {
+    gap: 5px !important;
+  }
+  .map-controls button {
+    min-width: 36px !important;
+    padding: 8px 9px !important;
+  }
+  .layout .map-section,
+  .layout.map-visible .map-section,
+  .layout.map-hidden .map-section {
+    height: 56dvh !important;
+    min-height: 330px !important;
+  }
+}

@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.26.0';
-const STATE_SCHEMA_VERSION = 90;
+const PROJECT_VERSION = 'v62.26.1';
+const STATE_SCHEMA_VERSION = 91;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3264,7 +3264,7 @@ async function actionCreateLine(player, payload) {
     return fail('Aucun itinéraire RFN réel entre ces gares.', missing ? `Segment introuvable dans formes-des-lignes-du-rfn : ${from} → ${to}.` : 'Choisis des gares reliées par le Réseau Ferré National.');
   }
   const ownershipProblem = lineStopsOwnershipProblem(stops);
-  if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
+  if (ownershipProblem) return fail(ownershipProblem);
   const ticketPrice = lineTicketPriceFromPayload(payload, routeInfo.distance);
   const tariff = tariffFromTicketPrice(ticketPrice, routeInfo.distance);
   const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
@@ -3342,7 +3342,7 @@ async function actionUpdateLine(player, payload) {
     return fail('Impossible de calculer un itinéraire RFN réel pour cette suite d’arrêts.', missing ? `Segment introuvable dans formes-des-lignes-du-rfn : ${from} → ${to}.` : '');
   }
   const ownershipProblem = lineStopsOwnershipProblem(nextStops);
-  if (ownershipProblem) return fail(ownershipProblem, 'Seuls les arrêts explicitement desservis doivent appartenir à une compagnie.');
+  if (ownershipProblem) return fail(ownershipProblem);
   if (!Array.isArray(payload.stops) && (!Number.isFinite(Number(line.distance)) || !Array.isArray(line.routeSegments) || !line.routeSegments.length)) {
     applyValidatedRouteToLine(line, routeInfo);
     changedOperationalData = true;
@@ -5750,12 +5750,10 @@ function stationOwnerInfo(stationId) {
 function lineStopsOwnershipProblem(stops) {
   const ids = sanitizeStopsPayload(stops, null, null);
   for (const stopId of ids) {
-    const station = stationById(stopId);
-    if (!station) return `Arrêt invalide : ${stopId}.`;
-    if (!stationOwnerInfo(stopId)) {
-      return `Impossible d’ouvrir cette ligne : ${station.name} n’appartient à aucune compagnie. Achète d’abord cette gare dans l’onglet Gares.`;
-    }
+    if (!stationById(stopId)) return `Arrêt invalide : ${stopId}.`;
   }
+  // Les gares libres peuvent désormais être desservies ou simplement traversées.
+  // Les péages ne sont dus que lorsqu'une gare appartient réellement à une autre compagnie.
   return '';
 }
 

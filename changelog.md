@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.26.1 — correctifs carte mobile, gares visibles et création de ligne
+
+- incrément de version : badge interface `v62.26.1`, package `62.26.1` et schéma serveur `91` ;
+- correction du layout mobile : la page peut à nouveau défiler, la carte conserve une hauteur propre sur téléphone et Leaflet est redimensionné lors des changements de viewport mobile ;
+- restauration du rendu des gares sur la carte avec de petites pastilles carrées ;
+- ajout d’un affichage progressif des gares selon le niveau de zoom, avec filtrage viewport et anti-chevauchement conservés ;
+- conservation des noms uniquement au zoom maximal pour les gares possédées, afin d’éviter une carte trop chargée ;
+- correction de l’ajout des arrêts intermédiaires dans la création de ligne : les gares sont maintenant conservées dans l’ordre choisi par le joueur, sans réinsertion automatique approximative ;
+- assouplissement serveur de la création/modification de ligne : les gares libres peuvent être desservies ou traversées, et les péages ne s’appliquent que sur les gares appartenant à une autre compagnie.
+
 ## Version v62.26.0 — gares réelles et itinéraires RFN obligatoires
 
 - incrément de version : badge interface `v62.26.0`, package `0.6.26` et schéma serveur `90` ;

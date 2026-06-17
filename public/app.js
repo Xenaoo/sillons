@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.26.0';
+const PROJECT_VERSION = 'v62.26.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -393,7 +393,7 @@ function bindStaticEvents() {
   });
 
   window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
-  window.visualViewport?.addEventListener('resize', () => scheduleTutorialOverlayPosition(60, { scroll: false }));
+  window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
   window.visualViewport?.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }));
   window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
   bindGlobalTooltips();
@@ -2401,9 +2401,9 @@ function renderCreateLinePanel() {
               <b>${draft.waypoints.length ? `${draft.waypoints.length} ajouté(s)` : 'Optionnel'}</b>
             </summary>
             <div class="line-advanced-body">
-              <p class="muted small">Ajoute une gare desservie entre le départ et le terminus. Le jeu conserve l’ordre préparé pour vérifier le parcours RFN réel.</p>
+              <p class="muted small">Ajoute les gares desservies dans l’ordre exact du parcours : le jeu valide ensuite chaque segment RFN réel sans réorganiser les arrêts.</p>
               ${renderStationSearchField('via', 'Ajouter une desserte', draft.viaCandidate, draft.viaQuery)}
-              <button type="button" id="addWaypointBtn" class="primary" ${tooltipAttr('Ajoute cette gare comme arrêt intermédiaire dans le parcours préparé.')}>Ajouter cette desserte</button>
+              <button type="button" id="addWaypointBtn" class="primary" ${tooltipAttr('Ajoute cette gare à la suite des arrêts intermédiaires déjà préparés.')}>Ajouter cette desserte</button>
               ${draft.waypoints.length ? `<div class="line-waypoint-list">${draft.waypoints.map((id, index) => renderWaypointChip(id, index)).join('')}</div>` : '<p class="muted small">Aucune desserte intermédiaire ajoutée.</p>'}
             </div>
           </details>
@@ -6553,14 +6553,17 @@ function pointAlongPolyline(points, t) {
 
 function shouldDrawStation(s, asset, selected) {
   if (selected || asset) return true;
-  const zoom = app.map.leaflet?.getZoom?.() || 6;
+  const zoom = Number(app.map.leaflet?.getZoom?.() || 6);
   const pop = Number(s.population || s.baseDemand * 450 || 0);
-  if (s.custom) return zoom >= 8;
-  if (zoom < 6) return pop >= 200000 || s.id === 'PAR';
-  if (zoom < 7) return pop >= 100000;
-  if (zoom < 10) return pop >= 40000;
-  if (!mapMaxZoomReached()) return pop >= 15000 || !s.commune;
-  return pop >= 5000 || !s.commune;
+  if (s.custom) return zoom >= 9;
+  if (zoom < 6) return pop >= 300000 || s.id === 'PAR';
+  if (zoom < 7) return pop >= 150000;
+  if (zoom < 8) return pop >= 80000;
+  if (zoom < 9) return pop >= 45000;
+  if (zoom < 10) return pop >= 25000;
+  if (zoom < 11) return pop >= 12000 || !s.commune;
+  if (zoom < 12) return pop >= 5000 || !s.commune;
+  return true;
 }
 
 function stationViewportCacheKey(lite = false) {
@@ -6600,10 +6603,58 @@ function stationCollisionRadiusForZoom() {
 }
 
 function stationMarkerRadiusForItem(item) {
-  if (item.selected) return 9;
-  if (item.asset) return 7;
-  if (item.custom) return 5.8;
-  return 5;
+  if (item.selected) return 8;
+  if (item.asset) return 6.5;
+  if (item.served) return 5.8;
+  if (item.custom) return 5.4;
+  return 4.8;
+}
+
+function stationSquareSizeForItem(item) {
+  const zoom = Number(app.map.leaflet?.getZoom?.() || 6);
+  if (item.selected) return 12;
+  if (item.asset) return zoom >= 11 ? 10 : 9;
+  if (item.served) return zoom >= 11 ? 8 : 7;
+  if (item.custom) return 7;
+  return zoom >= 12 ? 6 : zoom >= 10 ? 5 : 4;
+}
+
+function drawStationSquareMarker(ctx, item) {
+  const { p, asset, selected, served, custom } = item;
+  const size = stationSquareSizeForItem(item);
+  const half = Math.round(size / 2);
+  const x = Math.round(p.x) - half;
+  const y = Math.round(p.y) - half;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.shadowColor = selected
+    ? 'rgba(250, 204, 21, .55)'
+    : asset
+      ? 'rgba(217, 168, 82, .34)'
+      : 'rgba(15, 23, 42, .30)';
+  ctx.shadowBlur = selected ? 10 : asset ? 7 : 3;
+
+  ctx.fillStyle = selected
+    ? 'rgba(250, 204, 21, .96)'
+    : asset
+      ? 'rgba(217, 168, 82, .92)'
+      : served
+        ? 'rgba(106, 197, 143, .88)'
+        : custom
+          ? 'rgba(125, 211, 252, .86)'
+          : 'rgba(230, 220, 195, .76)';
+  ctx.fillRect(x, y, size, size);
+
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = selected
+    ? 'rgba(255, 246, 200, .98)'
+    : asset
+      ? 'rgba(255, 236, 179, .82)'
+      : 'rgba(4, 8, 16, .72)';
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, size - 1), Math.max(1, size - 1));
+  ctx.restore();
 }
 
 function stationMarkerMinDistance(a, b, baseRadius) {
@@ -6702,8 +6753,9 @@ function drawStations(ctx, lite = false) {
       app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: asset ? 14 : 11 });
     }
 
-    // Alléger fortement la carte : aucun marqueur de gare en vue normale.
-    // Au zoom maximal, seules les gares possédées par le joueur sont nommées.
+    drawStationSquareMarker(ctx, item);
+
+    // Les noms restent réservés au zoom maximal pour éviter de recharger la carte.
     if (!zoomMax || !asset) continue;
 
     ctx.save();
@@ -7840,8 +7892,12 @@ function addDraftWaypoint() {
     return;
   }
 
-  const newStops = insertStopAtBestIntermediatePosition(currentStops, stopId);
-  draft.waypoints = newStops.slice(1, -1);
+  // En création de ligne, l'ordre est celui préparé par le joueur :
+  // départ → arrêts ajoutés successivement → terminus.
+  // L'ancienne insertion automatique "meilleure position" pouvait déplacer une
+  // gare au mauvais endroit quand les distances provisoires n'étaient pas encore
+  // confirmées par la géométrie RFN.
+  draft.waypoints = [...(draft.waypoints || []), stopId];
   draft.viaCandidate = '';
   draft.viaQuery = '';
   saveLineDraft();
