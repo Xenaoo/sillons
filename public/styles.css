@@ -8623,3 +8623,80 @@ dialog.modal--wide {
     min-height: 255px !important;
   }
 }
+
+
+/* ===== v64.4.0 — maintenance alignée sur le catalogue ===== */
+.fleet-maintenance-era-list {
+  margin-top: 12px;
+}
+
+.fleet-maintenance-grid .maintenance-train-card {
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 72% 0%, rgba(217,168,82,.13), transparent 32%),
+    linear-gradient(180deg, rgba(10,18,34,.72), rgba(5,10,20,.55));
+  border-color: rgba(217,168,82,.20);
+}
+
+.fleet-maintenance-grid .maintenance-train-card .train-art {
+  height: clamp(142px, 14vw, 190px);
+  background:
+    radial-gradient(circle at 50% 52%, rgba(217,168,82,.13), transparent 38%),
+    linear-gradient(180deg, rgba(3,8,18,.60), rgba(3,8,18,.88));
+}
+
+.owned-train-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.owned-train-detail-grid div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(2,6,23,.32);
+  border: 1px solid rgba(217,168,82,.13);
+}
+
+.owned-train-detail-grid span {
+  color: #b8aa84;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.owned-train-detail-grid b {
+  min-width: 0;
+  color: #f3e1ba;
+  font-size: 11px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-maintenance-grid .maintenance-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.fleet-maintenance-grid .maintenance-btn {
+  min-height: 0;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.fleet-maintenance-grid .maintenance-btn strong {
+  font-size: 11px;
+}
+
+.fleet-maintenance-grid .maintenance-btn span,
+.fleet-maintenance-grid .maintenance-btn em {
+  font-size: 10px;
+  line-height: 1.15;
+}

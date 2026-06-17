@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64:3:0';
+const PROJECT_VERSION = 'v64.4.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -47,6 +47,7 @@ const app = {
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
   fleetCatalogEraCollapsed: loadJson('sillons.fleetCatalogEraCollapsed', {}),
+  fleetMaintenanceEraCollapsed: loadJson('sillons.fleetMaintenanceEraCollapsed', {}),
   sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
   admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
   mapPref: 'show',
@@ -4237,6 +4238,22 @@ function setFleetCatalogEraCollapsed(epoch, collapsed) {
   localStorage.setItem('sillons.fleetCatalogEraCollapsed', JSON.stringify(app.fleetCatalogEraCollapsed));
 }
 
+
+function fleetMaintenanceEraStorageKey(epoch) {
+  return `epoch::${Math.max(0, Number(epoch || 0))}`;
+}
+
+function isFleetMaintenanceEraCollapsed(epoch) {
+  return Boolean(app.fleetMaintenanceEraCollapsed?.[fleetMaintenanceEraStorageKey(epoch)]);
+}
+
+function setFleetMaintenanceEraCollapsed(epoch, collapsed) {
+  const key = fleetMaintenanceEraStorageKey(epoch);
+  app.fleetMaintenanceEraCollapsed = { ...(app.fleetMaintenanceEraCollapsed || {}), [key]: Boolean(collapsed) };
+  if (!collapsed) delete app.fleetMaintenanceEraCollapsed[key];
+  localStorage.setItem('sillons.fleetMaintenanceEraCollapsed', JSON.stringify(app.fleetMaintenanceEraCollapsed));
+}
+
 function renderFleetCatalogPanel(available, locked) {
   const me = app.state.me;
   const models = Object.values(app.state.balance.trains);
@@ -4292,6 +4309,13 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
   const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = me.trains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const trainsByEpoch = {};
+  for (const train of me.trains || []) {
+    const model = app.state.balance.trains[train.modelId] || {};
+    const epoch = Number(model.unlockEpoch ?? model.epoch ?? 0);
+    (trainsByEpoch[epoch] ||= []).push(train);
+  }
+  const eraEntries = Object.entries(trainsByEpoch).sort((a, b) => Number(a[0]) - Number(b[0]));
 
   return `
     <div class="fleet-maintenance-layout">
@@ -4322,8 +4346,31 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
           </div>
           <span class="tag">${me.trains.length} unité(s)</span>
         </div>
-        <div class="owned-train-grid fleet-owned-grid">
-          ${me.trains.map(t => renderOwnedTrain(t)).join('') || '<p class="muted">Aucun matériel.</p>'}
+        <div class="era-catalog fleet-maintenance-era-list">
+          ${eraEntries.length ? eraEntries.map(([epoch, trains]) => {
+            const collapsed = isFleetMaintenanceEraCollapsed(epoch);
+            const sorted = trains.sort((a, b) => {
+              const ma = app.state.balance.trains[a.modelId] || {};
+              const mb = app.state.balance.trains[b.modelId] || {};
+              return String(ma.name || '').localeCompare(String(mb.name || ''), 'fr') || String(a.id).localeCompare(String(b.id));
+            });
+            return `
+              <section class="era-block fleet-era-block ${collapsed ? 'collapsed' : ''}">
+                <button type="button" class="era-title fleet-era-toggle" data-action="toggle-fleet-maintenance-era" data-epoch="${escapeAttr(String(epoch))}" aria-expanded="${collapsed ? 'false' : 'true'}">
+                  <span class="research-era-title">
+                    <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+                    <strong>${escapeHtml(trainEraLabel(Number(epoch)))}</strong>
+                  </span>
+                  <span class="research-era-meta">${sorted.length} train${sorted.length > 1 ? 's' : ''} · ${collapsed ? 'Déplier' : 'Masquer'}</span>
+                </button>
+                ${collapsed ? '' : `
+                  <div class="train-card-grid fleet-catalog-grid fleet-maintenance-grid">
+                    ${sorted.map(t => renderOwnedTrain(t)).join('')}
+                  </div>
+                `}
+              </section>
+            `;
+          }).join('') : '<p class="muted">Aucun matériel.</p>'}
         </div>
       </div>
     </div>
@@ -4603,7 +4650,6 @@ function estimateTrainPowerKw(model) {
 }
 
 function renderTrainCatalogItem(model, buyable) {
-  const reason = trainModelLockedReason(model);
   const effective = effectiveModelWithResearchClient(model);
   const effectiveRange = effective.range;
   const unitPrice = trainPurchaseUnitPriceClient(model);
@@ -4635,7 +4681,7 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
         <div class="actions">
-          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(`Achète ${model.name}. Coût unitaire : ${money(unitPrice)}. Quantité par défaut : 1 train. ${model.description || ''} Vitesse : ${model.speed} km/h. Portée : ${formatInt(model.range)} km. Puissance estimée : ${formatInt(powerKw)} kW. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${buyable ? '' : 'disabled'}>Acheter</button>
         </div>
       </div>
     </div>
@@ -4643,6 +4689,20 @@ function renderTrainCatalogItem(model, buyable) {
 }
 
 
+
+
+function formatTrainServiceTime(train) {
+  const tickMs = Math.max(250, Number(app.state?.game?.tickMs || 2000));
+  const totalSeconds = Math.max(0, Math.floor(Number(train?.age || 0) * tickMs / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${formatInt(days)} j ${hours} h`;
+  if (hours > 0) return `${formatInt(hours)} h ${minutes} min`;
+  if (minutes > 0) return `${formatInt(minutes)} min ${seconds} s`;
+  return `${formatInt(seconds)} s`;
+}
 
 function renderOwnedTrain(train) {
   const model = app.state.balance.trains[train.modelId];
@@ -4658,14 +4718,22 @@ function renderOwnedTrain(train) {
     : inMaint
       ? 'Impossible de vendre : Ce train est en maintenance.'
       : `Vend ce train d’occasion. Valeur influencée par son état (${condition}%).`;
+  const statusLabel = line
+    ? linePublicName(line)
+    : inMaint
+      ? 'En atelier'
+      : condition <= 0
+        ? 'Immobilisé'
+        : 'Libre';
+  const statusClass = inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
 
   return `
-    <div class="list-item owned-train-card">
+    <div class="list-item train-catalog-card owned-train-card maintenance-train-card">
       ${renderTrainArt(model)}
-      <div class="owned-train-body">
+      <div class="train-card-body owned-train-body">
         <div class="item-title">
           <strong>${escapeHtml(model.name)}</strong>
-          <span class="tag ${inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : ''}">${inMaint ? 'En atelier' : condition <= 0 ? 'Immobilisé' : line ? 'En service' : 'Libre'}</span>
+          <span class="tag ${statusClass}">${escapeHtml(statusLabel)}</span>
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
         <div class="train-condition-head">
@@ -4673,17 +4741,12 @@ function renderOwnedTrain(train) {
           <b class="${conditionClass}-text">${escapeHtml(trainProjectionLabel(train))}</b>
         </div>
         <div class="progress train-condition-bar ${conditionClass}"><i style="width:${condition}%"></i></div>
-        <div class="kv" style="margin-top:8px">
-          <span>Affectation</span><b>${line ? escapeHtml(linePublicName(line)) : 'Libre'}</b>
-          <span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b>
-          <span>Usure historique</span><b>${formatInt(train.age)} cycles</b>
-          <span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b>
-          <span>Capacité</span><b>${formatInt(profile.capacity)} voy. / ${formatInt(profile.freight)} t</b>
-          <span>Portée</span><b>${formatInt(profile.range)} km</b>
-          <span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b>
-          <span>Dernier service</span><b>${maint.lastServiceDay || train.acquiredDay ? 'Effectué' : '-'}</b>
+        <div class="owned-train-detail-grid">
+          <div><span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b></div>
+          <div><span>Usure historique</span><b>${escapeHtml(formatTrainServiceTime(train))}</b></div>
+          <div><span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b></div>
+          <div><span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b></div>
         </div>
-        ${renderTrainInheritedResearchBonuses(model)}
         <div class="owned-train-composition-preview">
           ${renderTrainCompositionStrip(train, model, 'mini')}
         </div>
@@ -6148,6 +6211,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
   if (action === 'toggle-fleet-catalog-era') { const epoch = Number(button.dataset.epoch || 0); setFleetCatalogEraCollapsed(epoch, !isFleetCatalogEraCollapsed(epoch)); renderAll(); return; }
+  if (action === 'toggle-fleet-maintenance-era') { const epoch = Number(button.dataset.epoch || 0); setFleetMaintenanceEraCollapsed(epoch, !isFleetMaintenanceEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }
   if (action === 'toggle-owned-stations') { app.ownedStationsCollapsed = !app.ownedStationsCollapsed; localStorage.setItem('sillons.ownedStationsCollapsed', app.ownedStationsCollapsed ? '1' : '0'); renderAll(); return; }
   if (action === 'toggle-budget-section') {
