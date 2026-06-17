@@ -1,9 +1,9 @@
-## Version v64.5.1 — correctif lisibilité et stabilité des sous-menus Parc
+## Version v64.5.2 — désélection du filtre carte des lignes
 
-- incrément de version : badge interface `v64.5.1`, version serveur/client `v64.5.1`, package `64.5.1` et schéma serveur `108` ;
-- menu `Parc > Compositions` : correction de la barre de sélection multiple, dont le texte se retrouvait comprimé et illisible quand des trains étaient sélectionnés ;
-- menu `Parc > Compositions` : la consigne de sélection occupe désormais une ligne dédiée et les actions restent lisibles en dessous ;
-- sous-menus du `Parc` : blocage du rendu complet automatique à chaque tick serveur pour éviter les reconstructions permanentes du Catalogue, de la Maintenance et des Compositions ; seuls les compteurs du bandeau supérieur restent rafraîchis automatiquement.
+- incrément de version : badge interface `v64.5.2`, version serveur/client `v64.5.2`, package `64.5.2` et schéma serveur `109` ;
+- menu `Lignes > Modifier` : le premier clic sur une ligne conserve le comportement existant, avec centrage et filtre de la carte sur cette ligne ;
+- un second clic sur la même ligne déjà sélectionnée désélectionne maintenant la ligne et retire le filtre appliqué à la carte ;
+- le bouton `Carte` suit le même comportement de bascule, tandis que le bouton `Modifier` continue d'ouvrir l'éditeur sans désélectionner la ligne.
 
 ## Version v64.5.0 — sélection directe des compositions
 

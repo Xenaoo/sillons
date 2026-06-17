@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.5.1';
+const PROJECT_VERSION = 'v64.5.2';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -1810,10 +1810,14 @@ function clearFocusedLine() {
   drawMap();
 }
 
-function focusLineOnMap(lineId, { fit = true } = {}) {
+function focusLineOnMap(lineId, { fit = true, toggle = false } = {}) {
   const id = String(lineId || '');
   const line = app.state?.me?.lines?.find(l => l.id === id && l.active);
   if (!line) return;
+  if (toggle && app.focusedLineId === id) {
+    clearFocusedLine();
+    return;
+  }
   app.focusedLineId = id;
   localStorage.setItem('sillons.focusedLineId', id);
   syncFocusedLineUi();
@@ -5966,7 +5970,7 @@ async function onTabContentClick(event) {
   if (!button) {
     const lineCard = event.target.closest('.line-card-modern[data-line-id]');
     if (lineCard) {
-      focusLineOnMap(lineCard.dataset.lineId || '');
+      focusLineOnMap(lineCard.dataset.lineId || '', { toggle: true });
       return;
     }
     return;
@@ -6196,7 +6200,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     return doAction('closeLine', { lineId: button.dataset.id });
   }
   if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
-  if (action === 'focus-line') { focusLineOnMap(button.dataset.id || ''); return; }
+  if (action === 'focus-line') { focusLineOnMap(button.dataset.id || '', { toggle: true }); return; }
   if (action === 'edit-line') { focusLineOnMap(button.dataset.id || ''); return openLineModal(button.dataset.id); }
   if (action === 'remove-waypoint') { removeDraftWaypoint(button.dataset.index); return; }
   if (action === 'upgrade-station') return doAction('upgradeStation', { stationId: button.dataset.id, kind: button.dataset.kind });
