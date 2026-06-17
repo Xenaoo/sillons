@@ -44,7 +44,7 @@ Le serveur utilise les données SNCF Open Data lorsque l’accès réseau est di
 - `population-municipale-des-communes-france-entiere` sur data.gouv.fr pour rapprocher chaque gare de la population municipale de sa commune ;
 - `formes-des-lignes-du-rfn` pour calculer des géométries de route suivant les lignes du Réseau Ferré National.
 
-Le cache `data/communes-5000-population.json` conserve le nom historique du fichier mais contient désormais uniquement des gares réelles. Les anciennes communes jouables hors gare et la création manuelle de points sont désactivées. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si un segment n’a pas de tracé RFN exploitable, la création ou la modification de ligne est refusée au lieu de générer un itinéraire fictif.
+Le cache `data/communes-5000-population.json` conserve le nom historique du fichier mais contient désormais uniquement des gares réelles. Les anciennes communes jouables hors gare et la création de gares personnalisées sont désactivées. Les géométries RFN sont mises en cache localement dans `data/sncf-rfn-lines-cache.json` après le premier chargement. Si un segment n’a pas de tracé RFN exploitable, la création ou la modification de ligne est refusée au lieu de générer un itinéraire fictif.
 
 ## Notes
 

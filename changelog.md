@@ -1,9 +1,8 @@
-## Version v64.6.2 — purge des anciens points manuels
+## Version v64.6.1 — correction affichage sillons utilisés/disponibles
 
-- incrément de version : badge interface `v64.6.2`, version serveur/client `v64.6.2`, package `64.6.2` et schéma serveur `112` ;
-- suppression des derniers mécanismes de création/stockage manuel de points côté serveur et interface ;
-- nettoyage de la sauvegarde fournie : suppression du bloc historique dédié, retrait des anciens identifiants manuels des possessions et des lignes, avec conservation des lignes encore valides ;
-- maintien des itinéraires et gares réelles SNCF uniquement.
+- incrément de version : badge interface `v64.6.1`, version serveur/client `v64.6.1`, package `64.6.1` et schéma serveur `111` ;
+- correction de la case `Sillons` dans `Lignes > Modifier` : affichage au format `utilisés/disponibles` pour montrer à la fois les sillons utilisés par le joueur et les sillons réellement disponibles ;
+- correction du tooltip `Déjà utilisé par d'autres` : suppression de la répétition du nombre de sillons au début du détail entre parenthèses.
 
 ## Version v64.6.0 — lignes : sillons disponibles et détail du tronçon limitant
 
@@ -173,7 +172,7 @@
 - remplacement du modèle communes par les gares réelles de `liste-des-gares`, avec coordonnées SNCF exactes, UIC/GAIA, nature voyageurs/fret et codes lignes RFN ;
 - suppression de la notion de ville de moins ou plus de `5 000` habitants : les points jouables sont des gares SNCF réelles uniquement ;
 - rapprochement de la demande avec la population municipale communale issue de data.gouv.fr, avec agrégation Paris/Lyon/Marseille par arrondissements et fallback de cache local si l’API tabulaire est indisponible ;
-- création de points manuels désactivée côté client et côté serveur ;
+- création de gares personnalisées désactivée côté client et côté serveur ;
 - création et modification de ligne bloquées quand aucun itinéraire réel n’est trouvé dans `formes-des-lignes-du-rfn` entre deux arrêts ;
 - suppression des fallbacks visuels fictifs côté client : une ligne sans géométrie RFN reste en attente ou introuvable ;
 - validation voyageurs/fret par gare : une ligne voyageurs exige des gares voyageurs, une ligne fret exige des gares fret, une ligne mixte exige les deux ;
@@ -367,9 +366,9 @@
 - remplacement du ralentissement temporel par des seuils de trafic cumulés fortement augmentés : 15 000 000 pour le diesel, puis 75 000 000, 300 000 000, 1 200 000 000, 4 000 000 000 et 12 000 000 000 pour les ères suivantes ;
 - retrait de l’indicateur `Temps dans l’époque` de l’onglet R&D ;
 - ajout du prix d’achat dans la fiche et l’infobulle de chaque gare ;
-- création des points manuels rendue explicitement payante avec une fenêtre de validation indiquant le prix proposé avant débit ;
-- calcul du prix des points manuels à partir du potentiel local et des prix des gares proches, pour éviter un tarif fixe uniforme ;
-- mémorisation du coût de création d’une point manuel afin que sa revente rembourse bien la valeur de création.
+- création des gares personnalisées rendue explicitement payante avec une fenêtre de validation indiquant le prix proposé avant débit ;
+- calcul du prix des gares personnalisées à partir du potentiel local et des prix des gares proches, pour éviter un tarif fixe uniforme ;
+- mémorisation du coût de création d’une gare personnalisée afin que sa revente rembourse bien la valeur de création.
 
 
 ## Version v62.7.0 — péages limités aux gares et progression d’époque ralentie
@@ -673,9 +672,9 @@ Ajouts principaux :
 
 - Carte principale remplacée par une carte Carte interactive via moteur cartographique.
 - Ajout d'une surcouche canvas pour les gares, lignes et trains animés.
-- Possibilité de créer un point manuel n'importe où en France via le bouton **Créer point**.
-- Les points manuels sont sauvegardés dans `data/save.json`.
-- Les lignes peuvent être créées entre gares de base et points Carte manuels.
+- Possibilité de créer un arrêt personnalisé n'importe où en France via le bouton **Créer arrêt**.
+- Les arrêts personnalisés sont sauvegardés dans `data/save.json`.
+- Les lignes peuvent être créées entre gares de base et arrêts Carte personnalisés.
 - Le moteur économique existant reste utilisé : demande, fret, tourisme, coût de ligne, maintenance, trains, énergie, salariés et recherche.
 - Les trains restent animés sur la surcouche de carte.
 - Le zoom et le déplacement sont gérés par moteur cartographique/Carte interactive.
@@ -690,9 +689,9 @@ Note : cette version utilise les fonds cartographiques Carte interactive depuis 
 - Les communes chargées deviennent des points jouables dans le moteur : création de ligne, calcul de distance, demande voyageurs, fret, tourisme, affichage carte.
 - Les points de communes sont masqués quand la carte est dézoomée, puis apparaissent progressivement selon le niveau de zoom.
 - Le formulaire de création de ligne utilise maintenant une recherche textuelle avec suggestions au lieu de longs menus déroulants.
-- Les gares principales, communes ≥population réelle et points manuels sont recherchables.
+- Les gares principales, communes ≥population réelle et arrêts personnalisés sont recherchables.
 
-Note : le premier chargement complet des communes nécessite une connexion Internet, comme la carte Carte interactive. Si le téléchargement échoue, le jeu reste jouable avec les gares de base et les points Carte manuels.
+Note : le premier chargement complet des communes nécessite une connexion Internet, comme la carte Carte interactive. Si le téléchargement échoue, le jeu reste jouable avec les gares de base et les arrêts Carte personnalisés.
 
 ## Version v12
 
@@ -775,7 +774,7 @@ Ajouts UX :
 ## Version v19 — matériel roulant, doublons de gares et opacité
 
 - opacité des menus encore réduite pour rendre les images d’arrière-plan nettement plus visibles ;
-- déduplication des gares entre gares principales, communes API et points manuels ;
+- déduplication des gares entre gares principales, communes API et arrêts personnalisés ;
 - correction spécifique des doublons type `Le Havre` quand une commune et une gare principale se superposent ;
 - catalogue matériel roulant étendu à 24 modèles, soit plusieurs choix par époque ;
 - chaque matériel a maintenant une image dédiée dans `public/assets/art/rolling_stock/` ;
@@ -983,10 +982,10 @@ Correction visuelle ciblée de la carte :
 Correction ciblée :
 
 - ajout d’un champ de recherche complet dans l’onglet `Gares` ;
-- la liste déroulante de l’onglet `Gares` contient désormais toutes les gares disponibles, y compris les petites gares et points manuels ;
+- la liste déroulante de l’onglet `Gares` contient désormais toutes les gares disponibles, y compris les petites gares et arrêts personnalisés ;
 - sélection d’une gare par suggestion de recherche ;
 - correction de la sélection depuis la carte avec un fallback géographique si le cache de hitbox est obsolète ;
-- amélioration possible sur une petite gare ou une gare issue d’un ancien mode manuel sans passer par la création de ligne ;
+- amélioration possible sur une petite gare ou une gare créée/custom sans passer par la création de ligne ;
 - badge de version mis à jour en `v37`.
 
 ## Version v38 — stabilité de la recherche de gare
@@ -997,7 +996,7 @@ Correction ciblée :
 - les rafraîchissements automatiques du serveur ne reconstruisent plus l’onglet pendant que l’utilisateur tape ;
 - la recherche garde son texte et son candidat courant ;
 - la sélection via suggestion, carte, liste ou fiche synchronise correctement le champ de recherche ;
-- amélioration d’une point manuel retestée ;
+- amélioration d’une gare personnalisée retestée ;
 - badge de version mis à jour en `v38`.
 
 ## Version v40 — audit et réparation de la carte
@@ -1057,12 +1056,12 @@ Modifications de départ de partie :
 
 Correction création de gare / arrêt sur la carte :
 
-- refonte du mode `Créer point` ;
-- en mode création, le clic sur la carte crée toujours un nouveau point à l’endroit cliqué au lieu de sélectionner une gare existante ;
+- refonte du mode `Créer arrêt` ;
+- en mode création, le clic sur la carte crée toujours un nouvel arrêt à l’endroit cliqué au lieu de sélectionner une gare existante ;
 - ajout d’un gestionnaire de clic de secours directement sur le conteneur moteur cartographique ;
 - désactivation temporaire du déplacement de carte pendant la pose d’un arrêt pour éviter les clics perdus ;
 - zone de validité légèrement élargie pour couvrir correctement France, Corse, frontières et côtes ;
-- création d’point manuele retestée côté API ;
+- création d’arrêt personnalisée retestée côté API ;
 - badge de version mis à jour en `v43`.
 
 ## Version v44 — création de compagnie simplifiée + logos ferroviaires
