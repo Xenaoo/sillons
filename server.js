@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v64.6.3';
-const STATE_SCHEMA_VERSION = 113;
+const PROJECT_VERSION = 'v64.6.1';
+const STATE_SCHEMA_VERSION = 111;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -399,7 +399,6 @@ async function handleApi(req, res, url) {
     const auth = authenticateRequest(req, url, {});
     const playerId = auth?.user?.playerId || '';
     await waitForCommuneCache(3500);
-    if (sanitizeStateStationReferencesForPublicWorld()) saveState();
     sendJson(res, 200, publicState(playerId, auth?.user || null));
     return;
   }
@@ -1482,6 +1481,7 @@ function migrateState(loaded) {
     market: { ...createMarket(), ...(loaded.market || {}) },
     events: Array.isArray(loaded.events) ? loaded.events : [],
     news: Array.isArray(loaded.news) ? loaded.news.slice(0, 50) : [],
+    customStations: normalizeCustomStations(loaded.customStations),
     users: normalizeUsers(loaded.users || {}),
     players: purgeUnlinkedPlayers(players, loaded.users || {}),
   };
@@ -1704,6 +1704,7 @@ function createState() {
     market: createMarket(),
     events: [createEvent('expo', 12)],
     news: [{ day: 1, text: 'Le marché ferroviaire français s’ouvre aux premières compagnies privées.' }],
+    customStations: {},
     users: {},
     players: {}
   };
@@ -1807,7 +1808,7 @@ function stationRailPlacement(station) {
 
   const snap = nearestRailProjection(station);
   const population = Number(station.population || 0);
-  const maxSnapKm = population >= 50000 ? 12 : population >= 15000 ? 9 : 7;
+  const maxSnapKm = station.custom ? 5 : population >= 50000 ? 12 : population >= 15000 ? 9 : 7;
   if (snap && snap.distanceKm <= maxSnapKm) {
     return {
       ...station,
@@ -1903,19 +1904,24 @@ function deduplicatePublicStations(stations, existingStations = []) {
 
 
 function publicWorld() {
+  const customIds = '';
   const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
   const communeCount = Object.keys(communeCache.byId || {}).length;
-  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}`;
+  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}:${customIds}`;
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
+  const customStations = [];
   const baseStations = [];
   const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement), baseStations);
-  const stations = deduplicatePublicStations([...baseStations, ...communeStations]);
+  const publicStationsWithoutCustom = [...baseStations, ...communeStations];
+  const customFiltered = deduplicatePublicStations(customStations.map(stationRailPlacement), publicStationsWithoutCustom);
+  const stations = deduplicatePublicStations([...baseStations, ...communeStations, ...customFiltered]);
   const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
     stations,
     stationIndex,
+    customStations: customFiltered,
     communeStations,
     communesStatus: {
       status: communeCache.status,
@@ -1934,77 +1940,6 @@ function publicWorld() {
   };
   publicWorldCache = { key: cacheKey, value: world };
   return world;
-}
-
-function sanitizeStateStationReferencesForPublicWorld() {
-  const world = publicWorld();
-  const stationIndex = world?.stationIndex || {};
-  const hasStation = id => Boolean(id && stationIndex[currentStationId(id)]);
-  const normalizeId = id => {
-    const canonical = currentStationId(id);
-    return hasStation(canonical) ? canonical : '';
-  };
-  const stationLabel = id => stationIndex[id]?.name || id;
-  let changed = false;
-
-  for (const player of Object.values(state?.players || {})) {
-    if (!player || typeof player !== 'object') continue;
-
-    const cleanStations = {};
-    for (const [stationId, asset] of Object.entries(player.stations || {})) {
-      const nextId = normalizeId(stationId);
-      if (!nextId) { changed = true; continue; }
-      const normalizedAsset = asset && typeof asset === 'object' ? { ...asset } : {};
-      normalizedAsset.id = nextId;
-      if (normalizedAsset.stationId) normalizedAsset.stationId = nextId;
-      cleanStations[nextId] = { ...(cleanStations[nextId] || {}), ...normalizedAsset };
-      if (nextId !== stationId) changed = true;
-    }
-    player.stations = cleanStations;
-
-    const cleanLines = [];
-    for (const line of Array.isArray(player.lines) ? player.lines : []) {
-      if (!line || typeof line !== 'object') { changed = true; continue; }
-      const rawStops = Array.isArray(line.stops) && line.stops.length
-        ? line.stops
-        : [line.from, line.to].filter(Boolean);
-      const validStops = [];
-      for (const rawId of rawStops) {
-        const nextId = normalizeId(rawId);
-        if (!nextId) { if (rawId) changed = true; continue; }
-        if (!validStops.includes(nextId)) validStops.push(nextId);
-        if (nextId !== rawId) changed = true;
-      }
-      const from = normalizeId(line.from) || validStops[0] || '';
-      const to = normalizeId(line.to) || validStops[validStops.length - 1] || '';
-      if (from && !validStops.includes(from)) validStops.unshift(from);
-      if (to && !validStops.includes(to)) validStops.push(to);
-      if (validStops.length < 2) { changed = true; continue; }
-      const nextFrom = validStops[0];
-      const nextTo = validStops[validStops.length - 1];
-      const lineChanged = line.from !== nextFrom || line.to !== nextTo || JSON.stringify(line.stops || []) !== JSON.stringify(validStops);
-      if (lineChanged) changed = true;
-      line.from = nextFrom;
-      line.to = nextTo;
-      line.stops = validStops;
-      if (Array.isArray(line.route)) line.route = line.route.map(normalizeId).filter(Boolean);
-      if (Array.isArray(line.routeIds)) line.routeIds = line.routeIds.map(normalizeId).filter(Boolean);
-      if (Array.isArray(line.stopIds)) line.stopIds = line.stopIds.map(normalizeId).filter(Boolean);
-      const nextName = `${stationLabel(nextFrom)} → ${stationLabel(nextTo)}`;
-      if (line.name !== nextName || /(?:COM_|OSM_|PAR_)[A-Za-z0-9_]*/i.test(String(line.name))) {
-        line.name = nextName;
-        changed = true;
-      }
-      if (lineChanged && line.stats) {
-        delete line.stats;
-        changed = true;
-      }
-      cleanLines.push(line);
-    }
-    if ((player.lines || []).length !== cleanLines.length) changed = true;
-    player.lines = cleanLines;
-  }
-  return changed;
 }
 
 function closestCommuneForStation(station) {
@@ -3085,6 +3020,39 @@ function normalizeNameKey(value) {
     .trim();
 }
 
+function normalizeCustomStations(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, station] of Object.entries(raw)) {
+    const normalized = normalizeCustomStation(station, id);
+    if (normalized) out[normalized.id] = normalized;
+  }
+  return out;
+}
+
+function normalizeCustomStation(station, fallbackId) {
+  if (!station || typeof station !== 'object') return null;
+  const id = String(station.id || fallbackId || '').slice(0, 40);
+  const lat = Number(station.lat);
+  const lon = Number(station.lon);
+  if (!id || !Number.isFinite(lat) || !Number.isFinite(lon) || !isInFranceBounds(lat, lon)) return null;
+  return {
+    id,
+    name: cleanText(station.name || 'Arrêt personnalisé', 38),
+    lat,
+    lon,
+    region: cleanText(station.region || 'Arrêts personnalisés', 40),
+    baseDemand: clamp(Number(station.baseDemand || 95), 30, 420),
+    freight: clamp(Number(station.freight || 28), 0, 140),
+    tourism: clamp(Number(station.tourism || 40), 0, 110),
+    custom: true,
+    ownerId: station.ownerId || null,
+    createdDay: Number(station.createdDay || state?.day || 1),
+    creationCost: Math.max(0, Math.round(Number(station.creationCost || station.purchaseCost || 0))),
+    pricingSource: station.pricingSource || 'local-neighbourhood'
+  };
+}
+
 function isInFranceBounds(lat, lon) {
   return lat >= 41.0 && lat <= 51.5 && lon >= -5.7 && lon <= 10.2;
 }
@@ -3273,6 +3241,7 @@ async function applyAction(playerId, type, payload) {
     updateLine: () => actionUpdateLine(player, payload),
     upgradeStation: () => actionUpgradeStation(player, payload),
     sellStation: () => actionSellStation(player, payload),
+    createCustomStation: () => actionCreateCustomStation(player, payload),
     hireStaff: () => actionHireStaff(player, payload),
     fireStaff: () => actionFireStaff(player, payload),
     research: () => actionResearch(player, payload),
@@ -3907,6 +3876,11 @@ function stationAcquisitionCost(station) {
   const storedPurchaseCost = Number(station?.purchaseCost || station?.acquisitionCost || 0);
   if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
   if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
+  if (station?.custom) {
+    const stored = Number(station.creationCost || station.purchaseCost || 0);
+    if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
+    return Math.round(65000 * state.market.steel);
+  }
   const population = Number(station?.population || 0);
   if (population > 0) {
     // Prix volontairement très progressif : petites villes accessibles,
@@ -3983,6 +3957,9 @@ function actionSellStation(player, payload) {
   player.cash += refund.total;
   delete player.stations[stationId];
 
+  const custom = state.customStations?.[stationId];
+  if (custom?.ownerId === player.id) delete state.customStations[stationId];
+
   notify(
     player,
     `${station.name} vendue : remboursement ${money(refund.total)} ` +
@@ -3992,6 +3969,84 @@ function actionSellStation(player, payload) {
 }
 
 
+
+function customStationCreationCost(lat, lon) {
+  const demand = estimateDemandFromLocation(lat, lon);
+  const freight = estimateFreightFromLocation(lat, lon);
+  const tourism = estimateTourismFromLocation(lat, lon);
+  const market = Number(state?.market?.steel || 1);
+  const nearby = (publicWorld().stations || [])
+    .filter(s => !s.custom && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lon)))
+    .map(s => ({ station: s, distance: haversine(lat, lon, Number(s.lat), Number(s.lon)) }))
+    .filter(entry => Number.isFinite(entry.distance))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 10);
+
+  const localValue = 52000 + demand * 720 + freight * 420 + tourism * 260;
+  let weightedNeighbourValue = localValue;
+  let closestDistance = nearby[0]?.distance ?? 80;
+  let closestName = nearby[0]?.station?.name || '';
+
+  if (nearby.length) {
+    let totalWeight = 0;
+    let totalValue = 0;
+    for (const entry of nearby) {
+      const d = Math.max(0.5, entry.distance);
+      const weight = 1 / Math.pow(d + 8, 1.35);
+      const stationPrice = stationAcquisitionCost(entry.station);
+      totalWeight += weight;
+      totalValue += stationPrice * weight;
+    }
+    if (totalWeight > 0) weightedNeighbourValue = totalValue / totalWeight;
+  }
+
+  // Mélange volontaire : le coût suit les gares proches, mais reste borné par le potentiel local
+  // pour éviter une gare rurale hors de prix juste parce qu'une métropole est assez proche.
+  const proximityFactor = closestDistance < 4 ? 1.22 : closestDistance < 12 ? 1.10 : closestDistance > 55 ? 0.82 : 1;
+  const blended = (localValue * 0.58 + weightedNeighbourValue * 0.42) * proximityFactor * market;
+  const cost = Math.round(clamp(blended, 90000, 6500000));
+  return {
+    cost,
+    demand,
+    freight,
+    tourism,
+    closestDistance: round2(closestDistance),
+    closestName
+  };
+}
+
+function actionCreateCustomStation(player, payload) {
+  return fail('Création de gare désactivée.', 'Les points jouables sont maintenant limités aux gares réelles du Réseau Ferré National.');
+}
+
+function estimateDemandFromLocation(lat, lon) {
+  // Paris / grandes métropoles approchées par la proximité de gares existantes.
+  let best = 90;
+  for (const s of WORLD.stations) {
+    const d = haversine(lat, lon, s.lat, s.lon);
+    const influence = s.baseDemand * Math.exp(-d / 55);
+    best = Math.max(best, influence);
+  }
+  return Math.round(clamp(best, 60, 500));
+}
+
+function estimateFreightFromLocation(lat, lon) {
+  let best = 25;
+  for (const s of WORLD.stations) {
+    const d = haversine(lat, lon, s.lat, s.lon);
+    best = Math.max(best, s.freight * Math.exp(-d / 70));
+  }
+  return Math.round(clamp(best, 10, 150));
+}
+
+function estimateTourismFromLocation(lat, lon) {
+  let best = 30;
+  for (const s of WORLD.stations) {
+    const d = haversine(lat, lon, s.lat, s.lon);
+    best = Math.max(best, s.tourism * Math.exp(-d / 85));
+  }
+  return Math.round(clamp(best, 20, 120));
+}
 
 function actionHireStaff(player, payload) {
   const role = String(payload.role || '');
@@ -6086,6 +6141,11 @@ function stationOwnerInfo(stationId) {
     if (candidate?.stations?.[stationId]) {
       return { player: candidate, asset: normalizeStationAsset(candidate, stationId) };
     }
+  }
+  const custom = state.customStations?.[stationId];
+  if (custom?.ownerId && state.players[custom.ownerId]) {
+    const owner = state.players[custom.ownerId];
+    return { player: owner, asset: ensureStationAsset(owner, stationId) };
   }
   return null;
 }
