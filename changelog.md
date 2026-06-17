@@ -1,3 +1,11 @@
+## Version v64.5.0 — sélection directe des compositions
+
+- incrément de version : badge interface `v64.5.0`, version serveur/client `v64.5.0`, package `64.5.0` et schéma serveur `107` ;
+- menu `Parc > Compositions` : ajout d'un bouton `Tout sélectionner` pour sélectionner l'ensemble du parc possédé en une action ;
+- suppression des boutons de tri `Par ère` et `Voyageurs / Fret` ; les trains restent présentés par ère avec les catégories masquables existantes ;
+- suppression du contrôle `Sélection` en haut à gauche des vignettes ; une vignette se sélectionne ou se désélectionne désormais par clic sur une zone non fonctionnelle de la carte ;
+- ajustements CSS de la barre de sélection et des vignettes pour conserver un comportement lisible sur desktop et mobile.
+
 ## Version v64.4.1 — correction du cadrage des vignettes Maintenance
 
 - incrément de version : badge interface `v64.4.1`, version serveur/client `v64.4.1`, package `64.4.1` et schéma serveur `106` ;

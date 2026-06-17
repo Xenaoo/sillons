@@ -8739,3 +8739,56 @@ dialog.modal--wide {
 .fleet-maintenance-grid .owned-train-composition-preview {
   display: none !important;
 }
+
+
+/* ===== V64.5.0 : compositions — sélection directe par vignette ===== */
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-hint {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-vignette-select-row {
+  display: flex !important;
+  justify-content: flex-end !important;
+  min-width: 0;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-vignette-select-row .composition-status-tag {
+  max-width: 100% !important;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-train-vignette[data-composition-select-card] {
+  cursor: pointer;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-train-vignette[data-composition-select-card]:focus-visible {
+  outline: 2px solid rgba(217,168,82,.72);
+  outline-offset: 3px;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-vignette-main {
+  cursor: pointer;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-assign-row,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-train-actions {
+  cursor: default;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions {
+  flex-wrap: wrap !important;
+}
+
+@media (max-width: 700px) {
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions {
+    justify-content: stretch !important;
+  }
+}

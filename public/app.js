@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.4.1';
+const PROJECT_VERSION = 'v64.5.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -3722,6 +3722,18 @@ function setCompositionSelection(ids, primaryId = '') {
   else localStorage.removeItem('sillons.selectedCompositionTrainId');
 }
 
+
+function toggleCompositionCardSelection(trainId) {
+  const id = String(trainId || '').trim();
+  if (!compositionValidTrainIds().has(id)) return;
+  const selected = new Set(compositionSelectedIds());
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  const next = [...selected];
+  setCompositionSelection(next, selected.has(app.selectedCompositionTrainId) ? app.selectedCompositionTrainId : (selected.has(id) ? id : (next[0] || '')));
+  renderAll();
+}
+
 function compositionEditTargetIds(primaryId = '') {
   const selected = compositionSelectedIds();
   if (selected.length) return selected;
@@ -3745,7 +3757,7 @@ function setCompositionGroupCollapsed(mode, key, collapsed) {
 }
 
 function sortedCompositionTrains(trains) {
-  const mode = app.fleetSortMode || 'era';
+  const mode = 'era';
   return [...(trains || [])].sort((a, b) => {
     const ma = app.state.balance.trains[a.modelId] || {};
     const mb = app.state.balance.trains[b.modelId] || {};
@@ -3765,7 +3777,7 @@ function sortedCompositionTrains(trains) {
 }
 
 function groupCompositionTrains(trains) {
-  const mode = app.fleetSortMode || 'era';
+  const mode = 'era';
   const groups = [];
   for (const train of sortedCompositionTrains(trains)) {
     const model = app.state.balance.trains[train.modelId] || {};
@@ -3833,15 +3845,11 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
   const era = trainEraLabel(Number(model.unlockEpoch ?? model.epoch ?? 0));
   const serviceLabel = trainServiceSortLabel(trainServiceClass(model));
   return `
-    <article class="composition-train-vignette ${active ? 'active' : ''} ${selected ? 'selected' : ''}">
+    <article class="composition-train-vignette ${active ? 'active' : ''} ${selected ? 'selected' : ''}" data-composition-select-card data-id="${escapeAttr(train.id)}" role="button" tabindex="0" aria-pressed="${selected ? 'true' : 'false'}" title="Cliquer dans une zone libre pour ${selected ? 'retirer ce train de la sélection' : 'sélectionner ce train'}">
       <div class="composition-vignette-select-row">
-        <label class="composition-vignette-checkbox">
-          <input type="checkbox" data-action="toggle-composition-train-selection" data-id="${escapeAttr(train.id)}" ${selected ? 'checked' : ''}>
-          <span>Sélection</span>
-        </label>
         <span class="tag composition-status-tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
       </div>
-      <button type="button" class="composition-vignette-main" data-action="select-composition-train" data-id="${escapeAttr(train.id)}">
+      <div class="composition-vignette-main" aria-hidden="true">
         <div class="composition-vignette-media">
           ${renderTrainArt(model)}
         </div>
@@ -3858,7 +3866,7 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
             <b>${formatInt(profile.range)} km</b>
           </div>
         </div>
-      </button>
+      </div>
       <div class="composition-assign-row">
         <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>
           <option value="">${line ? 'Changer / retirer...' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
@@ -3880,7 +3888,7 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
 }
 
 function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositionSelectedIds())) {
-  const mode = app.fleetSortMode || 'era';
+  const mode = 'era';
   const collapsed = isCompositionGroupCollapsed(mode, group.key);
   const selectedCount = group.trains.reduce((count, train) => count + (selectedTrainIds.has(train.id) ? 1 : 0), 0);
   return `
@@ -3899,18 +3907,14 @@ function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositi
 
 function renderCompositionSelectionToolbar(selectedIds) {
   const selectedCount = selectedIds.length;
-  const sortMode = app.fleetSortMode === 'type' ? 'type' : 'era';
+  const totalCount = compositionValidTrainIds().size;
+  const allSelected = totalCount > 0 && selectedCount >= totalCount;
   return `
     <div class="composition-list-toolbar composition-refit-toolbar">
-      <div class="composition-sort-control" role="group" aria-label="Trier le parc possédé">
-        <span class="small muted">Trier le parc</span>
-        <div class="composition-sort-switch">
-          <button type="button" class="ghost ${sortMode === 'era' ? 'active' : ''}" data-action="set-composition-sort" data-mode="era">Par ère</button>
-          <button type="button" class="ghost ${sortMode === 'type' ? 'active' : ''}" data-action="set-composition-sort" data-mode="type">Voyageurs / Fret</button>
-        </div>
-      </div>
+      <div class="composition-selection-hint small muted">Clique sur une zone libre d’une vignette pour l’ajouter ou la retirer de la sélection.</div>
       <div class="composition-selection-actions">
         <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
+        <button type="button" class="ghost" data-action="select-all-composition-trains" ${allSelected ? 'disabled' : ''}>Tout sélectionner</button>
         <button type="button" class="ghost" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Éditer la sélection</button>
         <button type="button" class="ghost" data-action="clear-composition-selection" ${selectedCount ? '' : 'disabled'}>Vider</button>
       </div>
@@ -4167,7 +4171,7 @@ function renderFleetCompositionPanel() {
         <div class="fleet-card-heading">
           <div>
             <h2>Trains de la compagnie</h2>
-            <p class="muted small">Les trains sont présentés en vignettes. Clique sur une vignette pour ouvrir l’atelier, ou coche plusieurs trains avant d’éditer un ensemble.</p>
+            <p class="muted small">Les trains sont présentés en vignettes. Clique sur une zone libre d’une vignette pour la sélectionner, puis édite un train ou un ensemble.</p>
           </div>
           <span class="tag">${me.trains.length} unité(s)</span>
         </div>
@@ -5939,6 +5943,12 @@ async function onTabContentClick(event) {
     return;
   }
 
+  const compositionCard = event.target.closest('[data-composition-select-card]');
+  if (compositionCard && !event.target.closest('button, a, input, select, textarea, label, [data-action], [data-comp-mode], [data-station-choice]')) {
+    toggleCompositionCardSelection(compositionCard.dataset.id || '');
+    return;
+  }
+
   const button = event.target.closest('[data-action], #createLineBtn, #addWaypointBtn');
   if (!button) {
     const lineCard = event.target.closest('.line-card-modern[data-line-id]');
@@ -5997,12 +6007,6 @@ async function onTabContentClick(event) {
   }
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
-if (action === 'set-composition-sort') {
-  app.fleetSortMode = button.dataset.mode === 'type' ? 'type' : 'era';
-  localStorage.setItem('sillons.fleetSortMode', app.fleetSortMode);
-  renderAll();
-  return;
-}
 if (action === 'select-composition-train') {
   const trainId = button.dataset.id || '';
   const existingSelection = compositionSelectedIds();
@@ -6017,6 +6021,12 @@ if (action === 'toggle-composition-train-selection') {
   if (button.checked) selected.add(trainId);
   else selected.delete(trainId);
   setCompositionSelection([...selected], selected.has(app.selectedCompositionTrainId) ? app.selectedCompositionTrainId : ([...selected][0] || ''));
+  renderAll();
+  return;
+}
+if (action === 'select-all-composition-trains') {
+  const ids = [...compositionValidTrainIds()];
+  setCompositionSelection(ids, ids[0] || '');
   renderAll();
   return;
 }
