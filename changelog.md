@@ -1,5 +1,13 @@
 # Changelog
 
+## Version v64.1.1 — correctif définitif du scroll Composition
+
+- incrément de version : badge interface `v64.1.1`, package `64.1.1` et schéma serveur `98` ;
+- correction du panneau `Trains de la compagnie` : la zone des vignettes possède désormais un scroll indépendant forcé, avec hauteur recalculée après rendu, redimensionnement et viewport mobile ;
+- ajout d'une interception dédiée de la molette et du tactile dans le menu Composition pour empêcher le scroll parent de capter le défilement de la liste ;
+- réorganisation CSS du panneau en colonne flexible : en-tête, filtre et actions restent fixes, seule la liste des sections de trains défile ;
+- amélioration du bloc de tri `Par ère` / `Voyageurs / Fret` pour éviter les textes tronqués sur les panneaux étroits.
+
 ## Version v64.1.0 — correctifs menu Composition et réaffectation des trains
 
 - incrément de version : badge interface `v64.1.0`, package `64.1.0` et schéma serveur `97` ;

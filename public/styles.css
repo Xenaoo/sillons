@@ -7927,3 +7927,98 @@ dialog.modal--wide {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== V64.1.1 : scroll réellement indépendant du menu Composition ===== */
+.composition-refit-layout.has-editor,
+.composition-refit-layout.no-editor {
+  min-height: 0;
+  align-items: stretch;
+}
+
+.composition-refit-list-card {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0 !important;
+  height: var(--composition-list-card-height, calc(100dvh - 150px)) !important;
+  max-height: var(--composition-list-card-height, calc(100dvh - 150px)) !important;
+  overflow: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.composition-refit-list-card > .fleet-card-heading,
+.composition-refit-list-card > .composition-refit-toolbar {
+  flex: 0 0 auto;
+}
+
+.composition-refit-toolbar {
+  padding: 10px 12px;
+  border: 1px solid rgba(217,168,82,.14);
+  border-radius: 14px;
+  background: rgba(2,6,23,.28);
+}
+
+.composition-sort-control > .small {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.25;
+}
+
+.composition-sort-switch button {
+  min-height: 36px;
+}
+
+.composition-group-list,
+.composition-train-list.composition-group-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: var(--composition-group-list-height, auto) !important;
+  max-height: var(--composition-group-list-height, none) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-gutter: stable;
+  padding-right: 8px;
+}
+
+.composition-group-list .composition-train-group:last-child {
+  margin-bottom: 2px;
+}
+
+.composition-group-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.composition-vignette-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+@media (max-width: 1180px) {
+  .composition-refit-list-card {
+    height: var(--composition-list-card-height, calc(100dvh - 130px)) !important;
+    max-height: var(--composition-list-card-height, calc(100dvh - 130px)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .composition-refit-list-card {
+    height: var(--composition-list-card-height, calc(100dvh - 92px)) !important;
+    max-height: var(--composition-list-card-height, calc(100dvh - 92px)) !important;
+  }
+  .composition-refit-toolbar {
+    padding: 9px;
+  }
+  .composition-sort-switch {
+    grid-template-columns: 1fr 1fr;
+  }
+  .composition-sort-switch button {
+    white-space: normal;
+    line-height: 1.12;
+  }
+}

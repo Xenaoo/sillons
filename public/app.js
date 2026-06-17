@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.0';
+const PROJECT_VERSION = 'v64.1.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -104,6 +104,7 @@ const app = {
   selectedCompositionTrainId: '',
   compositionEditorModes: loadJson('sillons.compositionEditorModes', {}),
   compositionScrollState: loadJson('sillons.compositionScrollState', {}),
+  compositionTouchScroll: null,
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
@@ -403,6 +404,7 @@ function bindStaticEvents() {
   const tabContent = $('#tabContent');
   tabContent.addEventListener('click', onTabContentClick);
   tabContent.addEventListener('change', onTabContentChange);
+  bindCompositionIndependentScroll(tabContent);
   tabContent.addEventListener('input', event => {
     if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
       updateLineDraftFromForm(event.target.id);
@@ -413,9 +415,9 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); adjustCompositionRefitScroll(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
-  window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); adjustCompositionRefitScroll(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
-  window.visualViewport?.addEventListener('scroll', () => { adjustCompositionRefitScroll(); scheduleTutorialOverlayPosition(30, { scroll: false }); });
+  window.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.visualViewport?.addEventListener('scroll', () => { scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(30, { scroll: false }); });
   window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
   bindGlobalTooltips();
 }
@@ -441,7 +443,7 @@ function bindGlobalTooltips() {
   document.addEventListener('scroll', hideGlobalTooltip, true);
   document.addEventListener('scroll', event => {
     const editor = event.target?.closest?.('.composition-editor-card');
-    if (editor || event.target?.classList?.contains('composition-editor-card') || event.target?.classList?.contains('composition-strip')) {
+    if (editor || event.target?.classList?.contains('composition-editor-card') || event.target?.classList?.contains('composition-strip') || event.target?.classList?.contains('composition-group-list')) {
       captureCompositionScrollPosition();
     }
   }, true);
@@ -1177,23 +1179,114 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
   });
 }
 
+
+function compositionScrollContainerFromTarget(target) {
+  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return null;
+  if (!target?.closest) return null;
+  const list = target.closest('.composition-group-list');
+  if (list) return list;
+  const card = target.closest('.composition-refit-list-card');
+  return card?.querySelector?.('.composition-group-list') || null;
+}
+
+function compositionListCanScroll(list) {
+  return !!list && (list.scrollHeight - list.clientHeight) > 2;
+}
+
+function scrollCompositionListBy(list, deltaY) {
+  if (!compositionListCanScroll(list)) return false;
+  const max = Math.max(0, list.scrollHeight - list.clientHeight);
+  const previous = list.scrollTop;
+  const next = Math.max(0, Math.min(max, previous + deltaY));
+  if (Math.abs(next - previous) < 0.5) return false;
+  list.scrollTop = next;
+  captureCompositionScrollPosition();
+  return true;
+}
+
+function bindCompositionIndependentScroll(root) {
+  if (!root || root.dataset.compositionScrollBound === '1') return;
+  root.dataset.compositionScrollBound = '1';
+
+  root.addEventListener('wheel', event => {
+    if (event.target?.closest?.('select')) return;
+    const list = compositionScrollContainerFromTarget(event.target);
+    if (!list) return;
+    adjustCompositionRefitScroll();
+    if (!compositionListCanScroll(list)) return;
+    if (scrollCompositionListBy(list, event.deltaY)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, { passive: false });
+
+  root.addEventListener('touchstart', event => {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    const list = compositionScrollContainerFromTarget(event.target);
+    if (!list || !compositionListCanScroll(list)) {
+      app.compositionTouchScroll = null;
+      return;
+    }
+    app.compositionTouchScroll = {
+      id: touch.identifier,
+      y: touch.clientY,
+      list
+    };
+  }, { passive: true });
+
+  root.addEventListener('touchmove', event => {
+    const state = app.compositionTouchScroll;
+    if (!state?.list || !compositionListCanScroll(state.list)) return;
+    const touches = Array.from(event.touches || []);
+    const touch = touches.find(item => item.identifier === state.id) || touches[0];
+    if (!touch) return;
+    const delta = state.y - touch.clientY;
+    state.y = touch.clientY;
+    if (scrollCompositionListBy(state.list, delta)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, { passive: false });
+
+  root.addEventListener('touchend', () => { app.compositionTouchScroll = null; }, { passive: true });
+  root.addEventListener('touchcancel', () => { app.compositionTouchScroll = null; }, { passive: true });
+}
+
+function scheduleCompositionRefitScrollAdjustment() {
+  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return;
+  adjustCompositionRefitScroll();
+  requestAnimationFrame(() => {
+    adjustCompositionRefitScroll();
+    requestAnimationFrame(adjustCompositionRefitScroll);
+  });
+  window.setTimeout(adjustCompositionRefitScroll, 120);
+}
+
 function adjustCompositionRefitScroll() {
   if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return;
   const card = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   if (!card || !list) return;
-  const viewportHeight = Math.max(520, Math.floor(window.visualViewport?.height || window.innerHeight || 720));
+
+  const viewportHeight = Math.max(480, Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
   const cardRect = card.getBoundingClientRect();
-  const safeBottom = 16;
-  const availableCardHeight = Math.max(430, Math.floor(viewportHeight - cardRect.top - safeBottom));
+  const bottomSafe = window.matchMedia?.('(max-width: 700px)')?.matches ? 12 : 18;
+  const availableCardHeight = Math.max(420, Math.floor(viewportHeight - cardRect.top - bottomSafe));
+  card.style.setProperty('--composition-list-card-height', `${availableCardHeight}px`);
   card.style.height = `${availableCardHeight}px`;
   card.style.maxHeight = `${availableCardHeight}px`;
 
-  const refreshedCardRect = card.getBoundingClientRect();
   const listRect = list.getBoundingClientRect();
-  const availableListHeight = Math.max(260, Math.floor(refreshedCardRect.bottom - listRect.top - 14));
+  const refreshedCardRect = card.getBoundingClientRect();
+  const cardStyle = window.getComputedStyle(card);
+  const cardPaddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
+  const availableListHeight = Math.max(180, Math.floor(refreshedCardRect.bottom - listRect.top - cardPaddingBottom));
+  list.style.setProperty('--composition-group-list-height', `${availableListHeight}px`);
   list.style.height = `${availableListHeight}px`;
   list.style.maxHeight = `${availableListHeight}px`;
+  list.style.overflowY = 'auto';
+  list.style.overflowX = 'hidden';
 }
 
 
@@ -1431,8 +1524,8 @@ function renderAll() {
   renderTutorialOverlay();
   applyLayoutMode();
   syncFocusedLineUi();
+  scheduleCompositionRefitScrollAdjustment();
   requestAnimationFrame(() => {
-    adjustCompositionRefitScroll();
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
   });
   app.lastRenderKey = stateRenderSignature();
