@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.23.0';
-const STATE_SCHEMA_VERSION = 87;
+const PROJECT_VERSION = 'v62.24.0';
+const STATE_SCHEMA_VERSION = 88;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -65,21 +65,21 @@ const COMPANY_LOGOS = ["steam_front", "winged_wheel", "semaphore", "royal_track"
 const ECONOMY = Object.freeze({
   passengerDemandMultiplier: 2.85,
   freightDemandMultiplier: 1.8,
-  passengerRevenueMultiplier: 0.74,
-  freightRevenueMultiplier: 1.0,
-  energyCostMultiplier: 0.42,
-  maintenanceCostMultiplier: 0.75,
+  passengerRevenueMultiplier: 14.0,
+  freightRevenueMultiplier: 8.5,
+  energyCostMultiplier: 0.34,
+  maintenanceCostMultiplier: 0.62,
   lineInfrastructureMaintenancePerKm: 12.6,
-  lineCommercialCostThreshold: 700,
-  lineCommercialCostRate: 0.92,
+  lineCommercialCostThreshold: 4500,
+  lineCommercialCostRate: 0.08,
   staffCostDivisor: 82,
   debtInterestPerTick: 0.00012,
   stationLevelCost: 58,
   stationCommerceCost: 64,
   stationMaintenanceCost: 92,
   stationDepotCost: 150,
-  ownedStationIncomeBase: 18,
-  ownedStationCommerceIncome: 46,
+  ownedStationIncomeBase: 120,
+  ownedStationCommerceIncome: 280,
   stationAccessTollBase: 18,
   stationAccessTollCapacityFactor: 0.045,
   idleTrainStorageFactor: 0.000055,

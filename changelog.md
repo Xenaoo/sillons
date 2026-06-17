@@ -1,5 +1,16 @@
 # Changelog
 
+## Version v62.24.0 — carte allégée et rééquilibrage économique
+
+- incrément de version : badge interface `v62.24.0`, package `0.6.24` et schéma serveur `88` ;
+- affichage carte fortement allégé : seules les lignes restent visibles en vue normale ;
+- les marqueurs de gares sont masqués sur la carte afin de limiter la surcharge visuelle ;
+- au zoom maximal, seuls les noms des gares possédées par le joueur sont affichés ;
+- les gares restent cliquables sur la carte même si elles ne sont plus affichées ;
+- rééquilibrage monétaire global : hausse importante des revenus voyageurs et fret ;
+- réduction des coûts variables énergie / maintenance ;
+- forte baisse des coûts commerciaux automatiques afin qu’une petite ligne exploitée avec un petit train vise environ `50 000 €/h` de revenu net global.
+
 ## Version v62.23.0 — saisie libre RH et remboursement de dette
 
 - incrément de version : badge interface `v62.23.0`, package `0.6.23` et schéma serveur `87` ;

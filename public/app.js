@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.23.0';
+const PROJECT_VERSION = 'v62.24.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -6672,70 +6672,35 @@ function drawStations(ctx, lite = false) {
   if (!lite) app.map.stationHit = [];
   const items = drawableStations(lite);
   const zoomMax = mapMaxZoomReached();
-  const myLines = app.state?.me?.lines || [];
 
   for (const item of items) {
-    const { s, p, asset, selected, custom } = item;
-    const hover = !lite && app.hoverStation === s.id;
-    const served = myLines.some(line => line.active && lineStopsOf(line).includes(s.id));
-    const stage = stationPrestigeStage(asset);
-    const sprite = asset ? getStationMapSprite(asset) : null;
-    const showSprite = !!(zoomMax && sprite?.complete && sprite.naturalWidth && asset);
-    const markerR = selected ? 9 : asset ? 7 : custom ? 5.8 : 5;
+    const { s, p, asset } = item;
 
-    if (!lite) app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: showSprite ? 30 : (selected ? 24 : asset ? 20 : 16) });
+    if (!lite) {
+      // Les gares restent cliquables même si elles ne sont pas rendues visuellement.
+      app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: asset ? 14 : 11 });
+    }
+
+    // Alléger fortement la carte : aucun marqueur de gare en vue normale.
+    // Au zoom maximal, seules les gares possédées par le joueur sont nommées.
+    if (!zoomMax || !asset) continue;
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-
-    if (showSprite) {
-      const scale = (selected || hover ? 0.34 : 0.30) + stage * 0.014;
-      const w = sprite.naturalWidth * scale;
-      const h = sprite.naturalHeight * scale;
-      const drawX = p.x - w / 2;
-      const drawY = p.y - h - 8;
-
-      roundRect(ctx, drawX - 4, drawY - 4, w + 8, h + 8, 9);
-      ctx.fillStyle = 'rgba(4, 10, 18, 0.68)';
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = selected ? 'rgba(240,200,117,0.62)' : hover ? 'rgba(147,197,253,0.50)' : 'rgba(217,168,82,0.22)';
-      ctx.stroke();
-
-      ctx.drawImage(sprite, drawX, drawY, w, h);
-
-      drawSmallMapMarker(ctx, p, 4, app.state.me?.color || '#d9a852', selected);
-
-      if (!lite) {
-        app.map.stationHit.push({ id: s.id, x: drawX, y: drawY, width: w, height: h, r: 0 });
-      }
-    } else {
-      const fill = asset ? app.state.me.color : custom ? '#e0b34f' : 'rgba(238, 232, 210, 0.95)';
-      drawSmallMapMarker(ctx, p, markerR, fill, selected);
-      if (asset) {
-        ctx.fillStyle = '#f5d07f';
-        ctx.fillRect(Math.round(p.x - 1), Math.round(p.y - markerR - 5), 2, 4);
-      }
-    }
-
-    const shouldLabel = !lite && (selected || hover || served || asset?.level >= 3 || (custom && app.map.leaflet?.getZoom() >= 8));
-    if (shouldLabel) {
-      ctx.font = '12px "Trebuchet MS", system-ui';
-      const label = shortStationName(s.name);
-      const labelW = Math.min(170, ctx.measureText(label).width + 12);
-      const lx = Math.round(p.x + 12);
-      const ly = Math.round(showSprite ? p.y + 8 : p.y - 24);
-      roundRect(ctx, lx, ly, labelW, 17, 7);
-      ctx.fillStyle = hover ? 'rgba(2,6,23,.92)' : 'rgba(2,6,23,.82)';
-      ctx.fill();
-      ctx.strokeStyle = asset ? 'rgba(217,168,82,0.26)' : 'rgba(255,255,255,0.10)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(246,236,214,.98)';
-      ctx.fillText(label, lx + 6, ly + 12);
-      app.map.stationHit.push({ id: s.id, x: lx, y: ly, width: labelW, height: 17, r: 0 });
-    }
-
+    ctx.font = '12px "Trebuchet MS", system-ui';
+    const label = shortStationName(s.name);
+    const labelW = Math.min(170, ctx.measureText(label).width + 12);
+    const lx = Math.round(p.x + 8);
+    const ly = Math.round(p.y - 10);
+    roundRect(ctx, lx, ly, labelW, 17, 7);
+    ctx.fillStyle = 'rgba(2,6,23,.86)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(217,168,82,0.30)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(246,236,214,.98)';
+    ctx.fillText(label, lx + 6, ly + 12);
+    if (!lite) app.map.stationHit.push({ id: s.id, x: lx, y: ly, width: labelW, height: 17, r: 0 });
     ctx.restore();
   }
 }
