@@ -8146,3 +8146,79 @@ dialog.modal--wide {
     max-height: none !important;
   }
 }
+
+/* ===== V64.1.3 : Composition — scroll interne restauré proprement ===== */
+#tabContent.composition-scroll-mode,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] {
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+}
+
+#tabContent.composition-scroll-mode .fleet-workspace,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-workspace,
+#tabContent.composition-scroll-mode .composition-refit-layout,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout,
+#tabContent.composition-scroll-mode .composition-refit-list-card,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card,
+#tabContent.composition-scroll-mode .composition-group-list,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-group-list,
+#tabContent.composition-scroll-mode .composition-refit-editor,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-editor {
+  min-height: 0 !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-list-card,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  overscroll-behavior: contain !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-list-card > .fleet-card-heading,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card > .fleet-card-heading,
+#tabContent.composition-scroll-mode .composition-refit-list-card > .composition-refit-toolbar,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card > .composition-refit-toolbar {
+  flex: 0 0 auto !important;
+}
+
+#tabContent.composition-scroll-mode .composition-group-list,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-group-list {
+  flex: 1 1 auto !important;
+  display: grid !important;
+  align-content: start !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-gutter: stable !important;
+}
+
+#tabContent.composition-scroll-mode .composition-refit-editor,
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-editor {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+}
+
+@media (max-width: 900px) {
+  #tabContent.composition-scroll-mode,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] {
+    overflow-y: auto !important;
+  }
+  #tabContent.composition-scroll-mode .fleet-workspace,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-workspace,
+  #tabContent.composition-scroll-mode .composition-refit-layout,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-layout {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  #tabContent.composition-scroll-mode .composition-refit-editor,
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-editor {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}

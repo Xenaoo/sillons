@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v64.1.3 — déblocage du scroll Composition
+
+- incrément de version : badge interface `v64.1.3`, package `64.1.3` et schéma serveur `100` ;
+- correction du verrouillage CSS introduit en `v64.1.2` : les hauteurs calculées en JavaScript étaient annulées par des règles `!important`, ce qui empêchait le panneau Composition de scroller ;
+- application des hauteurs calculées avec priorité explicite sur le layout, la carte de liste, la liste des trains et l’éditeur ;
+- calcul de la hauteur de la liste à partir de l’en-tête et de la barre d’actions, pour que seule la zone des vignettes défile ;
+- restauration du scroll de l’éditeur de composition à droite, sans bloquer le panneau complet ;
+- adaptation du comportement sous 900 px : le panneau global redevient scrollable et la liste conserve son propre défilement tactile.
+
 ## Version v64.1.2 — correction réelle du scroll Composition
 
 - incrément de version : badge interface `v64.1.2`, package `64.1.2` et schéma serveur `99` ;

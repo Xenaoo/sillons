@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.2';
+const PROJECT_VERSION = 'v64.1.3';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -1310,43 +1310,95 @@ function adjustCompositionRefitScroll() {
   const layout = document.querySelector('.composition-refit-layout');
   const card = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
+  const editor = document.querySelector('.composition-refit-editor');
   if (!card || !list) return;
 
+  const setImportant = (node, property, value) => {
+    if (!node) return;
+    node.style.setProperty(property, value, 'important');
+  };
+  const clearImportant = (node, properties) => {
+    if (!node) return;
+    for (const property of properties) node.style.removeProperty(property);
+  };
+
   const viewportHeight = Math.max(480, Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
+  const stacked = Boolean(window.matchMedia?.('(max-width: 900px)')?.matches);
   const bottomSafe = window.matchMedia?.('(max-width: 700px)')?.matches ? 10 : 16;
 
   if (content) {
-    content.style.overflow = 'hidden';
-    content.style.minHeight = '0';
+    setImportant(content, 'min-height', '0');
+    setImportant(content, 'overflow-x', 'hidden');
+    setImportant(content, 'overflow-y', stacked ? 'auto' : 'hidden');
   }
   if (workspace) {
-    workspace.style.minHeight = '0';
-    workspace.style.overflow = 'hidden';
-  }
-  if (layout) {
-    const layoutRect = layout.getBoundingClientRect();
-    const layoutHeight = Math.max(360, Math.floor(viewportHeight - layoutRect.top - bottomSafe));
-    layout.style.height = `${layoutHeight}px`;
-    layout.style.maxHeight = `${layoutHeight}px`;
-    layout.style.overflow = 'hidden';
+    setImportant(workspace, 'min-height', '0');
+    setImportant(workspace, 'overflow', stacked ? 'visible' : 'hidden');
   }
 
-  const cardRect = card.getBoundingClientRect();
-  const availableCardHeight = Math.max(360, Math.floor(viewportHeight - cardRect.top - bottomSafe));
+  if (layout) {
+    if (stacked) {
+      clearImportant(layout, ['height', 'max-height']);
+      setImportant(layout, 'overflow', 'visible');
+    } else {
+      const layoutTop = Math.max(0, layout.getBoundingClientRect().top);
+      const layoutHeight = Math.max(360, Math.floor(viewportHeight - layoutTop - bottomSafe));
+      setImportant(layout, 'height', `${layoutHeight}px`);
+      setImportant(layout, 'max-height', `${layoutHeight}px`);
+      setImportant(layout, 'overflow', 'hidden');
+    }
+  }
+
+  const cardTop = Math.max(0, card.getBoundingClientRect().top);
+  const availableCardHeight = stacked
+    ? Math.max(360, Math.min(Math.floor(viewportHeight * 0.72), Math.floor(viewportHeight - cardTop - bottomSafe)))
+    : Math.max(360, Math.floor(viewportHeight - cardTop - bottomSafe));
+
   card.style.setProperty('--composition-list-card-height', `${availableCardHeight}px`);
-  card.style.height = `${availableCardHeight}px`;
-  card.style.maxHeight = `${availableCardHeight}px`;
-  card.style.overflow = 'hidden';
+  setImportant(card, 'display', 'flex');
+  setImportant(card, 'flex-direction', 'column');
+  setImportant(card, 'min-height', '0');
+  setImportant(card, 'height', `${availableCardHeight}px`);
+  setImportant(card, 'max-height', `${availableCardHeight}px`);
+  setImportant(card, 'overflow', 'hidden');
+  setImportant(card, 'overscroll-behavior', 'contain');
 
   const cardStyle = window.getComputedStyle(card);
-  const cardPaddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
-  const listRect = list.getBoundingClientRect();
-  const availableListHeight = Math.max(160, Math.floor(cardRect.top + availableCardHeight - listRect.top - cardPaddingBottom));
+  const paddingTop = parseFloat(cardStyle.paddingTop || '0') || 0;
+  const paddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
+  const gap = parseFloat(cardStyle.rowGap || cardStyle.gap || '0') || 0;
+  const header = card.querySelector(':scope > .fleet-card-heading');
+  const toolbar = card.querySelector(':scope > .composition-refit-toolbar');
+  const fixedHeight = (header?.offsetHeight || 0) + (toolbar?.offsetHeight || 0) + paddingTop + paddingBottom + gap * 2;
+  const availableListHeight = Math.max(180, Math.floor(availableCardHeight - fixedHeight));
+
   list.style.setProperty('--composition-group-list-height', `${availableListHeight}px`);
-  list.style.height = `${availableListHeight}px`;
-  list.style.maxHeight = `${availableListHeight}px`;
-  list.style.overflowY = 'auto';
-  list.style.overflowX = 'hidden';
+  setImportant(list, 'display', 'grid');
+  setImportant(list, 'align-content', 'start');
+  setImportant(list, 'flex', '1 1 auto');
+  setImportant(list, 'min-height', '0');
+  setImportant(list, 'height', `${availableListHeight}px`);
+  setImportant(list, 'max-height', `${availableListHeight}px`);
+  setImportant(list, 'overflow-y', 'auto');
+  setImportant(list, 'overflow-x', 'hidden');
+  setImportant(list, 'overscroll-behavior', 'contain');
+  setImportant(list, '-webkit-overflow-scrolling', 'touch');
+  setImportant(list, 'touch-action', 'pan-y');
+
+  if (editor) {
+    if (stacked) {
+      clearImportant(editor, ['height', 'max-height']);
+      setImportant(editor, 'overflow-y', 'visible');
+    } else {
+      const editorTop = Math.max(0, editor.getBoundingClientRect().top);
+      const editorHeight = Math.max(360, Math.floor(viewportHeight - editorTop - bottomSafe));
+      setImportant(editor, 'min-height', '0');
+      setImportant(editor, 'height', `${editorHeight}px`);
+      setImportant(editor, 'max-height', `${editorHeight}px`);
+      setImportant(editor, 'overflow-y', 'auto');
+      setImportant(editor, 'overflow-x', 'hidden');
+    }
+  }
 }
 
 
