@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.5';
+const PROJECT_VERSION = 'v64:2:0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -415,6 +415,9 @@ function bindStaticEvents() {
     if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
       updateLineDraftFromForm(event.target.id);
       updateLinePreview(event.target.id);
+    }
+    if (event.target?.dataset?.buyTrainQty) {
+      updateTrainPurchaseTotal(event.target);
     }
     if (event.target.classList?.contains('station-search-input')) {
       updateStationSearch(event.target.dataset.role, event.target.value);
@@ -4528,17 +4531,43 @@ function renderTrainRequirementPills(model) {
   `;
 }
 
+function trainPurchaseUnitPriceClient(model) {
+  const market = app.state?.game?.market || {};
+  const steel = Number(market.steel ?? 1);
+  const electricity = Number(market.electricity ?? 0.34);
+  const multiplier = 1
+    + Math.max(0, steel - 1) * 0.35
+    + (model.energyType === 'electricity' ? Math.max(0, electricity - 0.34) * 0.1 : 0);
+  return Math.round(Number(model.price || 0) * multiplier);
+}
+
+function normalizeTrainPurchaseQuantity(value) {
+  return clamp(Math.floor(Number(value || 1)), 1, 99);
+}
+
+function updateTrainPurchaseTotal(input) {
+  if (!input) return;
+  const modelId = input.dataset.buyTrainQty || '';
+  const quantity = normalizeTrainPurchaseQuantity(input.value);
+  if (String(input.value) !== String(quantity)) input.value = String(quantity);
+  const card = input.closest('.train-catalog-card');
+  const total = card?.querySelector(`[data-buy-train-total="${CSS.escape(modelId)}"]`);
+  const unitPrice = Math.max(0, Math.round(Number(input.dataset.unitPrice || 0)));
+  if (total) total.textContent = money(unitPrice * quantity);
+}
+
 function renderTrainCatalogItem(model, buyable) {
   const reason = trainModelLockedReason(model);
   const effective = effectiveModelWithResearchClient(model);
   const effectiveRange = effective.range;
+  const unitPrice = trainPurchaseUnitPriceClient(model);
   return `
     <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
       ${renderTrainArt(model)}
       <div class="train-card-body">
         <div class="item-title">
           <strong>${escapeHtml(model.name)}</strong>
-          <span class="tag ${buyable ? 'good' : 'warn'}">${buyable ? money(model.price) : 'À débloquer'}</span>
+          <span class="tag ${buyable ? 'good' : 'warn'}">${buyable ? money(unitPrice) : 'À débloquer'}</span>
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
         <div class="train-stat-grid">
@@ -4552,8 +4581,15 @@ function renderTrainCatalogItem(model, buyable) {
         </div>
         ${renderTrainRequirementPills(model)}
         ${renderTrainInheritedResearchBonuses(model)}
+        <div class="train-buy-control">
+          <label>
+            <span>Quantité</span>
+            <input type="number" min="1" max="99" step="1" value="1" inputmode="numeric" data-buy-train-qty="${escapeAttr(model.id)}" data-unit-price="${unitPrice}" ${buyable ? '' : 'disabled'}>
+          </label>
+          <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
+        </div>
         <div class="actions">
-          <button class="primary" data-action="buy-train" data-id="${model.id}" ${tooltipAttr(`Achète ${model.name}. Coût : ${money(model.price)}. ${model.description || ''} Vitesse : ${model.speed} km/h. Capacité : ${model.capacity} voyageurs. Fret : ${model.freight} t. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(`Achète ${model.name}. Coût unitaire : ${money(unitPrice)}. Quantité par défaut : 1 train. ${model.description || ''} Vitesse : ${model.speed} km/h. Capacité : ${model.capacity} voyageurs. Fret : ${model.freight} t. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
         </div>
       </div>
     </div>
@@ -5949,7 +5985,21 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
   }
   return doAction('updateTrainComposition', payload);
 }
-    if (action === 'buy-train') return doAction('buyTrain', { modelId: button.dataset.id });
+    if (action === 'buy-train') {
+      const modelId = button.dataset.id || '';
+      const input = document.querySelector(`[data-buy-train-qty="${CSS.escape(modelId)}"]`);
+      const quantity = normalizeTrainPurchaseQuantity(input?.value || 1);
+      if (input) updateTrainPurchaseTotal(input);
+      if (quantity > 1) {
+        const model = app.state?.balance?.trains?.[modelId];
+        const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+        const totalPrice = unitPrice * quantity;
+        if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
+
+Coût total estimé : ${money(totalPrice)}.`, { confirmLabel: 'Acheter' }))) return;
+      }
+      return doAction('buyTrain', { modelId, quantity });
+    }
   if (action === 'duplicate-train') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
     const model = train ? app.state.balance.trains[train.modelId] : null;

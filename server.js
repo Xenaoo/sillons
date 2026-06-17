@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v64.1.5';
-const STATE_SCHEMA_VERSION = 102;
+const PROJECT_VERSION = 'v64:2:0';
+const STATE_SCHEMA_VERSION = 103;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3272,15 +3272,19 @@ function actionBuyTrain(player, payload) {
     const tech = techNodeById(model.requiredTech);
     return fail('Recherche requise avant achat.', `Débloque d’abord : ${tech?.title || model.requiredTech} niveau ${requiredTechLevel}.`);
   }
+  const quantity = clamp(Math.floor(Number(payload.quantity || 1)), 1, 99);
   const multiplier = currentPriceMultiplier(player, model.energyType);
-  const price = Math.round(model.price * multiplier);
+  const unitPrice = Math.round(model.price * multiplier);
+  const price = Math.round(unitPrice * quantity);
   if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
   player.cash -= price;
-  const train = createTrainInstance(payload.modelId, player.id);
-  player.trains.push(train);
+  for (let i = 0; i < quantity; i++) {
+    player.trains.push(createTrainInstance(payload.modelId, player.id));
+  }
   markTutorialAction(player, 'buyTrain');
-  notify(player, `Achat confirmé : ${model.name} pour ${money(price)}.`);
-  return ok();
+  const quantityLabel = quantity > 1 ? `${quantity} exemplaires` : '1 exemplaire';
+  notify(player, `Achat confirmé : ${quantityLabel} de ${model.name} pour ${money(price)}.`);
+  return ok(quantity > 1 ? `${quantity} trains achetés.` : 'Train acheté.');
 }
 
 

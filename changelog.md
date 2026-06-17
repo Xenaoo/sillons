@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v64:2:0 — achat groupé depuis le catalogue du parc
+
+- incrément de version : badge interface `v64:2:0`, version serveur/client `v64:2:0`, package `64.2.0` et schéma serveur `103` ;
+- ajout d’un champ `Quantité` sur chaque carte de matériel dans `Parc > Catalogue`, initialisé à `1` pour conserver l’achat unitaire par défaut ;
+- ajout du calcul immédiat du total estimé selon la quantité choisie et le prix unitaire courant ;
+- ajout d’une confirmation dédiée lors d’un achat de plusieurs trains ;
+- adaptation de l’action serveur `buyTrain` pour accepter une quantité, valider la borne `1 à 99`, débiter le coût total et créer tous les exemplaires achetés.
+
+
 ## Version v64.1.5 — correction définitive du scroll Composition et carte mobile
 
 - incrément de version : badge interface `v64.1.5`, package `64.1.5` et schéma serveur `102` ;
