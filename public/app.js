@@ -7,6 +7,10 @@ const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
 const PROJECT_VERSION = 'v64.1.5';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
+const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v1';
+const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
+const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -81,6 +85,7 @@ const app = {
   },
   routeCache: new Map(),
   osmRouteCache: new Map(),
+  osmRouteCachePersistTimer: null,
   osmRoutePending: new Set(),
   osmRouteMissing: new Map(),
   lineDraft: loadJson('sillons.lineDraft', {}),
@@ -294,6 +299,7 @@ init();
 async function init() {
   app.map.canvas = $('#map');
   app.map.ctx = app.map.canvas.getContext('2d');
+  hydratePersistedOsmRouteCache();
   bindStaticEvents();
   preloadArt();
   preloadMapSprites();
@@ -545,6 +551,7 @@ function rememberCacheEntry(cache, key, value, maxEntries) {
     const oldestKey = cache.keys().next().value;
     cache.delete(oldestKey);
   }
+  if (cache === app.osmRouteCache) schedulePersistedOsmRouteCacheSave();
   return value;
 }
 
@@ -554,6 +561,65 @@ function getCacheEntry(cache, key) {
   cache.delete(key);
   cache.set(key, value);
   return value;
+}
+
+function normalizePersistedRouteGeometry(value) {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const coords = value
+    .map(pair => Array.isArray(pair) ? [Number(pair[0]), Number(pair[1])] : null)
+    .filter(pair => pair && Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
+  return coords.length >= 2 ? coords : null;
+}
+
+function persistableOsmRouteCacheEntries() {
+  return [...app.osmRouteCache.entries()]
+    .slice(-OSM_ROUTE_CACHE_MAX_ENTRIES)
+    .map(([key, geometry]) => [key, normalizePersistedRouteGeometry(geometry)])
+    .filter(([, geometry]) => geometry);
+}
+
+function hydratePersistedOsmRouteCache() {
+  const payload = loadJson(PERSISTED_OSM_ROUTE_CACHE_KEY, null);
+  if (!payload || payload.version !== PERSISTED_OSM_ROUTE_CACHE_VERSION) return;
+  if (Date.now() - Number(payload.savedAt || 0) > PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS) {
+    localStorage.removeItem(PERSISTED_OSM_ROUTE_CACHE_KEY);
+    return;
+  }
+  const entries = Array.isArray(payload.entries) ? payload.entries : [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || entry.length < 2) continue;
+    const [key, geometry] = entry;
+    const normalized = normalizePersistedRouteGeometry(geometry);
+    if (typeof key === 'string' && normalized) {
+      app.osmRouteCache.set(key, normalized);
+      while (app.osmRouteCache.size > OSM_ROUTE_CACHE_MAX_ENTRIES) {
+        app.osmRouteCache.delete(app.osmRouteCache.keys().next().value);
+      }
+    }
+  }
+}
+
+function schedulePersistedOsmRouteCacheSave() {
+  clearTimeout(app.osmRouteCachePersistTimer);
+  app.osmRouteCachePersistTimer = setTimeout(persistOsmRouteCache, PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS);
+}
+
+function persistOsmRouteCache() {
+  app.osmRouteCachePersistTimer = null;
+  let entries = persistableOsmRouteCacheEntries();
+  while (entries.length) {
+    try {
+      localStorage.setItem(PERSISTED_OSM_ROUTE_CACHE_KEY, JSON.stringify({
+        version: PERSISTED_OSM_ROUTE_CACHE_VERSION,
+        savedAt: Date.now(),
+        entries
+      }));
+      return;
+    } catch {
+      entries = entries.slice(Math.ceil(entries.length / 2));
+    }
+  }
+  localStorage.removeItem(PERSISTED_OSM_ROUTE_CACHE_KEY);
 }
 
 function startPanOverlay() {
