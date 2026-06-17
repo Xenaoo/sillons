@@ -12,12 +12,12 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.26.2';
-const STATE_SCHEMA_VERSION = 92;
+const PROJECT_VERSION = 'v62.26.3';
+const STATE_SCHEMA_VERSION = 93;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
-const COMMUNE_CACHE_SOURCE_VERSION = 8;
+const COMMUNE_CACHE_SOURCE_VERSION = 9;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
 const SNCF_STATION_DATASET = 'liste-des-gares';
 const SNCF_STATION_API_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/records`;
@@ -102,6 +102,22 @@ const PARIS_TERMINAL_STATIONS = Object.freeze([
   { id: 'PAR_SAINT_LAZARE', name: 'Paris Saint-Lazare', code: '75056', postal: '75008', lat: 48.8763, lon: 2.3249, stationUic: '87384008', stationName: 'Paris Saint-Lazare', annualPassengers: 114093491 }
 ]);
 const PARIS_TERMINAL_SOURCE = 'sncf-gares-de-voyageurs + frequentation-gares-2024';
+const PARIS_INTERCHANGE_SOURCE = 'sillons-manual-rer-interchange';
+const PARIS_INTERCHANGE_STATIONS = Object.freeze([
+  {
+    id: 'PAR_CHATELET_LES_HALLES',
+    code: '75056',
+    name: 'Châtelet-les-Halles',
+    postal: '75001',
+    lat: 48.861742,
+    lon: 2.34701,
+    stationName: 'Châtelet-les-Halles',
+    stationUic: '',
+    annualPassengers: 0,
+    codeLignes: ['981000', '984000'],
+    aliases: ['Chatelet les Halles', 'Châtelet Les Halles', 'Les Halles']
+  }
+]);
 const PARIS_COMMUNE_POPULATION = 2133111;
 
 const DEPARTMENT_NAME_TO_CODE = Object.freeze({
@@ -1235,28 +1251,53 @@ function buildPathFromRailShapeLines(lines, start, end, directKm) {
   }
   if (graph.size < 2) return [];
   connectNearbyRfnComponents(graph, coordsByKey, directKm);
-  const startKey = nearestRfnNodeKey(coordsByKey, start);
-  const endKey = nearestRfnNodeKey(coordsByKey, end);
-  if (!startKey || !endKey || startKey === endKey) return [];
-  const startGap = pointToCoordDistance(start, coordsByKey.get(startKey));
-  const endGap = pointToCoordDistance(end, coordsByKey.get(endKey));
+
   const maxGap = Math.min(14, Math.max(3.5, directKm * 0.18));
-  if (startGap > maxGap || endGap > maxGap) return [];
+  const startAnchors = nearestRfnNodeKeys(coordsByKey, start, { maxDistanceKm: maxGap, maxCount: 24 });
+  const endAnchors = nearestRfnNodeKeys(coordsByKey, end, { maxDistanceKm: maxGap, maxCount: 24 });
+  if (!startAnchors.length || !endAnchors.length) return [];
+
+  const startKey = '__route_start__';
+  const endKey = '__route_end__';
+  graph.set(startKey, []);
+  graph.set(endKey, []);
+  coordsByKey.set(startKey, [start.lon, start.lat]);
+  coordsByKey.set(endKey, [end.lon, end.lat]);
+
+  for (const anchor of startAnchors) {
+    graph.get(startKey).push([anchor.key, anchor.distance]);
+    graph.get(anchor.key)?.push([startKey, anchor.distance]);
+  }
+  for (const anchor of endAnchors) {
+    graph.get(endKey).push([anchor.key, anchor.distance]);
+    graph.get(anchor.key)?.push([endKey, anchor.distance]);
+  }
+
   const ids = dijkstraWeightedGraph(graph, startKey, endKey, 60000);
   if (ids.length < 2) return [];
-  const path = ids.map(id => coordsByKey.get(id)).filter(Boolean);
-  const distance = polylineDistanceKm(path);
+  const path = ids
+    .filter(id => id !== startKey && id !== endKey)
+    .map(id => coordsByKey.get(id))
+    .filter(Boolean);
+  const distance = polylineDistanceKm([[start.lon, start.lat], ...path, [end.lon, end.lat]]);
   if (distance <= 0 || distance > Math.max(45, directKm * 4.8)) return [];
   return [[start.lon, start.lat], ...path, [end.lon, end.lat]];
 }
 
-function nearestRfnNodeKey(coordsByKey, point) {
-  let best = null;
+function nearestRfnNodeKeys(coordsByKey, point, options = {}) {
+  const maxCount = Math.max(1, Number(options.maxCount || 8));
+  const maxDistanceKm = Number(options.maxDistanceKm || Infinity);
+  const ranked = [];
   for (const [key, [lon, lat]] of coordsByKey.entries()) {
     const distance = haversine(point.lat, point.lon, lat, lon);
-    if (!best || distance < best.distance) best = { key, distance };
+    if (!Number.isFinite(distance) || distance > maxDistanceKm) continue;
+    ranked.push({ key, distance });
   }
-  return best?.key || null;
+  return ranked.sort((a, b) => a.distance - b.distance).slice(0, maxCount);
+}
+
+function nearestRfnNodeKey(coordsByKey, point) {
+  return nearestRfnNodeKeys(coordsByKey, point, { maxCount: 1 })[0]?.key || null;
 }
 
 function pointToCoordDistance(point, coord) {
@@ -2013,6 +2054,53 @@ function parisTerminalStationEntry(entry) {
   };
 }
 
+function parisInterchangeStationEntry(entry) {
+  return normalizeCommuneStation({
+    id: entry.id,
+    code: entry.code,
+    name: entry.name,
+    lat: roundCoord(entry.lat),
+    lon: roundCoord(entry.lon),
+    population: PARIS_COMMUNE_POPULATION,
+    region: 'Paris — gare RER souterraine',
+    codesPostaux: [entry.postal],
+    codeDepartement: '75',
+    baseDemand: 1450,
+    freight: 40,
+    tourism: 115,
+    commune: true,
+    populationSource: 'point RER ajouté manuellement car absent de liste-des-gares',
+    realStation: true,
+    multiStation: true,
+    allowSameCommuneStation: true,
+    stationLat: roundCoord(entry.lat),
+    stationLon: roundCoord(entry.lon),
+    stationName: entry.stationName || entry.name,
+    stationUic: entry.stationUic || '',
+    stationTrigramme: '',
+    stationIdGare: entry.id,
+    stationSource: PARIS_INTERCHANGE_SOURCE,
+    hasPassengerStation: true,
+    hasFreightStation: false,
+    stationKind: 'rer-interchange',
+    codeLignes: Array.isArray(entry.codeLignes) ? entry.codeLignes : [],
+    sourceRecords: 1,
+    purchaseCost: 0
+  });
+}
+
+function applyParisInterchangeStations(byId) {
+  if (!byId || typeof byId !== 'object') return { added: 0 };
+  let added = 0;
+  for (const entry of PARIS_INTERCHANGE_STATIONS) {
+    const station = parisInterchangeStationEntry(entry);
+    if (!station?.id) continue;
+    byId[station.id] = station;
+    added += 1;
+  }
+  return { added };
+}
+
 function applyParisTerminalStations(byId) {
   if (!byId || typeof byId !== 'object') return { removed: 0, added: 0 };
   let removed = 0;
@@ -2043,6 +2131,7 @@ function loadCommuneCache() {
       const normalized = normalizeCommuneStation(station);
       if (normalized) byId[normalized.id] = normalized;
     }
+    applyParisInterchangeStations(byId);
     rebuildStationAliasMap(byId);
     const sourceVersion = Number(parsed.sourceVersion || 0);
     const missingAuthoritativePlacement = Object.values(byId).some(s => (s.hasPassengerStation || s.hasFreightStation) && (!Number.isFinite(Number(s.stationLat)) || !Number.isFinite(Number(s.stationLon)))) || !parsed.sncfStats;
@@ -2759,6 +2848,7 @@ async function refreshCommuneCache(force = false) {
     const built = buildStationsFromSncfList(sncfStations, populationIndex);
     const byId = {};
     for (const station of built.stations) byId[station.id] = station;
+    applyParisInterchangeStations(byId);
     const coverageCount = Object.keys(byId).length;
     if (coverageCount < COMMUNE_CACHE_MIN_READY_COUNT) {
       throw new Error(`Couverture gares SNCF incomplete: ${coverageCount}/${COMMUNE_CACHE_MIN_READY_COUNT}`);

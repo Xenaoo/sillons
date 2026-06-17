@@ -1,12 +1,20 @@
 # Changelog
 
-## Version v62.26.2 — correctif raccordement RFN aux bifurcations
+## Version v62.26.3 — correctif tunnel RER parisien et Châtelet-les-Halles
+
+- incrément de version : badge interface `v62.26.3`, package `62.26.3` et schéma serveur `93` ;
+- correction du calcul RFN quand une gare est proche de plusieurs faisceaux ou niveaux de voies : le serveur relie désormais chaque extrémité de segment à plusieurs ancrages RFN proches au lieu d’un seul point le plus proche ;
+- correction du segment `Paris-Nord → Paris-Gare-de-Lyon`, qui pouvait échouer car `Paris-Gare-de-Lyon` était accrochée au mauvais faisceau alors que le tunnel RER existe dans les formes RFN ;
+- validation du parcours complet `Creil → Melun` de la capture : les 29 segments sont maintenant calculés, pour environ `101 km` ;
+- ajout de la gare RER `Châtelet-les-Halles`, absente du dataset SNCF `liste-des-gares`, avec coordonnées alignées sur les formes RFN souterraines ;
+- mise à jour du cache local des gares pour intégrer `Châtelet-les-Halles` sans dépendre d’un rafraîchissement réseau.
+
+## Version v62.26.2 — raccords RFN courts entre tronçons voisins
 
 - incrément de version : badge interface `v62.26.2`, package `62.26.2` et schéma serveur `92` ;
-- correction du calcul d’itinéraire RFN quand deux géométries SNCF réelles sont voisines mais non raccordées par une coordonnée strictement identique ;
-- ajout de raccords virtuels très courts entre composantes RFN proches, utile aux bifurcations, faisceaux de voies et tunnels urbains ;
-- correction des segments réels du type `Juvisy → Bibliothèque-François-Mitterrand` et `St-Cyr → St-Quentin-en-Yvelines`, qui pouvaient bloquer une ligne RER C pourtant réelle ;
-- maintien du blocage sur les segments réellement trop éloignés ou sans géométrie RFN exploitable : le correctif ne crée pas de longs itinéraires fictifs.
+- ajout de raccords virtuels très courts entre composantes RFN voisines afin de compenser certains découpages non jointifs du dataset `formes-des-lignes-du-rfn` ;
+- correction de segments réels qui échouaient malgré leur existence sur le RFN, notamment dans les zones de bifurcations, faisceaux et tunnels urbains ;
+- conservation du blocage lorsque deux gares restent réellement trop éloignées d’un tronçon RFN exploitable.
 
 ## Version v62.26.1 — correctifs carte mobile, gares visibles et création de ligne
 
