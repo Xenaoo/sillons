@@ -8058,9 +8058,79 @@ function routeGeometryKey(a, b) {
   return `${a}->${b}`;
 }
 
+function routeGeometryStationPoint(id) {
+  const s = station(id);
+  if (!s) return null;
+  const lon = stationRouteLon(s);
+  const lat = stationRouteLat(s);
+  return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
+}
+
+function coordDistanceKm(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
+  return haversineClient(Number(a[1]), Number(a[0]), Number(b[1]), Number(b[0]));
+}
+
+function addEndpointIfNeeded(coords, point, atStart) {
+  if (!point || !Array.isArray(coords)) return coords || [];
+  const end = atStart ? coords[0] : coords[coords.length - 1];
+  if (!end || coordDistanceKm(point, end) > 0.03) return atStart ? [point, ...coords] : [...coords, point];
+  const copy = [...coords];
+  if (atStart) copy[0] = point;
+  else copy[copy.length - 1] = point;
+  return copy;
+}
+
+function officialRouteAliasForStation(id) {
+  const s = station(id);
+  if (!s?.custom) return id;
+  const name = stationDedupNameClient(s.name);
+  if (!name) return id;
+  const point = routeGeometryStationPoint(id);
+  if (!point) return id;
+  const candidates = dedupedStations(app.state?.world?.stations || [])
+    .filter(candidate => !candidate.custom && stationDedupNameClient(candidate.name) === name)
+    .map(candidate => ({ id: candidate.id, point: routeGeometryStationPoint(candidate.id) }))
+    .filter(candidate => candidate.point)
+    .map(candidate => ({ ...candidate, distance: coordDistanceKm(point, candidate.point) }))
+    .filter(candidate => candidate.distance <= 5)
+    .sort((a, b) => a.distance - b.distance);
+  return candidates[0]?.id || id;
+}
+
+function routeGeometryAliasPair(a, b) {
+  return {
+    a: officialRouteAliasForStation(a),
+    b: officialRouteAliasForStation(b)
+  };
+}
+
+function geometryWithRequestedEndpoints(geometry, requestedA, requestedB, aliasA, aliasB) {
+  let coords = Array.isArray(geometry) ? geometry : [];
+  if (!coords.length && aliasA === aliasB) {
+    const start = routeGeometryStationPoint(requestedA);
+    const end = routeGeometryStationPoint(requestedB);
+    return start && end ? [start, end] : [];
+  }
+  if (requestedA !== aliasA) coords = addEndpointIfNeeded(coords, routeGeometryStationPoint(requestedA), true);
+  if (requestedB !== aliasB) coords = addEndpointIfNeeded(coords, routeGeometryStationPoint(requestedB), false);
+  return coords;
+}
+
 function geometryForRoute(a, b) {
   const direct = cachedRailGeometryForRoute(a, b);
   if (direct) return direct;
+  const alias = routeGeometryAliasPair(a, b);
+  if (alias.a !== a || alias.b !== b) {
+    if (alias.a === alias.b) return geometryWithRequestedEndpoints([], a, b, alias.a, alias.b);
+    const aliasGeometry = cachedRailGeometryForRoute(alias.a, alias.b);
+    if (aliasGeometry) return geometryWithRequestedEndpoints(aliasGeometry, a, b, alias.a, alias.b);
+    const aliasKey = routeGeometryKey(alias.a, alias.b);
+    if (!routeGeometryMarkedMissing(aliasKey) && !routeGeometryMarkedMissing(routeGeometryKey(alias.b, alias.a))) {
+      ensureRailwayRouteGeometry(alias.a, alias.b);
+    }
+    return null;
+  }
   const key = routeGeometryKey(a, b);
   if (!routeGeometryMarkedMissing(key) && !routeGeometryMarkedMissing(routeGeometryKey(b, a))) ensureRailwayRouteGeometry(a, b);
   return null;
