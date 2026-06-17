@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.22.0 — pastilles animées sur les lignes
+
+- incrément de version : badge interface `v62.22.0`, package `0.6.22` et schéma serveur `86` ;
+- remplacement des sprites de trains pixel-art sur la carte par des pastilles rondes animées ;
+- une pastille correspond maintenant à un train affecté à la ligne ;
+- la quantité de pastilles suit donc directement le nombre de trains placés sur la ligne ;
+- la vitesse visuelle des pastilles dépend de la vitesse moyenne des trains affectés à la ligne, avec les pénalités liées au service, aux arrêts et à l’état du matériel ;
+- ajout d’une trainée de mouvement dont la longueur varie avec la vitesse moyenne ;
+- conservation des règles de visibilité : trains du joueur toujours visibles, trains des autres joueurs visibles seulement au zoom maximal.
+
 ## Version v62.21.0 — capacités de sillons réalistes
 
 - incrément de version : badge interface `v62.21.0`, package `0.6.21` et schéma serveur `85` ;

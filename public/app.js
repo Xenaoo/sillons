@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.21.0';
+const PROJECT_VERSION = 'v62.22.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -6243,10 +6243,17 @@ function drawAllLines(ctx, lite = false) {
         || line.stats?.status === 'train-out-of-service'
       )) continue;
 
+      const visualLine = visualLineWithEffectiveFrequency(line);
+      const speeds = trains.map(train => {
+        const model = app.state.balance.trains[train.modelId];
+        return model ? trainVisualAverageSpeedKmH(train, model, visualLine) : 0;
+      }).filter(speed => speed > 0);
+      const averageSpeed = speeds.length ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 70;
+
       trains.forEach((train, index) => {
         const model = app.state.balance.trains[train.modelId];
         if (!model) return;
-        drawTrainSprite(ctx, route.points, player.color, { ...visualLineWithEffectiveFrequency(line), id: `${player.id}:${line.id}:${index}` }, model, own, train);
+        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed }, model, own, train, index, trains.length);
       });
     }
   };
@@ -6310,14 +6317,16 @@ function trainVisualAverageSpeedKmH(train, model, line) {
 
 function trainVisualOneWaySeconds(line, train, model) {
   const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
-  const averageSpeed = trainVisualAverageSpeedKmH(train, model, line);
+  const averageSpeed = Number(line?.visualAverageSpeed || 0) > 0
+    ? Number(line.visualAverageSpeed)
+    : trainVisualAverageSpeedKmH(train, model, line);
   const travelHours = distanceKm / Math.max(1, averageSpeed);
   const secondsPerTravelHour = 18;
   return Math.max(5.5, Math.min(55, travelHours * secondsPerTravelHour));
 }
 
 function trainVisualInstanceCount(line) {
-  return 1;
+  return Math.max(1, Math.round(Number(line?.slotUsage?.used || line?.trainCount || 1)));
 }
 
 function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount = 1) {
@@ -6340,35 +6349,83 @@ function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount =
   return entry.phase;
 }
 
-function drawOneTrainSprite(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
+function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
   const phase = trainVisualPhase(line, train, model, instanceIndex, instanceCount);
   const reverse = phase > 1;
   const progress = reverse ? 2 - phase : phase;
   const t = Math.max(0.001, Math.min(0.999, progress));
   const pose = pointAndAngleAlongPolyline(points, t);
+  const speed = Number(line?.visualAverageSpeed || trainVisualAverageSpeedKmH(train, model, line) || 0);
+  const normalizedSpeed = clamp((speed - 35) / 165, 0, 1);
+  const trainCount = Math.max(1, instanceCount);
+  const densityShrink = clamp(1 - Math.max(0, trainCount - 1) * 0.025, 0.78, 1);
+  const radius = (own ? 7.2 : 5.8) * densityShrink;
+  const haloRadius = radius + 4 + normalizedSpeed * 3;
+  const pulse = 0.72 + 0.28 * Math.sin(performance.now() / 260 + instanceIndex * 0.9);
+  const directionX = Math.cos(reverse ? pose.angle + Math.PI : pose.angle);
+  const directionY = Math.sin(reverse ? pose.angle + Math.PI : pose.angle);
+  const dotColor = color || '#d9a852';
+
   ctx.save();
   ctx.translate(pose.x, pose.y);
-  ctx.rotate(reverse ? pose.angle + Math.PI : pose.angle);
-  ctx.imageSmoothingEnabled = false;
-  ctx.shadowColor = own ? color : 'rgba(240, 206, 128, 0.25)';
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalAlpha = own ? 0.98 : 0.88;
+
+  ctx.shadowColor = dotColor;
+  ctx.shadowBlur = own ? 14 + normalizedSpeed * 6 : 8 + normalizedSpeed * 3;
+
+  ctx.beginPath();
+  ctx.arc(0, 0, haloRadius * pulse, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(dotColor, own ? 0.18 : 0.12);
+  ctx.fill();
+
+  // Trainée dans le sens de circulation. Sa longueur reflète la vitesse moyenne.
+  const trailLength = 8 + normalizedSpeed * 12;
+  const gradient = ctx.createLinearGradient(-directionX * trailLength, -directionY * trailLength, 0, 0);
+  gradient.addColorStop(0, hexToRgba(dotColor, 0));
+  gradient.addColorStop(1, hexToRgba(dotColor, own ? 0.55 : 0.38));
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = Math.max(2.2, radius * 0.52);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-directionX * trailLength, -directionY * trailLength);
+  ctx.lineTo(-directionX * radius * 0.45, -directionY * radius * 0.45);
+  ctx.stroke();
+
   ctx.shadowBlur = own ? 10 : 5;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 1.8, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(5, 10, 18, 0.96)';
+  ctx.fill();
 
-  const size = own ? 1.15 : 1.0;
-  ctx.scale(size, size);
-  drawPixelTrainBody(ctx, color, model);
+  const dotGradient = ctx.createRadialGradient(-radius * 0.35, -radius * 0.45, 1, 0, 0, radius + 1);
+  dotGradient.addColorStop(0, 'rgba(255,255,255,0.92)');
+  dotGradient.addColorStop(0.22, '#f8df98');
+  dotGradient.addColorStop(0.5, dotColor);
+  dotGradient.addColorStop(1, own ? '#16372b' : '#2b2134');
+  ctx.fillStyle = dotGradient;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
 
-  if (model?.energyType === 'coal') drawSteamPuffs(ctx, t);
-  if (model?.energyType === 'electricity') drawPantographSpark(ctx, t);
-  if (model?.energyType === 'diesel') drawDieselExhaust(ctx, t);
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = own ? 2 : 1.4;
+  ctx.strokeStyle = own ? 'rgba(252, 230, 170, 0.95)' : 'rgba(252, 230, 170, 0.62)';
+  ctx.stroke();
+
+  if (trainCount > 1) {
+    ctx.font = `${Math.max(8, Math.round(radius * 1.08))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(3, 8, 14, 0.92)';
+    ctx.fillText(String(instanceIndex + 1), 0, 0.4);
+  }
   ctx.restore();
 }
 
-function drawTrainSprite(ctx, points, color, line, model, own, train = null) {
+function drawTrainSprite(ctx, points, color, line, model, own, train = null, instanceIndex = 0, instanceCount = 1) {
   if (!points?.length) return;
-  const count = trainVisualInstanceCount(line);
-  for (let i = 0; i < count; i += 1) {
-    drawOneTrainSprite(ctx, points, color, line, model, own, train, i, count);
-  }
+  drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex, Math.max(1, instanceCount));
 }
 
 function drawPixelTrainBody(ctx, color, model) {
@@ -8725,6 +8782,16 @@ function round(value) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, Number(value)));
+}
+
+function hexToRgba(hex, alpha = 1) {
+  const raw = String(hex || '').replace('#', '').trim();
+  const full = raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw;
+  const value = /^[0-9a-f]{6}$/i.test(full) ? full : 'd9a852';
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${clamp(Number(alpha), 0, 1)})`;
 }
 
 function hashCode(str) {
