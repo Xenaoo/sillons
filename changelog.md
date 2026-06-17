@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v64.1.4 — audit et correction du verrouillage de scroll Composition
+
+- incrément de version : badge interface `v64.1.4`, package `64.1.4` et schéma serveur `101` ;
+- cause corrigée : `scheduleCompositionRefitScrollAdjustment()` quittait immédiatement dès que l’utilisateur n’était plus dans `Parc > Compositions`, donc la classe `.composition-scroll-mode` et les styles inline de `#tabContent` restaient actifs après changement de menu ;
+- ajout d’un nettoyage explicite des styles de scroll quand on quitte l’onglet Composition, afin que les autres menus récupèrent toujours leur défilement normal ;
+- suppression du verrouillage total de `#tabContent` comme dépendance principale : le panneau conserve désormais un scroll de secours, tandis que la liste des trains garde son scroll interne ;
+- correction CSS du bug `height: 0 !important` hérité de `v64.1.2` sur `.composition-group-list` : la liste reprend une hauteur flexible et scrollable ;
+- renforcement du layout Composition : en-tête et barre de tri fixes, liste des vignettes scrollable, éditeur de droite scrollable séparément.
+
 ## Version v64.1.3 — déblocage du scroll Composition
 
 - incrément de version : badge interface `v64.1.3`, package `64.1.3` et schéma serveur `100` ;

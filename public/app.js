@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.3';
+const PROJECT_VERSION = 'v64.1.4';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -1288,13 +1288,27 @@ function handleCompositionTouchMove(event) {
 }
 
 function scheduleCompositionRefitScrollAdjustment() {
-  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return;
+  // Cette routine doit aussi tourner quand on QUITTE Parc > Compositions.
+  // Sinon la classe .composition-scroll-mode et les styles inline qui bloquent
+  // le scroll restent accrochés à #tabContent et cassent les autres menus.
   adjustCompositionRefitScroll();
   requestAnimationFrame(() => {
     adjustCompositionRefitScroll();
     requestAnimationFrame(adjustCompositionRefitScroll);
   });
   window.setTimeout(adjustCompositionRefitScroll, 120);
+}
+
+function clearCompositionScrollInlineState(content) {
+  const properties = [
+    'display', 'grid-template-rows', 'gap', 'min-height', 'height', 'max-height',
+    'overflow', 'overflow-x', 'overflow-y'
+  ];
+  if (content) {
+    content.classList.remove('composition-scroll-mode');
+    for (const property of properties) content.style.removeProperty(property);
+  }
+  app.compositionTouchScroll = null;
 }
 
 function adjustCompositionRefitScroll() {
@@ -1304,7 +1318,10 @@ function adjustCompositionRefitScroll() {
     content.classList.toggle('composition-scroll-mode', compositionActive);
     content.dataset.fleetSubtab = app.activeTab === 'fleet' ? (app.activeFleetSubtab || '') : '';
   }
-  if (!compositionActive) return;
+  if (!compositionActive) {
+    clearCompositionScrollInlineState(content);
+    return;
+  }
 
   const workspace = document.querySelector('.fleet-workspace');
   const layout = document.querySelector('.composition-refit-layout');
@@ -1329,7 +1346,9 @@ function adjustCompositionRefitScroll() {
   if (content) {
     setImportant(content, 'min-height', '0');
     setImportant(content, 'overflow-x', 'hidden');
-    setImportant(content, 'overflow-y', stacked ? 'auto' : 'hidden');
+    // Garde un scroll de secours sur #tabContent : si un calcul de hauteur échoue,
+    // la page reste exploitable et les autres menus ne sont plus impactés.
+    setImportant(content, 'overflow-y', 'auto');
   }
   if (workspace) {
     setImportant(workspace, 'min-height', '0');
