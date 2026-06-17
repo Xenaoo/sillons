@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.26.3';
-const STATE_SCHEMA_VERSION = 93;
+const PROJECT_VERSION = 'v63.0.0';
+const STATE_SCHEMA_VERSION = 94;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3228,12 +3228,14 @@ async function applyAction(playerId, type, payload) {
 
   const handlers = {
     buyTrain: () => actionBuyTrain(player, payload),
+    duplicateTrain: () => actionDuplicateTrain(player, payload),
     sellTrain: () => actionSellTrain(player, payload),
     repairTrain: () => actionRepairTrain(player, payload),
     repairAllTrains: () => actionRepairAllTrains(player, payload),
     updateTrainComposition: () => actionUpdateTrainComposition(player, payload),
     setMaintenancePolicy: () => actionSetMaintenancePolicy(player, payload),
     createLine: () => actionCreateLine(player, payload),
+    assignTrainToLine: () => actionAssignTrainToLine(player, payload),
     closeLine: () => actionCloseLine(player, payload),
     updateLine: () => actionUpdateLine(player, payload),
     upgradeStation: () => actionUpgradeStation(player, payload),
@@ -3278,6 +3280,43 @@ function actionBuyTrain(player, payload) {
   markTutorialAction(player, 'buyTrain');
   notify(player, `Achat confirmé : ${model.name} pour ${money(price)}.`);
   return ok();
+}
+
+
+function cloneTrainInstanceForPlayer(sourceTrain, playerId) {
+  const clone = createTrainInstance(sourceTrain.modelId, playerId);
+  clone.condition = Math.max(0.5, Math.min(1, Number(sourceTrain.condition || 1)));
+  clone.age = Math.max(0, Math.round(Number(sourceTrain.age || 0)));
+  clone.composition = JSON.parse(JSON.stringify(sourceTrain.composition || {}));
+  clone.name = sourceTrain.name ? `${sourceTrain.name} bis` : clone.name;
+  return clone;
+}
+
+function actionDuplicateTrain(player, payload) {
+  const source = player.trains.find(t => t.id === String(payload.trainId || ''));
+  if (!source) return fail('Train introuvable.');
+  if (source.maintenance?.active) return fail('Duplication indisponible.', 'Le train source est actuellement en maintenance.');
+  const model = BALANCE.trains[source.modelId];
+  if (!model) return fail('Modèle introuvable.');
+  const multiplier = currentPriceMultiplier(player, model.energyType);
+  const price = Math.round(model.price * multiplier * 0.98);
+  if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
+  player.cash -= price;
+  const clone = cloneTrainInstanceForPlayer(source, player.id);
+  player.trains.push(clone);
+  notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}.`);
+  return ok('Train dupliqué.');
+}
+
+function lineSillonPurchaseCost(line, count = 1) {
+  const distance = Math.max(1, lineDistance(line));
+  const stops = Math.max(2, lineStops(line).length);
+  return Math.round(Math.max(2500, distance * 780 + stops * 240) * Math.max(1, Number(count || 1)));
+}
+
+function newlyAddedTrainIds(currentIds, nextIds) {
+  const current = new Set((currentIds || []).map(id => String(id || '').trim()).filter(Boolean));
+  return [...new Set((nextIds || []).map(id => String(id || '').trim()).filter(Boolean))].filter(id => !current.has(id));
 }
 
 function actionSellTrain(player, payload) {
@@ -3474,6 +3513,51 @@ async function actionCreateLine(player, payload) {
   return ok();
 }
 
+
+async function actionAssignTrainToLine(player, payload) {
+  const line = player.lines.find(l => l.id === String(payload.lineId || '') && l.active);
+  if (!line) return fail('Ligne active introuvable.');
+  normalizeLine(line);
+  const trainId = String(payload.trainId || '').trim();
+  const train = player.trains.find(t => t.id === trainId);
+  if (!train) return fail('Train introuvable.');
+  if (lineTrainIds(line).includes(trainId)) return fail('Ce train est déjà affecté à cette ligne.');
+  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
+  if (trainUsedByActiveLine(player, trainId, line.id)) return fail('Ce train est déjà utilisé ailleurs.', 'Retire-le de son autre ligne avant de l’affecter ici.');
+  const model = BALANCE.trains[train.modelId];
+  const operatingModel = getTrainOperatingProfile(train, model, player);
+  if (!lineServiceCompatibleWithProfile(line.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
+
+  const routeInfo = await realRailRouteBetweenStops(lineStops(line));
+  if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
+  const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
+  if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
+
+  const currentIds = lineTrainIds(line);
+  const nextIds = [...new Set([...currentIds, trainId])];
+  const usage = buildSillonUsage();
+  const previousIds = line.trainIds;
+  line.trainIds = nextIds;
+  line.trainId = nextIds[0];
+  const sillonInfo = computeLineSillonLimit(player, line, usage);
+  line.trainIds = previousIds;
+  line.trainId = currentIds[0] || line.trainId;
+  if (sillonInfo.constrained) {
+    return fail('Sillon indisponible sur cette ligne.', `Disponibles au tronçon limitant : ${Math.floor(Number(sillonInfo.maxFrequency || 0))}.`);
+  }
+
+  const cost = lineSillonPurchaseCost(line, 1);
+  if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût du sillon : ${money(cost)}.`);
+  player.cash -= cost;
+  line.trainIds = nextIds;
+  line.trainId = nextIds[0];
+  line.sillonRightsCost = Math.round(Number(line.sillonRightsCost || 0) + cost);
+  normalizeLine(line);
+  refreshPlayerLineStatsNow(player);
+  notify(player, `Sillon acheté sur ${lineRouteName(lineStops(line))} : ${BALANCE.trains[train.modelId]?.name || 'train'} affecté pour ${money(cost)}.`);
+  return ok('Sillon acheté et train affecté.');
+}
+
 function actionCloseLine(player, payload) {
   const line = player.lines.find(l => l.id === payload.lineId);
   if (!line) return fail('Ligne introuvable.');
@@ -3572,9 +3656,28 @@ async function actionUpdateLine(player, payload) {
     changedOperationalData = true;
   }
 
-  const currentTrainKey = lineTrainIds(line).join('|');
+  const currentTrainIds = lineTrainIds(line);
+  const currentTrainKey = currentTrainIds.join('|');
   const nextTrainKey = nextTrainIds.join('|');
   if (currentTrainKey !== nextTrainKey) {
+    const addedTrainIds = newlyAddedTrainIds(currentTrainIds, nextTrainIds);
+    if (addedTrainIds.length) {
+      const previousIds = line.trainIds;
+      const previousId = line.trainId;
+      const usage = buildSillonUsage();
+      line.trainIds = [...nextTrainIds];
+      line.trainId = nextTrainIds[0];
+      const sillonInfo = computeLineSillonLimit(player, line, usage);
+      line.trainIds = previousIds;
+      line.trainId = previousId;
+      if (sillonInfo.constrained) {
+        return fail('Sillons insuffisants sur cette ligne.', `Disponibles au tronçon limitant : ${Math.floor(Number(sillonInfo.maxFrequency || 0))}.`);
+      }
+      const sillonCost = lineSillonPurchaseCost(line, addedTrainIds.length);
+      if (!canPay(player, sillonCost)) return fail(`Trésorerie insuffisante. Coût des sillons : ${money(sillonCost)}.`);
+      player.cash -= sillonCost;
+      line.sillonRightsCost = Math.round(Number(line.sillonRightsCost || 0) + sillonCost);
+    }
     line.trainIds = [...nextTrainIds];
     line.trainId = nextTrainIds[0];
     changedOperationalData = true;
@@ -3615,8 +3718,8 @@ function actionUpgradeStation(player, payload) {
   }
 
   const wasUnowned = !currentOwner;
-  if (wasUnowned && kind !== 'level') {
-    return fail('Achat requis.', `Achète d’abord ${station.name} avant de construire des commerces, ateliers ou dépôts.`);
+  if (wasUnowned) {
+    return fail('Achat de gare retiré.', `${station.name} reste libre : utilise l’achat de sillons depuis une ligne pour y faire circuler ton matériel.`);
   }
 
   const asset = ensureStationAsset(player, stationId);
@@ -3629,16 +3732,11 @@ function actionUpgradeStation(player, payload) {
     );
   if (maxed) return fail('Cette amélioration est déjà au maximum.');
 
-  const cost = wasUnowned ? stationAcquisitionCost(station) : stationUpgradeCost(station, asset, kind);
+  const cost = stationUpgradeCost(station, asset, kind);
   if (!Number.isFinite(cost) || cost <= 0) return fail('Coût d’amélioration invalide.');
   if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût: ${money(cost)}.`);
 
   player.cash -= cost;
-  if (wasUnowned) {
-    notify(player, `${station.name} acquise pour ${money(cost)} : les autres compagnies devront payer un péage de gare si elles la desservent.`);
-    return ok('Ville achetée.');
-  }
-
   if (kind === 'level') {
     asset.level += 1;
     notify(player, `${station.name} améliorée au niveau ${asset.level} pour ${money(cost)}.`);

@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.26.3';
+const PROJECT_VERSION = 'v63.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -45,6 +45,9 @@ const app = {
   sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
   admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
   mapPref: 'show',
+  showOtherLines: localStorage.getItem('sillons.showOtherLines') !== '0',
+  focusedLineId: localStorage.getItem('sillons.focusedLineId') || '',
+  fleetSortMode: localStorage.getItem('sillons.fleetSortMode') || 'era',
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
   mapSprites: { trains: {}, stations: {} },
@@ -344,6 +347,17 @@ function bindStaticEvents() {
   $('#zoomInBtn')?.addEventListener('click', () => app.map.leaflet?.zoomIn());
   $('#zoomOutBtn')?.addEventListener('click', () => app.map.leaflet?.zoomOut());
   $('#zoomResetBtn')?.addEventListener('click', fitFranceMap);
+  const showOtherLinesBox = $('#showOtherLines');
+  if (showOtherLinesBox) {
+    showOtherLinesBox.checked = app.showOtherLines;
+    showOtherLinesBox.addEventListener('change', event => {
+      app.showOtherLines = !!event.target.checked;
+      localStorage.setItem('sillons.showOtherLines', app.showOtherLines ? '1' : '0');
+      invalidateMapProjection('line-filter');
+      drawMap();
+    });
+  }
+  $('#clearFocusedLineBtn')?.addEventListener('click', clearFocusedLine);
   $('#addStopBtn')?.addEventListener('click', enableStationPlacement);
   $('#cancelStopBtn')?.addEventListener('click', disableStationPlacement);
   $('#renameBtn').addEventListener('click', openCompanyModal);
@@ -376,6 +390,11 @@ function bindStaticEvents() {
     if (isInteractiveElement(event.target)) markUiInteraction();
   }, true);
   document.addEventListener('change', event => {
+    if (event.target?.id === 'fleetSortMode') {
+      app.fleetSortMode = event.target.value || 'era';
+      localStorage.setItem('sillons.fleetSortMode', app.fleetSortMode);
+      renderAll();
+    }
     if (isInteractiveElement(event.target)) markUiInteraction();
   }, true);
 
@@ -601,7 +620,7 @@ function stateRenderSignature(state = app.state) {
     Object.values(me.staff || {}).join(','),
     Object.keys(me.stations || {}).length,
     (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? t.maintenance.daysLeft : 0}`).join('|'),
-    (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.service}:${lineTrainIdsOf(l).join('+')}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}`).join('|'),
+    (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.service}:${lineTrainIdsOf(l).join('+')}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}:${l.stats?.capacity?.sillons?.maxFrequency}:${l.stats?.capacity?.sillons?.lineCapacity}`).join('|'),
     Object.entries(me.techUnlocked || {}).sort().map(([id, level]) => `${id}:${level}`).join(','),
     me.researchProject ? `${me.researchProject.nodeId}:${me.researchProject.targetLevel}:${me.researchProject.durationMs}:${me.researchProject.costMoney || 0}:${me.researchProject.startedAt || 0}` : '',
     (me.researchQueue || []).map(item => `${item.nodeId}:${item.targetLevel}`).join('|')
@@ -1396,6 +1415,7 @@ function renderAll() {
   renderTabs();
   renderTutorialOverlay();
   applyLayoutMode();
+  syncFocusedLineUi();
   if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
   app.lastRenderKey = stateRenderSignature();
 }
@@ -1455,6 +1475,41 @@ function applyLayoutMode() {
   requestAnimationFrame(() => resizeCanvas());
 }
 
+function syncFocusedLineUi() {
+  const btn = $('#clearFocusedLineBtn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !app.focusedLineId);
+}
+
+function clearFocusedLine() {
+  app.focusedLineId = '';
+  localStorage.removeItem('sillons.focusedLineId');
+  syncFocusedLineUi();
+  invalidateMapProjection('line-focus-clear');
+  drawMap();
+}
+
+function focusLineOnMap(lineId, { fit = true } = {}) {
+  const id = String(lineId || '');
+  const line = app.state?.me?.lines?.find(l => l.id === id && l.active);
+  if (!line) return;
+  app.focusedLineId = id;
+  localStorage.setItem('sillons.focusedLineId', id);
+  syncFocusedLineUi();
+  if (fit && app.map.leaflet) {
+    const latLngs = lineStopsOf(line)
+      .map(id => station(id))
+      .map(s => [stationRouteLat(s), stationRouteLon(s)])
+      .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+    if (latLngs.length) {
+      try {
+        app.map.leaflet.fitBounds(latLngs, { padding: [34, 34], maxZoom: 11, animate: true });
+      } catch {}
+    }
+  }
+  invalidateMapProjection('line-focus');
+  drawMap();
+}
 
 
 function currentIsoFactor() {
@@ -2123,6 +2178,9 @@ function lineElectrificationTooltip(line) {
 }
 
 function stationUpgradeTooltip(station, asset, upgrade) {
+  if (!app.state?.me?.stations?.[station?.id] && upgrade.kind === 'level') {
+    return `${station.name} est libre. L’achat direct de gare est retiré : ajoute-la à une ligne et achète des sillons pour y faire rouler ton matériel.`;
+  }
   const effects = {
     level: upgrade.label === 'Acheter'
       ? 'achète la gare, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
@@ -2749,6 +2807,7 @@ function renderLineItem(line) {
       ${renderLineInsightPanels(line)}
 
       <div class="line-card-modern-actions">
+        <button data-action="focus-line" data-id="${line.id}" ${tooltipAttr('Centre la carte sur cette ligne et masque temporairement les autres tracés.')}>Carte</button>
         <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : trains affectés, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
         <button data-action="electrify-line" data-id="${line.id}" ${tooltipAttr(line.electrified ? 'Cette ligne est déjà électrifiée.' : lineElectrificationTooltip(line))} ${line.electrified || !canElectrify ? 'disabled' : ''}>
           ${line.electrified ? 'Électrifiée' : `Électrifier · ${money(electrifyCost)}`}
@@ -2758,7 +2817,7 @@ function renderLineItem(line) {
   `;
 
   return `
-    <article class="line-card-modern ${line.active ? '' : 'inactive'} ${collapsed ? 'collapsed' : ''}">
+    <article class="line-card-modern ${line.active ? '' : 'inactive'} ${collapsed ? 'collapsed' : ''} ${app.focusedLineId === line.id ? 'map-focused' : ''}" data-line-id="${escapeAttr(line.id)}">
       <header class="line-card-modern-head">
         <div>
           <div class="line-title-row">
@@ -3318,6 +3377,71 @@ function trainCurrentLine(trainId) {
   return app.state.me.lines.find(l => l.active && lineHasTrain(l, trainId)) || null;
 }
 
+function trainServiceClass(model) {
+  if (!model) return 'passengers';
+  const cap = Number(model.capacity || 0);
+  const freight = Number(model.freight || 0);
+  if (freight > 0 && cap <= 0) return 'freight';
+  if (freight > 0 && cap > 0) return 'mixed';
+  return 'passengers';
+}
+
+function trainServiceSortLabel(kind) {
+  return kind === 'freight' ? 'Fret' : kind === 'mixed' ? 'Mixte' : 'Voyageurs';
+}
+
+function sortedCompositionTrains(trains) {
+  const mode = app.fleetSortMode || 'era';
+  return [...(trains || [])].sort((a, b) => {
+    const ma = app.state.balance.trains[a.modelId] || {};
+    const mb = app.state.balance.trains[b.modelId] || {};
+    const eraA = Number(ma.unlockEpoch ?? ma.epoch ?? 0);
+    const eraB = Number(mb.unlockEpoch ?? mb.epoch ?? 0);
+    const typeA = trainServiceClass(ma);
+    const typeB = trainServiceClass(mb);
+    if (mode === 'type') {
+      if (typeA !== typeB) return typeA.localeCompare(typeB, 'fr');
+      if (eraA !== eraB) return eraA - eraB;
+    } else {
+      if (eraA !== eraB) return eraA - eraB;
+      if (typeA !== typeB) return typeA.localeCompare(typeB, 'fr');
+    }
+    return String(ma.name || '').localeCompare(String(mb.name || ''), 'fr') || String(a.id || '').localeCompare(String(b.id || ''), 'fr');
+  });
+}
+
+function assignableLinesForTrain(train) {
+  if (!train || train.maintenance?.active) return [];
+  const model = app.state.balance.trains[train.modelId];
+  const profile = previewOperatingProfile(train, model);
+  return (app.state.me?.lines || [])
+    .filter(line => line.active && !lineHasTrain(line, train.id) && !lineAssignedTrainsClient(line).some(t => t.id === train.id))
+    .filter(line => lineServiceCompatibleWithProfileClient(line.service || 'passengers', profile))
+    .filter(line => lineDistance(line) <= Number(profile.range || 0))
+    .sort((a, b) => linePublicName(a).localeCompare(linePublicName(b), 'fr'));
+}
+
+function lineServiceCompatibleWithProfileClient(service, profile) {
+  if (service === 'freight') return Number(profile?.freight || 0) > 0;
+  if (service === 'mixed') return Number(profile?.capacity || 0) > 0 && Number(profile?.freight || 0) > 0;
+  return Number(profile?.capacity || 0) > 0;
+}
+
+function lineAvailableSillonsClient(line) {
+  const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
+  if (!sillons) return null;
+  const max = Number(sillons.maxFrequency ?? sillons.bottleneck?.available ?? sillons.lineCapacity ?? 0);
+  const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
+  const available = Math.max(0, Math.floor(max));
+  return { available, requested: Math.max(0, Math.floor(requested)), capacity: Math.max(0, Math.floor(Number(sillons.lineCapacity ?? max))) };
+}
+
+function slotPurchaseCostClient(line, count = 1) {
+  const distance = Math.max(1, lineDistance(line));
+  const stops = Math.max(2, lineStopsOf(line).length);
+  return Math.round(Math.max(2500, distance * 780 + stops * 240) * Math.max(1, Number(count || 1)));
+}
+
 function renderCompositionTrainListItem(train) {
   const model = app.state.balance.trains[train.modelId];
   const profile = previewOperatingProfile(train, model);
@@ -3325,6 +3449,7 @@ function renderCompositionTrainListItem(train) {
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inMaint;
+  const assignable = assignableLinesForTrain(train);
   const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
   const sellEstimate = trainResaleEstimateClient(train, model);
   return `
@@ -3341,7 +3466,19 @@ function renderCompositionTrainListItem(train) {
           <b>${formatInt(profile.range)} km</b>
         </div>
       </button>
+      <div class="composition-assign-row">
+        <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>
+          <option value="">${line ? 'Déjà affecté' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
+          ${assignable.map(candidate => {
+            const slots = lineAvailableSillonsClient(candidate);
+            const label = slots ? `${linePublicName(candidate)} · ${slots.available} sillons dispo` : linePublicName(candidate);
+            return `<option value="${escapeAttr(candidate.id)}">${escapeHtml(label)}</option>`;
+          }).join('')}
+        </select>
+        <button type="button" class="ghost" data-action="assign-train-line" data-id="${train.id}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>Affecter</button>
+      </div>
       <div class="composition-train-actions">
+        <button type="button" class="ghost" data-action="duplicate-train" data-id="${train.id}" ${tooltipAttr(`Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
         <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${train.id}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : 'Impossible : train en maintenance.')}>Vendre</button>
       </div>
     </article>
@@ -3569,6 +3706,7 @@ function renderFleetCompositionPanel() {
     localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
   }
   const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || me.trains[0];
+  const sortedTrains = sortedCompositionTrains(me.trains);
   const configurable = me.trains.filter(t => !!t.compositionSpec).length;
   const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
 
@@ -3589,8 +3727,16 @@ function renderFleetCompositionPanel() {
           </div>
           <span class="tag">${me.trains.length} unité(s)</span>
         </div>
+        <div class="composition-list-toolbar">
+          <label>Trier le parc
+            <select id="fleetSortMode">
+              <option value="era" ${app.fleetSortMode === 'era' ? 'selected' : ''}>Par ère puis type</option>
+              <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Par type puis ère</option>
+            </select>
+          </label>
+        </div>
         <div class="composition-train-list">
-          ${me.trains.map(renderCompositionTrainListItem).join('')}
+          ${sortedTrains.map(renderCompositionTrainListItem).join('')}
         </div>
       </div>
 
@@ -4166,7 +4312,7 @@ function renderSelectedStation(s) {
   const unowned = !owner;
   const acquisitionCost = stationAcquisitionCost(s);
   const upgrades = [
-    { kind: 'level', label: asset ? `Niveau +1` : 'Acheter', maxed: asset ? preview.level >= 5 : false, cost: asset ? stationUpgradeCost(s, preview, 'level') : acquisitionCost },
+    { kind: 'level', label: asset ? `Niveau +1` : 'Gare libre', maxed: !asset || preview.level >= 5, cost: asset ? stationUpgradeCost(s, preview, 'level') : 0 },
     { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') },
     { kind: 'maintenance', label: 'Atelier', maxed: unowned || preview.maintenance >= 4, cost: stationUpgradeCost(s, preview, 'maintenance') },
     { kind: 'depot', label: 'Dépôt', maxed: unowned || !!preview.depot, cost: stationUpgradeCost(s, preview, 'depot') }
@@ -4179,7 +4325,7 @@ function renderSelectedStation(s) {
         <span>Demande fret</span><b>${formatInt(s.freight)}</b>
         <span>Population</span><b>${s.population ? formatInt(s.population) : '—'}</b>
         ${s.annualPassengers ? `<span>Fréquentation ${s.passengerTrafficYear || 2024}</span><b>${formatInt(s.annualPassengers)} voy./an</b>` : ''}
-        <span>Prix d'achat</span><b>${money(acquisitionCost)}</b>
+        <span>Mode d’accès</span><b>${asset ? 'Gare exploitée' : 'Sillons sur ligne'}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
         <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
@@ -4191,12 +4337,12 @@ function renderSelectedStation(s) {
       <div class="actions station-upgrades">
         ${upgrades.map(up => `
           <button data-action="upgrade-station" data-kind="${up.kind}" data-id="${s.id}" ${tooltipAttr(lockedByOwner ? `Cette gare appartient déjà à ${owner.player.name}.` : stationUpgradeTooltip(s, preview, up))} ${lockedByOwner || up.maxed || cash < up.cost ? 'disabled' : ''}>
-            ${escapeHtml(up.label)} <span>${!asset && up.kind !== 'level' ? 'Verrouillé' : up.maxed ? 'Max' : money(up.cost)}</span>
+            ${escapeHtml(up.label)} <span>${!asset ? 'Via sillons' : up.maxed ? 'Max' : money(up.cost)}</span>
           </button>
         `).join('')}
         ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${activeStationUsersClient(s.id).length ? 'disabled' : ''}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
       </div>
-      ${lockedByOwner ? `<p class="muted small">Cette gare est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Gare possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">Première action : acheter la gare. Elle deviendra ensuite utilisable pour ouvrir des lignes.</p>'}
+      ${lockedByOwner ? `<p class="muted small">Cette gare est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Gare possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">L’achat direct de gare est remplacé par l’achat de sillons : ajoute cette gare à une ligne, puis affecte du matériel à cette ligne.</p>'}
     </div>
   `;
 }
@@ -5221,7 +5367,14 @@ async function onTabContentClick(event) {
   }
 
   const button = event.target.closest('[data-action], #createLineBtn, #addWaypointBtn');
-  if (!button) return;
+  if (!button) {
+    const lineCard = event.target.closest('.line-card-modern[data-line-id]');
+    if (lineCard) {
+      focusLineOnMap(lineCard.dataset.lineId || '');
+      return;
+    }
+    return;
+  }
   if (button.id === 'createLineBtn') {
     updateLineDraftFromForm(document.activeElement?.id || '');
     const draft = app.lineDraft;
@@ -5309,6 +5462,27 @@ if (action === 'save-train-composition') {
   return doAction('updateTrainComposition', payload);
 }
     if (action === 'buy-train') return doAction('buyTrain', { modelId: button.dataset.id });
+  if (action === 'duplicate-train') {
+    const train = app.state.me.trains.find(t => t.id === button.dataset.id);
+    const model = train ? app.state.balance.trains[train.modelId] : null;
+    const price = Math.round((model?.price || 0) * 0.98);
+    if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
+
+Coût estimé : ${money(price)}.`, { confirmLabel: 'Dupliquer' }))) return;
+    return doAction('duplicateTrain', { trainId: button.dataset.id });
+  }
+  if (action === 'assign-train-line') {
+    const trainId = button.dataset.id;
+    const select = document.querySelector(`[data-assign-line-select="${CSS.escape(trainId)}"]`);
+    const lineId = select?.value || '';
+    if (!lineId) return toast('Choisis une ligne compatible.', 'error');
+    const line = app.state.me.lines.find(l => l.id === lineId);
+    const cost = line ? slotPurchaseCostClient(line, 1) : 0;
+    if (!(await gameConfirm('Acheter un sillon', `Affecter ce train à ${line ? linePublicName(line) : 'cette ligne'} ?
+
+Cette action achète 1 sillon supplémentaire sur la ligne. Coût : ${money(cost)}.`, { confirmLabel: 'Acheter le sillon' }))) return;
+    return doAction('assignTrainToLine', { trainId, lineId });
+  }
   if (action === 'sell-train') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
     const model = train ? app.state.balance.trains[train.modelId] : null;
@@ -5344,7 +5518,8 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     return doAction('closeLine', { lineId: button.dataset.id });
   }
   if (action === 'electrify-line') return doAction('updateLine', { lineId: button.dataset.id, electrify: true });
-  if (action === 'edit-line') return openLineModal(button.dataset.id);
+  if (action === 'focus-line') { focusLineOnMap(button.dataset.id || ''); return; }
+  if (action === 'edit-line') { focusLineOnMap(button.dataset.id || ''); return openLineModal(button.dataset.id); }
   if (action === 'remove-waypoint') { removeDraftWaypoint(button.dataset.index); return; }
   if (action === 'upgrade-station') return doAction('upgradeStation', { stationId: button.dataset.id, kind: button.dataset.kind });
   if (action === 'sell-station') {
@@ -5541,6 +5716,11 @@ function openLineModal(lineId) {
     app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
     app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
     const selectedTrainCount = app.lineEditor.trainIds.length;
+    const currentTrainCount = lineTrainIdsOf(line).length;
+    const addedSillons = Math.max(0, selectedTrainCount - currentTrainCount);
+    const sillonData = lineAvailableSillonsClient(line);
+    const availableForLine = sillonData ? Math.max(0, sillonData.available) : selectedTrainCount;
+    const sillonCost = addedSillons > 0 ? slotPurchaseCostClient(line, addedSillons) : 0;
     const trainChoices = freeOrCurrent.map(t => {
       const selected = app.lineEditor.trainIds.includes(t.id);
       const profile = previewOperatingProfile(t, app.state.balance.trains[t.modelId]);
@@ -5569,10 +5749,15 @@ function openLineModal(lineId) {
       <div class="line-editor-train-picker">
         <div class="line-editor-subtitle">
           <div>
-            <strong>Trains affectés à cette ligne</strong>
-            <span class="small muted">Coche plusieurs trains libres pour augmenter la capacité de la ligne.</span>
+            <strong>Sillons et trains affectés à cette ligne</strong>
+            <span class="small muted">Chaque train coché consomme 1 sillon. Les nouveaux sillons sont achetés sur la ligne, sans achat de gare.</span>
           </div>
-          <span class="tag ${selectedTrainCount ? 'good' : 'warn'}">${selectedTrainCount} sélectionné${selectedTrainCount > 1 ? 's' : ''}</span>
+          <span class="tag ${selectedTrainCount ? 'good' : 'warn'}">${selectedTrainCount}/${availableForLine} sillons</span>
+        </div>
+        <div class="line-sillon-purchase-summary">
+          <div><span>Sillons disponibles</span><b>${sillonData ? formatInt(sillonData.available) : 'N/A'}</b></div>
+          <div><span>Nouveaux à acheter</span><b>${formatInt(addedSillons)}</b></div>
+          <div><span>Coût estimé</span><b>${money(sillonCost)}</b></div>
         </div>
         <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre.</p>'}</div>
       </div>
@@ -5622,7 +5807,9 @@ function openLineModal(lineId) {
   `;
   };
 
-  openModal('Modifier la ligne', renderEditorHtml());
+  openModal('Modifier la ligne', renderEditorHtml(), { wide: true });
+  const modalForFocus = $('#modal');
+  modalForFocus?.addEventListener('close', clearFocusedLine, { once: true });
 
   const rerenderBody = () => {
     $('#modalBody').innerHTML = renderEditorHtml();
@@ -5662,7 +5849,10 @@ function openLineModal(lineId) {
       if (tag) {
         tag.classList.toggle('good', checked.length > 0);
         tag.classList.toggle('warn', checked.length <= 0);
-        tag.textContent = `${checked.length} sélectionné${checked.length > 1 ? 's' : ''}`;
+        const slots = lineAvailableSillonsClient(line);
+        const baseCount = lineTrainIdsOf(line).length;
+        const available = slots ? Math.max(0, slots.available) : checked.length;
+        tag.textContent = `${checked.length}/${available} sillons`;
       }
     }));
     $('#editLineTicketPrice').addEventListener('input', () => syncEditorTicketControls('editLineTicketPrice'));
@@ -6255,15 +6445,18 @@ function drawAllLines(ctx, lite = false) {
   const players = app.state.players || [];
   const me = app.state.me || null;
   const maxZoom = mapMaxZoomReached();
+  const focusedLineId = app.focusedLineId && me?.lines?.some(l => l.id === app.focusedLineId && l.active) ? app.focusedLineId : '';
+  if (app.focusedLineId && !focusedLineId) clearFocusedLine();
 
   const drawLinesForPlayer = (player, own = false) => {
     if (!player) return;
     for (const line of player.lines || []) {
       if (!line.active) continue;
+      if (focusedLineId && (!own || line.id !== focusedLineId)) continue;
       const route = getRouteForStops(lineStopsOf(line));
       if (!route.points.length) continue;
 
-      drawRailLine(ctx, route.points, player.color, own, line.electrified, lite);
+      drawRailLine(ctx, route.points, player.color, own, line.electrified, lite, focusedLineId === line.id);
       if (lite) continue;
 
       // Les trains du joueur connecté sont toujours dessinés.
@@ -6297,25 +6490,27 @@ function drawAllLines(ctx, lite = false) {
     }
   };
 
-  for (const player of players) {
-    if (me && player.id === me.id) continue;
-    drawLinesForPlayer(player, false);
+  if (!focusedLineId && app.showOtherLines) {
+    for (const player of players) {
+      if (me && player.id === me.id) continue;
+      drawLinesForPlayer(player, false);
+    }
   }
   drawLinesForPlayer(me, true);
 }
 
-function drawRailLine(ctx, points, color, own, electrified, lite = false) {
+function drawRailLine(ctx, points, color, own, electrified, lite = false, highlighted = false) {
   if (!points?.length) return;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.globalAlpha = own ? 0.96 : 0.68;
+  ctx.globalAlpha = highlighted ? 1 : (own ? 0.96 : 0.68);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.setLineDash([]);
 
   // sleeper/shadow pass
   ctx.strokeStyle = 'rgba(10, 15, 24, 0.85)';
-  ctx.lineWidth = own ? 8 : 6;
+  ctx.lineWidth = highlighted ? 13 : (own ? 8 : 6);
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
   for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
@@ -6323,9 +6518,9 @@ function drawRailLine(ctx, points, color, own, electrified, lite = false) {
 
   // main rail pass
   ctx.strokeStyle = color || '#d9a852';
-  ctx.lineWidth = own ? 4 : 2.8;
+  ctx.lineWidth = highlighted ? 6.4 : (own ? 4 : 2.8);
   ctx.shadowColor = color || 'rgba(236, 205, 127, 0.25)';
-  ctx.shadowBlur = lite ? 0 : (own ? 8 : 3);
+  ctx.shadowBlur = lite ? 0 : (highlighted ? 18 : (own ? 8 : 3));
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
   for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
@@ -6876,7 +7071,7 @@ function drawTooltip(ctx) {
   const trafficText = s.annualPassengers ? ` · ${formatInt(s.annualPassengers)} voy./an` : '';
   const subtitle = owner
     ? `${ownedByMe ? 'Ta gare' : `Propriétaire : ${owner.player.name}`} · Prix base ${money(acquisitionCost)}${trafficText}`
-    : `Achat requis · Prix ${money(acquisitionCost)}${trafficText}`;
+    : `Gare libre · accès par sillons de ligne${trafficText}`;
   ctx.fillText(fitTooltipText(subtitle, textMaxW), x + 16, y + 38);
 
   roundRect(ctx, x + width - badgeW - 14, y + 11, badgeW, 23, 11);
@@ -6960,7 +7155,7 @@ function drawTooltip(ctx) {
   ctx.fillStyle = owner ? (ownedByMe ? '#9be7a2' : '#f0c875') : '#d3c7ac';
   const footerText = owner
     ? (ownedByMe ? `Péage perçu · prix base ${money(acquisitionCost)}` : `Péage dû · prix base ${money(acquisitionCost)}`)
-    : `Prix d’achat : ${money(acquisitionCost)}`;
+    : 'Achat direct retiré · utilise les sillons d’une ligne';
   ctx.fillText(fitTooltipText(footerText, width - 54), x + 25, footerY + 14);
 
   ctx.restore();

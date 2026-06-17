@@ -7247,3 +7247,119 @@ dialog.modal--wide {
     min-height: 330px !important;
   }
 }
+
+/* ===== V63.0.0 : filtres carte, achat de sillons et atelier de compositions ===== */
+.map-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(217,168,82,.22);
+  border-radius: 999px;
+  background: rgba(5, 10, 20, .55);
+  color: #f0dfb8;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-filter-toggle input {
+  margin: 0;
+  accent-color: #d9a852;
+}
+.line-card-modern.map-focused {
+  border-color: rgba(250, 204, 21, .82);
+  box-shadow: 0 0 0 1px rgba(250,204,21,.24) inset, 0 16px 34px rgba(0,0,0,.38);
+}
+.line-card-modern[data-line-id] {
+  cursor: pointer;
+}
+.line-card-modern[data-line-id] button,
+.line-card-modern[data-line-id] input,
+.line-card-modern[data-line-id] select,
+.line-card-modern[data-line-id] textarea {
+  cursor: auto;
+}
+.line-sillon-purchase-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+.line-sillon-purchase-summary div {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid rgba(217,168,82,.14);
+  border-radius: 12px;
+  background: rgba(2,6,23,.32);
+}
+.line-sillon-purchase-summary span {
+  color: #b8aa84;
+  font-size: 11px;
+}
+.line-sillon-purchase-summary b {
+  color: #f6e8c9;
+  font-size: 13px;
+}
+.composition-list-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 205px);
+  overflow: hidden;
+}
+.composition-list-card .fleet-card-heading {
+  flex: 0 0 auto;
+}
+.composition-list-toolbar {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+.composition-list-toolbar label {
+  display: grid;
+  gap: 5px;
+  color: #b8aa84;
+  font-size: 12px;
+}
+.composition-train-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 179, 77, 0.62) rgba(5, 10, 20, 0.35);
+}
+.composition-train-list::-webkit-scrollbar {
+  width: 9px;
+}
+.composition-train-list::-webkit-scrollbar-track {
+  background: rgba(5,10,20,.35);
+  border-radius: 999px;
+}
+.composition-train-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(217,168,82,.78), rgba(133,94,32,.92));
+  border-radius: 999px;
+  border: 2px solid rgba(5,10,20,.32);
+}
+.composition-assign-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+.composition-assign-select {
+  min-width: 0;
+}
+.composition-train-actions {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .line-sillon-purchase-summary,
+  .composition-assign-row {
+    grid-template-columns: 1fr;
+  }
+  .map-filter-toggle span {
+    display: none;
+  }
+}

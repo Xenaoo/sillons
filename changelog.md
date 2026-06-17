@@ -1,5 +1,17 @@
 # Changelog
 
+## Version v63.0.0 — gestion des sillons, filtre concurrents et atelier de trains
+
+- incrément de version : badge interface `v63.0.0`, package `63.0.0` et schéma serveur `94` ;
+- ajout d’un filtre de carte permettant d’afficher ou masquer les tracés et trains des autres joueurs ;
+- ajout d’un mode focus de ligne : clic sur une fiche ligne ou bouton `Carte`, centrage de la vue sur le tracé, surbrillance de la ligne et masquage temporaire des autres tracés pendant l’édition ;
+- remplacement de l’achat direct des gares libres par une logique d’achat de sillons sur les lignes : les gares libres restent utilisables, l’ajout de matériel à une ligne consomme et achète des sillons ;
+- l’éditeur de ligne affiche les sillons disponibles, les sillons nouvellement demandés et le coût estimé avant sauvegarde ;
+- ajout d’une action serveur et interface pour affecter un train libre à une ligne depuis le menu Composition ;
+- ajout d’une action serveur et interface pour dupliquer un train avec sa composition actuelle ;
+- ajout d’un tri du parc possédé par ère puis type, ou par type puis ère ;
+- la liste des trains dans le menu Composition possède désormais son propre scroll indépendant de la fenêtre et de l’éditeur de composition.
+
 ## Version v62.26.3 — correctif tunnel RER parisien et Châtelet-les-Halles
 
 - incrément de version : badge interface `v62.26.3`, package `62.26.3` et schéma serveur `93` ;
