@@ -1,3 +1,9 @@
+## Version v64.6.1 — correction affichage sillons utilisés/disponibles
+
+- incrément de version : badge interface `v64.6.1`, version serveur/client `v64.6.1`, package `64.6.1` et schéma serveur `111` ;
+- correction de la case `Sillons` dans `Lignes > Modifier` : affichage au format `utilisés/disponibles` pour montrer à la fois les sillons utilisés par le joueur et les sillons réellement disponibles ;
+- correction du tooltip `Déjà utilisé par d'autres` : suppression de la répétition du nombre de sillons au début du détail entre parenthèses.
+
 ## Version v64.6.0 — lignes : sillons disponibles et détail du tronçon limitant
 
 - incrément de version : badge interface `v64.6.0`, version serveur/client `v64.6.0`, package `64.6.0` et schéma serveur `110` ;

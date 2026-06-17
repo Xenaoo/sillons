@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.6.0';
+const PROJECT_VERSION = 'v64.6.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -3055,7 +3055,9 @@ function lineSillonDataClient(line) {
   const bottleneck = sillons.bottleneck || null;
   const rawAvailable = Number(sillons.maxFrequency ?? bottleneck?.available ?? sillons.lineCapacity ?? lineSlotDemandClient(line));
   const available = Math.max(0, Math.floor(Number.isFinite(rawAvailable) ? rawAvailable : 0));
-  return { sillons, bottleneck, available };
+  const rawUsedByPlayer = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
+  const usedByPlayer = Math.max(0, Math.floor(Number.isFinite(rawUsedByPlayer) ? rawUsedByPlayer : 0));
+  return { sillons, bottleneck, available, usedByPlayer };
 }
 
 function lineSillonOtherUsageLabel(bottleneck) {
@@ -3065,7 +3067,7 @@ function lineSillonOtherUsageLabel(bottleneck) {
   const detailText = details
     .filter(item => Number(item.frequency || 0) > 0)
     .slice(0, 6)
-    .map(item => `${round(item.frequency)} ${item.playerName || 'Autre compagnie'} · ${item.lineName || 'Ligne'}`)
+    .map(item => `${item.playerName || 'Autre compagnie'} · ${item.lineName || 'Ligne'}`)
     .join(' ; ');
   const more = details.length > 6 ? ` ; +${details.length - 6}` : '';
   return `Déjà utilisé par d'autres : ${round(used)} (${detailText}${more})`;
@@ -3086,11 +3088,11 @@ function lineSillonLabel(line) {
 function renderLineSillonMini(line) {
   const data = lineSillonDataClient(line);
   if (!data) return '';
-  const { sillons, available } = data;
+  const { sillons, available, usedByPlayer } = data;
   const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const cls = sillons.constrained || requested > available ? 'warn-text' : 'good-text';
   const tip = lineSillonLabel(line);
-  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><b class="${cls}">${formatInt(available)}</b></div>`;
+  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(available)}</b></div>`;
 }
 
 function renderLineSillonCollapsedSummary(line) {
@@ -3098,7 +3100,7 @@ function renderLineSillonCollapsedSummary(line) {
   if (!data) return '';
   const requested = Number(data.sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const cls = data.sillons.constrained || requested > data.available ? 'warn-text' : 'good-text';
-  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <b class="${cls}">${formatInt(data.available)}</b></span>`;
+  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.available)}</b></span>`;
 }
 
 function renderLineItem(line) {
