@@ -1,5 +1,13 @@
 # Changelog
 
+## Version v62.26.2 — correctif raccordement RFN aux bifurcations
+
+- incrément de version : badge interface `v62.26.2`, package `62.26.2` et schéma serveur `92` ;
+- correction du calcul d’itinéraire RFN quand deux géométries SNCF réelles sont voisines mais non raccordées par une coordonnée strictement identique ;
+- ajout de raccords virtuels très courts entre composantes RFN proches, utile aux bifurcations, faisceaux de voies et tunnels urbains ;
+- correction des segments réels du type `Juvisy → Bibliothèque-François-Mitterrand` et `St-Cyr → St-Quentin-en-Yvelines`, qui pouvaient bloquer une ligne RER C pourtant réelle ;
+- maintien du blocage sur les segments réellement trop éloignés ou sans géométrie RFN exploitable : le correctif ne crée pas de longs itinéraires fictifs.
+
 ## Version v62.26.1 — correctifs carte mobile, gares visibles et création de ligne
 
 - incrément de version : badge interface `v62.26.1`, package `62.26.1` et schéma serveur `91` ;

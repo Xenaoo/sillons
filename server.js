@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.26.1';
-const STATE_SCHEMA_VERSION = 91;
+const PROJECT_VERSION = 'v62.26.2';
+const STATE_SCHEMA_VERSION = 92;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -1066,6 +1066,102 @@ function rfnCoordKey(lon, lat) {
   return `${Number(lon).toFixed(4)},${Number(lat).toFixed(4)}`;
 }
 
+function buildRfnGraphComponents(graph) {
+  const componentByNode = new Map();
+  const sizes = [];
+  for (const node of graph.keys()) {
+    if (componentByNode.has(node)) continue;
+    const componentId = sizes.length;
+    let size = 0;
+    const stack = [node];
+    componentByNode.set(node, componentId);
+    while (stack.length) {
+      const current = stack.pop();
+      size += 1;
+      for (const [next] of graph.get(current) || []) {
+        if (componentByNode.has(next)) continue;
+        componentByNode.set(next, componentId);
+        stack.push(next);
+      }
+    }
+    sizes.push(size);
+  }
+  return { componentByNode, sizes };
+}
+
+function connectNearbyRfnComponents(graph, coordsByKey, directKm) {
+  if (!graph?.size || !coordsByKey?.size) return 0;
+  const { componentByNode, sizes } = buildRfnGraphComponents(graph);
+  if (sizes.length <= 1) return 0;
+
+  // Les géométries RFN SNCF sont parfois découpées en tronçons voisins mais non
+  // strictement raccordés par coordonnées identiques, notamment aux bifurcations,
+  // faisceaux complexes et entrées de tunnels urbains. On ajoute donc quelques
+  // raccords virtuels très courts entre composantes proches, sans fabriquer de
+  // grands segments fictifs.
+  const thresholdKm = Math.min(0.22, Math.max(0.11, Math.max(1, Number(directKm || 0)) * 0.0075));
+  const cellSize = thresholdKm / 80;
+  const cells = new Map();
+
+  function cellKey(ix, iy) {
+    return `${ix}:${iy}`;
+  }
+
+  for (const [key, coord] of coordsByKey.entries()) {
+    const lon = Number(coord?.[0]);
+    const lat = Number(coord?.[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const ix = Math.floor(lon / cellSize);
+    const iy = Math.floor(lat / cellSize);
+    const bucketKey = cellKey(ix, iy);
+    const bucket = cells.get(bucketKey) || [];
+    bucket.push(key);
+    cells.set(bucketKey, bucket);
+  }
+
+  const bestByComponentPair = new Map();
+  for (const [a, coordA] of coordsByKey.entries()) {
+    const compA = componentByNode.get(a);
+    if (compA === undefined) continue;
+    const lonA = Number(coordA?.[0]);
+    const latA = Number(coordA?.[1]);
+    if (!Number.isFinite(lonA) || !Number.isFinite(latA)) continue;
+    const ix = Math.floor(lonA / cellSize);
+    const iy = Math.floor(latA / cellSize);
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const bucket = cells.get(cellKey(ix + dx, iy + dy));
+        if (!bucket?.length) continue;
+        for (const b of bucket) {
+          if (a >= b) continue;
+          const compB = componentByNode.get(b);
+          if (compB === undefined || compA === compB) continue;
+          const coordB = coordsByKey.get(b);
+          const lonB = Number(coordB?.[0]);
+          const latB = Number(coordB?.[1]);
+          if (!Number.isFinite(lonB) || !Number.isFinite(latB)) continue;
+          const distance = haversine(latA, lonA, latB, lonB);
+          if (!Number.isFinite(distance) || distance <= 0 || distance > thresholdKm) continue;
+          const pairKey = compA < compB ? `${compA}:${compB}` : `${compB}:${compA}`;
+          const previous = bestByComponentPair.get(pairKey);
+          if (!previous || distance < previous.distance) {
+            bestByComponentPair.set(pairKey, { a, b, distance });
+          }
+        }
+      }
+    }
+  }
+
+  let added = 0;
+  for (const link of bestByComponentPair.values()) {
+    if (!link?.a || !link?.b || !Number.isFinite(link.distance) || link.distance <= 0) continue;
+    graph.get(link.a)?.push([link.b, link.distance]);
+    graph.get(link.b)?.push([link.a, link.distance]);
+    added += 1;
+  }
+  return added;
+}
+
 async function sncfRouteGeometryForStations(fromId, toId) {
   const fromKey = currentStationId(fromId);
   const toKey = currentStationId(toId);
@@ -1138,6 +1234,7 @@ function buildPathFromRailShapeLines(lines, start, end, directKm) {
     }
   }
   if (graph.size < 2) return [];
+  connectNearbyRfnComponents(graph, coordsByKey, directKm);
   const startKey = nearestRfnNodeKey(coordsByKey, start);
   const endKey = nearestRfnNodeKey(coordsByKey, end);
   if (!startKey || !endKey || startKey === endKey) return [];

@@ -1,5 +1,5 @@
 {
-  "version": 90,
+  "version": 92,
   "createdAt": 1781511648911,
   "now": 1781699771836,
   "day": 87318,
@@ -2264,7 +2264,7 @@
       "co2": 755999.9299999659,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 0.000009259268221597128,
+        "coal": 9.259268221597128e-06,
         "diesel": 0,
         "electricityOrder": 0
       },
