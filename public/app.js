@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.19.0';
+const PROJECT_VERSION = 'v62.20.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -116,11 +116,10 @@ const TUTORIAL_STEPS = [
   { id: 'manual-composition', target: '.composition-editor-card, [data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Composition manuelle', body: 'Règle le nombre de voitures voyageurs ou de wagons. La composition modifie capacité, vitesse, maintenance et rentabilité.', action: 'J’ai compris' },
   { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
   { id: 'lines-tab', target: '#tabs [data-tab="lines"]', title: 'Créer une ligne', body: 'Clique sur Lignes. C’est le cœur du jeu : une ligne relie des gares, utilise un train et produit des recettes.', wait: 'activeTab:lines' },
-  { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train, fréquence et prix.', wait: 'linesSubtab:create' },
+  { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train et prix.', wait: 'linesSubtab:create' },
   { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. La recherche accepte les gares principales et les villes jouables.', action: 'Continuer' },
   { id: 'line-to', target: '#lineToSearch', tab: 'lines', subtab: 'create', title: 'Choisir le terminus', body: 'Renseigne la destination. Une ligne courte est préférable au début pour limiter l’usure, le charbon et les coûts.', action: 'Continuer' },
   { id: 'line-train', target: '#lineTrain', tab: 'lines', subtab: 'create', title: 'Affecter un train', body: 'Sélectionne le train libre à utiliser. Un train en maintenance ou à 0 % d’état ne peut pas produire de trafic.', action: 'Continuer' },
-  { id: 'line-frequency', target: '#lineFreq', tab: 'lines', subtab: 'create', title: 'Régler la fréquence', body: 'La fréquence augmente l’offre et les recettes, mais elle augmente aussi les besoins conducteurs, l’énergie et l’usure.', action: 'Continuer' },
   { id: 'line-price', target: '#lineTicketPrice', tab: 'lines', subtab: 'create', title: 'Fixer le prix', body: 'Un prix trop élevé réduit l’attractivité. Cherche un équilibre entre volume de voyageurs et recette par billet.', action: 'Continuer' },
   { id: 'create-line', target: '#createLineBtn:not([disabled])', tab: 'lines', subtab: 'create', title: 'Ouvrir la ligne', body: 'Clique sur Ouvrir la ligne. Si tu possèdes déjà une ligne active, l’étape est validée automatiquement.', wait: 'hasLine' },
   { id: 'lines-manage', target: '[data-lines-subtab="manage"]', tab: 'lines', title: 'Modifier les lignes', body: 'Le sous-menu Modifier sert à suivre la finance, les besoins métiers, la capacité, les arrêts et l’état opérationnel de chaque ligne.', wait: 'linesSubtab:manage' },
@@ -156,7 +155,7 @@ const CLIENT_COMPOSITION_VARIANTS = {
     { id: 'comfort', name: 'Grand confort', shortLabel: 'Confort', description: 'Moins de sièges mais meilleure image, adaptée aux dessertes premium et longues.', asset: '/assets/composition/variants/passenger_comfort.png', stats: { capacityMultiplier: 0.88, speedMultiplier: 0.98, energyMultiplier: 1.05, maintenanceMultiplier: 1.08, reliabilityDelta: 0.008, comfortDelta: 0.14, revenueMultiplier: 1 } },
     { id: 'sleeper', name: 'Couchettes', shortLabel: 'Couchettes', description: 'Voiture de nuit haut de gamme, capacité réduite mais très confortable.', asset: '/assets/composition/variants/passenger_sleeper.png', stats: { capacityMultiplier: 0.68, speedMultiplier: 0.94, energyMultiplier: 1.08, maintenanceMultiplier: 1.14, reliabilityDelta: -0.004, comfortDelta: 0.2, revenueMultiplier: 1 } },
     { id: 'midi_standard', name: 'Voiture Midi standard', shortLabel: 'Midi std.', description: 'Voiture métallique moderne pour les premières locomotives électriques. Offre équilibrée et plus fiable.', asset: '/assets/composition/era2/passenger_midi_standard.png', stats: { capacityMultiplier: 1.06, speedMultiplier: 1.04, energyMultiplier: 0.98, maintenanceMultiplier: 0.94, reliabilityDelta: 0.018, comfortDelta: 0.04, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
-    { id: 'midi_commuter', name: 'Voiture Midi banlieue', shortLabel: 'Midi banlieue', description: 'Voiture dense à accès rapides, adaptée aux axes électrifiés à forte fréquence.', asset: '/assets/composition/era2/passenger_midi_commuter.png', stats: { capacityMultiplier: 1.26, speedMultiplier: 1.05, energyMultiplier: 1.02, maintenanceMultiplier: 0.98, reliabilityDelta: 0.01, comfortDelta: -0.05, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
+    { id: 'midi_commuter', name: 'Voiture Midi banlieue', shortLabel: 'Midi banlieue', description: 'Voiture dense à accès rapides, adaptée aux axes électrifiés à fort trafic.', asset: '/assets/composition/era2/passenger_midi_commuter.png', stats: { capacityMultiplier: 1.26, speedMultiplier: 1.05, energyMultiplier: 1.02, maintenanceMultiplier: 0.98, reliabilityDelta: 0.01, comfortDelta: -0.05, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
     { id: 'midi_express', name: 'Voiture Midi express', shortLabel: 'Midi express', description: 'Voiture plus confortable et rapide, pensée pour les services régionaux électrifiés de qualité.', asset: '/assets/composition/era2/passenger_midi_express.png', stats: { capacityMultiplier: 0.96, speedMultiplier: 1.08, energyMultiplier: 1.0, maintenanceMultiplier: 1.02, reliabilityDelta: 0.02, comfortDelta: 0.12, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
     { id: 'midi_sleeper', name: 'Voiture Midi couchettes', shortLabel: 'Midi nuit', description: 'Voiture longue distance nocturne, coûteuse mais très attractive sur les liaisons de nuit.', asset: '/assets/composition/era2/passenger_midi_sleeper.png', stats: { capacityMultiplier: 0.72, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.10, reliabilityDelta: 0.005, comfortDelta: 0.24, revenueMultiplier: 1 }, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 }
   ],
@@ -383,7 +382,7 @@ function bindStaticEvents() {
   tabContent.addEventListener('click', onTabContentClick);
   tabContent.addEventListener('change', onTabContentChange);
   tabContent.addEventListener('input', event => {
-    if (['lineFreq', 'lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
+    if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
       updateLineDraftFromForm(event.target.id);
       updateLinePreview(event.target.id);
     }
@@ -2407,9 +2406,6 @@ function renderCreateLinePanel() {
             <label>Service
               <select id="lineService">${serviceOptions(draft.service)}</select>
             </label>
-            <label>Fréquence d’exploitation
-              <input id="lineFreq" type="number" min="1" max="20" value="${escapeAttr(draft.frequency)}">
-            </label>
             <label>Prix billet moyen
               ${renderTicketPriceControl({
                 inputId: 'lineTicketPrice',
@@ -2424,7 +2420,7 @@ function renderCreateLinePanel() {
           <div id="linePreview" class="line-preview muted small">Choisis au moins un départ, une arrivée et un train.</div>
 
           <div class="line-create-actions">
-            <button id="createLineBtn" class="primary big-action" ${tooltipAttr('Ouvre la ligne avec les arrêts, le train, la fréquence et le prix du billet choisis.')} ${freeTrains.length ? '' : 'disabled'}>
+            <button id="createLineBtn" class="primary big-action" ${tooltipAttr('Ouvre la ligne avec les arrêts, le train et le prix du billet choisis.')} ${freeTrains.length ? '' : 'disabled'}>
               Ouvrir la ligne
             </button>
           </div>
@@ -2436,7 +2432,7 @@ function renderCreateLinePanel() {
         <div class="line-help-steps">
           <div><b>1</b><span>Départ et terminus</span></div>
           <div><b>2</b><span>Dessertes optionnelles</span></div>
-          <div><b>3</b><span>Train et fréquence</span></div>
+          <div><b>3</b><span>Train et prix</span></div>
           <div><b>4</b><span>Validation</span></div>
         </div>
         <p class="muted small">Pour modifier l’ordre exact des gares, utilise ensuite l’onglet <strong>Modifier</strong> : il contient le glissé-déposé.</p>
@@ -2465,7 +2461,7 @@ function renderManageLinesPanel() {
         <div class="line-card-heading">
           <div>
             <h2>Modifier les lignes</h2>
-            <p class="muted small">Chaque ligne se modifie depuis une fiche claire : Matériel, fréquence, prix du billet, arrêts, ordre des gares et électrification.</p>
+            <p class="muted small">Chaque ligne se modifie depuis une fiche claire : Matériel, prix du billet, arrêts, ordre des gares et électrification.</p>
           </div>
           <span class="tag">${activeLines} ligne(s)</span>
         </div>
@@ -2553,7 +2549,7 @@ function renderLineInsightPanels(line) {
           <span>Transporte</span><b>${formatInt(stats.freightTons || 0)} t</b>
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
-          <span>Fréq. effective</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(line.frequency)}</b>
+          <span>Sillons actifs</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(lineSlotDemandClient(line))}</b>
           <span>Composition</span><b>${escapeHtml(capacity.trainComposition || 'Standard')}</b>
         </div>
       </section>
@@ -2587,7 +2583,7 @@ function renderLineStaffNeedsCard(line, options = {}) {
   const coverage = lineDriverCoverageForDisplay(line);
   const cls = lineStaffNeedsStatusClass(line);
   const effectiveFrequency = line.stats?.capacity?.effectiveFrequency ?? line.stats?.staffing?.effectiveFrequency;
-  const requestedFrequency = line.stats?.capacity?.requestedFrequency ?? line.frequency;
+  const requestedFrequency = line.stats?.capacity?.requestedFrequency ?? lineSlotDemandClient(line);
   const roleBars = staffOrder
     .filter(role => role !== 'stationAgents')
     .map(role => renderLineStaffNeedBar(role, needs[role] || 0, line))
@@ -2598,8 +2594,8 @@ function renderLineStaffNeedsCard(line, options = {}) {
       <h4>Salariés nécessaires</h4>
       <div class="line-staff-bars">${roleBars}</div>
       ${Number.isFinite(effectiveFrequency) && Number.isFinite(Number(requestedFrequency)) && Number(effectiveFrequency) < Number(requestedFrequency)
-        ? `<p class="small muted">Fréquence réduite : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de Conducteurs.</p>`
-        : '<p class="small muted">Conducteurs suffisants : Exploitation nominale.</p>'}
+        ? `<p class="small muted">Sillons exploités : ${round(effectiveFrequency)} / ${round(requestedFrequency)} faute de Conducteurs.</p>`
+        : '<p class="small muted">Conducteurs suffisants : tous les trains affectés peuvent circuler.</p>'}
     </section>
   `;
 }
@@ -2633,7 +2629,7 @@ function renderLineFactorBars(details) {
   if (!details?.factors) return '<p class="small muted">Données disponibles après le prochain cycle simulé.</p>';
   const labels = {
     price: 'Prix',
-    frequency: 'Frequence',
+    frequency: 'Sillons',
     speed: 'Vitesse',
     comfortOrCapacity: details.market === 'freight' ? 'Capacite fret' : 'Confort/capacite',
     reputation: 'Reputation',
@@ -2664,12 +2660,12 @@ function lineSillonLabel(line) {
   const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
   if (!sillons) return '';
   const max = Number(sillons.maxFrequency ?? 0);
-  const effective = Number(sillons.effectiveFrequency ?? line?.stats?.capacity?.effectiveFrequency ?? line?.frequency ?? 0);
-  const requested = Number(sillons.requestedFrequency ?? line?.frequency ?? 0);
+  const effective = Number(sillons.effectiveFrequency ?? line?.stats?.capacity?.effectiveFrequency ?? lineSlotDemandClient(line));
+  const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const bottleneck = sillons.bottleneck ? `${sillons.bottleneck.fromName || sillons.bottleneck.from} → ${sillons.bottleneck.toName || sillons.bottleneck.to}` : '';
   return [
-    `Sillons : ${round(effective)}/${round(requested)} trains/h`,
-    Number.isFinite(max) ? `Max ligne : ${round(max)} trains/h` : '',
+    `Sillons : ${round(effective)}/${round(requested)}`,
+    Number.isFinite(max) ? `Max ligne : ${round(max)} sillons` : '',
     bottleneck ? `Tronçon limitant : ${bottleneck}` : ''
   ].filter(Boolean).join(' · ');
 }
@@ -2678,7 +2674,7 @@ function renderLineSillonMini(line) {
   const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
   if (!sillons) return '';
   const cls = sillons.constrained ? 'warn-text' : 'good-text';
-  const value = `${round(sillons.effectiveFrequency ?? line.frequency)}/${round(sillons.requestedFrequency ?? line.frequency)} /h`;
+  const value = `${round(sillons.effectiveFrequency ?? lineSlotDemandClient(line))}/${round(sillons.requestedFrequency ?? lineSlotDemandClient(line))} sillons`;
   const tip = lineSillonLabel(line);
   return `<div><span>Sillons</span><b class="${cls}" ${tooltipAttr(tip)}>${escapeHtml(value)}</b></div>`;
 }
@@ -2714,8 +2710,8 @@ function renderLineItem(line) {
     <div class="line-card-collapsed-summary">
       <span>Train <b>${escapeHtml(trainLabel)}</b></span>
       <span>Distance <b>${formatInt(lineDistance(line))} km</b></span>
-      <span>Fréq. <b>${line.frequency}</b></span>
-      <span>Sillons <b>${escapeHtml(String(round(line.stats?.capacity?.sillons?.effectiveFrequency ?? line.frequency)))}/${escapeHtml(String(round(line.stats?.capacity?.sillons?.requestedFrequency ?? line.frequency)))}</b></span>
+      <span>Trains <b>${assignedTrains.length}</b></span>
+      <span>Sillons <b>${escapeHtml(String(round(line.stats?.capacity?.sillons?.effectiveFrequency ?? lineSlotDemandClient(line))))}/${escapeHtml(String(round(line.stats?.capacity?.sillons?.requestedFrequency ?? lineSlotDemandClient(line))))}</b></span>
       <span>Net /h <b class="${profitCls}">${moneyPerHour(profit)}</b></span>
     </div>
   `;
@@ -2729,7 +2725,7 @@ function renderLineItem(line) {
         <div><span>Trains</span><b>${escapeHtml(trainLabel)}</b></div>
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
-        <div><span>Fréq.</span><b>${line.frequency}</b></div>
+        <div><span>Trains affectés</span><b>${assignedTrains.length}</b></div>
         ${renderLineSillonMini(line)}
         <div><span>Billet moyen</span><b>${money(ticketPrice)}</b></div>
         <div><span>Attractivite</span><b>${escapeHtml(String(lineAttractivenessLabel(line)))}</b></div>
@@ -2739,7 +2735,7 @@ function renderLineItem(line) {
       ${renderLineInsightPanels(line)}
 
       <div class="line-card-modern-actions">
-        <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : Train, fréquence, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
+        <button data-action="edit-line" data-id="${line.id}" ${tooltipAttr('Ouvre l’éditeur complet : trains affectés, prix du billet, arrêts et ordre des gares en glissé-déposé.')}>Modifier</button>
         <button data-action="electrify-line" data-id="${line.id}" ${tooltipAttr(line.electrified ? 'Cette ligne est déjà électrifiée.' : lineElectrificationTooltip(line))} ${line.electrified || !canElectrify ? 'disabled' : ''}>
           ${line.electrified ? 'Électrifiée' : `Électrifier · ${money(electrifyCost)}`}
         </button>
@@ -3539,7 +3535,7 @@ function renderCompositionEditor(train) {
           ${quantityControl}
           <div class="composition-save-box">
             ${renderCompositionCostSummary(train)}
-            <p class="small muted">Impact ligne : Capacité d’exploitation = composition × fréquence. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
+            <p class="small muted">Impact ligne : capacité d’exploitation = composition × trains affectés. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
             <button class="primary" data-action="save-train-composition" data-id="${train.id}">Enregistrer la composition</button>
           </div>
         </div>
@@ -3604,7 +3600,7 @@ function renderFleet() {
     ? 'Achète du matériel adapté à tes lignes : Capacité, vitesse, énergie, confort, fret ou fiabilité.'
     : active === 'maintenance'
       ? 'Choisis une politique d’entretien et planifie les interventions pour éviter l’usure excessive du parc.'
-      : 'Allonge ou raccourcis les trains pour ajuster la capacité en plus de la fréquence : Voitures voyageurs, wagons fret et engins moteurs.';
+      : 'Allonge ou raccourcis les trains pour ajuster la capacité : voitures voyageurs, wagons fret et engins moteurs.';
 
   return `
     ${renderSectionHero('PARC FERROVIAIRE', heroTitle, heroText, ART.tabs.fleet, ['Matériel', 'Atelier', 'Compositions'])}
@@ -4011,7 +4007,7 @@ function renderOwnedTrain(train) {
           <span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b>
           <span>Capacité</span><b>${formatInt(profile.capacity)} voy. / ${formatInt(profile.freight)} t</b>
           <span>Portée</span><b>${formatInt(profile.range)} km</b>
-          <span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, line ? line.frequency : 1, train.condition)}</b>
+          <span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b>
           <span>Dernier service</span><b>${maint.lastServiceDay || train.acquiredDay ? 'Effectué' : '-'}</b>
         </div>
         ${renderTrainInheritedResearchBonuses(model)}
@@ -4388,24 +4384,28 @@ function emptyStaffNeedsClient() {
   return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
 }
 
+
+function lineSlotDemandClient(line) {
+  return Math.max(0, lineAssignedTrainsClient(line).length || lineTrainIdsOf(line).length || 0);
+}
+
 function lineStaffNeedsClient(line) {
   if (line?.staffNeeds) return line.staffNeeds;
   if (!line?.active) return emptyStaffNeedsClient();
   const stops = lineStopsOf(line);
   if (stops.length < 2) return emptyStaffNeedsClient();
   const dist = lineDistance(line);
-  const frequency = Math.max(1, Math.min(20, Number(line.frequency || 0)));
+  const trainCount = Math.max(1, lineSlotDemandClient(line) || 1);
   const longLineFactor = 1 + Math.max(0, dist - 180) / 420;
   const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
   const passengerService = line.service === 'passengers' || line.service === 'mixed';
-  const trainCount = Math.max(1, lineAssignedTrainsClient(line).length || lineTrainIdsOf(line).length || 1);
   return {
-    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor * trainCount)),
-    controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
-    stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
-    mechanics: Math.max(1, Math.ceil(trainCount * 0.34 + dist * frequency * trainCount / 2200)),
-    dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
-    engineers: Math.max(0, Math.ceil(dist / 220 + frequency / 16 - 0.5))
+    drivers: Math.max(1, Math.ceil(trainCount * longLineFactor * stopFactor)),
+    controllers: passengerService ? Math.max(1, Math.ceil(trainCount * 0.75 * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
+    stationAgents: Math.max(1, Math.ceil(trainCount * 0.12 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
+    mechanics: Math.max(1, Math.ceil(trainCount * 0.55 + dist * trainCount / 2200)),
+    dispatchers: Math.max(1, Math.ceil(0.34 + (trainCount / 6) * Math.min(1.5, stopFactor))),
+    engineers: Math.max(0, Math.ceil(dist / 220 + trainCount / 8 - 0.5))
   };
 }
 
@@ -4425,7 +4425,7 @@ function computeStaffNeedsClient() {
     needs.controllers += lineNeeds.controllers;
     needs.dispatchers += lineNeeds.dispatchers;
     needs.engineers += lineNeeds.engineers;
-    dailyKm += lineDistance(line) * Math.max(1, Math.min(20, Number(line.frequency || 0)));
+    dailyKm += lineDistance(line) * Math.max(1, lineSlotDemandClient(line) || 1);
     stationWork += Math.max(0, lineStopsOf(line).length - 2);
   }
   return {
@@ -4466,7 +4466,7 @@ function staffRoleImpact(role) {
   return {
     drivers: {
       title: 'Capacité réelle des trains',
-      effects: ['Plus de Conducteurs = plus de fréquences exploitables sans pénalité.', 'Sous-effectif : Capacité réduite, ponctualité et attractivité en baisse.']
+      effects: ['Plus de Conducteurs = plus de trains exploitables sans pénalité.', 'Sous-effectif : Capacité réduite, ponctualité et attractivité en baisse.']
     },
     controllers: {
       title: 'Service à bord et recettes',
@@ -4979,7 +4979,7 @@ function renderResources() {
       </div>
     </div>
     <div class="resource-grid">
-      ${renderResourceCard('coal', { label: 'Charbon', requiredEpoch: 0, description: 'Stock consommé par les locomotives vapeur en fonction de leur poids, de la distance et de la fréquence.' })}
+      ${renderResourceCard('coal', { label: 'Charbon', requiredEpoch: 0, description: 'Stock consommé par les locomotives vapeur en fonction du poids, de la distance et du nombre de trains affectés.' })}
       ${renderResourceCard('diesel', { label: 'Diesel', requiredEpoch: 1, description: 'Stock consommé par les matériels diesel. Verrouillé tant que l’ère diesel n’est pas atteinte.' })}
       ${renderResourceCard('electricity', { label: 'Électricité', requiredEpoch: 2, description: 'Commande de puissance auprès du producteur. Les trains électriques et batteries ne circulent que si la commande couvre la demande.' })}
       ${renderResourceCard('hydrogen', { label: 'Hydrogène', requiredEpoch: 4, description: 'Prévu pour les futures rames hydrogène. Fonction grisée tant que cette ère n’est pas atteinte.' })}
@@ -5200,7 +5200,6 @@ async function onTabContentClick(event) {
       preserveOrder: true,
       trainId: draft.trainId,
       service: draft.service,
-      frequency: Number(draft.frequency),
       ticketPrice: Number(draft.ticketPrice),
       tariff: Number(draft.tariff)
     });
@@ -5373,7 +5372,7 @@ function onTabContentChange(event) {
     renderAll();
     return;
   }
-  if (['lineTicketPrice', 'lineTicketPriceRange', 'lineFreq'].includes(event.target.id)) {
+  if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
     updateLineDraftFromForm(event.target.id);
     updateLinePreview(event.target.id);
     return;
@@ -5466,7 +5465,6 @@ function openLineModal(lineId) {
     trainIds: lineTrainIdsOf(line),
     trainId: lineTrainIdsOf(line)[0] || '',
     service: line.service || 'passengers',
-    frequency: line.frequency,
     tariff: line.tariff,
     ticketPrice: lineTicketPrice(line),
     candidateId: '',
@@ -5519,11 +5517,10 @@ function openLineModal(lineId) {
     }).join('');
     return `
     <div class="form-grid line-editor">
-      <div class="two form-grid">
+      <div class="form-grid">
         <label>Type de transport
           <select id="editLineService">${serviceOptions(app.lineEditor.service)}</select>
         </label>
-        <label>Fréquence d’exploitation <input id="editLineFreq" type="number" min="1" max="20" value="${app.lineEditor.frequency}"></label>
       </div>
       <div class="line-editor-train-picker">
         <div class="line-editor-subtitle">
@@ -5607,7 +5604,6 @@ function openLineModal(lineId) {
       refreshTicketPriceControl('editLineTicketPrice', 'editLineTicketPriceRange', 'editLineTicketPriceHint', editorDistance, app.lineEditor.ticketPrice, sourceId);
     };
     $('#editLineService')?.addEventListener('change', e => app.lineEditor.service = e.target.value);
-    $('#editLineFreq').addEventListener('input', e => app.lineEditor.frequency = Number(e.target.value));
     document.querySelectorAll('.edit-line-train-check').forEach(input => input.addEventListener('change', () => {
       const checked = [...document.querySelectorAll('.edit-line-train-check:checked')].map(item => item.value);
       app.lineEditor.trainIds = checked;
@@ -5706,7 +5702,9 @@ function openLineModal(lineId) {
 
       const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
       const input = $('#editLineTicketPrice');
-      const ticketPrice = normalizeTicketPrice(input?.value, app.lineEditor.ticketPrice, editorDistance);
+      const range = $('#editLineTicketPriceRange');
+      const rawPrice = input?.value !== undefined && input?.value !== '' ? input.value : range?.value;
+      const ticketPrice = normalizeTicketPrice(rawPrice, app.lineEditor.ticketPrice, editorDistance);
       app.lineEditor.ticketPrice = ticketPrice;
       app.lineEditor.tariff = ticketPriceToTariff(ticketPrice, editorDistance);
       if (input) input.value = String(ticketPrice);
@@ -5716,7 +5714,6 @@ function openLineModal(lineId) {
         lineId,
         trainIds: [...app.lineEditor.trainIds],
         service: $('#editLineService')?.value || app.lineEditor.service,
-        frequency: Number($('#editLineFreq').value),
         ticketPrice,
         stops: [...app.lineEditor.stops],
         preserveOrder: true
@@ -6207,10 +6204,7 @@ function drawBaseRailNetwork(ctx) {
 
 
 function visualLineWithEffectiveFrequency(line) {
-  const effectiveFrequency = Number(line?.stats?.capacity?.effectiveFrequency ?? line?.stats?.staffing?.effectiveFrequency ?? line?.frequency ?? 0);
-  if (!Number.isFinite(effectiveFrequency) || effectiveFrequency <= 0) return line;
-  if (Math.abs(effectiveFrequency - Number(line.frequency || 0)) < 0.001) return line;
-  return { ...line, frequency: effectiveFrequency };
+  return line;
 }
 
 function drawAllLines(ctx, lite = false) {
@@ -6318,10 +6312,6 @@ function trainVisualOneWaySeconds(line, train, model) {
 }
 
 function trainVisualInstanceCount(line) {
-  const frequency = Number(line?.frequency || 1);
-  if (frequency >= 9) return 4;
-  if (frequency >= 5) return 3;
-  if (frequency >= 3) return 2;
   return 1;
 }
 
@@ -8226,8 +8216,7 @@ function updateLineDraftFromForm(sourceId = '') {
     viaCandidate: $('#lineVia')?.value || app.lineDraft.viaCandidate || '',
     viaQuery: $('#lineViaSearch')?.value || app.lineDraft.viaQuery || '',
     trainId: $('#lineTrain')?.value || app.lineDraft.trainId || '',
-    service: $('#lineService')?.value || app.lineDraft.service || 'passengers',
-    frequency: $('#lineFreq')?.value || app.lineDraft.frequency || 4
+    service: $('#lineService')?.value || app.lineDraft.service || 'passengers'
   };
   const ticketDistance = draftTicketDistance(nextDraft);
   const priceControl = sourceId === 'lineTicketPriceRange' ? $('#lineTicketPriceRange') : $('#lineTicketPrice');

@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.19.0';
-const STATE_SCHEMA_VERSION = 83;
+const PROJECT_VERSION = 'v62.20.0';
+const STATE_SCHEMA_VERSION = 84;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -105,7 +105,7 @@ const PASSENGER_COMPOSITION_VARIANTS = Object.freeze({
   comfort: { id: 'comfort', name: 'Grand confort', shortLabel: 'Confort', description: 'Moins de sièges mais meilleure image, adaptée aux dessertes premium et longues.', asset: '/assets/composition/variants/passenger_comfort.png', capacityMultiplier: 0.88, speedMultiplier: 0.98, energyMultiplier: 1.05, maintenanceMultiplier: 1.08, reliabilityDelta: 0.008, comfortDelta: 0.14 },
   sleeper: { id: 'sleeper', name: 'Couchettes', shortLabel: 'Couchettes', description: 'Voiture de nuit haut de gamme, capacité réduite mais très confortable.', asset: '/assets/composition/variants/passenger_sleeper.png', capacityMultiplier: 0.68, speedMultiplier: 0.94, energyMultiplier: 1.08, maintenanceMultiplier: 1.14, reliabilityDelta: -0.004, comfortDelta: 0.2 },
   midi_standard: { id: 'midi_standard', name: 'Voiture Midi standard', shortLabel: 'Midi std.', description: 'Voiture métallique moderne pour les premières locomotives électriques. Offre équilibrée et plus fiable.', asset: '/assets/composition/era2/passenger_midi_standard.png', capacityMultiplier: 1.06, speedMultiplier: 1.04, energyMultiplier: 0.98, maintenanceMultiplier: 0.94, reliabilityDelta: 0.018, comfortDelta: 0.04, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
-  midi_commuter: { id: 'midi_commuter', name: 'Voiture Midi banlieue', shortLabel: 'Midi banlieue', description: 'Voiture dense à accès rapides, adaptée aux axes électrifiés à forte fréquence.', asset: '/assets/composition/era2/passenger_midi_commuter.png', capacityMultiplier: 1.26, speedMultiplier: 1.05, energyMultiplier: 1.02, maintenanceMultiplier: 0.98, reliabilityDelta: 0.01, comfortDelta: -0.05, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
+  midi_commuter: { id: 'midi_commuter', name: 'Voiture Midi banlieue', shortLabel: 'Midi banlieue', description: 'Voiture dense à accès rapides, adaptée aux axes électrifiés à fort trafic.', asset: '/assets/composition/era2/passenger_midi_commuter.png', capacityMultiplier: 1.26, speedMultiplier: 1.05, energyMultiplier: 1.02, maintenanceMultiplier: 0.98, reliabilityDelta: 0.01, comfortDelta: -0.05, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
   midi_express: { id: 'midi_express', name: 'Voiture Midi express', shortLabel: 'Midi express', description: 'Voiture plus confortable et rapide, pensée pour les services régionaux électrifiés de qualité.', asset: '/assets/composition/era2/passenger_midi_express.png', capacityMultiplier: 0.96, speedMultiplier: 1.08, energyMultiplier: 1.0, maintenanceMultiplier: 1.02, reliabilityDelta: 0.02, comfortDelta: 0.12, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 },
   midi_sleeper: { id: 'midi_sleeper', name: 'Voiture Midi couchettes', shortLabel: 'Midi nuit', description: 'Voiture longue distance nocturne, coûteuse mais très attractive sur les liaisons de nuit.', asset: '/assets/composition/era2/passenger_midi_sleeper.png', capacityMultiplier: 0.72, speedMultiplier: 1.02, energyMultiplier: 1.04, maintenanceMultiplier: 1.10, reliabilityDelta: 0.005, comfortDelta: 0.24, requiredEpoch: 1, requiredTech: 'diesel_passenger_locomotives', requiredModelEpoch: 1 }
 });
@@ -2565,7 +2565,7 @@ function actionCreateLine(player, payload) {
   const stops = payload.preserveOrder ? rawStops : coherentStopOrder(rawStops);
   const trainId = String(payload.trainId || '');
   const service = ['passengers', 'freight', 'mixed'].includes(payload.service) ? payload.service : 'passengers';
-  const frequency = clamp(Number(payload.frequency || 2), 1, 20);
+  const frequency = 1;
 
   const invalidReason = validateLineStops(stops);
   if (invalidReason) return fail(invalidReason);
@@ -2696,11 +2696,6 @@ function actionUpdateLine(player, payload) {
   if (currentTrainKey !== nextTrainKey) {
     line.trainIds = [...nextTrainIds];
     line.trainId = nextTrainIds[0];
-    changedOperationalData = true;
-  }
-
-  if (payload.frequency !== undefined) {
-    line.frequency = clamp(Number(payload.frequency), 1, 20);
     changedOperationalData = true;
   }
   if (payload.ticketPrice !== undefined || payload.tariff !== undefined) {
@@ -3548,14 +3543,16 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const allocatedDrivers = lineNeeds.drivers > 0 ? lineNeeds.drivers * lineDriverCoverage : 0;
     const sillonInfo = computeLineSillonLimit(player, line, sillonUsage);
     const effectiveLine = lineWithEffectiveFrequency(line, lineDriverCoverage, sillonInfo);
-    const effectiveFrequency = Number(effectiveLine.frequency || 0);
+    const effectiveFrequency = Number(effectiveLine.effectiveSlots ?? effectiveLine.frequency ?? 0);
+    const serviceFactor = lineUtilizationFactor(effectiveLine);
+    const requestedSillons = Number(sillonInfo?.requestedFrequency ?? lineSlotDemand(player, line));
     const lineStaffingStats = {
       needs: lineNeeds,
       driverCoverage: round2(lineDriverCoverage * 100),
       allocatedDrivers: round2(allocatedDrivers),
       requiredDrivers: lineNeeds.drivers,
       effectiveFrequency: round2(effectiveFrequency),
-      requestedFrequency: Number(line.frequency || 0),
+      requestedFrequency: round2(requestedSillons),
       sillons: sillonStatsPayload(sillonInfo)
     };
     if (!bundle) {
@@ -3581,7 +3578,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           capacityFactor: 0,
           driverCoverage: round2(lineDriverCoverage * 100),
           effectiveFrequency: 0,
-          requestedFrequency: Number(line.frequency || 0),
+          requestedFrequency: round2(requestedSillons),
           trainComposition: operatingModel.compositionSummary,
           sillons: sillonStatsPayload(sillonInfo)
         },
@@ -3634,7 +3631,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           capacityFactor: 0,
           driverCoverage: 0,
           effectiveFrequency: 0,
-          requestedFrequency: Number(line.frequency || 0),
+          requestedFrequency: round2(requestedSillons),
           trainComposition: operatingModel.compositionSummary,
           sillons: sillonStatsPayload(sillonInfo)
         }
@@ -3665,7 +3662,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           capacityFactor: 0,
           driverCoverage: round2(lineDriverCoverage * 100),
           effectiveFrequency: round2(effectiveFrequency),
-          requestedFrequency: Number(line.frequency || 0),
+          requestedFrequency: round2(requestedSillons),
           trainComposition: operatingModel.compositionSummary,
           sillons: sillonStatsPayload(sillonInfo)
         },
@@ -3703,8 +3700,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const fareComplianceFactor = 1 + controllerCoverage * 0.15;
     const stationAgentFlowFactor = clamp(0.86 + stationAgentCoverage * 0.14, 0.86, 1);
     const dispatchRevenueFactor = clamp(0.94 + dispatcherCoverage * 0.06, 0.94, 1.03);
-    const maxPax = operatingModel.capacity * effectiveFrequency * capacityFactor;
-    const maxFreight = operatingModel.freight * effectiveFrequency * capacityFactor;
+    const maxPax = operatingModel.capacity * serviceFactor * capacityFactor;
+    const maxFreight = operatingModel.freight * serviceFactor * capacityFactor;
     let linePax = 0;
     let lineFreight = 0;
 
@@ -3720,9 +3717,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       lineFreight = Math.max(0, Math.min(maxFreight, routeDemand.freight * share * freightCapture));
     }
 
-    const effectiveTicketPrice = demandAdjustedTicketPrice(line, distance, routeDemand.passengers);
+    const effectiveTicketPrice = lineTicketPrice(line, distance);
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
-    setLineTicketPrice(line, effectiveTicketPrice, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
     const baseTicketRevenue = linePax * distance * effectiveTariff * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
     const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
@@ -3730,8 +3726,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
     const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
     const lineRevenue = serviceRevenue * dispatchRevenueFactor;
-    const energyCost = computeEnergyCost(player, operatingModel, distance, effectiveFrequency, line.electrified);
-    const maintenanceCost = operatingModel.maintenance * distance * effectiveFrequency * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
+    const energyCost = computeEnergyCost(player, operatingModel, distance, serviceFactor, line.electrified);
+    const maintenanceCost = operatingModel.maintenance * distance * serviceFactor * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
     const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance, infrastructureUsage);
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
@@ -3810,8 +3806,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         capacityFactor: round2(capacityFactor * 100),
         driverCoverage: round2(lineDriverCoverage * 100),
         effectiveFrequency: round2(effectiveFrequency),
-        requestedFrequency: Number(line.frequency || 0),
-        trainComposition: operatingModel.compositionSummary
+        requestedFrequency: round2(requestedSillons),
+        trainComposition: operatingModel.compositionSummary,
+        sillons: sillonStatsPayload(sillonInfo)
       },
       finance: {
         ticketPrice: Math.round(effectiveTicketPrice),
@@ -3840,11 +3837,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         margin: lineRevenue > 0 ? round2(contribution / lineRevenue * 100) : 0
       }
     };
-    activeLineStats.push({ line, stats: line.stats, weight: Math.max(1, lineRevenue, distance * line.frequency) });
+    activeLineStats.push({ line, stats: line.stats, weight: Math.max(1, lineRevenue, distance * Math.max(1, effectiveFrequency)) });
 
     passengers += linePax;
     freight += lineFreight;
-    co2 += computeCo2(operatingModel, distance, effectiveFrequency);
+    co2 += computeCo2(operatingModel, distance, serviceFactor);
     punctualityWeighted += punctuality * Math.max(1, linePax + lineFreight * 0.5);
     satisfactionWeighted += satisfaction * Math.max(1, linePax + lineFreight * 0.5);
     weight += Math.max(1, linePax + lineFreight * 0.5);
@@ -4220,7 +4217,7 @@ function createResourceRuntime(player) {
 function reserveLineResource(player, runtime, model, line, distance, dryRun = false) {
   const type = trainResourceType(model);
   if (!type) return { ok: true, type: null, amountPerHour: 0, amountPerTick: 0 };
-  const perHour = resourceDemandPerHour(model, distance, line.frequency);
+  const perHour = resourceDemandPerHour(model, distance, lineUtilizationFactor(line));
   const perTick = perHour / ticksPerRealHour();
 
   if (type === 'electricity') {
@@ -4308,7 +4305,7 @@ function computeTrainWearPerTick(player, train, model, line, profile = null, sta
   const activeStaffing = staffing || computeStaffing(player);
   const activePolicy = policy || BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
   const baseHours = trainBaseWearLifetimeHours(model);
-  const frequencyFactor = clamp(Number(line.frequency || 0) / 2, 0.75, 1.35);
+  const frequencyFactor = clamp(lineUtilizationFactor(line), 0.55, 1.15);
   const distanceFactor = clamp(lineDistance(line) / 26, 0.8, 1.35);
   const maintenanceLoad = clamp(Number(activeProfile.maintenance || model.maintenance || 0.5) / Math.max(0.25, Number(model.maintenance || 0.5)), 0.85, 1.22);
   const mechanicFactor = clamp(1.1 - Number(activeStaffing.mechanics || 0) * 0.1, 0.82, 1.12);
@@ -4340,25 +4337,38 @@ function emptyStaffNeeds() {
   return { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
 }
 
+
+function lineSlotDemand(player, line) {
+  normalizeLineTrainIds(line);
+  const assigned = player ? lineAssignedTrains(player, line).length : 0;
+  const ids = lineTrainIds(line).length;
+  return Math.max(0, assigned || ids || 0);
+}
+
+function lineUtilizationFactor(line) {
+  const explicit = Number(line?.utilizationFactor);
+  if (Number.isFinite(explicit)) return clamp(explicit, 0, 1);
+  return 1;
+}
+
 function computeLineStaffNeeds(player, line) {
   if (!line?.active) return emptyStaffNeeds();
   const stops = lineStops(line);
   if (stops.length < 2) return emptyStaffNeeds();
   normalizeLineTrainIds(line);
   const distance = lineDistance(line);
-  const frequency = clamp(Number(line.frequency || 0), 1, 20);
-  const trainCount = Math.max(1, lineAssignedTrains(player, line).length || lineTrainIds(line).length || 1);
+  const trainCount = Math.max(1, lineSlotDemand(player, line) || 1);
   const longLineFactor = 1 + Math.max(0, distance - 180) / 420;
   const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
   const passengerService = line.service === 'passengers' || line.service === 'mixed';
 
   return {
-    drivers: Math.max(1, Math.ceil((frequency / 2) * longLineFactor * stopFactor * trainCount)),
-    controllers: passengerService ? Math.max(1, Math.ceil((frequency / 3.2) * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
-    stationAgents: Math.max(1, Math.ceil(frequency / 20 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
-    mechanics: Math.max(1, Math.ceil(trainCount * 0.34 + distance * frequency * trainCount / 2200)),
-    dispatchers: Math.max(1, Math.ceil(0.34 + (frequency / 18) * Math.min(1.5, stopFactor))),
-    engineers: Math.max(0, Math.ceil(distance / 220 + frequency / 16 - 0.5))
+    drivers: Math.max(1, Math.ceil(trainCount * longLineFactor * stopFactor)),
+    controllers: passengerService ? Math.max(1, Math.ceil(trainCount * 0.75 * Math.min(1.8, longLineFactor) * Math.min(1.45, stopFactor))) : 0,
+    stationAgents: Math.max(1, Math.ceil(trainCount * 0.12 + stops.length * 0.18 + Math.max(0, stops.length - 2) * 0.16)),
+    mechanics: Math.max(1, Math.ceil(trainCount * 0.55 + distance * trainCount / 2200)),
+    dispatchers: Math.max(1, Math.ceil(0.34 + (trainCount / 6) * Math.min(1.5, stopFactor))),
+    engineers: Math.max(0, Math.ceil(distance / 220 + trainCount / 8 - 0.5))
   };
 }
 
@@ -4378,7 +4388,7 @@ function computeStaffNeeds(player) {
     needs.controllers += lineNeeds.controllers;
     needs.dispatchers += lineNeeds.dispatchers;
     needs.engineers += lineNeeds.engineers;
-    dailyKm += lineDistance(line) * clamp(Number(line.frequency || 0), 1, 20);
+    dailyKm += lineDistance(line) * Math.max(1, lineSlotDemand(player, line) || 1);
     stationWork += Math.max(0, lineStops(line).length - 2);
   }
 
@@ -4400,12 +4410,18 @@ function driverCoverageForNeed(player, need = null) {
 
 function lineWithEffectiveFrequency(line, driverCoverage, sillonInfo = null) {
   const coverage = clamp(Number(driverCoverage), 0, 1);
-  const requested = Math.max(0, Number(line?.frequency || 0));
+  const requested = Math.max(0, Number(sillonInfo?.requestedFrequency ?? lineTrainIds(line).length ?? 0));
   const driverLimited = requested * coverage;
   const sillonLimited = sillonInfo ? Math.max(0, Number(sillonInfo.maxFrequency ?? requested)) : requested;
-  const effective = Math.max(0, Math.min(driverLimited, sillonLimited));
-  if (Math.abs(effective - requested) < 0.001) return line;
-  return { ...line, frequency: effective };
+  const effectiveSlots = Math.max(0, Math.min(driverLimited, sillonLimited));
+  const utilizationFactor = requested > 0 ? clamp(effectiveSlots / requested, 0, 1) : 0;
+  return {
+    ...line,
+    frequency: effectiveSlots,
+    requestedFrequency: requested,
+    effectiveSlots,
+    utilizationFactor
+  };
 }
 
 function computeStaffing(player) {
@@ -5053,7 +5069,7 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
   }
 
   const capacityBase = Math.max(1, Number(model.capacity || 0) + Number(model.freight || 0) * 0.65);
-  const frequency = Math.max(0, Number(line.frequency || 0));
+  const frequency = Math.max(0, lineUtilizationFactor(line));
   if (frequency <= 0) {
     return { total: 0, infrastructureTotal: 0, stationTotal: 0, allocations: [] };
   }
@@ -5198,7 +5214,8 @@ function buildSillonUsage() {
   for (const player of activePlayers()) {
     for (const line of player.lines || []) {
       if (!line?.active) continue;
-      const requested = Math.max(0, Number(line.frequency || 0));
+      const requested = lineSlotDemand(player, line);
+      if (requested <= 0) continue;
       for (const segment of lineSegments(line)) {
         const capacity = segmentCapacityPerHour(segment);
         const entry = usage.get(segment.key) || {
@@ -5222,7 +5239,7 @@ function buildSillonUsage() {
 }
 
 function computeLineSillonLimit(player, line, usage = null) {
-  const requested = Math.max(0, Number(line?.frequency || 0));
+  const requested = lineSlotDemand(player, line);
   const sillonUsage = usage || buildSillonUsage();
   const segments = lineSegments(line);
   if (!segments.length) {
@@ -6002,12 +6019,12 @@ function buildTechTree() {
 
   add('operations', 'manual_dispatch', 'Régulation manuelle structurée', 'Pose les bases des roulements et priorités de circulation.', 0, [], [], ['Ponctualité de base par niveau']);
   add('operations', 'block_signaling', 'Block automatique', 'Augmente le débit et réduit les conflits de circulation.', 1, ['manual_dispatch'], [], ['Attractivité et ponctualité par niveau']);
-  add('operations', 'passing_loops', 'Évitements cadencés', 'Rend les lignes secondaires plus fréquentes.', 1, ['manual_dispatch'], [], ['Fréquence soutenable sur petites lignes']);
+  add('operations', 'passing_loops', 'Évitements cadencés', 'Augmente le débit exploitable des lignes secondaires.', 1, ['manual_dispatch'], [], ['Débit soutenable sur petites lignes']);
   add('operations', 'centralized_control', 'Commande centralisée', 'Supervise plusieurs lignes depuis un poste unique.', 2, ['block_signaling'], [], ['Attractivité réseau et prérequis grande vitesse']);
   add('operations', 'clockface_timetable', 'Horaire cadencé', 'Rend les lignes plus lisibles pour les voyageurs.', 2, ['centralized_control'], [], ['Demande voyageurs et satisfaction accrues']);
   add('operations', 'incident_protocols', 'Plans incidents', 'Réduit l’impact des événements météo et sociaux.', 2, ['centralized_control'], [], ['Résilience événementielle par niveau']);
   add('operations', 'platform_dispatching', 'Gestion quais centralisée', 'Réduit les conflits dans les grandes gares.', 3, ['clockface_timetable', 'passenger_flow'], [], ['Capacité des nœuds accrue']);
-  add('operations', 'traffic_simulation', 'Simulation de trafic', 'Prévoit la saturation avant ouverture des lignes.', 3, ['centralized_control'], [], ['Meilleure marge sur fréquences élevées']);
+  add('operations', 'traffic_simulation', 'Simulation de trafic', 'Prévoit la saturation avant ouverture des lignes.', 3, ['centralized_control'], [], ['Meilleure marge sur axes saturés']);
   add('operations', 'night_services', 'Exploitation de nuit', 'Organise sûreté, roulements et maintenance nocturne.', 4, ['centralized_control'], ['Trains de nuit modernes'], ['Revenus longue distance et disponibilité améliorés']);
   add('operations', 'dynamic_pricing', 'Yield management ferroviaire', 'Optimise le prix moyen sans casser l’attractivité.', 4, ['traffic_simulation'], [], ['Revenus voyageurs par niveau']);
   add('operations', 'automated_dispatch', 'Régulation automatisée', 'Optimise les priorités à grande échelle.', 5, ['traffic_simulation', 'electric_electronic_control'], [], ['Ponctualité réseau avancée']);
@@ -6042,7 +6059,7 @@ function buildTechTree() {
   add('social', 'crew_training', 'Formation polyvalente', 'Améliore la productivité des équipes de circulation.', 0, [], [], ['Efficacité RH et masse salariale par niveau']);
   add('social', 'safety_training', 'Culture sécurité', 'Réduit les erreurs d’exploitation et améliore la fiabilité perçue.', 1, ['crew_training'], [], ['Fiabilité et Agents de gare plus efficaces']);
   add('social', 'apprenticeship_tracks', 'Écoles métiers ferroviaires', 'Réduit le coût des recrutements futurs.', 0, ['crew_training'], [], ['Recrutement moins coûteux par niveau']);
-  add('social', 'driver_rosters', 'Roulements Conducteurs', 'Stabilise les lignes à forte fréquence.', 1, ['crew_training'], [], ['Besoin Conducteur mieux couvert']);
+  add('social', 'driver_rosters', 'Roulements Conducteurs', 'Stabilise les lignes à fort trafic.', 1, ['crew_training'], [], ['Besoin Conducteur mieux couvert']);
   add('social', 'controller_service', 'Service commercial embarqué', 'Améliore satisfaction et revenus annexes.', 1, ['safety_training'], [], ['Satisfaction voyageurs par niveau']);
   add('social', 'mechanic_certification', 'Certification Mainteneurs', 'Améliore la qualité des interventions atelier.', 1, ['crew_training'], [], ['Maintenance plus efficace par niveau']);
   add('social', 'dispatcher_school', 'École de régulation', 'Renforce la ponctualité des réseaux complexes.', 2, ['driver_rosters', 'manual_dispatch'], [], ['Régulation et ponctualité par niveau']);
@@ -6052,7 +6069,7 @@ function buildTechTree() {
   add('social', 'digital_training', 'Formation simulateur', 'Améliore la conduite des matériels modernes.', 4, ['dispatcher_school', 'real_time_information'], [], ['Fiabilité matériel moderne par niveau']);
   add('social', 'autonomous_supervision', 'Supervision des systèmes autonomes', 'Prépare les équipes au rail automatisé.', 5, ['digital_training', 'automated_dispatch'], [], ['Réduction coûts RH futurs']);
 
-  add('operations', 'network_revenue_control', 'Pilotage revenu réseau', 'Arbitre prix, fréquence et capacité entre lignes concurrentes.', 4, ['dynamic_pricing', 'traffic_simulation'], [], ['Marge des lignes denses améliorée']);
+  add('operations', 'network_revenue_control', 'Pilotage revenu réseau', 'Arbitre prix, capacité et saturation entre lignes concurrentes.', 4, ['dynamic_pricing', 'traffic_simulation'], [], ['Marge des lignes denses améliorée']);
   add('operations', 'ai_timetable_planner', 'Planificateur horaire assisté', 'Construit des sillons robustes sur réseau complexe.', 5, ['automated_dispatch', 'knowledge_management'], [], ['Ponctualité et capacité réseau futures']);
   add('stations', 'station_energy_retrofit', 'Rénovation énergétique des gares', 'Réduit les coûts fixes des bâtiments voyageurs.', 3, ['electric_electronic_control', 'station_retail'], [], ['Charges de gares réduites par niveau']);
   add('stations', 'crowd_simulation', 'Simulation de foule', 'Évite la saturation des terminaux majeurs.', 4, ['major_terminal_design', 'real_time_information'], [], ['Capacité des grandes gares accrue']);
@@ -6126,7 +6143,7 @@ function researchLevelEffectText(node) {
     traction: '+1 niveau de branche Traction : Meilleure portée, vitesse commerciale ou confort selon le matériel concerné.',
     energy: '+1 niveau de branche Énergie : Coûts de traction plus stables et meilleure efficacité énergétique.',
     maintenance: '+1 niveau de branche Maintenance : Moins d’usure, moins d’immobilisation ou moins de coût atelier.',
-    operations: '+1 niveau de branche Exploitation : Meilleure ponctualité, débit ou robustesse des fréquences.',
+    operations: '+1 niveau de branche Exploitation : Meilleure ponctualité, débit ou robustesse des sillons.',
     stations: '+1 niveau de branche Gares : Plus de capacité, satisfaction ou revenus annexes.',
     freight: '+1 niveau de branche Fret : Meilleure capture de demande, taux de chargement ou revenu par tonne.',
     social: '+1 niveau de branche RH : Meilleure productivité, sécurité ou vitesse de recherche.'

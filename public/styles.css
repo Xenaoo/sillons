@@ -7077,3 +7077,41 @@ dialog.modal--wide {
     display: none !important;
   }
 }
+
+
+/* ===== V62.20 : sélection trains lignes nettoyée et fréquence supprimée ===== */
+.line-train-choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)) !important;
+  align-items: stretch;
+}
+.line-train-choice {
+  grid-template-columns: 30px minmax(0, 1fr) !important;
+  min-height: 74px !important;
+  padding: 12px 13px !important;
+  align-items: center !important;
+}
+.line-train-choice-check {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.line-train-choice-main {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+.line-train-choice-visual {
+  max-width: 116px;
+  opacity: .72;
+  margin: 0 0 6px !important;
+}
+.line-train-choice-main b,
+.line-train-choice-main em,
+.line-train-choice-main small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.line-editor .ticket-price-control {
+  min-width: 0;
+}

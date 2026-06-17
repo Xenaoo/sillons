@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.20.0 — sillons par trains et suppression de la fréquence
+
+- incrément de version : badge interface `v62.20.0`, package `0.6.20` et schéma serveur `84` ;
+- suppression de la notion de fréquence dans l’interface de création et de modification des lignes ;
+- les sillons consommés sont désormais déterminés par le nombre de trains affectés à la ligne ;
+- correction du compteur de sillons : il affiche les trains/sillons effectivement exploitables sur les tronçons limitants ;
+- correction du prix billet dans la fenêtre de modification : le montant saisi est sauvegardé et n’est plus réécrit automatiquement par le recalcul économique ;
+- nettoyage visuel de la sélection des trains dans la fenêtre de modification ;
+- les trains animés sont dessinés à raison d’une animation par train affecté, sans duplication liée à une ancienne fréquence.
+
 ## Version v62.19.0 — sillons ferroviaires et péages de passage
 
 - incrément de version : badge interface `v62.19.0`, package `0.6.19` et schéma serveur `83` ;
