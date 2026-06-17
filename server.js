@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.20.0';
-const STATE_SCHEMA_VERSION = 84;
+const PROJECT_VERSION = 'v62.21.0';
+const STATE_SCHEMA_VERSION = 85;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -5185,28 +5185,95 @@ function lineSegments(line) {
   return segments;
 }
 
+const SILLON_PARIS_ORLEANS_MAIN_IDS = new Set([
+  'COM_91223', // Étampes
+  'COM_91226', // Étréchy
+  'COM_91330', // Lardy
+  'COM_91376', // Marolles-en-Hurepoix
+  'COM_91103', // Brétigny-sur-Orge
+  'COM_91570', // Saint-Michel-sur-Orge
+  'COM_91549', // Sainte-Geneviève-des-Bois
+  'COM_91589', // Savigny-sur-Orge
+  'COM_91326', // Juvisy-sur-Orge
+  'COM_94081', // Vitry-sur-Seine
+  'COM_94022', // Choisy-le-Roi
+  'COM_94041', // Ivry-sur-Seine
+  'PAR_AUSTERLITZ'
+]);
+
+const SILLON_DOURDAN_BRANCH_IDS = new Set([
+  'COM_91200', // Dourdan
+  'COM_91540', // Saint-Chéron
+  'COM_91105', // Breuillet
+  'COM_91021', // Arpajon
+  'COM_91552', // Saint-Germain-lès-Arpajon
+  'COM_91207', // Égly
+  'COM_91461', // Ollainville
+  'COM_91103'  // Brétigny-sur-Orge
+]);
+
+function stationDeptCode(station) {
+  const code = String(station?.codeDepartement || station?.code || station?.postal || station?.codesPostaux?.[0] || '');
+  return code.slice(0, 2);
+}
+
+function stationIdOrNameMatches(station, regex) {
+  const text = normalizeSearch(`${station?.id || ''} ${station?.name || ''}`);
+  return regex.test(text);
+}
+
+function segmentSpecificCapacityPerHour(segment, a, b) {
+  const idA = currentStationId(segment.from);
+  const idB = currentStationId(segment.to);
+  const onDourdanBranch = SILLON_DOURDAN_BRANCH_IDS.has(idA) && SILLON_DOURDAN_BRANCH_IDS.has(idB);
+  const onParisOrleans = SILLON_PARIS_ORLEANS_MAIN_IDS.has(idA) && SILLON_PARIS_ORLEANS_MAIN_IDS.has(idB);
+
+  // Antenne Dourdan ↔ Brétigny : voie moins capacitaire, référence demandée 4 trains/h.
+  if (onDourdanBranch && !onParisOrleans) return 4;
+
+  // Axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : capacité haute, référence demandée 18 trains/h.
+  if (onParisOrleans) return 18;
+
+  const nameA = normalizeSearch(a?.name || '');
+  const nameB = normalizeSearch(b?.name || '');
+  const pairName = `${nameA} ${nameB}`;
+  if (/\bdourdan\b/.test(pairName) && /\bbretigny\b/.test(pairName)) return 4;
+  if (/\betampes\b/.test(pairName) && /(austerlitz|bretigny|juvisy)/.test(pairName)) return 18;
+
+  return null;
+}
+
 function segmentCapacityPerHour(segment) {
   const a = stationById(segment.from);
   const b = stationById(segment.to);
   const distance = Math.max(1, Number(segment.distance || distanceBetween(segment.from, segment.to) || 1));
-  const demandA = Number(a?.baseDemand || a?.population || 0);
-  const demandB = Number(b?.baseDemand || b?.population || 0);
+  const specific = segmentSpecificCapacityPerHour(segment, a, b);
+  if (Number.isFinite(specific) && specific > 0) return clamp(Math.round(specific), 2, 40);
+
+  const demandA = Number(a?.baseDemand || 0) + Math.min(900, Number(a?.population || 0) / 2500);
+  const demandB = Number(b?.baseDemand || 0) + Math.min(900, Number(b?.population || 0) / 2500);
   const maxDemand = Math.max(demandA, demandB);
   const sumDemand = demandA + demandB;
-  const codeA = String(a?.code || a?.postal || '');
-  const codeB = String(b?.code || b?.postal || '');
-  const parisOrDense = /^75/.test(codeA) || /^75/.test(codeB) || /^9[1-5]/.test(codeA) || /^9[1-5]/.test(codeB) || /^PAR_/.test(String(a?.id || '')) || /^PAR_/.test(String(b?.id || ''));
+  const deptA = stationDeptCode(a);
+  const deptB = stationDeptCode(b);
+  const idfA = ['75', '77', '78', '91', '92', '93', '94', '95'].includes(deptA) || /^PAR_/.test(String(a?.id || ''));
+  const idfB = ['75', '77', '78', '91', '92', '93', '94', '95'].includes(deptB) || /^PAR_/.test(String(b?.id || ''));
+  const denseCore = ['75', '92', '93', '94'].includes(deptA) || ['75', '92', '93', '94'].includes(deptB) || /^PAR_/.test(String(a?.id || '')) || /^PAR_/.test(String(b?.id || ''));
+  const secondaryBranch = distance <= 35 && sumDemand < 620 && maxDemand < 380;
 
-  let capacity = 10;
-  if (parisOrDense && distance <= 45) capacity = 28;
-  else if (sumDemand >= 450000 || maxDemand >= 260000) capacity = 24;
-  else if (sumDemand >= 180000 || maxDemand >= 90000) capacity = 18;
-  else if (sumDemand >= 70000 || maxDemand >= 35000) capacity = 14;
-  else if (distance >= 140 && sumDemand < 40000) capacity = 5;
-  else if (distance >= 85 && sumDemand < 70000) capacity = 7;
-  else if (distance <= 22 && sumDemand >= 30000) capacity = 12;
+  let capacity = 8;
+  if (denseCore && distance <= 45) capacity = 20;
+  else if (idfA && idfB && distance <= 55 && !secondaryBranch) capacity = 14;
+  else if (idfA && idfB && secondaryBranch) capacity = 6;
+  else if (sumDemand >= 1500 || maxDemand >= 850) capacity = 18;
+  else if (sumDemand >= 900 || maxDemand >= 520) capacity = 14;
+  else if (sumDemand >= 520 || maxDemand >= 300) capacity = 10;
+  else if (distance >= 120 && sumDemand < 500) capacity = 4;
+  else if (distance >= 70 && sumDemand < 650) capacity = 6;
+  else if (distance <= 25 && sumDemand >= 380) capacity = 8;
+  else capacity = 6;
 
-  return clamp(Math.round(capacity), 2, 32);
+  return clamp(Math.round(capacity), 2, 40);
 }
 
 function buildSillonUsage() {
@@ -5254,6 +5321,7 @@ function computeLineSillonLimit(player, line, usage = null) {
   }
 
   let maxFrequency = Number.POSITIVE_INFINITY;
+  let lineCapacity = Number.POSITIVE_INFINITY;
   let bottleneck = null;
   const details = [];
   for (const segment of segments) {
@@ -5263,6 +5331,7 @@ function computeLineSillonLimit(player, line, usage = null) {
       .filter(item => item.playerId === player.id && item.lineId === line.id)
       .reduce((sum, item) => sum + Number(item.frequency || 0), 0);
     const usedByOthers = Math.max(0, Number(entry?.used || 0) - ownRequested);
+    const totalUsed = usedByOthers + requested;
     const available = Math.max(0, capacity - usedByOthers);
     const detail = {
       key: segment.key,
@@ -5272,10 +5341,12 @@ function computeLineSillonLimit(player, line, usage = null) {
       toName: stationById(segment.to)?.name || segment.to,
       capacity,
       usedByOthers: round2(usedByOthers),
+      totalUsed: round2(totalUsed),
       available: round2(available),
       requested
     };
     details.push(detail);
+    if (capacity < lineCapacity) lineCapacity = capacity;
     if (available < maxFrequency) {
       maxFrequency = available;
       bottleneck = detail;
@@ -5283,9 +5354,11 @@ function computeLineSillonLimit(player, line, usage = null) {
   }
 
   if (!Number.isFinite(maxFrequency)) maxFrequency = requested;
+  if (!Number.isFinite(lineCapacity)) lineCapacity = maxFrequency;
   const effectiveFrequency = Math.max(0, Math.min(requested, maxFrequency));
   return {
     requestedFrequency: round2(requested),
+    lineCapacity: round2(lineCapacity),
     maxFrequency: round2(maxFrequency),
     effectiveFrequency: round2(effectiveFrequency),
     constrained: effectiveFrequency + 0.001 < requested,
@@ -5298,6 +5371,7 @@ function sillonStatsPayload(info) {
   if (!info) return null;
   return {
     requestedFrequency: round2(info.requestedFrequency || 0),
+    lineCapacity: round2(info.lineCapacity ?? info.maxFrequency ?? 0),
     maxFrequency: round2(info.maxFrequency || 0),
     effectiveFrequency: round2(info.effectiveFrequency || 0),
     constrained: Boolean(info.constrained),
@@ -5309,6 +5383,7 @@ function sillonStatsPayload(info) {
       toName: info.bottleneck.toName,
       capacity: round2(info.bottleneck.capacity || 0),
       usedByOthers: round2(info.bottleneck.usedByOthers || 0),
+      totalUsed: round2(info.bottleneck.totalUsed || 0),
       available: round2(info.bottleneck.available || 0)
     } : null
   };

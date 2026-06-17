@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v62.21.0 — capacités de sillons réalistes
+
+- incrément de version : badge interface `v62.21.0`, package `0.6.21` et schéma serveur `85` ;
+- correction de l’affichage des sillons : les lignes affichent désormais `sillons utilisés / capacité réelle du tronçon limitant`, au lieu de `sillons effectifs / sillons demandés` ;
+- ajout d’une capacité dédiée pour l’axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : `18 trains/h` ;
+- ajout d’une capacité dédiée pour l’antenne Dourdan ↔ Brétigny : `4 trains/h` ;
+- amélioration de l’heuristique générale des capacités de tronçons selon densité urbaine, distance, Île-de-France et axes principaux/secondaires ;
+- les sillons consommés restent déterminés par le nombre de trains affectés à la ligne.
+
 ## Version v62.20.0 — sillons par trains et suppression de la fréquence
 
 - incrément de version : badge interface `v62.20.0`, package `0.6.20` et schéma serveur `84` ;
