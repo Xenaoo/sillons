@@ -2120,6 +2120,7 @@ button[data-tooltip]:focus-visible::before {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 9px 12px;
   border-radius: 14px;
   background: linear-gradient(90deg, rgba(217,168,82,.20), rgba(7,13,24,.22));
@@ -2128,6 +2129,21 @@ button[data-tooltip]:focus-visible::before {
 .era-title strong {
   color: #f5dfaa;
   letter-spacing: .2px;
+}
+.fleet-era-toggle {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.fleet-era-block.collapsed {
+  gap: 0;
+}
+.fleet-era-toggle .research-era-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .train-card-grid {
   display: grid;
@@ -4486,13 +4502,15 @@ input[type="number"] {
 .fleet-catalog-grid .train-buy-control input {
   width: 100%;
   min-width: 0;
-  height: 30px;
-  padding: 4px 7px;
+  min-height: 36px;
+  padding: 6px 10px;
   border-radius: 9px;
   border: 1px solid rgba(217,168,82,.26);
   background: rgba(2,6,23,.55);
   color: #f8efd8;
+  font-size: 15px;
   font-weight: 800;
+  line-height: 1;
 }
 
 .fleet-catalog-grid .train-buy-total {

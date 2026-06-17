@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64:2:0';
+const PROJECT_VERSION = 'v64:3:0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -46,6 +46,7 @@ const app = {
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
+  fleetCatalogEraCollapsed: loadJson('sillons.fleetCatalogEraCollapsed', {}),
   sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
   admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
   mapPref: 'show',
@@ -4220,11 +4221,28 @@ function renderFleet() {
   `;
 }
 
+
+function fleetCatalogEraStorageKey(epoch) {
+  return `epoch::${Math.max(0, Number(epoch || 0))}`;
+}
+
+function isFleetCatalogEraCollapsed(epoch) {
+  return Boolean(app.fleetCatalogEraCollapsed?.[fleetCatalogEraStorageKey(epoch)]);
+}
+
+function setFleetCatalogEraCollapsed(epoch, collapsed) {
+  const key = fleetCatalogEraStorageKey(epoch);
+  app.fleetCatalogEraCollapsed = { ...(app.fleetCatalogEraCollapsed || {}), [key]: Boolean(collapsed) };
+  if (!collapsed) delete app.fleetCatalogEraCollapsed[key];
+  localStorage.setItem('sillons.fleetCatalogEraCollapsed', JSON.stringify(app.fleetCatalogEraCollapsed));
+}
+
 function renderFleetCatalogPanel(available, locked) {
   const me = app.state.me;
   const models = Object.values(app.state.balance.trains);
   const byEpoch = {};
   for (const model of models) (byEpoch[model.unlockEpoch] ||= []).push(model);
+  const eraEntries = Object.entries(byEpoch).sort((a, b) => Number(a[0]) - Number(b[0]));
 
   return `
     <div class="fleet-catalog-layout">
@@ -4245,17 +4263,25 @@ function renderFleetCatalogPanel(available, locked) {
         </div>
 
         <div class="era-catalog">
-          ${Object.entries(byEpoch).map(([epoch, list]) => `
-            <section class="era-block fleet-era-block">
-              <div class="era-title">
-                <strong>${escapeHtml(trainEraLabel(Number(epoch)))}</strong>
-                <span class="tag">${list.length} matériels</span>
-              </div>
-              <div class="train-card-grid fleet-catalog-grid">
-                ${list.sort((a,b) => a.price - b.price).map(model => renderTrainCatalogItem(model, trainModelUnlocked(model))).join('')}
-              </div>
-            </section>
-          `).join('')}
+          ${eraEntries.map(([epoch, list]) => {
+            const collapsed = isFleetCatalogEraCollapsed(epoch);
+            return `
+              <section class="era-block fleet-era-block ${collapsed ? 'collapsed' : ''}">
+                <button type="button" class="era-title fleet-era-toggle" data-action="toggle-fleet-catalog-era" data-epoch="${escapeAttr(String(epoch))}" aria-expanded="${collapsed ? 'false' : 'true'}">
+                  <span class="research-era-title">
+                    <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+                    <strong>${escapeHtml(trainEraLabel(Number(epoch)))}</strong>
+                  </span>
+                  <span class="research-era-meta">${list.length} matériels · ${collapsed ? 'Déplier' : 'Masquer'}</span>
+                </button>
+                ${collapsed ? '' : `
+                  <div class="train-card-grid fleet-catalog-grid">
+                    ${list.sort((a, b) => a.price - b.price).map(model => renderTrainCatalogItem(model, trainModelUnlocked(model))).join('')}
+                  </div>
+                `}
+              </section>
+            `;
+          }).join('')}
         </div>
       </div>
     </div>
@@ -4506,15 +4532,12 @@ function renderTrainInheritedResearchBonuses(model) {
     `;
   }
 
-  const sourceLabel = sources.slice(0, 3).map(src => `${src.title} niv. ${src.level}`).join(' · ');
-  const more = sources.length > 3 ? ` · +${sources.length - 3}` : '';
   return `
     <div class="train-research-bonus-panel">
       <div class="train-research-bonus-title">Bonus recherches hérités</div>
       <div class="train-research-bonus-grid">
         ${items.map(item => `<span><small>${escapeHtml(item.label)}</small><b>${escapeHtml(item.value)}</b></span>`).join('')}
       </div>
-      <p>${escapeHtml(sourceLabel + more)}</p>
     </div>
   `;
 }
@@ -4556,11 +4579,35 @@ function updateTrainPurchaseTotal(input) {
   if (total) total.textContent = money(unitPrice * quantity);
 }
 
+
+function estimateTrainPowerKw(model) {
+  const speed = Math.max(0, Number(model?.speed || 0));
+  const capacity = Math.max(0, Number(model?.capacity || 0));
+  const freight = Math.max(0, Number(model?.freight || 0));
+  const typeLabel = `${model?.name || ''} ${model?.type || ''}`.toLowerCase();
+  const energyType = String(model?.energyType || '').toLowerCase();
+  let multiplier = energyType === 'coal'
+    ? 0.72
+    : energyType === 'diesel'
+      ? 0.88
+      : energyType === 'battery'
+        ? 0.92
+        : energyType === 'hydrogen'
+          ? 0.96
+          : 1;
+  if (/(grande vitesse|tgv|maglev)/.test(typeLabel)) multiplier *= 1.22;
+  else if (/(autorail|rame|duplex|regio|régio|navette)/.test(typeLabel)) multiplier *= 1.08;
+  else if (/(fret|marchand)/.test(typeLabel) && freight > capacity) multiplier *= 1.1;
+  const weightedLoad = capacity * 5 + freight * 1.6 + speed * 18 + Math.max(capacity, freight * 0.25);
+  return Math.max(350, Math.round((weightedLoad * multiplier) / 50) * 50);
+}
+
 function renderTrainCatalogItem(model, buyable) {
   const reason = trainModelLockedReason(model);
   const effective = effectiveModelWithResearchClient(model);
   const effectiveRange = effective.range;
   const unitPrice = trainPurchaseUnitPriceClient(model);
+  const powerKw = estimateTrainPowerKw(model);
   return `
     <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
       ${renderTrainArt(model)}
@@ -4573,8 +4620,7 @@ function renderTrainCatalogItem(model, buyable) {
         <div class="train-stat-grid">
           ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '', `${effective.speed} km/h`, effective.speed / 420)}
           ${renderTrainStat('Portée', `${formatInt(model.range)} km`, (model.range || 0) / 1400, effectiveRange >= 900 ? 'good' : '', `${formatInt(effectiveRange)} km`, effectiveRange / 1400)}
-          ${renderTrainStat('Voyageurs', `${model.capacity}`, model.capacity / 1100, model.capacity >= 650 ? 'good' : '')}
-          ${renderTrainStat('Fret', `${model.freight} t`, model.freight / 2200, model.freight >= 900 ? 'good' : '')}
+          ${renderTrainStat('Puissance', `${formatInt(powerKw)} kW`, powerKw / 20000, powerKw >= 8000 ? 'good' : '')}
           ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, effective.reliability >= 0.92 ? 'good' : '', `${Math.round(effective.reliability * 100)}%`, effective.reliability)}
           ${renderTrainStat('Confort', `${Math.round(model.comfort * 100)}%`, model.comfort, model.comfort >= 0.8 ? 'good' : '')}
           ${renderTrainStat('Maint./h', maintenanceHourlyRange(model), 1 - Math.min(1, model.maintenance / 1.3), model.maintenance <= 0.45 ? 'good' : 'warn')}
@@ -4589,7 +4635,7 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
         <div class="actions">
-          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(`Achète ${model.name}. Coût unitaire : ${money(unitPrice)}. Quantité par défaut : 1 train. ${model.description || ''} Vitesse : ${model.speed} km/h. Capacité : ${model.capacity} voyageurs. Fret : ${model.freight} t. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(`Achète ${model.name}. Coût unitaire : ${money(unitPrice)}. Quantité par défaut : 1 train. ${model.description || ''} Vitesse : ${model.speed} km/h. Portée : ${formatInt(model.range)} km. Puissance estimée : ${formatInt(powerKw)} kW. Fiabilité : ${Math.round(model.reliability * 100)}%.`)} ${buyable ? '' : 'disabled'}>Acheter</button>
         </div>
       </div>
     </div>
@@ -6101,6 +6147,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'toggle-fleet-catalog-era') { const epoch = Number(button.dataset.epoch || 0); setFleetCatalogEraCollapsed(epoch, !isFleetCatalogEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }
   if (action === 'toggle-owned-stations') { app.ownedStationsCollapsed = !app.ownedStationsCollapsed; localStorage.setItem('sillons.ownedStationsCollapsed', app.ownedStationsCollapsed ? '1' : '0'); renderAll(); return; }
   if (action === 'toggle-budget-section') {

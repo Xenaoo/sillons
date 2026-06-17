@@ -1,3 +1,11 @@
+## Version v64:3:0 — catalogue du parc : cartes épurées et catégories masquables par ère
+
+- incrément de version : badge interface `v64:3:0`, version serveur/client `v64:3:0`, package `64.3.0` et schéma serveur `104` ;
+- catalogue du parc : transformation des sections d’ère en catégories réductibles, avec état de masquage mémorisé localement pour pouvoir masquer ou réafficher chaque ère indépendamment ;
+- vignettes du catalogue : suppression des statistiques `Voyageurs` et `Fret`, remplacées par une statistique `Puissance` affichée en `kW` ;
+- bonus de recherche hérités : suppression de la ligne récapitulative en petit texte sous les bonus, pour alléger les cartes ;
+- zone d’achat : champ `Quantité` légèrement agrandi pour améliorer la lisibilité tout en conservant l’achat unitaire par défaut.
+
 # Changelog
 
 ## Version v64:2:0 — achat groupé depuis le catalogue du parc
