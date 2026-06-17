@@ -7824,3 +7824,106 @@ dialog.modal--wide {
     width: 100%;
   }
 }
+
+/* ===== V64.1.0 : correctifs robustes menu Composition ===== */
+.composition-refit-list-card {
+  min-height: 430px;
+  height: calc(100dvh - 180px);
+  max-height: calc(100dvh - 180px);
+  overflow: hidden;
+}
+
+.composition-group-list {
+  align-content: start;
+  min-height: 0;
+  height: auto;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.composition-refit-toolbar {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.composition-sort-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composition-sort-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.composition-sort-switch button {
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composition-sort-switch button.active {
+  border-color: rgba(217,168,82,.72);
+  background: linear-gradient(180deg, rgba(217,168,82,.18), rgba(217,168,82,.08));
+  color: #ffe9b9;
+}
+
+.composition-vignette-select-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+}
+
+.composition-vignette-checkbox {
+  flex: none;
+  white-space: nowrap;
+}
+
+.composition-vignette-checkbox span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.composition-vignette-select-row .composition-status-tag,
+.composition-vignette-select-row .tag {
+  justify-self: end;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.composition-assign-select option {
+  color: #111827;
+  background: #f8fafc;
+}
+
+@media (max-width: 700px) {
+  .composition-refit-list-card {
+    min-height: 480px;
+    height: calc(100dvh - 120px);
+    max-height: calc(100dvh - 120px);
+  }
+
+  .composition-sort-switch {
+    grid-template-columns: 1fr;
+  }
+
+  .composition-selection-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

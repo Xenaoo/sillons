@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v64.1.0 — correctifs menu Composition et réaffectation des trains
+
+- incrément de version : badge interface `v64.1.0`, package `64.1.0` et schéma serveur `97` ;
+- correction robuste du scroll indépendant dans le menu Composition : la liste des sections de trains calcule désormais sa hauteur utile selon la position réelle dans le viewport, puis conserve son propre défilement vertical ;
+- déplacement du choix de tri hors d’un `select` trop étroit : le tri du parc se fait maintenant via deux boutons lisibles `Par ère` et `Voyageurs / Fret` ;
+- correction des alignements des vignettes : libellé `Sélection` non tronqué, statut de ligne borné proprement et choix d’affectation contenu dans la carte ;
+- ajout de la réaffectation directe depuis le menu Composition : un train déjà affecté peut être retiré de sa ligne ou déplacé vers une autre ligne compatible ;
+- ajout de l’action serveur `setTrainLineAssignment`, avec validation de compatibilité service / portée, achat de sillon sur la nouvelle ligne et libération de l’ancienne ligne ;
+- correction des besoins de personnel pour les lignes actives sans train affecté : elles ne génèrent plus de besoin opérationnel tant qu’aucun matériel n’y circule.
+
 ## Version v64.0.1 — correctif lisibilité et scroll du menu Composition
 
 - incrément de version : badge interface `v64.0.1`, package `64.0.1` et schéma serveur `96` ;

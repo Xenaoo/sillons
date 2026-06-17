@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v64.0.1';
-const STATE_SCHEMA_VERSION = 96;
+const PROJECT_VERSION = 'v64.1.0';
+const STATE_SCHEMA_VERSION = 97;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3236,6 +3236,7 @@ async function applyAction(playerId, type, payload) {
     setMaintenancePolicy: () => actionSetMaintenancePolicy(player, payload),
     createLine: () => actionCreateLine(player, payload),
     assignTrainToLine: () => actionAssignTrainToLine(player, payload),
+    setTrainLineAssignment: () => actionSetTrainLineAssignment(player, payload),
     closeLine: () => actionCloseLine(player, payload),
     updateLine: () => actionUpdateLine(player, payload),
     upgradeStation: () => actionUpgradeStation(player, payload),
@@ -3588,6 +3589,85 @@ async function actionAssignTrainToLine(player, payload) {
   refreshPlayerLineStatsNow(player);
   notify(player, `Sillon acheté sur ${lineRouteName(lineStops(line))} : ${BALANCE.trains[train.modelId]?.name || 'train'} affecté pour ${money(cost)}.`);
   return ok('Sillon acheté et train affecté.');
+}
+
+async function actionSetTrainLineAssignment(player, payload) {
+  const trainId = String(payload.trainId || '').trim();
+  const targetLineId = String(payload.lineId || '').trim();
+  const train = player.trains.find(t => t.id === trainId);
+  if (!train) return fail('Train introuvable.');
+
+  const currentLine = (player.lines || []).find(line => line?.active && lineTrainIds(line).includes(trainId)) || null;
+  if (!targetLineId) {
+    if (!currentLine) return ok('Ce train est déjà libre.');
+    const nextCurrentIds = lineTrainIds(currentLine).filter(id => id !== trainId);
+    currentLine.trainIds = nextCurrentIds;
+    currentLine.trainId = nextCurrentIds[0] || '';
+    refreshPlayerLineStatsNow(player);
+    notify(player, `${BALANCE.trains[train.modelId]?.name || 'Train'} retiré de ${lineRouteName(lineStops(currentLine))}.`);
+    return ok('Train retiré de la ligne.');
+  }
+
+  const targetLine = player.lines.find(l => l.id === targetLineId && l.active);
+  if (!targetLine) return fail('Ligne active introuvable.');
+  normalizeLine(targetLine);
+  if (currentLine?.id === targetLine.id) return ok('Ce train est déjà affecté à cette ligne.');
+  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
+
+  const model = BALANCE.trains[train.modelId];
+  const operatingModel = getTrainOperatingProfile(train, model, player);
+  if (!lineServiceCompatibleWithProfile(targetLine.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
+
+  const routeInfo = await realRailRouteBetweenStops(lineStops(targetLine));
+  if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
+  const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
+  if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
+
+  const targetIds = lineTrainIds(targetLine).filter(id => id !== trainId);
+  const nextTargetIds = [...new Set([...targetIds, trainId])];
+  const originalTargetIds = Array.isArray(targetLine.trainIds) ? [...targetLine.trainIds] : undefined;
+  const originalTargetTrainId = targetLine.trainId;
+  const originalCurrentIds = currentLine ? (Array.isArray(currentLine.trainIds) ? [...currentLine.trainIds] : undefined) : undefined;
+  const originalCurrentTrainId = currentLine?.trainId;
+
+  if (currentLine && currentLine.id !== targetLine.id) {
+    const nextCurrentIds = lineTrainIds(currentLine).filter(id => id !== trainId);
+    currentLine.trainIds = nextCurrentIds;
+    currentLine.trainId = nextCurrentIds[0] || '';
+  }
+  targetLine.trainIds = nextTargetIds;
+  targetLine.trainId = nextTargetIds[0] || '';
+  const usage = buildSillonUsage();
+  const sillonInfo = computeLineSillonLimit(player, targetLine, usage);
+
+  if (currentLine && currentLine.id !== targetLine.id) {
+    if (originalCurrentIds !== undefined) currentLine.trainIds = originalCurrentIds;
+    else delete currentLine.trainIds;
+    currentLine.trainId = originalCurrentTrainId;
+  }
+  if (originalTargetIds !== undefined) targetLine.trainIds = originalTargetIds;
+  else delete targetLine.trainIds;
+  targetLine.trainId = originalTargetTrainId;
+
+  if (sillonInfo.constrained) {
+    return fail('Sillon indisponible sur cette ligne.', `Disponibles au tronçon limitant : ${Math.floor(Number(sillonInfo.maxFrequency || 0))}.`);
+  }
+
+  const cost = lineSillonPurchaseCost(targetLine, 1);
+  if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût du sillon : ${money(cost)}.`);
+  player.cash -= cost;
+
+  if (currentLine && currentLine.id !== targetLine.id) {
+    const nextCurrentIds = lineTrainIds(currentLine).filter(id => id !== trainId);
+    currentLine.trainIds = nextCurrentIds;
+    currentLine.trainId = nextCurrentIds[0] || '';
+  }
+  targetLine.trainIds = nextTargetIds;
+  targetLine.trainId = nextTargetIds[0] || '';
+  targetLine.sillonRightsCost = Math.round(Number(targetLine.sillonRightsCost || 0) + cost);
+  refreshPlayerLineStatsNow(player);
+  notify(player, `${BALANCE.trains[train.modelId]?.name || 'Train'} ${currentLine ? 'déplacé' : 'affecté'} sur ${lineRouteName(lineStops(targetLine))} pour ${money(cost)}.`);
+  return ok(currentLine ? 'Train déplacé et sillon acheté.' : 'Train affecté et sillon acheté.');
 }
 
 function actionCloseLine(player, payload) {
@@ -5345,8 +5425,10 @@ function computeLineStaffNeeds(player, line) {
   const stops = lineStops(line);
   if (stops.length < 2) return emptyStaffNeeds();
   normalizeLineTrainIds(line);
+  const assignedCount = lineSlotDemand(player, line);
+  if (assignedCount <= 0) return emptyStaffNeeds();
   const distance = lineDistance(line);
-  const trainCount = Math.max(1, lineSlotDemand(player, line) || 1);
+  const trainCount = Math.max(1, assignedCount);
   const longLineFactor = 1 + Math.max(0, distance - 180) / 420;
   const stopFactor = 1 + Math.max(0, stops.length - 2) * 0.08;
   const passengerService = line.service === 'passengers' || line.service === 'mixed';

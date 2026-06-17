@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.0.1';
+const PROJECT_VERSION = 'v64.1.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -413,9 +413,9 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
-  window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
-  window.visualViewport?.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }));
+  window.addEventListener('resize', () => { resizeCanvas(); adjustCompositionRefitScroll(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); adjustCompositionRefitScroll(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.visualViewport?.addEventListener('scroll', () => { adjustCompositionRefitScroll(); scheduleTutorialOverlayPosition(30, { scroll: false }); });
   window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
   bindGlobalTooltips();
 }
@@ -1149,10 +1149,11 @@ function captureCompositionScrollPosition() {
   const key = currentCompositionScrollKey();
   if (!key) return;
   const editor = document.querySelector('.composition-editor-card');
-  if (!editor) return;
-  const strip = editor.querySelector('.composition-strip.large');
+  const list = document.querySelector('.composition-group-list');
+  const strip = editor?.querySelector('.composition-strip.large');
   app.compositionScrollState[key] = {
-    top: editor.scrollTop || 0,
+    top: editor?.scrollTop || 0,
+    listTop: list?.scrollTop || 0,
     stripLeft: strip?.scrollLeft || 0
   };
   localStorage.setItem('sillons.compositionScrollState', JSON.stringify(app.compositionScrollState));
@@ -1163,16 +1164,36 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
   const saved = app.compositionScrollState?.[key];
   if (!saved) return;
   const editor = document.querySelector('.composition-editor-card');
-  if (!editor) return;
+  const list = document.querySelector('.composition-group-list');
   const restore = () => {
-    editor.scrollTop = Number(saved.top || 0);
-    const strip = editor.querySelector('.composition-strip.large');
+    if (editor) editor.scrollTop = Number(saved.top || 0);
+    if (list) list.scrollTop = Number(saved.listTop || 0);
+    const strip = editor?.querySelector('.composition-strip.large');
     if (strip) strip.scrollLeft = Number(saved.stripLeft || 0);
   };
   requestAnimationFrame(() => {
     restore();
     requestAnimationFrame(restore);
   });
+}
+
+function adjustCompositionRefitScroll() {
+  if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return;
+  const card = document.querySelector('.composition-refit-list-card');
+  const list = document.querySelector('.composition-group-list');
+  if (!card || !list) return;
+  const viewportHeight = Math.max(520, Math.floor(window.visualViewport?.height || window.innerHeight || 720));
+  const cardRect = card.getBoundingClientRect();
+  const safeBottom = 16;
+  const availableCardHeight = Math.max(430, Math.floor(viewportHeight - cardRect.top - safeBottom));
+  card.style.height = `${availableCardHeight}px`;
+  card.style.maxHeight = `${availableCardHeight}px`;
+
+  const refreshedCardRect = card.getBoundingClientRect();
+  const listRect = list.getBoundingClientRect();
+  const availableListHeight = Math.max(260, Math.floor(refreshedCardRect.bottom - listRect.top - 14));
+  list.style.height = `${availableListHeight}px`;
+  list.style.maxHeight = `${availableListHeight}px`;
 }
 
 
@@ -1410,7 +1431,10 @@ function renderAll() {
   renderTutorialOverlay();
   applyLayoutMode();
   syncFocusedLineUi();
-  if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
+  requestAnimationFrame(() => {
+    adjustCompositionRefitScroll();
+    if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
+  });
   app.lastRenderKey = stateRenderSignature();
 }
 
@@ -3466,12 +3490,13 @@ function groupCompositionTrains(trains) {
   return groups;
 }
 
-function assignableLinesForTrain(train) {
+function assignableLinesForTrain(train, currentLine = null) {
   if (!train || train.maintenance?.active) return [];
   const model = app.state.balance.trains[train.modelId];
   const profile = previewOperatingProfile(train, model);
+  const currentLineId = currentLine?.id || '';
   return (app.state.me?.lines || [])
-    .filter(line => line.active && !lineHasTrain(line, train.id) && !lineAssignedTrainsClient(line).some(t => t.id === train.id))
+    .filter(line => line.active && line.id !== currentLineId && !lineHasTrain(line, train.id) && !lineAssignedTrainsClient(line).some(t => t.id === train.id))
     .filter(line => lineServiceCompatibleWithProfileClient(line.service || 'passengers', profile))
     .filter(line => lineDistance(line) <= Number(profile.range || 0))
     .sort((a, b) => linePublicName(a).localeCompare(linePublicName(b), 'fr'));
@@ -3506,8 +3531,10 @@ function renderCompositionTrainVignette(train) {
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inMaint;
-  const assignable = assignableLinesForTrain(train);
+  const assignable = assignableLinesForTrain(train, line);
+  const hasAssignmentAction = !!line || (assignable.length > 0 && !inMaint);
   const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
+  const assignButtonLabel = line ? 'Appliquer' : 'Affecter';
   const sellEstimate = trainResaleEstimateClient(train, model);
   const era = trainEraLabel(Number(model.unlockEpoch ?? model.epoch ?? 0));
   const serviceLabel = trainServiceSortLabel(trainServiceClass(model));
@@ -3518,7 +3545,7 @@ function renderCompositionTrainVignette(train) {
           <input type="checkbox" data-action="toggle-composition-train-selection" data-id="${escapeAttr(train.id)}" ${selected ? 'checked' : ''}>
           <span>Sélection</span>
         </label>
-        <span class="tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
+        <span class="tag composition-status-tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
       </div>
       <button type="button" class="composition-vignette-main" data-action="select-composition-train" data-id="${escapeAttr(train.id)}">
         <div class="composition-vignette-media">
@@ -3539,15 +3566,16 @@ function renderCompositionTrainVignette(train) {
         </div>
       </button>
       <div class="composition-assign-row">
-        <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>
-          <option value="">${line ? 'Déjà affecté' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
+        <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>
+          <option value="">${line ? 'Changer / retirer...' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
+          ${line ? `<option value="__remove__">Retirer de la ligne actuelle</option>` : ''}
           ${assignable.map(candidate => {
             const slots = lineAvailableSillonsClient(candidate);
             const label = slots ? `${linePublicName(candidate)} · ${slots.available} sillons dispo` : linePublicName(candidate);
             return `<option value="${escapeAttr(candidate.id)}">${escapeHtml(label)}</option>`;
           }).join('')}
         </select>
-        <button type="button" class="ghost" data-action="assign-train-line" data-id="${escapeAttr(train.id)}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>Affecter</button>
+        <button type="button" class="ghost" data-action="assign-train-line" data-id="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>${escapeHtml(assignButtonLabel)}</button>
       </div>
       <div class="composition-train-actions">
         <button type="button" class="ghost" data-action="duplicate-train" data-id="${escapeAttr(train.id)}" ${tooltipAttr(`Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
@@ -3577,14 +3605,16 @@ function renderCompositionTrainGroup(group) {
 
 function renderCompositionSelectionToolbar(selectedIds) {
   const selectedCount = selectedIds.length;
+  const sortMode = app.fleetSortMode === 'type' ? 'type' : 'era';
   return `
     <div class="composition-list-toolbar composition-refit-toolbar">
-      <label>Trier le parc
-        <select id="fleetSortMode">
-          <option value="era" ${app.fleetSortMode === 'era' ? 'selected' : ''}>Par ère</option>
-          <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Voyageurs / fret</option>
-        </select>
-      </label>
+      <div class="composition-sort-control" role="group" aria-label="Trier le parc possédé">
+        <span class="small muted">Trier le parc</span>
+        <div class="composition-sort-switch">
+          <button type="button" class="ghost ${sortMode === 'era' ? 'active' : ''}" data-action="set-composition-sort" data-mode="era">Par ère</button>
+          <button type="button" class="ghost ${sortMode === 'type' ? 'active' : ''}" data-action="set-composition-sort" data-mode="type">Voyageurs / Fret</button>
+        </div>
+      </div>
       <div class="composition-selection-actions">
         <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
         <button type="button" class="ghost" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Éditer la sélection</button>
@@ -5535,6 +5565,12 @@ async function onTabContentClick(event) {
   }
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
+if (action === 'set-composition-sort') {
+  app.fleetSortMode = button.dataset.mode === 'type' ? 'type' : 'era';
+  localStorage.setItem('sillons.fleetSortMode', app.fleetSortMode);
+  renderAll();
+  return;
+}
 if (action === 'select-composition-train') {
   const trainId = button.dataset.id || '';
   const existingSelection = compositionSelectedIds();
@@ -5637,13 +5673,24 @@ Coût estimé : ${money(price)}.`, { confirmLabel: 'Dupliquer' }))) return;
     const trainId = button.dataset.id;
     const select = document.querySelector(`[data-assign-line-select="${CSS.escape(trainId)}"]`);
     const lineId = select?.value || '';
-    if (!lineId) return toast('Choisis une ligne compatible.', 'error');
+    if (!lineId) return toast('Choisis une action ou une ligne compatible.', 'error');
+    const currentLine = trainCurrentLine(trainId);
+    if (lineId === '__remove__') {
+      if (!(await gameConfirm('Retirer le train', `Retirer ce train de ${currentLine ? linePublicName(currentLine) : 'sa ligne actuelle'} ?`, { confirmLabel: 'Retirer' }))) return;
+      return doAction('setTrainLineAssignment', { trainId, lineId: '' });
+    }
     const line = app.state.me.lines.find(l => l.id === lineId);
     const cost = line ? slotPurchaseCostClient(line, 1) : 0;
-    if (!(await gameConfirm('Acheter un sillon', `Affecter ce train à ${line ? linePublicName(line) : 'cette ligne'} ?
+    const title = currentLine ? 'Changer de ligne' : 'Acheter un sillon';
+    const message = currentLine
+      ? `Déplacer ce train de ${linePublicName(currentLine)} vers ${line ? linePublicName(line) : 'cette ligne'} ?
 
-Cette action achète 1 sillon supplémentaire sur la ligne. Coût : ${money(cost)}.`, { confirmLabel: 'Acheter le sillon' }))) return;
-    return doAction('assignTrainToLine', { trainId, lineId });
+Cette action achète 1 sillon sur la nouvelle ligne. Coût : ${money(cost)}.`
+      : `Affecter ce train à ${line ? linePublicName(line) : 'cette ligne'} ?
+
+Cette action achète 1 sillon supplémentaire sur la ligne. Coût : ${money(cost)}.`;
+    if (!(await gameConfirm(title, message, { confirmLabel: currentLine ? 'Déplacer' : 'Acheter le sillon' }))) return;
+    return doAction('setTrainLineAssignment', { trainId, lineId });
   }
   if (action === 'sell-train') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
