@@ -1,5 +1,14 @@
 # Changelog
 
+## Version v64.0.1 — correctif lisibilité et scroll du menu Composition
+
+- incrément de version : badge interface `v64.0.1`, package `64.0.1` et schéma serveur `96` ;
+- correction de la grille de vignettes du menu Composition : largeur minimale augmentée, contenus contenus dans les cartes et suppression des débordements des boutons / listes déroulantes ;
+- correction des libellés longs de lignes et statuts : ellipses propres, titres bornés et textes empêchés de sortir des cadres ;
+- correction du scroll indépendant de la liste des trains : la zone des sections de trains possède désormais une hauteur bornée et son propre défilement vertical ;
+- amélioration de la lisibilité du choix de tri `Par ère` / `Voyageurs / fret`, notamment sur écran étroit ;
+- adaptation responsive des en-têtes de sections réductibles pour éviter les titres coupés ou illisibles.
+
 ## Version v64.0.0 — refonte du menu Composition
 
 - incrément de version : badge interface `v64.0.0`, package `64.0.0` et schéma serveur `95` ;

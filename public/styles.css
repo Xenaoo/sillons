@@ -7564,3 +7564,263 @@ dialog.modal--wide {
     min-height: 92px;
   }
 }
+
+/* ===== V64.0.1 : corrections menu Composition — alignements, débordements et scroll ===== */
+.composition-refit-layout,
+.composition-refit-list-card,
+.composition-group-list,
+.composition-train-group,
+.composition-vignette-grid,
+.composition-train-vignette,
+.composition-vignette-main,
+.composition-vignette-body,
+.composition-assign-row,
+.composition-train-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.composition-refit-list-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  max-height: calc(100dvh - 188px);
+  overflow: hidden;
+}
+
+.composition-group-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  min-height: 260px;
+  max-height: calc(100dvh - 340px);
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(217,168,82,.62) rgba(5,10,20,.35);
+}
+
+.composition-group-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.composition-group-list::-webkit-scrollbar-track {
+  background: rgba(5,10,20,.35);
+  border-radius: 999px;
+}
+
+.composition-group-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(217,168,82,.78), rgba(133,94,32,.92));
+  border-radius: 999px;
+  border: 2px solid rgba(5,10,20,.35);
+}
+
+.composition-vignette-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 315px), 1fr));
+  align-items: stretch;
+}
+
+.composition-train-vignette {
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.composition-vignette-select-row {
+  min-width: 0;
+}
+
+.composition-vignette-select-row .tag {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.composition-vignette-checkbox {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.composition-vignette-checkbox span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composition-vignette-main {
+  overflow: hidden;
+}
+
+.composition-vignette-title strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.composition-vignette-title span,
+.composition-vignette-body > .small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composition-mini-stats {
+  gap: 6px 9px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.composition-mini-stats b {
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.composition-assign-row {
+  grid-template-columns: minmax(0, 1fr) minmax(76px, max-content);
+  overflow: hidden;
+}
+
+.composition-assign-select,
+.composition-assign-row button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.composition-assign-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composition-assign-row button {
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+.composition-train-actions {
+  display: flex;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.composition-train-actions button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.composition-refit-toolbar {
+  min-width: 0;
+  align-items: end;
+}
+
+.composition-refit-toolbar label {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.composition-refit-toolbar select {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composition-group-heading {
+  min-width: 0;
+}
+
+.composition-group-heading .research-era-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.composition-group-heading .research-era-title > span:last-child {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.composition-group-heading .research-era-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+@media (max-width: 1180px) {
+  .composition-refit-list-card {
+    max-height: calc(100dvh - 170px);
+  }
+
+  .composition-group-list,
+  .composition-train-list.composition-group-list {
+    min-height: 340px;
+    max-height: calc(100dvh - 310px);
+  }
+}
+
+@media (max-width: 700px) {
+  .composition-refit-list-card {
+    max-height: calc(100dvh - 148px);
+  }
+
+  .composition-refit-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .composition-selection-actions {
+    justify-content: stretch;
+  }
+
+  .composition-selection-actions > *,
+  .composition-editor-heading-actions > * {
+    width: 100%;
+  }
+
+  .composition-group-list,
+  .composition-train-list.composition-group-list {
+    min-height: 360px;
+    max-height: calc(100dvh - 285px);
+    padding-right: 4px;
+  }
+
+  .composition-group-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .composition-group-heading .research-era-meta {
+    text-align: left;
+    font-size: 0.78rem;
+  }
+
+  .composition-vignette-select-row {
+    align-items: flex-start;
+  }
+
+  .composition-vignette-select-row .tag {
+    max-width: 52%;
+  }
+
+  .composition-assign-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composition-assign-row button,
+  .composition-train-actions button {
+    width: 100%;
+  }
+}

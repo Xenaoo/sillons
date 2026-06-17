@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.0.0';
+const PROJECT_VERSION = 'v64.0.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -3582,7 +3582,7 @@ function renderCompositionSelectionToolbar(selectedIds) {
       <label>Trier le parc
         <select id="fleetSortMode">
           <option value="era" ${app.fleetSortMode === 'era' ? 'selected' : ''}>Par ère</option>
-          <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Par type voyageurs / fret</option>
+          <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Voyageurs / fret</option>
         </select>
       </label>
       <div class="composition-selection-actions">
