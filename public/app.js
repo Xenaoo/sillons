@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.5.0';
+const PROJECT_VERSION = 'v64.5.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -713,6 +713,11 @@ function stateRenderSignature(state = app.state) {
   ].join('::');
 }
 
+
+function isFleetSubmenuAutoRefreshFrozen() {
+  return app.activeTab === 'fleet' && ['catalog', 'maintenance', 'composition'].includes(app.activeFleetSubtab || '');
+}
+
 async function refreshState(first) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
@@ -747,7 +752,12 @@ async function refreshState(first) {
     const nextRenderKey = stateRenderSignature(data);
     const shouldRender = first || nextRenderKey !== app.lastRenderKey;
     if (!shouldRender) return;
-    if (!first && isInteractiveUiActive()) {
+    if (!first && isFleetSubmenuAutoRefreshFrozen()) {
+      // Les sous-menus du Parc ne sont plus reconstruits à chaque tick serveur :
+      // les sélections, scrolls, boutons et champs restent stables jusqu'à une action utilisateur.
+      renderTopbar();
+      app.lastRenderKey = nextRenderKey;
+    } else if (!first && isInteractiveUiActive()) {
       // Ne pas reconstruire l’onglet pendant une interaction utilisateur :
       // menus déroulants, saisie, sliders, suggestions et formulaires restent ouverts.
       renderTopbar();
@@ -3909,9 +3919,12 @@ function renderCompositionSelectionToolbar(selectedIds) {
   const selectedCount = selectedIds.length;
   const totalCount = compositionValidTrainIds().size;
   const allSelected = totalCount > 0 && selectedCount >= totalCount;
+  const hint = selectedCount
+    ? 'Clique sur une zone libre d’une vignette pour ajouter ou retirer un train de la sélection.'
+    : 'Clique sur une zone libre d’une vignette pour commencer une sélection multiple.';
   return `
     <div class="composition-list-toolbar composition-refit-toolbar">
-      <div class="composition-selection-hint small muted">Clique sur une zone libre d’une vignette pour l’ajouter ou la retirer de la sélection.</div>
+      <div class="composition-selection-hint small muted">${escapeHtml(hint)}</div>
       <div class="composition-selection-actions">
         <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
         <button type="button" class="ghost" data-action="select-all-composition-trains" ${allSelected ? 'disabled' : ''}>Tout sélectionner</button>

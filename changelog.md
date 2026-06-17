@@ -1,3 +1,10 @@
+## Version v64.5.1 — correctif lisibilité et stabilité des sous-menus Parc
+
+- incrément de version : badge interface `v64.5.1`, version serveur/client `v64.5.1`, package `64.5.1` et schéma serveur `108` ;
+- menu `Parc > Compositions` : correction de la barre de sélection multiple, dont le texte se retrouvait comprimé et illisible quand des trains étaient sélectionnés ;
+- menu `Parc > Compositions` : la consigne de sélection occupe désormais une ligne dédiée et les actions restent lisibles en dessous ;
+- sous-menus du `Parc` : blocage du rendu complet automatique à chaque tick serveur pour éviter les reconstructions permanentes du Catalogue, de la Maintenance et des Compositions ; seuls les compteurs du bandeau supérieur restent rafraîchis automatiquement.
+
 ## Version v64.5.0 — sélection directe des compositions
 
 - incrément de version : badge interface `v64.5.0`, version serveur/client `v64.5.0`, package `64.5.0` et schéma serveur `107` ;

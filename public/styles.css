@@ -8792,3 +8792,38 @@ dialog.modal--wide {
     justify-content: stretch !important;
   }
 }
+
+
+/* ===== V64.5.1 : compositions — lisibilité toolbar et anti-refresh Parc ===== */
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-toolbar {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 9px !important;
+  align-items: start !important;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-hint {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 8px 10px !important;
+  border: 1px solid rgba(217,168,82,.12);
+  border-radius: 12px;
+  background: rgba(2,6,23,.28);
+  color: #d8c89e !important;
+  line-height: 1.35 !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  hyphens: none !important;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions .tag {
+  white-space: nowrap;
+}
