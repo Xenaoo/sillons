@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.6.1';
+const PROJECT_VERSION = 'v64.6.4';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -81,7 +81,6 @@ const app = {
     trainMotion: {},
     lastMoveEventAt: 0,
     panOverlay: { active: false, anchorLatLng: null, anchorPoint: null, raf: false },
-    creatingCustomStation: false,
     view: { zoom: 1, panX: 0, panY: 0 },
     drag: { active: false, moved: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 }
   },
@@ -666,10 +665,9 @@ function endPanOverlay() {
 function worldRouteSignature(state = app.state) {
   if (!state?.players || !state?.world) return '';
   const playerSig = state.players.map(p => `${p.id}:${(p.lines || []).map(l => `${l.id}:${lineStopsOf(l).join('>')}:${lineTrainIdsOf(l).join('+')}:${l.active ? 1 : 0}:${l.electrified ? 1 : 0}`).join('|')}`).join('||');
-  const customCount = state.world.stations?.filter?.(s => s.custom)?.length || 0;
   const communeStatus = state.world.communesStatus || {};
   const stationSig = `${state.world.stations?.length || 0}:${communeStatus.status || ''}:${communeStatus.count || 0}:${communeStatus.updatedAt || ''}`;
-  return `${playerSig}::stations:${stationSig}::custom:${customCount}`;
+  return `${playerSig}::stations:${stationSig}`;
 }
 
 function stateRenderSignature(state = app.state) {
@@ -841,22 +839,9 @@ function initOsmMap() {
   app.map.leaflet.on('mousemove', onOsmMouseMove);
   app.map.leaflet.on('mouseout', () => {
     app.hoverStation = null;
-    app.map.leaflet.getContainer().style.cursor = app.map.stationPlacement ? 'crosshair' : '';
+    app.map.leaflet.getContainer().style.cursor = '';
   });
   app.map.leaflet.on('click', onOsmClick);
-
-  // Filet de sécurité v43 : en mode création d’arrêt, on capte aussi le clic
-  // DOM du conteneur. Cela évite que les hitboxes canvas/Leaflet ou certains
-  // overlays empêchent la création sur une zone vide de la carte.
-  target.addEventListener('click', event => {
-    if (!app.map.stationPlacement || !app.map.leaflet || app.map.creatingCustomStation) return;
-    if (event.target.closest?.('.leaflet-control')) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const point = app.map.leaflet.mouseEventToContainerPoint(event);
-    const latlng = app.map.leaflet.containerPointToLatLng(point);
-    createCustomStationFromLatLng(latlng);
-  }, true);
 
   app.map.leaflet.whenReady(() => {
     app.map.mapReady = true;
@@ -948,155 +933,31 @@ function enableStationPlacement() {
   toast('Création désactivée : seules les gares réelles SNCF sont jouables.');
   $('#addStopBtn')?.classList.add('hidden');
   $('#cancelStopBtn')?.classList.add('hidden');
-  $('#mapHint').textContent = 'Clique une gare réelle du Réseau Ferré National.';
-  return;
-  app.map.stationPlacement = true;
-  app.map.creatingCustomStation = false;
-  $('#addStopBtn')?.classList.add('hidden');
-  $('#cancelStopBtn')?.classList.remove('hidden');
-  $('#mapHint').textContent = 'Création désactivée : seules les gares réelles SNCF sont jouables.';
-  const container = app.map.leaflet?.getContainer();
-  container?.classList.add('placing-stop');
-  app.map.leaflet?.dragging?.disable?.();
+  const hint = $('#mapHint');
+  if (hint) hint.textContent = 'Clique une gare réelle du Réseau Ferré National.';
 }
 
 function disableStationPlacement() {
   app.map.stationPlacement = false;
-  app.map.creatingCustomStation = false;
   $('#addStopBtn')?.classList.add('hidden');
   $('#cancelStopBtn')?.classList.add('hidden');
-  $('#mapHint').textContent = 'Clique une gare réelle du Réseau Ferré National.';
+  const hint = $('#mapHint');
+  if (hint) hint.textContent = 'Clique une gare réelle du Réseau Ferré National.';
   const container = app.map.leaflet?.getContainer();
   container?.classList.remove('placing-stop');
   app.map.leaflet?.dragging?.enable?.();
 }
 
-function validCustomStationLatLng(lat, lng) {
-  // Zone volontairement légèrement plus large que la France métropolitaine :
-  // elle couvre aussi la Corse et évite les faux refus près des frontières/côtes.
-  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 40.6 && lat <= 51.8 && lng >= -5.9 && lng <= 10.4;
-}
-
-
-function customStationCreationQuote(lat, lon) {
-  const demand = estimateDemandFromLocationClient(lat, lon);
-  const freight = estimateFreightFromLocationClient(lat, lon);
-  const tourism = estimateTourismFromLocationClient(lat, lon);
-  const market = Number(app.state?.game?.market?.steel || 1);
-  const nearby = dedupedStations(app.state?.world?.stations || [])
-    .filter(s => !s.custom && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lon)))
-    .map(s => ({ station: s, distance: haversineClient(lat, lon, Number(s.lat), Number(s.lon)) }))
-    .filter(entry => Number.isFinite(entry.distance))
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 10);
-
-  const localValue = 52000 + demand * 720 + freight * 420 + tourism * 260;
-  let weightedNeighbourValue = localValue;
-  const closest = nearby[0] || null;
-  const closestDistance = closest?.distance ?? 80;
-
-  if (nearby.length) {
-    let totalWeight = 0;
-    let totalValue = 0;
-    for (const entry of nearby) {
-      const d = Math.max(0.5, entry.distance);
-      const weight = 1 / Math.pow(d + 8, 1.35);
-      totalWeight += weight;
-      totalValue += stationAcquisitionCost(entry.station) * weight;
-    }
-    if (totalWeight > 0) weightedNeighbourValue = totalValue / totalWeight;
-  }
-
-  const proximityFactor = closestDistance < 4 ? 1.22 : closestDistance < 12 ? 1.10 : closestDistance > 55 ? 0.82 : 1;
-  const blended = (localValue * 0.58 + weightedNeighbourValue * 0.42) * proximityFactor * market;
-  const cost = Math.round(clamp(blended, 90000, 6500000));
-  return {
-    cost,
-    demand,
-    freight,
-    tourism,
-    closestName: closest?.station?.name || '',
-    closestDistance: closest ? Math.round(closest.distance * 10) / 10 : null
-  };
-}
-
-function estimateDemandFromLocationClient(lat, lon) {
-  let best = 90;
-  for (const s of dedupedStations(app.state?.world?.stations || [])) {
-    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
-    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
-    const influence = Number(s.baseDemand || 80) * Math.exp(-d / 55);
-    best = Math.max(best, influence);
-  }
-  return Math.round(clamp(best, 60, 500));
-}
-
-function estimateFreightFromLocationClient(lat, lon) {
-  let best = 25;
-  for (const s of dedupedStations(app.state?.world?.stations || [])) {
-    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
-    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
-    best = Math.max(best, Number(s.freight || 20) * Math.exp(-d / 70));
-  }
-  return Math.round(clamp(best, 10, 150));
-}
-
-function estimateTourismFromLocationClient(lat, lon) {
-  let best = 30;
-  for (const s of dedupedStations(app.state?.world?.stations || [])) {
-    if (!Number.isFinite(Number(s.lat)) || !Number.isFinite(Number(s.lon))) continue;
-    const d = haversineClient(lat, lon, Number(s.lat), Number(s.lon));
-    best = Math.max(best, Number(s.tourism || 20) * Math.exp(-d / 85));
-  }
-  return Math.round(clamp(best, 10, 120));
-}
-
-async function createCustomStationFromLatLng(latlng) {
-  if (!app.map.stationPlacement || app.map.creatingCustomStation) return false;
-  const lat = Number(latlng?.lat);
-  const lng = Number(latlng?.lng);
-  if (!validCustomStationLatLng(lat, lng)) {
-    toast('Choisis un emplacement sur la zone de jeu France / Corse.', 'error');
-    return true;
-  }
-
-  const defaultName = `Arrêt ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-  const name = window.prompt('Nom du nouvel arrêt / gare :', defaultName);
-  if (!name) return true;
-
-  const quote = customStationCreationQuote(lat, lng);
-  const nearest = quote.closestName ? `\nGare de référence la plus proche : ${quote.closestName} (${quote.closestDistance} km).` : '';
-  const message = `Créer la gare « ${name} » ?\n\nPrix proposé : ${money(quote.cost)}\nDemande estimée : ${formatInt(quote.demand)} voyageurs, ${formatInt(quote.freight)} fret, ${formatInt(quote.tourism)} tourisme.${nearest}\n\nCe montant sera débité immédiatement.`;
-  if (!(await gameConfirm('Créer un arrêt', message, { confirmLabel: 'Créer l’arrêt' }))) return true;
-  if (Number(app.state?.me?.cash || 0) < quote.cost) {
-    toast(`Trésorerie insuffisante. Coût estimé : ${money(quote.cost)}.`, 'error');
-    return true;
-  }
-
-  app.map.creatingCustomStation = true;
-  try {
-    await doAction('createCustomStation', { name, lat, lon: lng, quotedCost: quote.cost });
-  } finally {
-    disableStationPlacement();
-  }
-  return true;
-}
-
 function onOsmMouseMove(event) {
   if (app.map.navigating) return;
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
-  const hit = app.map.stationPlacement ? null : hitStationAt(p);
+  const hit = hitStationAt(p);
   app.hoverStation = hit?.id || null;
   const container = app.map.leaflet.getContainer();
-  container.style.cursor = app.map.stationPlacement ? 'crosshair' : hit ? 'pointer' : '';
+  container.style.cursor = hit ? 'pointer' : '';
 }
 
 async function onOsmClick(event) {
-  if (app.map.stationPlacement) {
-    await createCustomStationFromLatLng(event.latlng);
-    return;
-  }
-
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
   const hit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
   if (hit) {
@@ -4977,11 +4838,6 @@ function stationAcquisitionCost(s) {
   const storedPurchaseCost = Number(s?.purchaseCost || s?.acquisitionCost || 0);
   if (Number.isFinite(storedPurchaseCost) && storedPurchaseCost > 0) return Math.round(storedPurchaseCost);
   if (Number.isFinite(annualPassengers) && annualPassengers > 0) return stationPriceFromAnnualPassengers(annualPassengers);
-  if (s?.custom) {
-    const stored = Number(s.creationCost || s.purchaseCost || 0);
-    if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
-    return Math.round(65000 * app.state.game.market.steel);
-  }
   const population = Number(s?.population || 0);
   if (population > 0) {
     return Math.round((120000 + population * 3.2 + Math.pow(population, 1.12) * 0.9) * app.state.game.market.steel);
@@ -7478,7 +7334,6 @@ function shouldDrawStation(s, asset, selected) {
   if (selected || asset) return true;
   const zoom = Number(app.map.leaflet?.getZoom?.() || 6);
   const pop = Number(s.population || s.baseDemand * 450 || 0);
-  if (s.custom) return zoom >= 9;
   if (zoom < 6) return pop >= 300000 || s.id === 'PAR';
   if (zoom < 7) return pop >= 150000;
   if (zoom < 8) return pop >= 80000;
@@ -7511,7 +7366,6 @@ function stationMapPriority(s, asset, selected, served) {
   if (asset) return 900_000_000 + (asset.level || 1) * 100_000 + pop;
   if (served) return 800_000_000 + pop;
   if (!s.commune) return 700_000_000 + pop;
-  if (s.custom) return 650_000_000 + pop;
   return pop;
 }
 
@@ -7529,7 +7383,6 @@ function stationMarkerRadiusForItem(item) {
   if (item.selected) return 8;
   if (item.asset) return 6.5;
   if (item.served) return 5.8;
-  if (item.custom) return 5.4;
   return 4.8;
 }
 
@@ -7538,12 +7391,11 @@ function stationSquareSizeForItem(item) {
   if (item.selected) return 12;
   if (item.asset) return zoom >= 11 ? 10 : 9;
   if (item.served) return zoom >= 11 ? 8 : 7;
-  if (item.custom) return 7;
   return zoom >= 12 ? 6 : zoom >= 10 ? 5 : 4;
 }
 
 function drawStationSquareMarker(ctx, item) {
-  const { p, asset, selected, served, custom } = item;
+  const { p, asset, selected, served } = item;
   const size = stationSquareSizeForItem(item);
   const half = Math.round(size / 2);
   const x = Math.round(p.x) - half;
@@ -7564,9 +7416,7 @@ function drawStationSquareMarker(ctx, item) {
       ? 'rgba(217, 168, 82, .92)'
       : served
         ? 'rgba(106, 197, 143, .88)'
-        : custom
-          ? 'rgba(125, 211, 252, .86)'
-          : 'rgba(230, 220, 195, .76)';
+        : 'rgba(230, 220, 195, .76)';
   ctx.fillRect(x, y, size, size);
 
   ctx.shadowBlur = 0;
@@ -7613,7 +7463,7 @@ function drawableStations(lite = false) {
     const asset = me?.stations?.[s.id];
     const selected = app.selectedStation === s.id;
     const served = servedStationIds.has(s.id);
-    if (lite && !selected && !asset && !s.custom) continue;
+    if (lite && !selected && !asset && !served) continue;
     if (!shouldDrawStation(s, asset, selected)) continue;
     if (viewport && !selected && !asset) {
       const lat = stationRouteLat(s);
@@ -7629,7 +7479,6 @@ function drawableStations(lite = false) {
       asset,
       selected,
       served,
-      custom: !!s.custom,
       priority: stationMapPriority(s, asset, selected, served)
     });
   }
@@ -8170,9 +8019,8 @@ function stationListSignature(list) {
   const ids = stations.map(s => `${s?.id || ''}:${s?.code || s?.communeCode || ''}:${s?.population || 0}`).join('|');
   let hash = 0;
   for (let i = 0; i < ids.length; i += 1) hash = ((hash << 5) - hash + ids.charCodeAt(i)) | 0;
-  const customCount = stations.reduce((count, s) => count + (s?.custom ? 1 : 0), 0);
   const communes = app.state?.world?.communesStatus || {};
-  const signature = `${stations.length}:${hash}:${ids.length}:${customCount}:${communes.status || ''}:${communes.updatedAt || ''}:${communes.count || 0}`;
+  const signature = `${stations.length}:${hash}:${ids.length}:${communes.status || ''}:${communes.updatedAt || ''}:${communes.count || 0}`;
   app.stationSignatureCache = { source: list, signature };
   return signature;
 }
@@ -8290,20 +8138,7 @@ function addEndpointIfNeeded(coords, point, atStart) {
 }
 
 function officialRouteAliasForStation(id) {
-  const s = station(id);
-  if (!s?.custom) return id;
-  const name = stationDedupNameClient(s.name);
-  if (!name) return id;
-  const point = routeGeometryStationPoint(id);
-  if (!point) return id;
-  const candidates = dedupedStations(app.state?.world?.stations || [])
-    .filter(candidate => !candidate.custom && stationDedupNameClient(candidate.name) === name)
-    .map(candidate => ({ id: candidate.id, point: routeGeometryStationPoint(candidate.id) }))
-    .filter(candidate => candidate.point)
-    .map(candidate => ({ ...candidate, distance: coordDistanceKm(point, candidate.point) }))
-    .filter(candidate => candidate.distance <= 5)
-    .sort((a, b) => a.distance - b.distance);
-  return candidates[0]?.id || id;
+  return id;
 }
 
 function routeGeometryAliasPair(a, b) {
@@ -9512,7 +9347,6 @@ function stationMetaLabel(s) {
   if (!s) return '';
   if (s.annualPassengers) return `${formatInt(s.annualPassengers)} voy./an · ${s.codesPostaux?.[0] || s.codeDepartement || 'France'}`;
   if (s.population) return `${formatInt(s.population)} hab. · ${s.codesPostaux?.[0] || s.codeDepartement || 'France'}`;
-  if (s.custom) return 'Arrêt personnalisé';
   return s.region || 'Gare principale';
 }
 

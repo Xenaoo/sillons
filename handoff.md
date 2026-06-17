@@ -65,7 +65,7 @@ Routes API principales :
 
 Les actions joueur passent par `applyAction(playerId, type, payload)`. Types connus :
 
-`buyTrain`, `duplicateTrain`, `sellTrain`, `repairTrain`, `repairAllTrains`, `updateTrainComposition`, `setMaintenancePolicy`, `createLine`, `assignTrainToLine`, `setTrainLineAssignment`, `closeLine`, `updateLine`, `upgradeStation`, `sellStation`, `createCustomStation`, `hireStaff`, `fireStaff`, `research`, `cancelResearch`, `energyStrategy`, `buyResource`, `setElectricityOrder`, `takeLoan`, `repayLoan`, `rename`, `resetCompany`, `tutorial`.
+`buyTrain`, `duplicateTrain`, `sellTrain`, `repairTrain`, `repairAllTrains`, `updateTrainComposition`, `setMaintenancePolicy`, `createLine`, `assignTrainToLine`, `setTrainLineAssignment`, `closeLine`, `updateLine`, `upgradeStation`, `sellStation`, `hireStaff`, `fireStaff`, `research`, `cancelResearch`, `energyStrategy`, `buyResource`, `setElectricityOrder`, `takeLoan`, `repayLoan`, `rename`, `resetCompany`, `tutorial`.
 
 Compte admin : identifiant normalise `xenao` (`ADMIN_USERNAME_KEY`). L'onglet admin apparait cote client si la session est admin.
 
