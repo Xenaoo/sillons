@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.1.4';
+const PROJECT_VERSION = 'v64.1.5';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -1151,11 +1151,12 @@ function captureCompositionScrollPosition() {
   const key = currentCompositionScrollKey();
   if (!key) return;
   const editor = document.querySelector('.composition-editor-card');
+  const panel = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   const strip = editor?.querySelector('.composition-strip.large');
   app.compositionScrollState[key] = {
     top: editor?.scrollTop || 0,
-    listTop: list?.scrollTop || 0,
+    listTop: panel?.scrollTop || list?.scrollTop || 0,
     stripLeft: strip?.scrollLeft || 0
   };
   localStorage.setItem('sillons.compositionScrollState', JSON.stringify(app.compositionScrollState));
@@ -1166,10 +1167,12 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
   const saved = app.compositionScrollState?.[key];
   if (!saved) return;
   const editor = document.querySelector('.composition-editor-card');
+  const panel = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   const restore = () => {
     if (editor) editor.scrollTop = Number(saved.top || 0);
-    if (list) list.scrollTop = Number(saved.listTop || 0);
+    if (panel) panel.scrollTop = Number(saved.listTop || 0);
+    else if (list) list.scrollTop = Number(saved.listTop || 0);
     const strip = editor?.querySelector('.composition-strip.large');
     if (strip) strip.scrollLeft = Number(saved.stripLeft || 0);
   };
@@ -1183,10 +1186,7 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
 function compositionScrollContainerFromTarget(target) {
   if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return null;
   if (!target?.closest) return null;
-  const list = target.closest('.composition-group-list');
-  if (list) return list;
-  const card = target.closest('.composition-refit-list-card');
-  return card?.querySelector?.('.composition-group-list') || null;
+  return target.closest('.composition-refit-list-card') || target.closest('.composition-group-list') || null;
 }
 
 function compositionListCanScroll(list) {
@@ -1379,30 +1379,26 @@ function adjustCompositionRefitScroll() {
   setImportant(card, 'min-height', '0');
   setImportant(card, 'height', `${availableCardHeight}px`);
   setImportant(card, 'max-height', `${availableCardHeight}px`);
-  setImportant(card, 'overflow', 'hidden');
+  setImportant(card, 'overflow-y', 'auto');
+  setImportant(card, 'overflow-x', 'hidden');
   setImportant(card, 'overscroll-behavior', 'contain');
+  setImportant(card, '-webkit-overflow-scrolling', 'touch');
+  setImportant(card, 'touch-action', 'pan-y');
 
-  const cardStyle = window.getComputedStyle(card);
-  const paddingTop = parseFloat(cardStyle.paddingTop || '0') || 0;
-  const paddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
-  const gap = parseFloat(cardStyle.rowGap || cardStyle.gap || '0') || 0;
-  const header = card.querySelector(':scope > .fleet-card-heading');
-  const toolbar = card.querySelector(':scope > .composition-refit-toolbar');
-  const fixedHeight = (header?.offsetHeight || 0) + (toolbar?.offsetHeight || 0) + paddingTop + paddingBottom + gap * 2;
-  const availableListHeight = Math.max(180, Math.floor(availableCardHeight - fixedHeight));
-
-  list.style.setProperty('--composition-group-list-height', `${availableListHeight}px`);
-  setImportant(list, 'display', 'grid');
-  setImportant(list, 'align-content', 'start');
-  setImportant(list, 'flex', '1 1 auto');
+  // La liste n'est plus le conteneur de scroll : elle reste en flux normal.
+  // Le scroll se fait sur la carte/panneau .composition-refit-list-card, ce qui évite
+  // les conflits flex/grid qui réduisaient .composition-group-list à quelques pixels.
+  list.style.removeProperty('--composition-group-list-height');
+  setImportant(list, 'display', 'block');
+  setImportant(list, 'align-content', 'normal');
+  setImportant(list, 'flex', '0 0 auto');
   setImportant(list, 'min-height', '0');
-  setImportant(list, 'height', `${availableListHeight}px`);
-  setImportant(list, 'max-height', `${availableListHeight}px`);
-  setImportant(list, 'overflow-y', 'auto');
-  setImportant(list, 'overflow-x', 'hidden');
-  setImportant(list, 'overscroll-behavior', 'contain');
-  setImportant(list, '-webkit-overflow-scrolling', 'touch');
-  setImportant(list, 'touch-action', 'pan-y');
+  setImportant(list, 'height', 'auto');
+  setImportant(list, 'max-height', 'none');
+  setImportant(list, 'overflow-y', 'visible');
+  setImportant(list, 'overflow-x', 'visible');
+  setImportant(list, 'overscroll-behavior', 'auto');
+  setImportant(list, 'touch-action', 'auto');
 
   if (editor) {
     if (stacked) {
@@ -1656,6 +1652,7 @@ function renderAll() {
   applyLayoutMode();
   syncFocusedLineUi();
   scheduleCompositionRefitScrollAdjustment();
+  scheduleMobileMapViewportFix();
   requestAnimationFrame(() => {
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
   });
@@ -6646,6 +6643,27 @@ function scheduleLeafletInvalidateSize() {
       app.map.invalidatingSize = false;
     }
   });
+}
+
+function scheduleMobileMapViewportFix() {
+  const section = document.querySelector('.map-section');
+  const holder = document.querySelector('#osmMap');
+  if (!section || !holder) return;
+  const run = () => {
+    if (window.matchMedia?.('(max-width: 1100px)')?.matches) {
+      section.classList.remove('hidden-by-layout');
+      section.style.removeProperty('display');
+      const height = holder.getBoundingClientRect().height;
+      if (height < 260) holder.style.minHeight = '300px';
+    }
+    resizeCanvas();
+    scheduleLeafletInvalidateSize();
+  };
+  requestAnimationFrame(() => {
+    run();
+    requestAnimationFrame(run);
+  });
+  window.setTimeout(run, 180);
 }
 
 function hasPixelMapArt() {

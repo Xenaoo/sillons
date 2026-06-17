@@ -1,5 +1,13 @@
 # Changelog
 
+## Version v64.1.5 — correction définitive du scroll Composition et carte mobile
+
+- incrément de version : badge interface `v64.1.5`, package `64.1.5` et schéma serveur `102` ;
+- correction du scroll dans `Parc > Compositions` : le conteneur scrollable est maintenant le panneau `Trains de la compagnie`, plus la grille interne qui était écrasée par les règles flex/grid ;
+- suppression du conflit qui réduisait `.composition-group-list` à une hauteur quasi nulle et empêchait la molette/le tactile de déplacer les vignettes ;
+- conservation du scroll indépendant de l’éditeur de composition à droite ;
+- ajout de garde-fous CSS et JS pour maintenir la carte visible sur téléphone, y compris après changement d’onglet, redimensionnement ou état de panneau réduit.
+
 ## Version v64.1.4 — audit et correction du verrouillage de scroll Composition
 
 - incrément de version : badge interface `v64.1.4`, package `64.1.4` et schéma serveur `101` ;
