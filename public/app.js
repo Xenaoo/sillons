@@ -116,9 +116,9 @@ const TUTORIAL_STEPS = [
   { id: 'welcome', target: '.brand', title: 'Bienvenue dans Sillons', body: 'Ce tutoriel guidé va te faire découvrir le jeu de A à Z : acheter un train, régler sa composition, ouvrir une ligne, puis lire les menus importants.', action: 'Commencer' },
   { id: 'overview', target: '#tabs [data-tab="overview"]', title: 'Vue générale', body: 'La Vue donne le résumé de ta compagnie : résultat, réseau, matériel, réputation et alertes. C’est ton poste de contrôle.', action: 'Continuer' },
   { id: 'fleet-tab', target: '#tabs [data-tab="fleet"]', title: 'Va dans le Parc', body: 'Clique sur Parc. C’est ici que tu achètes tes trains, règles les compositions et lances les opérations de maintenance.', wait: 'activeTab:fleet' },
-  { id: 'fleet-catalog', target: '[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, capacité, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
+  { id: 'fleet-catalog', target: 'button[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, capacité, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
   { id: 'buy-train', target: '[data-action="buy-train"]:not([disabled])', tab: 'fleet', subtab: 'catalog', title: 'Acheter un train', body: 'Achète un premier train adapté à une ligne courte. Si tu as déjà un train, cette étape est automatiquement validée.', wait: 'hasTrain' },
-  { id: 'fleet-composition-tab', target: '[data-fleet-subtab="composition"]', tab: 'fleet', title: 'Atelier de compositions', body: 'Clique sur Compositions. Tu vas choisir manuellement les voitures ou wagons pour adapter le train à ton service.', wait: 'fleetSubtab:composition' },
+  { id: 'fleet-composition-tab', target: 'button[data-fleet-subtab="composition"]', tab: 'fleet', title: 'Atelier de compositions', body: 'Clique sur Compositions. Tu vas choisir manuellement les voitures ou wagons pour adapter le train à ton service.', wait: 'fleetSubtab:composition' },
   { id: 'select-composition-train', target: '[data-action="select-composition-train"], [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Sélectionne le train que tu veux configurer. Les réglages de composition apparaissent ensuite à droite.', wait: 'compositionTrainSelected' },
   { id: 'manual-composition', target: '.composition-editor-card, [data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Composition manuelle', body: 'Règle le nombre de voitures voyageurs ou de wagons. La composition modifie capacité, vitesse, maintenance et rentabilité.', action: 'J’ai compris' },
   { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
@@ -132,7 +132,7 @@ const TUTORIAL_STEPS = [
   { id: 'lines-manage', target: '[data-lines-subtab="manage"]', tab: 'lines', title: 'Modifier les lignes', body: 'Le sous-menu Modifier sert à suivre la finance, les besoins métiers, la capacité, les arrêts et l’état opérationnel de chaque ligne.', wait: 'linesSubtab:manage' },
   { id: 'stations-tab', target: '#tabs [data-tab="stations"]', title: 'Gares', body: 'Clique sur Gares. Tu peux améliorer les niveaux, commerces, ateliers et dépôts pour soutenir le trafic et la maintenance.', wait: 'activeTab:stations' },
   { id: 'staff-tab', target: '#tabs [data-tab="staff"]', title: 'Ressources humaines', body: 'Clique sur RH. Les conducteurs sont obligatoires, les autres métiers améliorent recettes, régularité, satisfaction, maintenance et infrastructure.', wait: 'activeTab:staff' },
-  { id: 'maintenance-tab', target: '[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Surveille l’état des trains : à 0 %, ils ne roulent plus et disparaissent de la carte.', wait: 'fleetSubtab:maintenance' },
+  { id: 'maintenance-tab', target: 'button[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Surveille l’état des trains : à 0 %, ils ne roulent plus et disparaissent de la carte.', wait: 'fleetSubtab:maintenance' },
   { id: 'research-tab', target: '#tabs [data-tab="research"]', title: 'Recherche', body: 'Clique sur R&D. Les recherches débloquent du matériel, de l’exploitation, de l’énergie, du fret, des gares et des bonus sociaux.', wait: 'activeTab:research' },
   { id: 'resources-tab', target: '#tabs [data-tab="resources"]', title: 'Énergie', body: 'Clique sur Énergie. Surveille charbon, diesel et électricité : sans ressource, les lignes concernées s’arrêtent.', wait: 'activeTab:resources' },
   { id: 'market-tab', target: '#tabs [data-tab="market"]', title: 'Marché et financement', body: 'Clique sur Marché. Tu y ajustes les contrats et le financement pour accompagner la croissance de la compagnie.', wait: 'activeTab:market' },
@@ -1151,12 +1151,11 @@ function captureCompositionScrollPosition() {
   const key = currentCompositionScrollKey();
   if (!key) return;
   const editor = document.querySelector('.composition-editor-card');
-  const panel = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   const strip = editor?.querySelector('.composition-strip.large');
   app.compositionScrollState[key] = {
     top: editor?.scrollTop || 0,
-    listTop: panel?.scrollTop || list?.scrollTop || 0,
+    listTop: list?.scrollTop || 0,
     stripLeft: strip?.scrollLeft || 0
   };
   localStorage.setItem('sillons.compositionScrollState', JSON.stringify(app.compositionScrollState));
@@ -1167,12 +1166,10 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
   const saved = app.compositionScrollState?.[key];
   if (!saved) return;
   const editor = document.querySelector('.composition-editor-card');
-  const panel = document.querySelector('.composition-refit-list-card');
   const list = document.querySelector('.composition-group-list');
   const restore = () => {
     if (editor) editor.scrollTop = Number(saved.top || 0);
-    if (panel) panel.scrollTop = Number(saved.listTop || 0);
-    else if (list) list.scrollTop = Number(saved.listTop || 0);
+    if (list) list.scrollTop = Number(saved.listTop || 0);
     const strip = editor?.querySelector('.composition-strip.large');
     if (strip) strip.scrollLeft = Number(saved.stripLeft || 0);
   };
@@ -1186,7 +1183,10 @@ function restoreCompositionScrollPosition(key = currentCompositionScrollKey()) {
 function compositionScrollContainerFromTarget(target) {
   if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return null;
   if (!target?.closest) return null;
-  return target.closest('.composition-refit-list-card') || target.closest('.composition-group-list') || null;
+  const list = target.closest('.composition-group-list');
+  if (list) return list;
+  const card = target.closest('.composition-refit-list-card');
+  return card?.querySelector?.('.composition-group-list') || null;
 }
 
 function compositionListCanScroll(list) {
@@ -1306,6 +1306,7 @@ function clearCompositionScrollInlineState(content) {
   ];
   if (content) {
     content.classList.remove('composition-scroll-mode');
+    content.classList.remove('composition-narrow-workspace');
     for (const property of properties) content.style.removeProperty(property);
   }
   app.compositionTouchScroll = null;
@@ -1340,10 +1341,14 @@ function adjustCompositionRefitScroll() {
   };
 
   const viewportHeight = Math.max(480, Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
-  const stacked = Boolean(window.matchMedia?.('(max-width: 900px)')?.matches);
+  const layoutWidth = Math.floor(layout?.getBoundingClientRect?.().width || window.innerWidth || document.documentElement.clientWidth || 0);
+  const narrowWorkspace = Boolean(editor && layoutWidth > 0 && layoutWidth < 760);
+  const viewportStacked = Boolean(window.matchMedia?.('(max-width: 900px)')?.matches);
+  const stacked = Boolean(viewportStacked || narrowWorkspace);
   const bottomSafe = window.matchMedia?.('(max-width: 700px)')?.matches ? 10 : 16;
 
   if (content) {
+    content.classList.toggle('composition-narrow-workspace', narrowWorkspace);
     setImportant(content, 'min-height', '0');
     setImportant(content, 'overflow-x', 'hidden');
     // Garde un scroll de secours sur #tabContent : si un calcul de hauteur échoue,
@@ -1352,20 +1357,12 @@ function adjustCompositionRefitScroll() {
   }
   if (workspace) {
     setImportant(workspace, 'min-height', '0');
-    setImportant(workspace, 'overflow', stacked ? 'visible' : 'hidden');
+    setImportant(workspace, 'overflow', 'visible');
   }
 
   if (layout) {
-    if (stacked) {
-      clearImportant(layout, ['height', 'max-height']);
-      setImportant(layout, 'overflow', 'visible');
-    } else {
-      const layoutTop = Math.max(0, layout.getBoundingClientRect().top);
-      const layoutHeight = Math.max(360, Math.floor(viewportHeight - layoutTop - bottomSafe));
-      setImportant(layout, 'height', `${layoutHeight}px`);
-      setImportant(layout, 'max-height', `${layoutHeight}px`);
-      setImportant(layout, 'overflow', 'hidden');
-    }
+    clearImportant(layout, ['height', 'max-height']);
+    setImportant(layout, 'overflow', 'visible');
   }
 
   const cardTop = Math.max(0, card.getBoundingClientRect().top);
@@ -1379,29 +1376,33 @@ function adjustCompositionRefitScroll() {
   setImportant(card, 'min-height', '0');
   setImportant(card, 'height', `${availableCardHeight}px`);
   setImportant(card, 'max-height', `${availableCardHeight}px`);
-  setImportant(card, 'overflow-y', 'auto');
-  setImportant(card, 'overflow-x', 'hidden');
+  setImportant(card, 'overflow', 'hidden');
   setImportant(card, 'overscroll-behavior', 'contain');
-  setImportant(card, '-webkit-overflow-scrolling', 'touch');
-  setImportant(card, 'touch-action', 'pan-y');
 
-  // La liste n'est plus le conteneur de scroll : elle reste en flux normal.
-  // Le scroll se fait sur la carte/panneau .composition-refit-list-card, ce qui évite
-  // les conflits flex/grid qui réduisaient .composition-group-list à quelques pixels.
-  list.style.removeProperty('--composition-group-list-height');
+  const cardStyle = window.getComputedStyle(card);
+  const paddingTop = parseFloat(cardStyle.paddingTop || '0') || 0;
+  const paddingBottom = parseFloat(cardStyle.paddingBottom || '0') || 0;
+  const gap = parseFloat(cardStyle.rowGap || cardStyle.gap || '0') || 0;
+  const header = card.querySelector(':scope > .fleet-card-heading');
+  const toolbar = card.querySelector(':scope > .composition-refit-toolbar');
+  const fixedHeight = (header?.offsetHeight || 0) + (toolbar?.offsetHeight || 0) + paddingTop + paddingBottom + gap * 2;
+  const availableListHeight = Math.max(180, Math.floor(availableCardHeight - fixedHeight));
+
+  list.style.setProperty('--composition-group-list-height', `${availableListHeight}px`);
   setImportant(list, 'display', 'block');
   setImportant(list, 'align-content', 'normal');
-  setImportant(list, 'flex', '0 0 auto');
+  setImportant(list, 'flex', '1 1 auto');
   setImportant(list, 'min-height', '0');
-  setImportant(list, 'height', 'auto');
-  setImportant(list, 'max-height', 'none');
-  setImportant(list, 'overflow-y', 'visible');
-  setImportant(list, 'overflow-x', 'visible');
-  setImportant(list, 'overscroll-behavior', 'auto');
-  setImportant(list, 'touch-action', 'auto');
+  setImportant(list, 'height', `${availableListHeight}px`);
+  setImportant(list, 'max-height', `${availableListHeight}px`);
+  setImportant(list, 'overflow-y', 'auto');
+  setImportant(list, 'overflow-x', 'hidden');
+  setImportant(list, 'overscroll-behavior', 'contain');
+  setImportant(list, '-webkit-overflow-scrolling', 'touch');
+  setImportant(list, 'touch-action', 'pan-y');
 
   if (editor) {
-    if (stacked) {
+    if (viewportStacked && !narrowWorkspace) {
       clearImportant(editor, ['height', 'max-height']);
       setImportant(editor, 'overflow-y', 'visible');
     } else {
@@ -5704,7 +5705,7 @@ async function onTabContentClick(event) {
     return;
   }
 
-  const lineSubtab = event.target.closest('[data-lines-subtab]');
+  const lineSubtab = event.target.closest('button[data-lines-subtab]');
   if (lineSubtab) {
     app.activeLinesSubtab = lineSubtab.dataset.linesSubtab;
     localStorage.setItem('sillons.linesSubtab', app.activeLinesSubtab);
@@ -5712,7 +5713,7 @@ async function onTabContentClick(event) {
     return;
   }
 
-  const fleetSubtab = event.target.closest('[data-fleet-subtab]');
+  const fleetSubtab = event.target.closest('button[data-fleet-subtab]');
   if (fleetSubtab) {
     app.activeFleetSubtab = fleetSubtab.dataset.fleetSubtab;
     localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
