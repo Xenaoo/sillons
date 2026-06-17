@@ -3070,14 +3070,14 @@ button[data-tooltip]:focus-visible::before {
 /* ===== V30 : sous-onglets Parc / Catalogue / Maintenance ===== */
 .fleet-workspace {
   display: grid;
-  gap: 14px;
+  gap: 8px;
 }
 
 .fleet-subtabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
   border-radius: 18px;
   border: 1px solid rgba(217,168,82,.20);
   background:
@@ -3087,24 +3087,24 @@ button[data-tooltip]:focus-visible::before {
 
 .fleet-subtabs button {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   text-align: left;
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 8px 10px;
   border: 1px solid rgba(217,168,82,.14);
   background: rgba(5,10,20,.44);
 }
 
 .fleet-subtabs button span {
   color: #b8aa84;
-  font-size: 12px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .08em;
 }
 
 .fleet-subtabs button b {
   color: #f4e3bd;
-  font-size: 16px;
+  font-size: 12px;
 }
 
 .fleet-subtabs button.active {
@@ -8340,30 +8340,6 @@ dialog.modal--wide {
 
 #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .menu-context p {
   display: none !important;
-}
-
-#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-workspace {
-  gap: 8px !important;
-}
-
-#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-subtabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  gap: 6px !important;
-  padding: 5px !important;
-}
-
-#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-subtabs button {
-  gap: 2px !important;
-  padding: 8px 10px !important;
-  border-radius: 10px !important;
-}
-
-#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-subtabs button span {
-  font-size: 10px !important;
-}
-
-#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .fleet-subtabs button b {
-  font-size: 12px !important;
 }
 
 #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-refit-list-card {

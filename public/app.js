@@ -3746,11 +3746,11 @@ function slotPurchaseCostClient(line, count = 1) {
   return Math.round(Math.max(2500, distance * 780 + stops * 240) * Math.max(1, Number(count || 1)));
 }
 
-function renderCompositionTrainVignette(train) {
+function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compositionSelectedIds())) {
   const model = app.state.balance.trains[train.modelId];
   const profile = previewOperatingProfile(train, model);
   const active = app.selectedCompositionTrainId === train.id;
-  const selected = compositionSelectedIds().includes(train.id);
+  const selected = selectedTrainIds.has(train.id);
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inMaint;
@@ -3808,10 +3808,10 @@ function renderCompositionTrainVignette(train) {
   `;
 }
 
-function renderCompositionTrainGroup(group) {
+function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositionSelectedIds())) {
   const mode = app.fleetSortMode || 'era';
   const collapsed = isCompositionGroupCollapsed(mode, group.key);
-  const selectedCount = group.trains.filter(train => compositionSelectedIds().includes(train.id)).length;
+  const selectedCount = group.trains.reduce((count, train) => count + (selectedTrainIds.has(train.id) ? 1 : 0), 0);
   return `
     <section class="composition-train-group ${collapsed ? 'collapsed' : ''}">
       <button type="button" class="research-era-heading composition-group-heading" data-action="toggle-composition-group" data-mode="${escapeAttr(mode)}" data-key="${escapeAttr(group.key)}" aria-expanded="${collapsed ? 'false' : 'true'}">
@@ -3821,7 +3821,7 @@ function renderCompositionTrainGroup(group) {
         </span>
         <span class="research-era-meta">${group.trains.length} train${group.trains.length > 1 ? 's' : ''}${selectedCount ? ` · ${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}` : ''} · ${collapsed ? 'Déplier' : 'Réduire'}</span>
       </button>
-      ${collapsed ? '' : `<div class="composition-vignette-grid">${group.trains.map(renderCompositionTrainVignette).join('')}</div>`}
+      ${collapsed ? '' : `<div class="composition-vignette-grid">${group.trains.map(train => renderCompositionTrainVignette(train, selectedTrainIds)).join('')}</div>`}
     </section>
   `;
 }
@@ -4079,6 +4079,7 @@ function renderFleetCompositionPanel() {
   }
   const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || null;
   const groups = groupCompositionTrains(me.trains);
+  const selectedTrainIds = new Set(cleanedSelection);
   const configurable = me.trains.filter(t => !!t.compositionSpec).length;
   const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
 
@@ -4101,7 +4102,7 @@ function renderFleetCompositionPanel() {
         </div>
         ${renderCompositionSelectionToolbar(cleanedSelection)}
         <div class="composition-train-list composition-group-list">
-          ${groups.map(renderCompositionTrainGroup).join('')}
+          ${groups.map(group => renderCompositionTrainGroup(group, selectedTrainIds)).join('')}
         </div>
       </div>
 
