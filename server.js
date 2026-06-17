@@ -11,8 +11,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v62.22.0';
-const STATE_SCHEMA_VERSION = 86;
+const PROJECT_VERSION = 'v62.23.0';
+const STATE_SCHEMA_VERSION = 87;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 5000;
 const COMMUNE_CACHE_MIN_READY_COUNT = 1500;
@@ -2993,7 +2993,7 @@ function estimateTourismFromLocation(lat, lon) {
 
 function actionHireStaff(player, payload) {
   const role = String(payload.role || '');
-  const count = clamp(Math.floor(Number(payload.count || 1)), 1, 50);
+  const count = clamp(Math.floor(Number(payload.count || 1)), 1, 5000);
   const def = BALANCE.staff[role];
   if (!def) return fail('Métier inconnu.');
   const cost = Math.round(def.hireCost * count);
@@ -3006,7 +3006,7 @@ function actionHireStaff(player, payload) {
 
 function actionFireStaff(player, payload) {
   const role = String(payload.role || '');
-  const count = clamp(Math.floor(Number(payload.count || 1)), 1, 50);
+  const count = clamp(Math.floor(Number(payload.count || 1)), 1, 5000);
   const def = BALANCE.staff[role];
   if (!def) return fail('Métier inconnu.');
   const current = player.staff[role] || 0;
@@ -3456,14 +3456,15 @@ function actionTakeLoan(player, payload) {
 }
 
 function actionRepayLoan(player, payload) {
-  const amount = clamp(Math.round(Number(payload.amount || 100000)), 10000, Math.max(10000, player.debt));
   if (player.debt <= 0) return fail('Aucune dette à rembourser.');
-  if (!canPay(player, amount)) return fail('Trésorerie insuffisante.');
-  const paid = Math.min(amount, player.debt);
+  const requested = Math.round(Number(payload.amount || 0));
+  if (!Number.isFinite(requested) || requested <= 0) return fail('Montant de remboursement invalide.');
+  const paid = Math.min(requested, Math.round(player.debt));
+  if (!canPay(player, paid)) return fail(`Trésorerie insuffisante. Montant demandé : ${money(paid)}.`);
   player.cash -= paid;
   player.debt -= paid;
   notify(player, `Dette remboursée : ${money(paid)}.`);
-  return ok();
+  return ok('Dette remboursée.');
 }
 
 function actionRename(player, payload) {

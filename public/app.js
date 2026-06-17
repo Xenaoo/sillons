@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v62.22.0';
+const PROJECT_VERSION = 'v62.23.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -4550,10 +4550,16 @@ function renderStaffRole(role, count) {
         <span>Salaire</span><b>${staffSalaryPerHour(def)}</b>
         <span>Recrutement</span><b>${money(def.hireCost)}</b>
       </div>
+      <div class="staff-amount-control">
+        <label>Quantité
+          <input id="staffAmount_${role}" type="number" min="1" max="5000" step="1" value="1">
+        </label>
+      </div>
       <div class="actions staff-compact-actions">
         <button class="danger" data-action="fire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'fire'))} ${count <= 0 ? 'disabled' : ''}>-1</button>
         <button data-action="hire-staff" data-role="${role}" data-count="1" ${tooltipAttr(staffActionTooltip(role, 1, 'hire'))}>+1</button>
-        <button data-action="hire-staff" data-role="${role}" data-count="5" ${tooltipAttr(staffActionTooltip(role, 5, 'hire'))}>+5</button>
+        <button class="danger" data-action="fire-staff" data-role="${role}" data-count-input="staffAmount_${role}" ${tooltipAttr('Supprime la quantité saisie pour ce métier.')} ${count <= 0 ? 'disabled' : ''}>Licencier</button>
+        <button data-action="hire-staff" data-role="${role}" data-count-input="staffAmount_${role}" ${tooltipAttr('Recrute la quantité saisie pour ce métier.')}>Recruter</button>
       </div>
     </div>
   `;
@@ -5140,12 +5146,24 @@ function renderMarket() {
         `).join('')}
       </div>
     </div>
-    <div class="card">
+    <div class="card finance-card">
       <h2>Financement</h2>
+      <div class="card-grid finance-summary-grid">
+        ${metric('Trésorerie', money(me.cash), me.cash >= 0 ? 'good-text' : 'bad-text')}
+        ${metric('Dette', money(me.debt), me.debt > 0 ? 'warn-text' : 'good-text')}
+      </div>
       <div class="actions">
         <button data-action="loan" data-amount="100000" ${tooltipAttr('Ajoute immédiatement 100 000 € de trésorerie et augmente la dette. Effet : Plus de marge d’investissement, mais des remboursements/intérêts pèseront sur la compagnie.')}>Emprunter 100 000 €</button>
         <button data-action="loan" data-amount="500000" ${tooltipAttr('Ajoute immédiatement 500 000 € de trésorerie et augmente fortement la dette. À utiliser pour gros investissements : Matériel, gares, électrification.')}>Emprunter 500 000 €</button>
-        <button data-action="repay" data-amount="100000" ${tooltipAttr('Rembourse 100 000 € de dette si la trésorerie le permet. Effet : Diminue l’endettement et améliore la solidité financière.')}>Rembourser 100 000 €</button>
+      </div>
+      <div class="debt-repay-control">
+        <label>Montant à rembourser
+          <input id="debtRepayAmount" type="number" min="1" step="1000" value="${Math.min(100000, Math.max(0, Math.round(me.debt || 0)))}" placeholder="Ex : 250000" ${me.debt <= 0 ? 'disabled' : ''}>
+        </label>
+        <div class="debt-repay-actions">
+          <button data-action="repay" data-amount-input="debtRepayAmount" ${tooltipAttr('Rembourse le montant saisi, dans la limite de la dette et de la trésorerie disponible.')} ${me.debt <= 0 ? 'disabled' : ''}>Rembourser ce montant</button>
+          <button data-action="repay" data-amount="${Math.max(0, Math.round(me.debt || 0))}" ${tooltipAttr('Rembourse toute la dette si la trésorerie le permet.')} ${me.debt <= 0 ? 'disabled' : ''}>Tout rembourser</button>
+        </div>
       </div>
     </div>
   `;
@@ -5337,8 +5355,16 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     renderAll();
     return;
   }
-  if (action === 'hire-staff') return doAction('hireStaff', { role: button.dataset.role, count: Number(button.dataset.count) });
-  if (action === 'fire-staff') return doAction('fireStaff', { role: button.dataset.role, count: Number(button.dataset.count) });
+  if (action === 'hire-staff') {
+    const input = button.dataset.countInput ? $(`#${button.dataset.countInput}`) : null;
+    const count = Math.max(1, Math.floor(Number(input?.value || button.dataset.count || 1)));
+    return doAction('hireStaff', { role: button.dataset.role, count });
+  }
+  if (action === 'fire-staff') {
+    const input = button.dataset.countInput ? $(`#${button.dataset.countInput}`) : null;
+    const count = Math.max(1, Math.floor(Number(input?.value || button.dataset.count || 1)));
+    return doAction('fireStaff', { role: button.dataset.role, count });
+  }
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
@@ -5360,7 +5386,11 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   }
   if (action === 'set-electricity-order') return doAction('setElectricityOrder', { amount: Number($('#electricityOrderInput')?.value || 0) });
   if (action === 'loan') return doAction('takeLoan', { amount: Number(button.dataset.amount) });
-  if (action === 'repay') return doAction('repayLoan', { amount: Number(button.dataset.amount) });
+  if (action === 'repay') {
+    const input = button.dataset.amountInput ? $(`#${button.dataset.amountInput}`) : null;
+    const amount = Math.max(1, Math.round(Number(input?.value || button.dataset.amount || 0)));
+    return doAction('repayLoan', { amount });
+  }
 }
 
 function onTabContentChange(event) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## Version v62.23.0 — saisie libre RH et remboursement de dette
+
+- incrément de version : badge interface `v62.23.0`, package `0.6.23` et schéma serveur `87` ;
+- ajout d’un champ de quantité pour chaque métier dans l’onglet RH ;
+- les actions de recrutement et licenciement peuvent maintenant utiliser la quantité saisie ;
+- relèvement de la limite technique par action RH à `5000` salariés ;
+- ajout d’un champ de remboursement libre dans le panneau Financement ;
+- ajout d’un bouton de remboursement total de la dette ;
+- le serveur accepte désormais un remboursement libre, plafonné à la dette réelle et contrôlé par la trésorerie disponible.
+
 ## Version v62.22.0 — pastilles animées sur les lignes
 
 - incrément de version : badge interface `v62.22.0`, package `0.6.22` et schéma serveur `86` ;
