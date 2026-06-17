@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v63.0.0';
+const PROJECT_VERSION = 'v64.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 
@@ -48,6 +48,8 @@ const app = {
   showOtherLines: localStorage.getItem('sillons.showOtherLines') !== '0',
   focusedLineId: localStorage.getItem('sillons.focusedLineId') || '',
   fleetSortMode: localStorage.getItem('sillons.fleetSortMode') || 'era',
+  compositionGroupCollapsed: loadJson('sillons.compositionGroupCollapsed', {}),
+  selectedCompositionTrainIds: loadJson('sillons.selectedCompositionTrainIds', []),
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
   mapSprites: { trains: {}, stations: {} },
@@ -99,7 +101,7 @@ const app = {
   lastNotificationKey: '',
   stationListCache: { source: null, signature: '', deduped: [] },
   stationSignatureCache: { source: null, signature: '' },
-  selectedCompositionTrainId: localStorage.getItem('sillons.selectedCompositionTrainId') || '',
+  selectedCompositionTrainId: '',
   compositionEditorModes: loadJson('sillons.compositionEditorModes', {}),
   compositionScrollState: loadJson('sillons.compositionScrollState', {}),
   pendingCompositionScrollRestore: null,
@@ -1199,7 +1201,7 @@ function tutorialConditionMet(step) {
   if (wait.startsWith('linesSubtab:')) return app.activeTab === 'lines' && app.activeLinesSubtab === wait.split(':')[1];
   if (wait === 'hasTrain') return (me.trains || []).length > 0;
   if (wait === 'hasLine') return (me.lines || []).some(line => line.active);
-  if (wait === 'compositionTrainSelected') return Boolean(app.selectedCompositionTrainId || (me.trains || [])[0]?.id);
+  if (wait === 'compositionTrainSelected') return Boolean(app.selectedCompositionTrainId);
   if (wait === 'compositionSaved') return Boolean(me.tutorial?.actionLog?.compositionSaved);
   return false;
 }
@@ -1236,14 +1238,6 @@ function prepareTutorialStepView(step) {
     app.activeLinesSubtab = 'manage';
     localStorage.setItem('sillons.linesSubtab', app.activeLinesSubtab);
     changed = true;
-  }
-  if (step.id === 'select-composition-train' && !app.selectedCompositionTrainId) {
-    const first = app.state?.me?.trains?.[0]?.id;
-    if (first) {
-      app.selectedCompositionTrainId = first;
-      localStorage.setItem('sillons.selectedCompositionTrainId', first);
-      changed = true;
-    }
   }
   return changed;
 }
@@ -3390,6 +3384,48 @@ function trainServiceSortLabel(kind) {
   return kind === 'freight' ? 'Fret' : kind === 'mixed' ? 'Mixte' : 'Voyageurs';
 }
 
+function compositionValidTrainIds() {
+  return new Set((app.state?.me?.trains || []).map(train => train.id));
+}
+
+function compositionSelectedIds() {
+  const valid = compositionValidTrainIds();
+  const ids = Array.isArray(app.selectedCompositionTrainIds) ? app.selectedCompositionTrainIds : [];
+  return [...new Set(ids.map(id => String(id || '').trim()).filter(id => valid.has(id)))];
+}
+
+function setCompositionSelection(ids, primaryId = '') {
+  const valid = compositionValidTrainIds();
+  const cleaned = [...new Set((ids || []).map(id => String(id || '').trim()).filter(id => valid.has(id)))];
+  app.selectedCompositionTrainIds = cleaned;
+  app.selectedCompositionTrainId = cleaned.includes(primaryId) ? primaryId : (cleaned[0] || '');
+  localStorage.setItem('sillons.selectedCompositionTrainIds', JSON.stringify(cleaned));
+  if (app.selectedCompositionTrainId) localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+  else localStorage.removeItem('sillons.selectedCompositionTrainId');
+}
+
+function compositionEditTargetIds(primaryId = '') {
+  const selected = compositionSelectedIds();
+  if (selected.length) return selected;
+  const valid = compositionValidTrainIds();
+  return primaryId && valid.has(primaryId) ? [primaryId] : [];
+}
+
+function compositionGroupStorageKey(mode, key) {
+  return `${mode || 'era'}::${key || 'default'}`;
+}
+
+function isCompositionGroupCollapsed(mode, key) {
+  return Boolean(app.compositionGroupCollapsed?.[compositionGroupStorageKey(mode, key)]);
+}
+
+function setCompositionGroupCollapsed(mode, key, collapsed) {
+  const storageKey = compositionGroupStorageKey(mode, key);
+  app.compositionGroupCollapsed = { ...(app.compositionGroupCollapsed || {}), [storageKey]: Boolean(collapsed) };
+  if (!collapsed) delete app.compositionGroupCollapsed[storageKey];
+  localStorage.setItem('sillons.compositionGroupCollapsed', JSON.stringify(app.compositionGroupCollapsed));
+}
+
 function sortedCompositionTrains(trains) {
   const mode = app.fleetSortMode || 'era';
   return [...(trains || [])].sort((a, b) => {
@@ -3400,14 +3436,34 @@ function sortedCompositionTrains(trains) {
     const typeA = trainServiceClass(ma);
     const typeB = trainServiceClass(mb);
     if (mode === 'type') {
-      if (typeA !== typeB) return typeA.localeCompare(typeB, 'fr');
+      if (typeA !== typeB) return trainServiceSortLabel(typeA).localeCompare(trainServiceSortLabel(typeB), 'fr');
       if (eraA !== eraB) return eraA - eraB;
     } else {
       if (eraA !== eraB) return eraA - eraB;
-      if (typeA !== typeB) return typeA.localeCompare(typeB, 'fr');
+      if (typeA !== typeB) return trainServiceSortLabel(typeA).localeCompare(trainServiceSortLabel(typeB), 'fr');
     }
     return String(ma.name || '').localeCompare(String(mb.name || ''), 'fr') || String(a.id || '').localeCompare(String(b.id || ''), 'fr');
   });
+}
+
+function groupCompositionTrains(trains) {
+  const mode = app.fleetSortMode || 'era';
+  const groups = [];
+  for (const train of sortedCompositionTrains(trains)) {
+    const model = app.state.balance.trains[train.modelId] || {};
+    const era = Number(model.unlockEpoch ?? model.epoch ?? 0);
+    const type = trainServiceClass(model);
+    const key = mode === 'type' ? type : `era-${era}`;
+    let group = groups.find(item => item.key === key);
+    if (!group) {
+      group = mode === 'type'
+        ? { key, label: trainServiceSortLabel(type), meta: 'type de composition', trains: [] }
+        : { key, label: trainEraLabel(era), meta: 'ère matériel', trains: [] };
+      groups.push(group);
+    }
+    group.trains.push(train);
+  }
+  return groups;
 }
 
 function assignableLinesForTrain(train) {
@@ -3442,28 +3498,44 @@ function slotPurchaseCostClient(line, count = 1) {
   return Math.round(Math.max(2500, distance * 780 + stops * 240) * Math.max(1, Number(count || 1)));
 }
 
-function renderCompositionTrainListItem(train) {
+function renderCompositionTrainVignette(train) {
   const model = app.state.balance.trains[train.modelId];
   const profile = previewOperatingProfile(train, model);
   const active = app.selectedCompositionTrainId === train.id;
+  const selected = compositionSelectedIds().includes(train.id);
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inMaint;
   const assignable = assignableLinesForTrain(train);
   const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
   const sellEstimate = trainResaleEstimateClient(train, model);
+  const era = trainEraLabel(Number(model.unlockEpoch ?? model.epoch ?? 0));
+  const serviceLabel = trainServiceSortLabel(trainServiceClass(model));
   return `
-    <article class="composition-train-item ${active ? 'active' : ''}">
-      <button type="button" class="composition-train-select" data-action="select-composition-train" data-id="${train.id}">
-        <div class="composition-train-head">
-          <strong>${escapeHtml(model.name)}</strong>
-          <span class="tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
+    <article class="composition-train-vignette ${active ? 'active' : ''} ${selected ? 'selected' : ''}">
+      <div class="composition-vignette-select-row">
+        <label class="composition-vignette-checkbox">
+          <input type="checkbox" data-action="toggle-composition-train-selection" data-id="${escapeAttr(train.id)}" ${selected ? 'checked' : ''}>
+          <span>Sélection</span>
+        </label>
+        <span class="tag" title="${escapeAttr(statusLabel)}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <button type="button" class="composition-vignette-main" data-action="select-composition-train" data-id="${escapeAttr(train.id)}">
+        <div class="composition-vignette-media">
+          ${renderTrainArt(model)}
         </div>
-        <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
-        <div class="composition-mini-stats">
-          <b>${formatInt(profile.capacity)} voy.</b>
-          <b>${formatInt(profile.freight)} t</b>
-          <b>${formatInt(profile.range)} km</b>
+        <div class="composition-vignette-body">
+          <div class="composition-vignette-title">
+            <strong>${escapeHtml(model.name)}</strong>
+            <span>${escapeHtml(era)} · ${escapeHtml(serviceLabel)}</span>
+          </div>
+          <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
+          <div class="composition-mini-stats">
+            <b>${formatInt(profile.capacity)} voy.</b>
+            <b>${formatInt(profile.freight)} t</b>
+            <b>${formatInt(profile.speed)} km/h</b>
+            <b>${formatInt(profile.range)} km</b>
+          </div>
         </div>
       </button>
       <div class="composition-assign-row">
@@ -3475,15 +3547,53 @@ function renderCompositionTrainListItem(train) {
             return `<option value="${escapeAttr(candidate.id)}">${escapeHtml(label)}</option>`;
           }).join('')}
         </select>
-        <button type="button" class="ghost" data-action="assign-train-line" data-id="${train.id}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>Affecter</button>
+        <button type="button" class="ghost" data-action="assign-train-line" data-id="${escapeAttr(train.id)}" ${assignable.length && !line && !inMaint ? '' : 'disabled'}>Affecter</button>
       </div>
       <div class="composition-train-actions">
-        <button type="button" class="ghost" data-action="duplicate-train" data-id="${train.id}" ${tooltipAttr(`Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
-        <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${train.id}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : 'Impossible : train en maintenance.')}>Vendre</button>
+        <button type="button" class="ghost" data-action="duplicate-train" data-id="${escapeAttr(train.id)}" ${tooltipAttr(`Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
+        <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${escapeAttr(train.id)}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : 'Impossible : train en maintenance.')}>Vendre</button>
       </div>
     </article>
   `;
 }
+
+function renderCompositionTrainGroup(group) {
+  const mode = app.fleetSortMode || 'era';
+  const collapsed = isCompositionGroupCollapsed(mode, group.key);
+  const selectedCount = group.trains.filter(train => compositionSelectedIds().includes(train.id)).length;
+  return `
+    <section class="composition-train-group ${collapsed ? 'collapsed' : ''}">
+      <button type="button" class="research-era-heading composition-group-heading" data-action="toggle-composition-group" data-mode="${escapeAttr(mode)}" data-key="${escapeAttr(group.key)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+        <span class="research-era-title">
+          <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          <span>${escapeHtml(group.label)}</span>
+        </span>
+        <span class="research-era-meta">${group.trains.length} train${group.trains.length > 1 ? 's' : ''}${selectedCount ? ` · ${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}` : ''} · ${collapsed ? 'Déplier' : 'Réduire'}</span>
+      </button>
+      ${collapsed ? '' : `<div class="composition-vignette-grid">${group.trains.map(renderCompositionTrainVignette).join('')}</div>`}
+    </section>
+  `;
+}
+
+function renderCompositionSelectionToolbar(selectedIds) {
+  const selectedCount = selectedIds.length;
+  return `
+    <div class="composition-list-toolbar composition-refit-toolbar">
+      <label>Trier le parc
+        <select id="fleetSortMode">
+          <option value="era" ${app.fleetSortMode === 'era' ? 'selected' : ''}>Par ère</option>
+          <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Par type voyageurs / fret</option>
+        </select>
+      </label>
+      <div class="composition-selection-actions">
+        <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
+        <button type="button" class="ghost" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Éditer la sélection</button>
+        <button type="button" class="ghost" data-action="clear-composition-selection" ${selectedCount ? '' : 'disabled'}>Vider</button>
+      </div>
+    </div>
+  `;
+}
+
 
 
 function compositionProfileWithChange(train, model, spec, key, value) {
@@ -3586,6 +3696,8 @@ function renderCompositionMarginalImpact(train, model, spec, profile) {
 function renderCompositionEditor(train) {
   if (!train) return '<p class="muted">Sélectionne un train à configurer.</p>';
   const model = app.state.balance.trains[train.modelId];
+  const targetIds = compositionEditTargetIds(train.id);
+  const targetCount = Math.max(1, targetIds.length);
   const spec = trainCompositionSpec(train, model);
   const detailBundle = computeOperatingProfileDetailed(train, model);
   const profile = detailBundle.profile;
@@ -3638,12 +3750,15 @@ function renderCompositionEditor(train) {
 
   return `
     <div class="composition-workshop-shell" style="background-image: linear-gradient(180deg, rgba(4,10,22,.74), rgba(4,10,22,.92)), url('${COMPOSITION_ART.workshop}');">
-      <div class="fleet-card-heading">
+      <div class="fleet-card-heading composition-editor-heading">
         <div>
           <h2>Atelier de composition</h2>
-          <p class="muted small">Ajuste la longueur utile du train et sélectionne les voitures / wagons spécialisés pour façonner précisément les performances de la rame.</p>
+          <p class="muted small">Ajuste la longueur utile du train et sélectionne les voitures / wagons spécialisés. En sélection multiple, l’enregistrement applique le réglage aux trains compatibles.</p>
         </div>
-        <span class="tag">${line ? `Affecté à ${escapeHtml(linePublicName(line))}` : 'Train libre'}</span>
+        <div class="composition-editor-heading-actions">
+          <span class="tag ${targetCount > 1 ? 'good' : ''}">${targetCount > 1 ? `${targetCount} trains ciblés` : line ? `Affecté à ${escapeHtml(linePublicName(line))}` : 'Train libre'}</span>
+          <button type="button" class="ghost" data-action="close-composition-editor">Fermer</button>
+        </div>
       </div>
 
       ${renderCompositionModeTabs(train, model)}
@@ -3687,7 +3802,7 @@ function renderCompositionEditor(train) {
           <div class="composition-save-box">
             ${renderCompositionCostSummary(train)}
             <p class="small muted">Impact ligne : capacité d’exploitation = composition × trains affectés. Les variantes permettent de spécialiser ton offre voyageurs ou la marchandise transportée.</p>
-            <button class="primary" data-action="save-train-composition" data-id="${train.id}">Enregistrer la composition</button>
+            <button class="primary" data-action="save-train-composition" data-id="${train.id}">${targetCount > 1 ? `Enregistrer sur ${targetCount} trains` : 'Enregistrer la composition'}</button>
           </div>
         </div>
         ${variantPanel ? `<div class="composition-variant-panel">${variantPanel}</div>` : ''}
@@ -3701,51 +3816,47 @@ function renderFleetCompositionPanel() {
   if (!me.trains.length) {
     return `<div class="card"><h2>Compositions</h2><p class="muted">Achète d’abord un train dans le catalogue pour accéder à l’atelier de composition.</p></div>`;
   }
-  if (!me.trains.some(t => t.id === app.selectedCompositionTrainId)) {
-    app.selectedCompositionTrainId = me.trains[0].id;
-    localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+
+  const validIds = compositionValidTrainIds();
+  const cleanedSelection = compositionSelectedIds();
+  if (cleanedSelection.length !== (app.selectedCompositionTrainIds || []).length) setCompositionSelection(cleanedSelection, app.selectedCompositionTrainId);
+  if (app.selectedCompositionTrainId && !validIds.has(app.selectedCompositionTrainId)) {
+    app.selectedCompositionTrainId = '';
+    localStorage.removeItem('sillons.selectedCompositionTrainId');
   }
-  const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || me.trains[0];
-  const sortedTrains = sortedCompositionTrains(me.trains);
+  const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || null;
+  const groups = groupCompositionTrains(me.trains);
   const configurable = me.trains.filter(t => !!t.compositionSpec).length;
   const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
 
   return `
-    <div class="fleet-composition-layout">
+    <div class="fleet-composition-layout composition-refit-layout ${selected ? 'has-editor' : 'no-editor'}">
       <div class="card fleet-kpi-card composition-kpi-card">
         ${metric('Trains configurables', configurable)}
         ${metric('Capacité moyenne', `${avgSeats} voy.`)}
-        ${metric('Sélection active', deriveCompositionSummary(selected), 'metric-value-selection')}
+        ${metric('Sélection multiple', `${cleanedSelection.length} train${cleanedSelection.length > 1 ? 's' : ''}`)}
         ${metric('Lignes actives', me.lines.filter(l => l.active).length)}
       </div>
 
-      <div class="card composition-list-card">
+      <div class="card composition-list-card composition-refit-list-card">
         <div class="fleet-card-heading">
           <div>
             <h2>Trains de la compagnie</h2>
-            <p class="muted small">Sélectionne un matériel pour ajuster sa composition visuelle et opérationnelle.</p>
+            <p class="muted small">Les trains sont présentés en vignettes. Clique sur une vignette pour ouvrir l’atelier, ou coche plusieurs trains avant d’éditer un ensemble.</p>
           </div>
           <span class="tag">${me.trains.length} unité(s)</span>
         </div>
-        <div class="composition-list-toolbar">
-          <label>Trier le parc
-            <select id="fleetSortMode">
-              <option value="era" ${app.fleetSortMode === 'era' ? 'selected' : ''}>Par ère puis type</option>
-              <option value="type" ${app.fleetSortMode === 'type' ? 'selected' : ''}>Par type puis ère</option>
-            </select>
-          </label>
-        </div>
-        <div class="composition-train-list">
-          ${sortedTrains.map(renderCompositionTrainListItem).join('')}
+        ${renderCompositionSelectionToolbar(cleanedSelection)}
+        <div class="composition-train-list composition-group-list">
+          ${groups.map(renderCompositionTrainGroup).join('')}
         </div>
       </div>
 
-      <div class="card composition-editor-card">
-        ${renderCompositionEditor(selected)}
-      </div>
+      ${selected ? `<div class="card composition-editor-card composition-refit-editor">${renderCompositionEditor(selected)}</div>` : ''}
     </div>
   `;
 }
+
 
 function renderFleet() {
   const me = app.state.me;
@@ -5425,17 +5536,53 @@ async function onTabContentClick(event) {
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
 if (action === 'select-composition-train') {
-  app.selectedCompositionTrainId = button.dataset.id || '';
-  localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
+  const trainId = button.dataset.id || '';
+  const existingSelection = compositionSelectedIds();
+  const nextSelection = existingSelection.includes(trainId) && existingSelection.length > 1 ? existingSelection : [trainId];
+  setCompositionSelection(nextSelection, trainId);
+  renderAll();
+  return;
+}
+if (action === 'toggle-composition-train-selection') {
+  const trainId = button.dataset.id || '';
+  const selected = new Set(compositionSelectedIds());
+  if (button.checked) selected.add(trainId);
+  else selected.delete(trainId);
+  setCompositionSelection([...selected], selected.has(app.selectedCompositionTrainId) ? app.selectedCompositionTrainId : ([...selected][0] || ''));
+  renderAll();
+  return;
+}
+if (action === 'edit-composition-selection') {
+  const ids = compositionSelectedIds();
+  if (!ids.length) return toast('Sélectionne au moins un train.', 'error');
+  setCompositionSelection(ids, ids[0]);
+  renderAll();
+  return;
+}
+if (action === 'clear-composition-selection') {
+  setCompositionSelection([], '');
+  renderAll();
+  return;
+}
+if (action === 'close-composition-editor') {
+  app.selectedCompositionTrainId = '';
+  localStorage.removeItem('sillons.selectedCompositionTrainId');
+  renderAll();
+  return;
+}
+if (action === 'toggle-composition-group') {
+  const mode = button.dataset.mode || app.fleetSortMode || 'era';
+  const key = button.dataset.key || '';
+  setCompositionGroupCollapsed(mode, key, !isCompositionGroupCollapsed(mode, key));
   renderAll();
   return;
 }
 if (action === 'open-composition') {
+  const trainId = button.dataset.id || '';
   app.activeTab = 'fleet';
   app.activeFleetSubtab = 'composition';
-  app.selectedCompositionTrainId = button.dataset.id || '';
+  setCompositionSelection([trainId], trainId);
   localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
-  localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
   renderAll();
   return;
 }
@@ -5443,8 +5590,10 @@ if (action === 'save-train-composition') {
   const trainId = button.dataset.id;
   const train = app.state.me.trains.find(t => t.id === trainId);
   if (!train) return;
+  const targetIds = compositionEditTargetIds(trainId);
+  if (!targetIds.length) return toast('Aucun train sélectionné.', 'error');
   const spec = trainCompositionSpec(train);
-  const payload = { trainId, mode: spec.mode };
+  const payload = { trainId, trainIds: targetIds, mode: spec.mode };
   if (spec.mode === 'multiple_unit') payload.powerUnits = Number($('#compPowerUnitsValue')?.value || $('#compPowerUnits')?.value || 1);
   else if (spec.mode === 'freight_loco') {
     payload.freightCars = Number($('#compFreightCarsValue')?.value || $('#compFreightCars')?.value || 2);
@@ -5453,11 +5602,24 @@ if (action === 'save-train-composition') {
     payload.passengerCars = Number($('#compPassengerCarsValue')?.value || $('#compPassengerCars')?.value || 1);
     payload.passengerVariant = document.querySelector('input[name="compPassengerVariant"]:checked')?.value || '';
   }
-  const economy = compositionChangeEconomyClient(train, payload);
+  const economy = targetIds.reduce((acc, id) => {
+    const targetTrain = app.state.me.trains.find(t => t.id === id);
+    if (!targetTrain) return acc;
+    const item = compositionChangeEconomyClient(targetTrain, payload);
+    acc.cost += Number(item.cost || 0);
+    acc.refund += Number(item.refund || 0);
+    return acc;
+  }, { cost: 0, refund: 0 });
+  const countLabel = targetIds.length > 1 ? `${targetIds.length} trains` : 'ce train';
   if (economy.cost > 0) {
-    if (!(await gameConfirm('Modifier la composition', `Coût des voitures/wagons ajoutés : ${money(economy.cost)}.`, { confirmLabel: 'Modifier' }))) return;
+    if (!(await gameConfirm('Modifier la composition', `Appliquer cette composition à ${countLabel} ?
+
+Coût estimé : ${money(economy.cost)}.${economy.refund > 0 ? `
+Remboursement estimé : ${money(economy.refund)}.` : ''}`, { confirmLabel: 'Modifier' }))) return;
   } else if (economy.refund > 0) {
-    if (!(await gameConfirm('Modifier la composition', `Remboursement estimé au prorata de l’usure : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }))) return;
+    if (!(await gameConfirm('Modifier la composition', `Appliquer cette composition à ${countLabel} ?
+
+Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }))) return;
   }
   return doAction('updateTrainComposition', payload);
 }

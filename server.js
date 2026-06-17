@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v63.0.0';
-const STATE_SCHEMA_VERSION = 94;
+const PROJECT_VERSION = 'v64.0.0';
+const STATE_SCHEMA_VERSION = 95;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3336,14 +3336,17 @@ function actionSellTrain(player, payload) {
 
 
 
-function actionUpdateTrainComposition(player, payload) {
-  const train = player.trains.find(t => t.id === payload.trainId);
-  if (!train) return fail('Train introuvable.');
-  if (train.maintenance?.active) return fail('Composition indisponible.', 'Le train est actuellement en maintenance.');
+function prepareTrainCompositionUpdate(player, train, payload) {
+  if (!train) return { ok: false, result: fail('Train introuvable.') };
+  if (train.maintenance?.active) return { ok: false, result: fail('Composition indisponible.', 'Le train est actuellement en maintenance.') };
   const model = BALANCE.trains[train.modelId];
-  if (!model) return fail('Modèle introuvable.');
+  if (!model) return { ok: false, result: fail('Modèle introuvable.') };
   const current = ensureTrainComposition(train, model);
   const requestedMode = payload.mode || current.mode;
+  const availableModes = compositionAvailableModesForModel(model);
+  if (payload.mode && !availableModes.includes(requestedMode)) {
+    return { ok: false, result: fail('Composition incompatible.', `${model.name} ne peut pas recevoir ce type de composition.`) };
+  }
   const spec = compositionSpecForModel(model, requestedMode);
   const updated = { ...current, mode: spec.mode };
 
@@ -3354,7 +3357,7 @@ function actionUpdateTrainComposition(player, payload) {
     const variant = compositionVariantForMode('passenger_loco', payload.passengerVariant ?? current.passengerVariant);
     if (!compositionVariantUnlockedForPlayer(player, model, variant)) {
       const tech = variant?.requiredTech ? techNodeById(variant.requiredTech) : null;
-      return fail('Variante non débloquée.', tech ? `Recherche requise : ${tech.title}.` : 'Cette variante demande une époque plus avancée.');
+      return { ok: false, result: fail('Variante non débloquée.', tech ? `Recherche requise : ${tech.title}.` : 'Cette variante demande une époque plus avancée.') };
     }
     updated.passengerVariant = variant?.id || current.passengerVariant;
   } else {
@@ -3362,31 +3365,60 @@ function actionUpdateTrainComposition(player, payload) {
     const variant = compositionVariantForMode('freight_loco', payload.freightVariant ?? current.freightVariant);
     if (!compositionVariantUnlockedForPlayer(player, model, variant)) {
       const tech = variant?.requiredTech ? techNodeById(variant.requiredTech) : null;
-      return fail('Variante non débloquée.', tech ? `Recherche requise : ${tech.title}.` : 'Cette variante demande une époque plus avancée.');
+      return { ok: false, result: fail('Variante non débloquée.', tech ? `Recherche requise : ${tech.title}.` : 'Cette variante demande une époque plus avancée.') };
     }
     updated.freightVariant = variant?.id || current.freightVariant;
   }
 
   const targetComposition = { ...current, ...updated, mode: spec.mode };
   const economy = compositionChangeEconomy(model, current, targetComposition, train);
-  if (economy.cost > 0 && !canPay(player, economy.cost)) {
-    return fail(`Trésorerie insuffisante. Coût de composition : ${money(economy.cost)}.`);
+  const before = getTrainOperatingProfile({ ...train, composition: current }, model);
+  const after = getTrainOperatingProfile({ ...train, composition: targetComposition }, model);
+  return { ok: true, train, model, current, targetComposition, economy, before, after };
+}
+
+function actionUpdateTrainComposition(player, payload) {
+  const requestedIds = Array.isArray(payload.trainIds) && payload.trainIds.length
+    ? payload.trainIds
+    : [payload.trainId];
+  const trainIds = [...new Set(requestedIds.map(id => String(id || '').trim()).filter(Boolean))];
+  if (!trainIds.length) return fail('Aucun train sélectionné.');
+
+  const updates = [];
+  for (const trainId of trainIds) {
+    const train = player.trains.find(t => t.id === trainId);
+    const prepared = prepareTrainCompositionUpdate(player, train, payload);
+    if (!prepared.ok) return prepared.result;
+    updates.push(prepared);
   }
 
-  const before = getTrainOperatingProfile({ ...train, composition: current }, model);
-  if (economy.cost > 0) player.cash -= economy.cost;
-  if (economy.refund > 0) player.cash += economy.refund;
-  train.composition = targetComposition;
-  const after = getTrainOperatingProfile(train, model);
+  const totalCost = updates.reduce((sum, item) => sum + Math.max(0, Number(item.economy.cost || 0)), 0);
+  const totalRefund = updates.reduce((sum, item) => sum + Math.max(0, Number(item.economy.refund || 0)), 0);
+  const netCost = totalCost - totalRefund;
+  if (netCost > 0 && !canPay(player, netCost)) {
+    return fail(`Trésorerie insuffisante. Coût net de composition : ${money(netCost)}.`);
+  }
+
+  player.cash -= totalCost;
+  player.cash += totalRefund;
+  for (const update of updates) {
+    update.train.composition = update.targetComposition;
+  }
+
   markTutorialAction(player, 'compositionSaved');
   refreshPlayerLineStatsNow(player);
-  const cashText = economy.cost > 0
-    ? `Coût : ${money(economy.cost)}.`
-    : economy.refund > 0
-      ? `Remboursement : ${money(economy.refund)}.`
+  const cashText = totalCost > 0
+    ? `Coût : ${money(totalCost)}${totalRefund > 0 ? `, remboursement : ${money(totalRefund)}` : ''}.`
+    : totalRefund > 0
+      ? `Remboursement : ${money(totalRefund)}.`
       : 'Aucun coût.';
-  notify(player, `Composition mise à jour pour ${model.name} : ${after.compositionSummary}. ${cashText}`);
-  return ok(`Composition mise à jour (${before.compositionSummary} → ${after.compositionSummary}). ${cashText}`);
+  if (updates.length === 1) {
+    const update = updates[0];
+    notify(player, `Composition mise à jour pour ${update.model.name} : ${update.after.compositionSummary}. ${cashText}`);
+    return ok(`Composition mise à jour (${update.before.compositionSummary} → ${update.after.compositionSummary}). ${cashText}`);
+  }
+  notify(player, `${updates.length} compositions mises à jour. ${cashText}`);
+  return ok(`${updates.length} compositions mises à jour. ${cashText}`);
 }
 
 function ticketPriceCeiling(distance) {

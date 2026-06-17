@@ -1,5 +1,16 @@
 # Changelog
 
+## Version v64.0.0 — refonte du menu Composition
+
+- incrément de version : badge interface `v64.0.0`, package `64.0.0` et schéma serveur `95` ;
+- refonte du menu Composition : l’atelier d’édition ne s’ouvre plus automatiquement et apparaît uniquement après clic sur une vignette de train ou sur le bouton d’édition de la sélection ;
+- remplacement de la liste verticale simple par des vignettes de trains, visuellement proches des cartes de recherche / catalogue ;
+- classement du parc soit par sections d’ère, soit par sections de type de composition `Voyageurs`, `Fret` ou `Mixte`, avec sections réductibles persistées localement ;
+- intégration directe dans chaque vignette des actions `Dupliquer`, `Affecter à une ligne` et `Vendre` ;
+- ajout d’une sélection multiple permettant d’appliquer une composition à un ensemble de trains compatibles ;
+- l’action serveur `updateTrainComposition` accepte désormais plusieurs trains en une seule opération, valide la compatibilité de chaque matériel, calcule le coût / remboursement global et recalcule les lignes après application ;
+- ajustements CSS du panneau pour conserver un scroll indépendant de la liste des vignettes et une mise en page lisible sur écran étroit.
+
 ## Version v63.0.0 — gestion des sillons, filtre concurrents et atelier de trains
 
 - incrément de version : badge interface `v63.0.0`, package `63.0.0` et schéma serveur `94` ;
