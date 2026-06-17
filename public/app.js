@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.4.0';
+const PROJECT_VERSION = 'v64.4.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -4746,9 +4746,6 @@ function renderOwnedTrain(train) {
           <div><span>Usure historique</span><b>${escapeHtml(formatTrainServiceTime(train))}</b></div>
           <div><span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b></div>
           <div><span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b></div>
-        </div>
-        <div class="owned-train-composition-preview">
-          ${renderTrainCompositionStrip(train, model, 'mini')}
         </div>
         ${inMaint ? `
           <p class="small muted">Le train est immobilisé. Toute ligne qui l’utilise reste ouverte mais ne produit rien jusqu’à la fin de l’intervention.</p>

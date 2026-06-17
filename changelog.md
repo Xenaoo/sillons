@@ -1,3 +1,10 @@
+## Version v64.4.1 — correction du cadrage des vignettes Maintenance
+
+- incrément de version : badge interface `v64.4.1`, version serveur/client `v64.4.1`, package `64.4.1` et schéma serveur `106` ;
+- correction du bug de cadrage des vignettes dans `Parc > Maintenance` : les cartes reprennent une disposition verticale cohérente avec le catalogue au lieu de forcer un affichage en deux colonnes trop étroit ;
+- sécurisation de l'affichage des pastilles de statut/ligne longue dans les vignettes de maintenance ;
+- suppression de l'aperçu miniature de composition sous la ligne `Composition` dans les vignettes de maintenance.
+
 ## Version v64.4.0 — maintenance du parc alignée sur le catalogue
 
 - incrément de version : badge interface `v64.4.0`, version serveur/client `v64.4.0`, package `64.4.0` et schéma serveur `105` ;
@@ -10,17 +17,9 @@
 
 # Changelog
 
-## Version v64.3.0 — catalogue du parc : cartes épurées et catégories masquables par ère
+## Version v64:2:0 — achat groupé depuis le catalogue du parc
 
-- incrément de version : badge interface `v64.3.0`, version serveur/client `v64.3.0`, package `64.3.0` et schéma serveur `104` ;
-- catalogue du parc : transformation des sections d’ère en catégories réductibles, avec état de masquage mémorisé localement pour pouvoir masquer ou réafficher chaque ère indépendamment ;
-- vignettes du catalogue : suppression des statistiques `Voyageurs` et `Fret`, remplacées par une statistique `Puissance` affichée en `kW` ;
-- bonus de recherche hérités : suppression de la ligne récapitulative en petit texte sous les bonus, pour alléger les cartes ;
-- zone d’achat : champ `Quantité` légèrement agrandi pour améliorer la lisibilité tout en conservant l’achat unitaire par défaut.
-
-## Version v64.2.0 — achat groupé depuis le catalogue du parc
-
-- incrément de version : badge interface `v64.2.0`, version serveur/client `v64.2.0`, package `64.2.0` et schéma serveur `103` ;
+- incrément de version : badge interface `v64:2:0`, version serveur/client `v64:2:0`, package `64.2.0` et schéma serveur `103` ;
 - ajout d’un champ `Quantité` sur chaque carte de matériel dans `Parc > Catalogue`, initialisé à `1` pour conserver l’achat unitaire par défaut ;
 - ajout du calcul immédiat du total estimé selon la quantité choisie et le prix unitaire courant ;
 - ajout d’une confirmation dédiée lors d’un achat de plusieurs trains ;

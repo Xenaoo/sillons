@@ -8700,3 +8700,42 @@ dialog.modal--wide {
   font-size: 10px;
   line-height: 1.15;
 }
+
+
+/* ===== v64.4.1 — correction cadrage vignettes Maintenance ===== */
+.fleet-maintenance-grid .maintenance-train-card {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-content: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fleet-maintenance-grid .maintenance-train-card .train-card-body,
+.fleet-maintenance-grid .maintenance-train-card .owned-train-body {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fleet-maintenance-grid .maintenance-train-card .item-title {
+  min-width: 0;
+  align-items: start;
+}
+
+.fleet-maintenance-grid .maintenance-train-card .item-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fleet-maintenance-grid .maintenance-train-card .item-title .tag {
+  max-width: min(48%, 132px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleet-maintenance-grid .owned-train-composition-preview {
+  display: none !important;
+}
