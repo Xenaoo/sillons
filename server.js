@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v64.5.2';
-const STATE_SCHEMA_VERSION = 109;
+const PROJECT_VERSION = 'v64.6.0';
+const STATE_SCHEMA_VERSION = 110;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -6455,6 +6455,26 @@ function computeLineSillonLimit(player, line, usage = null) {
       .filter(item => item.playerId === player.id && item.lineId === line.id)
       .reduce((sum, item) => sum + Number(item.frequency || 0), 0);
     const usedByOthers = Math.max(0, Number(entry?.used || 0) - ownRequested);
+    const usedByOthersDetails = [];
+    const otherUsage = new Map();
+    for (const item of entry?.entries || []) {
+      if (item.playerId === player.id && item.lineId === line.id) continue;
+      const otherPlayer = state.players?.[item.playerId];
+      const otherLine = otherPlayer?.lines?.find(candidate => candidate.id === item.lineId);
+      const key = `${item.playerId || 'unknown'}::${item.lineId || 'unknown'}`;
+      const current = otherUsage.get(key) || {
+        playerId: item.playerId || '',
+        playerName: cleanText(otherPlayer?.name || 'Autre compagnie', 40),
+        lineId: item.lineId || '',
+        lineName: cleanText(otherLine ? lineRouteName(lineStops(otherLine)) : 'Ligne', 64),
+        frequency: 0
+      };
+      current.frequency += Number(item.frequency || 0);
+      otherUsage.set(key, current);
+    }
+    for (const item of otherUsage.values()) {
+      if (item.frequency > 0) usedByOthersDetails.push({ ...item, frequency: round2(item.frequency) });
+    }
     const totalUsed = usedByOthers + requested;
     const available = Math.max(0, capacity - usedByOthers);
     const detail = {
@@ -6465,6 +6485,7 @@ function computeLineSillonLimit(player, line, usage = null) {
       toName: stationById(segment.to)?.name || segment.to,
       capacity,
       usedByOthers: round2(usedByOthers),
+      usedByOthersDetails,
       totalUsed: round2(totalUsed),
       available: round2(available),
       requested
@@ -6507,6 +6528,15 @@ function sillonStatsPayload(info) {
       toName: info.bottleneck.toName,
       capacity: round2(info.bottleneck.capacity || 0),
       usedByOthers: round2(info.bottleneck.usedByOthers || 0),
+      usedByOthersDetails: Array.isArray(info.bottleneck.usedByOthersDetails)
+        ? info.bottleneck.usedByOthersDetails.map(item => ({
+          playerId: String(item.playerId || ''),
+          playerName: cleanText(item.playerName || 'Autre compagnie', 40),
+          lineId: String(item.lineId || ''),
+          lineName: cleanText(item.lineName || 'Ligne', 64),
+          frequency: round2(item.frequency || 0)
+        }))
+        : [],
       totalUsed: round2(info.bottleneck.totalUsed || 0),
       available: round2(info.bottleneck.available || 0)
     } : null

@@ -1,3 +1,11 @@
+## Version v64.6.0 — lignes : sillons disponibles et détail du tronçon limitant
+
+- incrément de version : badge interface `v64.6.0`, version serveur/client `v64.6.0`, package `64.6.0` et schéma serveur `110` ;
+- menu `Lignes > Modifier` : suppression de la case `Trains` dans les statistiques de fiche ligne ;
+- case `Sillons` : affichage limité au nombre de sillons réellement disponibles sur le tronçon limitant ;
+- tooltip `Sillons` : ajout d’un affichage ligne par ligne avec le tronçon limitant et l’utilisation déjà consommée par les autres compagnies/lignes ;
+- serveur : enrichissement des statistiques de sillons avec le détail des lignes tierces utilisant le tronçon limitant.
+
 ## Version v64.5.2 — désélection du filtre carte des lignes
 
 - incrément de version : badge interface `v64.5.2`, version serveur/client `v64.5.2`, package `64.5.2` et schéma serveur `109` ;
