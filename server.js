@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v64.8.1';
-const STATE_SCHEMA_VERSION = 117;
+const PROJECT_VERSION = 'v65.0.0';
+const STATE_SCHEMA_VERSION = 118;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -54,6 +54,10 @@ const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;
 const AUTH_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const AUTH_PASSWORD_MIN_LENGTH = 6;
+const API_JSON_BODY_LIMIT = 8_000_000;
+const BUG_REPORT_MAX_IMAGES = 3;
+const BUG_REPORT_MAX_IMAGE_CHARS = 950_000;
+const BUG_REPORT_MAX_STORED = 120;
 const COMPOSITION_REFUND_RATE = 0.78;
 const SNCF_ROUTE_GEOMETRY_CACHE_MAX = 1800;
 // Les passages d'époque sont ralentis par le trafic cumulé requis, sans délai temporel artificiel.
@@ -63,7 +67,7 @@ const STARTER_PLAYER_ID = '4c7dfa51-225a-487a-aa42-1b0776c4e1d5';
 const TICKET_PRICE_CAP_ABSOLUTE = 28;
 // Départ v49 : aucune ligne, aucun train, aucun salarié. Capital suffisant
 // pour un premier achat sérieux, mais insuffisant pour contrôler une métropole.
-const STARTING_CASH = 500000;
+const STARTING_CASH = 1000000;
 // Les recherches sont jouées comme illimitées. Cette limite technique évite seulement les valeurs JS absurdes.
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
 const COMPANY_LOGOS = ["steam_front", "winged_wheel", "semaphore", "royal_track", "tunnel_arch", "electric_rail", "mountain_rail", "laurel_wheel", "pantograph", "conductor_cap", "grand_station", "freight_wagon", "star_track", "compass_rail", "monogram_rail", "bridge_truss", "boiler_gauge", "gear_wheel", "lantern_wings", "switch_roundel"];
@@ -523,7 +527,7 @@ function readBody(req) {
     req.on('data', chunk => {
       if (tooLarge) return;
       data += chunk;
-      if (data.length > 1_000_000) {
+      if (data.length > API_JSON_BODY_LIMIT) {
         tooLarge = true;
         reject(httpError(413, 'Payload trop volumineux.'));
       }
@@ -724,6 +728,124 @@ function authPayload(user, token) {
   };
 }
 
+
+function normalizeBugImage(raw = {}, index = 0) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = cleanOptionalText(raw.name || `image-${index + 1}.jpg`, 90) || `image-${index + 1}.jpg`;
+  const type = cleanOptionalText(raw.type || 'image/jpeg', 40);
+  const dataUrl = String(raw.dataUrl || raw.data || '').trim();
+  if (!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(dataUrl)) return null;
+  if (dataUrl.length > BUG_REPORT_MAX_IMAGE_CHARS) return null;
+  return {
+    id: cleanOptionalText(raw.id || crypto.randomUUID(), 80),
+    name,
+    type,
+    dataUrl,
+    size: Math.max(0, Math.round(Number(raw.size || Math.ceil(dataUrl.length * 0.75))))
+  };
+}
+
+function normalizeBugReports(raw = []) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list.map(item => {
+    if (!item || typeof item !== 'object') return null;
+    const id = cleanOptionalText(item.id || crypto.randomUUID(), 80);
+    const title = cleanText(item.title || 'Bug signalé', 120);
+    const description = cleanText(item.description || item.body || '', 4000);
+    const status = item.status === 'closed' ? 'closed' : 'open';
+    const images = Array.isArray(item.images)
+      ? item.images.map((image, index) => normalizeBugImage(image, index)).filter(Boolean).slice(0, BUG_REPORT_MAX_IMAGES)
+      : [];
+    return {
+      id,
+      title,
+      description,
+      severity: ['low', 'normal', 'high', 'critical'].includes(item.severity) ? item.severity : 'normal',
+      status,
+      reporterId: cleanOptionalText(item.reporterId || '', 80),
+      reporterName: cleanText(item.reporterName || 'Joueur', 80),
+      createdAt: Number(item.createdAt || Date.now()),
+      createdDay: Math.max(1, Math.round(Number(item.createdDay || 1))),
+      closedAt: status === 'closed' ? Number(item.closedAt || Date.now()) : null,
+      closedBy: status === 'closed' ? cleanOptionalText(item.closedBy || '', 80) : '',
+      closedByName: status === 'closed' ? cleanText(item.closedByName || '', 80) : '',
+      resolution: status === 'closed' ? cleanText(item.resolution || 'Réglé', 500) : '',
+      images
+    };
+  }).filter(Boolean)
+    .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+    .slice(0, BUG_REPORT_MAX_STORED);
+}
+
+function publicBugReports(authUser = null) {
+  state.bugReports = normalizeBugReports(state.bugReports || []);
+  const isAdmin = isAdminUser(authUser);
+  return state.bugReports.map(bug => ({
+    id: bug.id,
+    title: bug.title,
+    description: bug.description,
+    severity: bug.severity,
+    status: bug.status,
+    reporterName: bug.reporterName,
+    createdAt: bug.createdAt,
+    createdDay: bug.createdDay,
+    closedAt: bug.closedAt,
+    closedByName: bug.closedByName,
+    resolution: bug.resolution,
+    images: bug.images,
+    canClose: isAdmin && bug.status !== 'closed'
+  }));
+}
+
+function actionSubmitBugReport(player, payload = {}) {
+  const title = cleanText(payload.title || '', 120);
+  const description = cleanText(payload.description || '', 4000);
+  if (title.length < 4) return fail('Titre trop court.', 'Indique un titre de bug suffisamment explicite.');
+  if (description.length < 10) return fail('Description trop courte.', 'Décris ce que tu as fait, ce qui s’est produit et ce qui était attendu.');
+  const images = Array.isArray(payload.images)
+    ? payload.images.map((image, index) => normalizeBugImage(image, index)).filter(Boolean).slice(0, BUG_REPORT_MAX_IMAGES)
+    : [];
+  if (Array.isArray(payload.images) && payload.images.length && !images.length) {
+    return fail('Image refusée.', 'Formats acceptés : PNG, JPEG ou WebP, avec une taille raisonnable.');
+  }
+  const report = {
+    id: crypto.randomUUID(),
+    title,
+    description,
+    severity: ['low', 'normal', 'high', 'critical'].includes(payload.severity) ? payload.severity : 'normal',
+    status: 'open',
+    reporterId: player.id,
+    reporterName: player.name,
+    createdAt: Date.now(),
+    createdDay: state.day,
+    closedAt: null,
+    closedBy: '',
+    closedByName: '',
+    resolution: '',
+    images
+  };
+  state.bugReports = normalizeBugReports([report, ...(state.bugReports || [])]);
+  notify(player, 'Bug signalé : Il apparaît maintenant dans la liste commune des signalements.');
+  return ok('Bug signalé.');
+}
+
+function actionCloseBugReport(player, payload = {}) {
+  const user = Object.values(state.users || {}).find(item => item.playerId === player.id);
+  if (!isAdminUser(user)) return fail('Accès réservé au compte Xenao.');
+  const id = String(payload.id || payload.bugId || '').trim();
+  state.bugReports = normalizeBugReports(state.bugReports || []);
+  const bug = state.bugReports.find(item => item.id === id);
+  if (!bug) return fail('Signalement introuvable.');
+  if (bug.status === 'closed') return ok('Signalement déjà clôturé.');
+  bug.status = 'closed';
+  bug.closedAt = Date.now();
+  bug.closedBy = player.id;
+  bug.closedByName = player.name;
+  bug.resolution = cleanText(payload.resolution || 'Réglé', 500);
+  state.bugReports = normalizeBugReports(state.bugReports);
+  return ok('Signalement clôturé.');
+}
+
 function createTutorialState(raw = null) {
   const t = raw && typeof raw === 'object' ? raw : {};
   return {
@@ -859,7 +981,7 @@ function buildAdminDashboard() {
       rawPlayer: player
     };
   }).sort((a, b) => (b.isAdmin - a.isAdmin) || String(a.name).localeCompare(String(b.name), 'fr'));
-  return { players, generatedAt: Date.now() };
+  return { players, bugReports: publicBugReports({ usernameKey: ADMIN_USERNAME_KEY, username: 'Xenao' }), openBugs: normalizeBugReports(state.bugReports || []).filter(bug => bug.status !== 'closed').length, generatedAt: Date.now() };
 }
 
 function adminFindPlayer(payload = {}) {
@@ -1482,6 +1604,7 @@ function migrateState(loaded) {
     market: { ...createMarket(), ...(loaded.market || {}) },
     events: Array.isArray(loaded.events) ? loaded.events : [],
     news: Array.isArray(loaded.news) ? loaded.news.slice(0, 50) : [],
+    bugReports: normalizeBugReports(loaded.bugReports || []),
     users: normalizeUsers(loaded.users || {}),
     players: purgeUnlinkedPlayers(players, loaded.users || {}),
   };
@@ -1704,6 +1827,7 @@ function createState() {
     market: createMarket(),
     events: [createEvent('expo', 12)],
     news: [{ day: 1, text: 'Le marché ferroviaire français s’ouvre aux premières compagnies privées.' }],
+    bugReports: [],
     users: {},
     players: {}
   };
@@ -3109,6 +3233,7 @@ function publicState(playerId, authUser = null) {
     },
     players,
     me,
+    bugReports: publicBugReports(authUser),
     admin: isAdminUser(authUser) ? buildAdminDashboard() : null
   };
 }
@@ -3240,7 +3365,7 @@ function createPlayer(input) {
     },
     notifications: [{
       day: state.day,
-      text: `Compagnie créée avec ${money(STARTING_CASH)}. Achète un premier matériel roulant dans l’onglet Parc, puis ouvre ta première ligne courte ou régionale.`
+      text: `Compagnie créée avec ${money(STARTING_CASH)}. Lance d’abord une recherche de traction, puis achète ton premier matériel roulant dans l’onglet Parc.`
     }],
     createdAt: Date.now(),
     lastSeen: Date.now()
@@ -3284,7 +3409,9 @@ async function applyAction(playerId, type, payload) {
     repayLoan: () => actionRepayLoan(player, payload),
     rename: () => actionRename(player, payload),
     resetCompany: () => actionResetCompany(player, payload),
-    tutorial: () => actionTutorial(player, payload)
+    tutorial: () => actionTutorial(player, payload),
+    submitBugReport: () => actionSubmitBugReport(player, payload),
+    closeBugReport: () => actionCloseBugReport(player, payload)
   };
 
   const handler = handlers[type];

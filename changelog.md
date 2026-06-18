@@ -1,3 +1,14 @@
+## Version v65.0.0 — tutoriel corrigé, capital de départ et signalements de bugs
+
+- incrément de version : badge interface `v65.0.0`, version serveur/client `v65.0.0`, package `65.0.0` et schéma serveur `118` ;
+- tutoriel intégré retravaillé pour suivre l’ordre réel du début de partie : recherche de traction avant achat du premier train ;
+- capital initial des nouveaux joueurs porté à `1 000 000 €` ;
+- ajout du menu `Bugs` accessible à tous les joueurs ;
+- les joueurs peuvent créer un signalement avec titre, gravité, description et jusqu’à trois images jointes redimensionnées côté client ;
+- tous les joueurs peuvent consulter la liste commune des bugs en lecture seule ;
+- le compte `Xenao` peut clôturer les bugs réglés ;
+- migration de sauvegarde : ajout du registre `bugReports` et normalisation des signalements au chargement.
+
 ## Version v64.8.1 — retour au rendu RFN segmenté avant v64.7.0
 
 - incrément de version : badge interface `v64.8.1`, version serveur/client `v64.8.1`, package `64.8.1` et schéma serveur `117` ;

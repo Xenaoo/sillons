@@ -1,5 +1,5 @@
 {
-  "version": 117,
+  "version": 118,
   "createdAt": 1781511648911,
   "now": 1781733641038,
   "day": 102337,
@@ -16222,5 +16222,6 @@
       "lastSeen": 1781706310751,
       "epochStartedAt": 1781640468414
     }
-  }
+  },
+  "bugReports": []
 }

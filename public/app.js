@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v64.8.1';
+const PROJECT_VERSION = 'v65.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -119,18 +119,20 @@ const app = {
 
 
 const TUTORIAL_STEPS = [
-  { id: 'welcome', target: '.brand', title: 'Bienvenue dans Sillons', body: 'Ce tutoriel guidé va te faire découvrir le jeu de A à Z : acheter un train, régler sa composition, ouvrir une ligne, puis lire les menus importants.', action: 'Commencer' },
+  { id: 'welcome', target: '.brand', title: 'Bienvenue dans Sillons', body: 'Ce tutoriel guidé suit maintenant l’ordre réel du début de partie : lancer une recherche, acheter un train, régler sa composition, puis ouvrir une ligne.', action: 'Commencer' },
   { id: 'overview', target: '#tabs [data-tab="overview"]', title: 'Vue générale', body: 'La Vue donne le résumé de ta compagnie : résultat, réseau, matériel, réputation et alertes. C’est ton poste de contrôle.', action: 'Continuer' },
+  { id: 'research-tab', target: '#tabs [data-tab="research"]', title: 'Commencer par la R&D', body: 'Clique sur R&D. Le premier matériel nécessite une recherche de traction avant achat.', wait: 'activeTab:research' },
+  { id: 'first-research', target: '[data-action="research-node"][data-id="steam_first_locomotives"]:not([disabled])', tab: 'research', title: 'Débloquer les premières locomotives', body: 'Lance la recherche Premières locomotives à vapeur. Quand elle sera terminée, le premier train deviendra achetable.', wait: 'tech:steam_first_locomotives:1' },
   { id: 'fleet-tab', target: '#tabs [data-tab="fleet"]', title: 'Va dans le Parc', body: 'Clique sur Parc. C’est ici que tu achètes tes trains, règles les compositions et lances les opérations de maintenance.', wait: 'activeTab:fleet' },
-  { id: 'fleet-catalog', target: 'button[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, capacité, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
+  { id: 'fleet-catalog', target: 'button[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, puissance, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
   { id: 'buy-train', target: '[data-action="buy-train"]:not([disabled])', tab: 'fleet', subtab: 'catalog', title: 'Acheter un train', body: 'Achète un premier train adapté à une ligne courte. Si tu as déjà un train, cette étape est automatiquement validée.', wait: 'hasTrain' },
   { id: 'fleet-composition-tab', target: 'button[data-fleet-subtab="composition"]', tab: 'fleet', title: 'Atelier de compositions', body: 'Clique sur Compositions. Tu vas choisir manuellement les voitures ou wagons pour adapter le train à ton service.', wait: 'fleetSubtab:composition' },
-  { id: 'select-composition-train', target: '[data-action="select-composition-train"], [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Sélectionne le train que tu veux configurer. Les réglages de composition apparaissent ensuite à droite.', wait: 'compositionTrainSelected' },
+  { id: 'select-composition-train', target: '.composition-train-card, [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Clique sur une vignette de train pour la sélectionner. Les réglages de composition apparaissent ensuite à droite.', wait: 'compositionTrainSelected' },
   { id: 'manual-composition', target: '.composition-editor-card, [data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Composition manuelle', body: 'Règle le nombre de voitures voyageurs ou de wagons. La composition modifie capacité, vitesse, maintenance et rentabilité.', action: 'J’ai compris' },
   { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
   { id: 'lines-tab', target: '#tabs [data-tab="lines"]', title: 'Créer une ligne', body: 'Clique sur Lignes. C’est le cœur du jeu : une ligne relie des gares, utilise un train et produit des recettes.', wait: 'activeTab:lines' },
   { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train et prix.', wait: 'linesSubtab:create' },
-  { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. La recherche accepte uniquement les gares réelles du réseau.', action: 'Continuer' },
+  { id: 'line-from', target: '#lineFromSearch', tab: 'lines', subtab: 'create', title: 'Choisir le départ', body: 'Renseigne la gare d’origine. Tu n’as plus besoin d’acheter les gares desservies avant de créer une ligne.', action: 'Continuer' },
   { id: 'line-to', target: '#lineToSearch', tab: 'lines', subtab: 'create', title: 'Choisir le terminus', body: 'Renseigne la destination. Une ligne courte est préférable au début pour limiter l’usure, le charbon et les coûts.', action: 'Continuer' },
   { id: 'line-train', target: '#lineTrain', tab: 'lines', subtab: 'create', title: 'Affecter un train', body: 'Sélectionne le train libre à utiliser. Un train en maintenance ou à 0 % d’état ne peut pas produire de trafic.', action: 'Continuer' },
   { id: 'line-price', target: '#lineTicketPrice', tab: 'lines', subtab: 'create', title: 'Fixer le prix', body: 'Un prix trop élevé réduit l’attractivité. Cherche un équilibre entre volume de voyageurs et recette par billet.', action: 'Continuer' },
@@ -139,13 +141,12 @@ const TUTORIAL_STEPS = [
   { id: 'stations-tab', target: '#tabs [data-tab="stations"]', title: 'Gares', body: 'Clique sur Gares. Tu peux améliorer les niveaux, commerces, ateliers et dépôts pour soutenir le trafic et la maintenance.', wait: 'activeTab:stations' },
   { id: 'staff-tab', target: '#tabs [data-tab="staff"]', title: 'Ressources humaines', body: 'Clique sur RH. Les conducteurs sont obligatoires, les autres métiers améliorent recettes, régularité, satisfaction, maintenance et infrastructure.', wait: 'activeTab:staff' },
   { id: 'maintenance-tab', target: 'button[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Surveille l’état des trains : à 0 %, ils ne roulent plus et disparaissent de la carte.', wait: 'fleetSubtab:maintenance' },
-  { id: 'research-tab', target: '#tabs [data-tab="research"]', title: 'Recherche', body: 'Clique sur R&D. Les recherches débloquent du matériel, de l’exploitation, de l’énergie, du fret, des gares et des bonus sociaux.', wait: 'activeTab:research' },
   { id: 'resources-tab', target: '#tabs [data-tab="resources"]', title: 'Énergie', body: 'Clique sur Énergie. Surveille charbon, diesel et électricité : sans ressource, les lignes concernées s’arrêtent.', wait: 'activeTab:resources' },
   { id: 'market-tab', target: '#tabs [data-tab="market"]', title: 'Marché et financement', body: 'Clique sur Marché. Tu y ajustes les contrats et le financement pour accompagner la croissance de la compagnie.', wait: 'activeTab:market' },
   { id: 'budget-tab', target: '#tabs [data-tab="budget"]', title: 'Budget', body: 'Clique sur Budget. C’est le menu à consulter pour comprendre chaque recette, dépense, charge fixe et résultat net.', wait: 'activeTab:budget' },
-  { id: 'done', target: '#tabs [data-tab="overview"]', title: 'Tutoriel terminé', body: 'Tu as vu le chemin principal. Tu peux maintenant optimiser lignes, parc, RH, maintenance, recherche et budget.', action: 'Terminer' }
+  { id: 'bugs-tab', target: '#tabs [data-tab="bugs"]', title: 'Signalements de bugs', body: 'Clique sur Bugs. Ce menu permet de déclarer un problème, joindre des captures et consulter les signalements déjà remontés.', wait: 'activeTab:bugs' },
+  { id: 'done', target: '#tabs [data-tab="overview"]', title: 'Tutoriel terminé', body: 'Tu as vu le chemin principal. Tu peux maintenant optimiser lignes, parc, RH, maintenance, recherche, énergie, budget et signalements.', action: 'Terminer' }
 ];
-
 const TUTORIAL_STEP_INDEX = Object.fromEntries(TUTORIAL_STEPS.map((step, index) => [step.id, index]));
 
 const serviceLabels = {
@@ -217,7 +218,8 @@ const ART = {
     research: '/assets/art/hero-research-v12.png',
     market: '/assets/art/hero-market-v12.png',
     resources: '/assets/art/hero-market-v12.png',
-    budget: '/assets/art/hero-market-v12.png'
+    budget: '/assets/art/hero-market-v12.png',
+    bugs: '/assets/art/hero-overview-v12.png'
   },
   researchGroups: {
     traction: '/assets/art/board-traction.png',
@@ -677,6 +679,7 @@ function stateRenderSignature(state = app.state) {
   const events = (game.events || []).map(e => `${e.kind}:${e.remaining}`).join('|');
   const news = (game.news || []).map(n => `${n.day}:${n.text}`).join('|');
   const world = state.world?.communesStatus;
+  const bugSig = (state.bugReports || []).map(bug => `${bug.id}:${bug.status}:${bug.createdAt}:${bug.closedAt || 0}`).join('|');
   const meSig = me ? [
     me.id,
     me.cash,
@@ -707,6 +710,7 @@ function stateRenderSignature(state = app.state) {
     world?.status || '',
     world?.count || 0,
     worldRouteSignature(state),
+    bugSig,
     meSig
   ].join('::');
 }
@@ -1387,6 +1391,10 @@ function tutorialConditionMet(step) {
   if (wait === 'hasLine') return (me.lines || []).some(line => line.active);
   if (wait === 'compositionTrainSelected') return Boolean(app.selectedCompositionTrainId);
   if (wait === 'compositionSaved') return Boolean(me.tutorial?.actionLog?.compositionSaved);
+  if (wait.startsWith('tech:')) {
+    const [, nodeId, level] = wait.split(':');
+    return Number(me.techUnlocked?.[nodeId] || 0) >= Math.max(1, Number(level || 1));
+  }
   return false;
 }
 
@@ -1855,12 +1863,147 @@ function renderTabs() {
     resources: renderResources,
     market: renderMarket,
     budget: renderBudget,
+    bugs: renderBugs,
     admin: renderAdmin
   };
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
   if (app.activeTab === 'stations') refreshStationSearchWidgets();
   setTimeout(renderTutorialOverlay, 0);
+}
+
+
+function bugSeverityLabel(value) {
+  return ({ low: 'Mineur', normal: 'Normal', high: 'Gênant', critical: 'Bloquant' })[value] || 'Normal';
+}
+
+function bugStatusLabel(value) {
+  return value === 'closed' ? 'Clôturé' : 'Ouvert';
+}
+
+function renderBugImages(images = []) {
+  if (!images.length) return '';
+  return `<div class="bug-image-grid">${images.map(image => `
+    <a href="${escapeAttr(image.dataUrl)}" target="_blank" rel="noopener" title="Ouvrir l’image">
+      <img src="${escapeAttr(image.dataUrl)}" alt="${escapeAttr(image.name || 'Image bug')}">
+    </a>
+  `).join('')}</div>`;
+}
+
+function renderBugCard(bug) {
+  const admin = Boolean(app.state?.auth?.isAdmin);
+  const closed = bug.status === 'closed';
+  return `
+    <article class="bug-card ${closed ? 'closed' : 'open'}">
+      <div class="bug-card-head">
+        <div>
+          <h3>${escapeHtml(bug.title)}</h3>
+          <p class="small muted">Signalé par ${escapeHtml(bug.reporterName || 'Joueur')} · jour ${formatInt(bug.createdDay || 0)} · ${escapeHtml(formatDateTime(bug.createdAt))}</p>
+        </div>
+        <div class="bug-tags">
+          <span class="tag ${closed ? '' : 'warn'}">${escapeHtml(bugStatusLabel(bug.status))}</span>
+          <span class="tag">${escapeHtml(bugSeverityLabel(bug.severity))}</span>
+        </div>
+      </div>
+      <p>${escapeHtml(bug.description || '')}</p>
+      ${renderBugImages(bug.images || [])}
+      ${closed ? `<p class="small muted">Clôturé par ${escapeHtml(bug.closedByName || 'Admin')} · ${escapeHtml(bug.resolution || 'Réglé')}</p>` : ''}
+      ${admin && !closed ? `<div class="actions"><button class="primary" data-action="close-bug-report" data-id="${escapeAttr(bug.id)}">Clôturer comme réglé</button></div>` : ''}
+    </article>
+  `;
+}
+
+function renderBugs() {
+  const reports = app.state?.bugReports || [];
+  const openCount = reports.filter(bug => bug.status !== 'closed').length;
+  const closedCount = reports.length - openCount;
+  return `
+    ${renderSectionHero('BUGS & SIGNALEMENTS', 'Registre partagé', 'Signale un problème avec une description précise et des captures. La liste est visible par tous pour éviter les doublons.', ART.tabs.bugs, [`${openCount} ouverts`, `${closedCount} clôturés`, app.state?.auth?.isAdmin ? 'Gestion Xenao' : 'Lecture commune'])}
+
+    <section class="card bug-submit-card">
+      <h2>Signaler un bug</h2>
+      <p class="muted small">Décris les étapes pour reproduire le problème. Les images sont redimensionnées avant envoi pour garder la sauvegarde légère.</p>
+      <div class="bug-form-grid">
+        <label>Titre
+          <input id="bugTitle" maxlength="120" placeholder="Ex : La carte ne se recharge plus après...">
+        </label>
+        <label>Gravité
+          <select id="bugSeverity">
+            <option value="normal">Normal</option>
+            <option value="low">Mineur</option>
+            <option value="high">Gênant</option>
+            <option value="critical">Bloquant</option>
+          </select>
+        </label>
+      </div>
+      <label>Description
+        <textarea id="bugDescription" rows="5" maxlength="4000" placeholder="Ce que j’ai fait, ce que j’ai obtenu, ce que j’attendais..."></textarea>
+      </label>
+      <label>Images jointes
+        <input id="bugImages" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+      </label>
+      <div class="actions">
+        <button class="primary" data-action="submit-bug-report">Envoyer le signalement</button>
+      </div>
+    </section>
+
+    <section class="card bug-list-card">
+      <div class="fleet-card-heading">
+        <div>
+          <h2>Signalements existants</h2>
+          <p class="muted small">Tous les joueurs peuvent consulter cette liste. Seul le compte Xenao peut clôturer un bug.</p>
+        </div>
+        <span class="tag">${reports.length} signalement(s)</span>
+      </div>
+      <div class="bug-list">
+        ${reports.map(renderBugCard).join('') || '<p class="muted">Aucun bug signalé pour le moment.</p>'}
+      </div>
+    </section>
+  `;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Lecture image impossible.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Image invalide.'));
+    image.src = dataUrl;
+  });
+}
+
+async function bugAttachmentFromFile(file) {
+  if (!file || !/^image\/(png|jpeg|webp)$/i.test(file.type || '')) throw new Error('Format image refusé.');
+  if (file.size > 4_000_000) throw new Error(`${file.name} dépasse 4 Mo.`);
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageFromDataUrl(dataUrl);
+  const maxSide = 1200;
+  const ratio = Math.min(1, maxSide / Math.max(image.width || 1, image.height || 1));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round((image.width || 1) * ratio));
+  canvas.height = Math.max(1, Math.round((image.height || 1) * ratio));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  let output = canvas.toDataURL('image/jpeg', 0.76);
+  if (output.length > 900_000) output = canvas.toDataURL('image/jpeg', 0.58);
+  if (output.length > 950_000) throw new Error(`${file.name} reste trop lourde après compression.`);
+  return { name: file.name || 'capture.jpg', type: 'image/jpeg', size: Math.round(output.length * 0.75), dataUrl: output };
+}
+
+async function collectBugImageAttachments() {
+  const input = $('#bugImages');
+  const files = Array.from(input?.files || []).slice(0, 3);
+  const images = [];
+  for (const file of files) images.push(await bugAttachmentFromFile(file));
+  return images;
 }
 
 function renderAdmin() {
@@ -6113,6 +6256,19 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'submit-bug-report') {
+    try {
+      const title = $('#bugTitle')?.value || '';
+      const description = $('#bugDescription')?.value || '';
+      const severity = $('#bugSeverity')?.value || 'normal';
+      const images = await collectBugImageAttachments();
+      return doAction('submitBugReport', { title, description, severity, images });
+    } catch (error) {
+      toast(error.message || 'Image refusée.', 'error');
+      return;
+    }
+  }
+  if (action === 'close-bug-report') return doAction('closeBugReport', { id: button.dataset.id, resolution: 'Réglé' });
   if (action === 'toggle-fleet-catalog-era') { const epoch = Number(button.dataset.epoch || 0); setFleetCatalogEraCollapsed(epoch, !isFleetCatalogEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-fleet-maintenance-era') { const epoch = Number(button.dataset.epoch || 0); setFleetMaintenanceEraCollapsed(epoch, !isFleetMaintenanceEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }

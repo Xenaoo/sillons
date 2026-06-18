@@ -8827,3 +8827,85 @@ dialog.modal--wide {
 #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions .tag {
   white-space: nowrap;
 }
+
+
+/* ===== V65 : signalements de bugs ===== */
+.bug-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+  gap: 12px;
+}
+
+.bug-submit-card textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.bug-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bug-card {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(7,13,24,.62), rgba(3,8,18,.44));
+}
+
+.bug-card.closed {
+  opacity: .74;
+  border-color: rgba(148,163,184,.18);
+}
+
+.bug-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bug-card h3 {
+  margin: 0 0 4px;
+}
+
+.bug-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.bug-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.bug-image-grid a {
+  display: block;
+  border: 1px solid rgba(217,168,82,.18);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(2,6,23,.45);
+}
+
+.bug-image-grid img {
+  display: block;
+  width: 100%;
+  height: 92px;
+  object-fit: cover;
+}
+
+@media (max-width: 720px) {
+  .bug-form-grid,
+  .bug-card-head {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+  .bug-tags {
+    justify-content: flex-start;
+  }
+}
