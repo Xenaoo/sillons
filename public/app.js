@@ -8,7 +8,7 @@ const PROJECT_VERSION = 'v67.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v10';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v9';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -161,7 +161,6 @@ const app = {
   },
   routeCache: new Map(),
   osmRouteCache: new Map(),
-  routeTimingCache: new Map(),
   osmRouteCachePersistTimer: null,
   osmRoutePending: new Set(),
   osmRouteMissing: new Map(),
@@ -3610,9 +3609,6 @@ function renderLineItem(line) {
 
       <div class="line-card-modern-stats">
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
-        <div><span>Temps</span><b>${formatTravelMinutes(line.durationMinutes)}</b></div>
-        <div><span>Vitesse moy.</span><b>${line.averageSpeedKmh ? `${formatInt(line.averageSpeedKmh)} km/h` : '-'}</b></div>
-        <div><span>RFN</span><b>${Number(line.highSpeedShare || 0) > 0.35 ? `LGV ${formatInt(Number(line.highSpeedShare || 0) * 100)}%` : 'Classique'}</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
         <div><span>Trains affectés</span><b>${assignedTrains.length}</b></div>
         ${renderLineSillonMini(line)}
@@ -8245,22 +8241,6 @@ function visualLineWithEffectiveFrequency(line) {
   return line;
 }
 
-function visualLineWithRouteTiming(line, route) {
-  const out = visualLineWithEffectiveFrequency(line);
-  if (!route) return out;
-  return {
-    ...out,
-    distance: Number.isFinite(Number(out?.distance)) && Number(out.distance) > 0 ? out.distance : route.distance,
-    travelMinutes: Number.isFinite(Number(out?.travelMinutes)) && Number(out.travelMinutes) > 0 ? out.travelMinutes : route.travelMinutes,
-    dwellMinutes: Number.isFinite(Number(out?.dwellMinutes)) && Number(out.dwellMinutes) >= 0 ? out.dwellMinutes : route.dwellMinutes,
-    durationMinutes: Number.isFinite(Number(out?.durationMinutes)) && Number(out.durationMinutes) > 0 ? out.durationMinutes : route.durationMinutes,
-    averageSpeedKmh: Number.isFinite(Number(out?.averageSpeedKmh)) && Number(out.averageSpeedKmh) > 0 ? out.averageSpeedKmh : route.averageSpeedKmh,
-    highSpeedShare: Number.isFinite(Number(out?.highSpeedShare)) ? out.highSpeedShare : route.highSpeedShare,
-    classicShare: Number.isFinite(Number(out?.classicShare)) ? out.classicShare : route.classicShare,
-    speedSource: out?.speedSource || route.speedSource
-  };
-}
-
 function drawAllLines(ctx, lite = false) {
   if (!lite) app.map.lineHit = [];
   const players = app.state.players || [];
@@ -8298,12 +8278,17 @@ function drawAllLines(ctx, lite = false) {
         || line.stats?.status === 'train-out-of-service'
       )) continue;
 
-      const visualLine = visualLineWithRouteTiming(line, route);
+      const visualLine = visualLineWithEffectiveFrequency(line);
+      const speeds = trains.map(train => {
+        const model = app.state.balance.trains[train.modelId];
+        return model ? trainVisualAverageSpeedKmH(train, model, visualLine) : 0;
+      }).filter(speed => speed > 0);
+      const averageSpeed = speeds.length ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 70;
 
       trains.forEach((train, index) => {
         const model = app.state.balance.trains[train.modelId];
         if (!model) return;
-        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}` }, model, own, train, index, trains.length);
+        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed }, model, own, train, index, trains.length);
       });
     }
   };
@@ -8470,36 +8455,7 @@ function drawRailLine(ctx, points, color, own, electrified, lite = false, highli
   ctx.restore();
 }
 
-const TRAIN_VISUAL_SECONDS_PER_REAL_HOUR = 18;
-
-function lineRealTravelMinutesClient(line, train, model) {
-  const duration = Number(line?.durationMinutes);
-  if (Number.isFinite(duration) && duration > 0) return duration;
-  const travel = Number(line?.travelMinutes);
-  const dwell = Number(line?.dwellMinutes);
-  if (Number.isFinite(travel) && travel > 0) return travel + (Number.isFinite(dwell) && dwell > 0 ? dwell : 0);
-
-  const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
-  const profile = train ? trainRuntimeProfile(train, model) : {};
-  const maxSpeed = Math.max(1, Number(profile.speed || model?.speed || 90));
-  const stopCount = Math.max(2, lineStopsOf(line).length);
-  const fallbackAverageSpeed = Math.max(18, maxSpeed * (line?.service === 'freight' ? 0.58 : 0.72));
-  return distanceKm / fallbackAverageSpeed * 60 + Math.max(0, stopCount - 2);
-}
-
-function lineRealAverageSpeedKmHClient(line, train, model) {
-  const stored = Number(line?.averageSpeedKmh || line?.nominalAverageSpeedKmh);
-  if (Number.isFinite(stored) && stored > 0) return stored;
-  const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
-  const minutes = lineRealTravelMinutesClient(line, train, model);
-  if (Number.isFinite(minutes) && minutes > 0) return distanceKm / (minutes / 60);
-  const profile = train ? trainRuntimeProfile(train, model) : {};
-  return Math.max(18, Number(profile.speed || model?.speed || 90) * 0.72);
-}
-
 function trainVisualAverageSpeedKmH(train, model, line) {
-  const realAverage = lineRealAverageSpeedKmHClient(line, train, model);
-  if (Number.isFinite(realAverage) && realAverage > 0) return Math.max(8, realAverage);
   const profile = train ? trainRuntimeProfile(train, model) : {};
   const maxSpeed = Number(profile.speed || model?.speed || 90);
   const condition = Math.max(0.35, Math.min(1, Number(train?.condition ?? 0.9)));
@@ -8511,9 +8467,13 @@ function trainVisualAverageSpeedKmH(train, model, line) {
 }
 
 function trainVisualOneWaySeconds(line, train, model) {
-  const realMinutes = lineRealTravelMinutesClient(line, train, model);
-  const visualSeconds = realMinutes / 60 * TRAIN_VISUAL_SECONDS_PER_REAL_HOUR;
-  return Math.max(5.5, Math.min(90, visualSeconds));
+  const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
+  const averageSpeed = Number(line?.visualAverageSpeed || 0) > 0
+    ? Number(line.visualAverageSpeed)
+    : trainVisualAverageSpeedKmH(train, model, line);
+  const travelHours = distanceKm / Math.max(1, averageSpeed);
+  const secondsPerTravelHour = 18;
+  return Math.max(5.5, Math.min(55, travelHours * secondsPerTravelHour));
 }
 
 function trainVisualInstanceCount(line) {
@@ -8523,12 +8483,21 @@ function trainVisualInstanceCount(line) {
 function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount = 1) {
   const oneWaySeconds = trainVisualOneWaySeconds(line, train, model);
   const roundTripMs = oneWaySeconds * 2 * 1000;
-  const now = serverNow();
-  const lineSeed = (hashCode(`${line?.id || 'line'}`) % 10000) / 10000 * 2;
-  const spacing = instanceCount > 1 ? instanceIndex / instanceCount * 2 : 0;
-  const trainJitter = instanceCount > 1 ? ((hashCode(`${train?.id || instanceIndex}`) % 1000) / 1000 - 0.5) * Math.min(0.08, 0.4 / instanceCount) : 0;
-  const base = (now % Math.max(1000, roundTripMs)) / Math.max(1000, roundTripMs) * 2;
-  return (base + lineSeed + spacing + trainJitter + 2) % 2;
+  const key = `${line.id}:${train?.id || 'train'}:${instanceIndex}`;
+  const now = performance.now();
+  const motion = app.map.trainMotion || (app.map.trainMotion = {});
+  let entry = motion[key];
+  if (!entry) {
+    const seed = (hashCode(`${line.id}:${train?.id || ''}`) % 10000) / 10000;
+    const offset = instanceCount > 1 ? instanceIndex / instanceCount : 0;
+    entry = motion[key] = { phase: (seed + offset) % 2, lastAt: now };
+  } else {
+    const elapsed = Math.max(0, Math.min(250, now - Number(entry.lastAt || now)));
+    const phaseDelta = elapsed * 2 / Math.max(1000, roundTripMs);
+    entry.phase = (Number(entry.phase || 0) + phaseDelta) % 2;
+    entry.lastAt = now;
+  }
+  return entry.phase;
 }
 
 function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
@@ -8537,7 +8506,7 @@ function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex
   const progress = reverse ? 2 - phase : phase;
   const t = Math.max(0.001, Math.min(0.999, progress));
   const pose = pointAndAngleAlongPolyline(points, t);
-  const speed = Number(trainVisualAverageSpeedKmH(train, model, line) || 0);
+  const speed = Number(line?.visualAverageSpeed || trainVisualAverageSpeedKmH(train, model, line) || 0);
   const normalizedSpeed = clamp((speed - 35) / 165, 0, 1);
   const trainCount = Math.max(1, instanceCount);
   const densityShrink = clamp(1 - Math.max(0, trainCount - 1) * 0.025, 0.78, 1);
@@ -9652,19 +9621,6 @@ async function fetchSncfRouteGeometryForStopSequence(ids, profile = 'default') {
     });
     if (!response.ok) return [];
     const data = await response.json();
-    const timing = {
-      distance: Number(data.distance),
-      travelMinutes: Number(data.travelMinutes),
-      dwellMinutes: Number(data.dwellMinutes),
-      durationMinutes: Number(data.durationMinutes),
-      averageSpeedKmh: Number(data.averageSpeedKmh),
-      highSpeedShare: Number(data.highSpeedShare),
-      classicShare: Number(data.classicShare),
-      speedSource: data.source || ''
-    };
-    if (Number.isFinite(timing.durationMinutes) && timing.durationMinutes > 0) {
-      rememberCacheEntry(app.routeTimingCache, geometryKeyForStops(cleanIds, routeProfile), timing, OSM_ROUTE_CACHE_MAX_ENTRIES);
-    }
     const coords = Array.isArray(data.geometry) ? data.geometry : [];
     return coords
       .map(pair => [Number(pair[0]), Number(pair[1])])
@@ -10398,19 +10354,11 @@ function getRouteForStops(stops, options = {}) {
       .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
     if (sequencePoints.length >= 2) {
       const distance = Math.round(polylineGeoDistance(sequenceGeometry));
-      const timing = getCacheEntry(app.routeTimingCache, geometryKeyForStops(ids, profile));
       const route = {
         ids,
-        distance: Number.isFinite(Number(timing?.distance)) && Number(timing.distance) > 0 ? Math.round(Number(timing.distance)) : distance,
+        distance,
         maxSegment: distance,
-        points: cleanRoutePoints(sequencePoints),
-        travelMinutes: Number.isFinite(Number(timing?.travelMinutes)) ? Number(timing.travelMinutes) : undefined,
-        dwellMinutes: Number.isFinite(Number(timing?.dwellMinutes)) ? Number(timing.dwellMinutes) : undefined,
-        durationMinutes: Number.isFinite(Number(timing?.durationMinutes)) ? Number(timing.durationMinutes) : undefined,
-        averageSpeedKmh: Number.isFinite(Number(timing?.averageSpeedKmh)) ? Number(timing.averageSpeedKmh) : undefined,
-        highSpeedShare: Number.isFinite(Number(timing?.highSpeedShare)) ? Number(timing.highSpeedShare) : undefined,
-        classicShare: Number.isFinite(Number(timing?.classicShare)) ? Number(timing.classicShare) : undefined,
-        speedSource: timing?.speedSource || undefined
+        points: cleanRoutePoints(sequencePoints)
       };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
     }
@@ -11036,15 +10984,6 @@ function toast(message, type = 'ok') {
 
 function formatInt(value) {
   return Math.round(Number(value || 0)).toLocaleString('fr-FR');
-}
-
-function formatTravelMinutes(value) {
-  const minutes = Math.max(0, Math.round(Number(value || 0)));
-  if (minutes <= 0) return '-';
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (!h) return `${m} min`;
-  return `${h} h ${String(m).padStart(2, '0')}`;
 }
 
 function money(value) {

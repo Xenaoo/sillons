@@ -13,7 +13,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
 const PROJECT_VERSION = 'v67.0.0';
-const STATE_SCHEMA_VERSION = 145;
+const STATE_SCHEMA_VERSION = 144;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -29,17 +29,13 @@ const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
 const COMMUNE_CACHE_SOURCE_VERSION = 9;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
 const SNCF_STATION_DATASET = 'liste-des-gares';
-const SNCF_STATION_TRAFFIC_DATASET = 'frequentation-gares';
 const SNCF_STATION_API_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/records`;
 const SNCF_STATION_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/exports/json`;
-const SNCF_STATION_TRAFFIC_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_TRAFFIC_DATASET}/exports/json`;
 const SNCF_STATION_PAGE_SIZE = 100;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
-const SNCF_RFN_SPEED_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/vitesse-maximale-nominale-sur-ligne/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
-const SNCF_RFN_SPEED_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-speed-cache.json');
 const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
-const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v11';
+const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v9';
 const SNCF_RFN_SPATIAL_CELL_DEG = 0.18;
 const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
 const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
@@ -400,10 +396,6 @@ async function ensureCommuneCacheReady(force = false) {
 
 function communeCacheUsable(cache = communeCache) {
   if (cache?.status === 'stale-cache') return false;
-  return communeCacheHasPlayableStations(cache);
-}
-
-function communeCacheHasPlayableStations(cache = communeCache) {
   const byId = cache?.byId || {};
   const count = Object.keys(byId).length;
   if (count < COMMUNE_CACHE_MIN_READY_COUNT) return false;
@@ -411,7 +403,6 @@ function communeCacheHasPlayableStations(cache = communeCache) {
 }
 
 async function waitForCommuneCache(maxMs = 3500) {
-  if (communeCacheHasPlayableStations(communeCache)) return;
   try {
     await Promise.race([
       ensureCommuneCacheReady(false),
@@ -439,14 +430,6 @@ function warmSncfRailShapeLinesCache() {
     .catch(error => console.warn('Préchargement RFN SNCF différé :', error.message));
 }
 
-function warmPublicWorldCache() {
-  try {
-    if (communeCacheHasPlayableStations(communeCache)) publicWorld();
-  } catch (error) {
-    console.warn('Prechargement monde public differe :', error.message);
-  }
-}
-
 setTimeout(warmSncfRailShapeLinesCache, 0);
 
 const server = http.createServer(async (req, res) => {
@@ -464,9 +447,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
-  refreshCommuneCache(false)
-    .then(() => scheduleMissingRouteTimingBackfill(5000))
-    .catch(error => console.warn('Chargement des populations communales impossible:', error.message));
+  refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
 });
 
 async function handleApi(req, res, url) {
@@ -497,7 +478,6 @@ async function handleApi(req, res, url) {
     const playerId = auth?.user?.playerId || '';
     await waitForCommuneCache(3500);
     if (sanitizeStateStationReferencesForPublicWorld()) saveState();
-    scheduleMissingRouteTimingBackfill(2000);
     sendJson(res, 200, publicState(playerId, auth?.user || null));
     return;
   }
@@ -539,24 +519,12 @@ async function handleApi(req, res, url) {
       .filter(Boolean);
     const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
     const route = await sncfRouteGeometryForStopSequence(stops, { profile });
-    let timing = null;
-    try {
-      timing = estimateRouteTimingFromGeometry(route.geometry || [], route.ids || stops, null, await loadSncfRailSpeedSegments(), profile);
-    } catch (error) {
-      timing = estimateRouteTimingFromGeometry(route.geometry || [], route.ids || stops, null, [], profile);
-    }
     sendJson(res, 200, {
       ok: true,
       stops: route.ids || stops,
       profile,
       geometry: route.geometry || [],
       distance: Math.round(polylineDistanceKm(route.geometry || [])),
-      travelMinutes: timing?.travelMinutes || null,
-      dwellMinutes: timing?.dwellMinutes || null,
-      durationMinutes: timing?.durationMinutes || null,
-      averageSpeedKmh: timing?.averageSpeedKmh || null,
-      highSpeedShare: timing?.highSpeedShare || null,
-      classicShare: timing?.classicShare || null,
       pointCount: Array.isArray(route.geometry) ? route.geometry.length : 0,
       chunks: route.chunks || [],
       source: route.geometry?.length ? 'sncf-formes-des-lignes-du-rfn-sequence' : 'none'
@@ -1202,9 +1170,6 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
 let sncfRailLinesCache = null;
 let sncfRailLinesLoadedAt = 0;
 let sncfRailLineSpatialIndex = null;
-let sncfRailSpeedSegmentsCache = null;
-let sncfRailSpeedSpatialIndex = null;
-let sncfRailSpeedLoadedAt = 0;
 let sncfPersistentRouteCacheLoaded = false;
 let sncfPersistentRouteCacheSaveTimer = null;
 const sncfRouteGeometryResultCache = new Map();
@@ -1415,64 +1380,6 @@ async function loadSncfRailShapeLines() {
   return sncfRailLinesCache;
 }
 
-async function loadSncfRailSpeedSegments() {
-  if (sncfRailSpeedSegmentsCache?.length) return sncfRailSpeedSegmentsCache;
-  try {
-    if (fs.existsSync(SNCF_RFN_SPEED_CACHE_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(SNCF_RFN_SPEED_CACHE_FILE, 'utf8'));
-      if (Array.isArray(parsed.segments) && parsed.segments.length) {
-        sncfRailSpeedSegmentsCache = parsed.segments
-          .filter(segment => Array.isArray(segment?.coords) && segment.coords.length >= 2 && Number(segment.speedKmh) > 0)
-          .map(segment => ({ ...segment, bounds: segment.bounds || geoLineBounds(segment.coords) }));
-        sncfRailSpeedSpatialIndex = buildSncfRailLineSpatialIndex(sncfRailSpeedSegmentsCache);
-        sncfRailSpeedLoadedAt = Number(parsed.updatedAt || Date.now());
-        return sncfRailSpeedSegmentsCache;
-      }
-    }
-  } catch (error) {
-    console.warn('Cache vitesses RFN SNCF illisible:', error.message);
-  }
-
-  const geojson = await fetchJsonWithTimeout(SNCF_RFN_SPEED_GEOJSON_URL, 120000);
-  const segments = extractGeoJsonRailSpeedSegments(geojson)
-    .filter(segment => segment.coords.length >= 2 && Number(segment.speedKmh) > 0)
-    .map(segment => ({ ...segment, bounds: geoLineBounds(segment.coords) }));
-  if (!segments.length) throw new Error('Aucune vitesse nominale RFN exploitable.');
-  sncfRailSpeedSegmentsCache = segments;
-  sncfRailSpeedSpatialIndex = buildSncfRailLineSpatialIndex(sncfRailSpeedSegmentsCache);
-  sncfRailSpeedLoadedAt = Date.now();
-  try {
-    fs.writeFileSync(SNCF_RFN_SPEED_CACHE_FILE, JSON.stringify({ updatedAt: sncfRailSpeedLoadedAt, source: 'vitesse-maximale-nominale-sur-ligne', segments }, null, 0));
-  } catch (error) {
-    console.warn('Cache vitesses RFN SNCF non écrit:', error.message);
-  }
-  return sncfRailSpeedSegmentsCache;
-}
-
-function extractGeoJsonRailSpeedSegments(geojson) {
-  const features = Array.isArray(geojson?.features) ? geojson.features : Array.isArray(geojson) ? geojson : [];
-  const segments = [];
-  for (const feature of features) {
-    const geometry = feature?.geometry || feature?.geo_shape || feature;
-    const properties = feature?.properties || feature?.fields || feature || {};
-    const speedKmh = Math.round(Number(properties.v_max || properties.vitesse || properties.speed || properties.V_MAX || 0));
-    if (!Number.isFinite(speedKmh) || speedKmh <= 0) continue;
-    for (const coords of geometryToLineStrings(geometry)) {
-      const clean = coords
-        .map(pair => [Number(pair[0]), Number(pair[1])])
-        .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && isInFranceBounds(lat, lon));
-      if (clean.length >= 2) segments.push({
-        coords: clean,
-        speedKmh: clamp(speedKmh, 5, 350),
-        codeLigne: String(properties.code_ligne || properties.codeLigne || properties.CODE_LIGNE || '').trim(),
-        pkd: String(properties.pkd || '').trim(),
-        pkf: String(properties.pkf || '').trim()
-      });
-    }
-  }
-  return segments;
-}
-
 function extractGeoJsonRailLines(geojson) {
   const features = Array.isArray(geojson?.features) ? geojson.features : Array.isArray(geojson) ? geojson : [];
   const lines = [];
@@ -1545,10 +1452,10 @@ function buildSncfRailLineSpatialIndex(lines) {
   return { cellSize, cells };
 }
 
-function indexedGeoLinesInBounds(lines, bbox, spatialIndex = null) {
+function sncfRailLinesInBounds(lines, bbox) {
   const source = Array.isArray(lines) ? lines : [];
-  if (!bbox || !spatialIndex?.cells?.size) return source.filter(line => boundsIntersects(line.bounds, bbox));
-  const { cellSize, cells } = spatialIndex;
+  if (!bbox || !sncfRailLineSpatialIndex?.cells?.size) return source.filter(line => boundsIntersects(line.bounds, bbox));
+  const { cellSize, cells } = sncfRailLineSpatialIndex;
   const seen = new Set();
   const out = [];
   const minX = Math.floor(bbox.minLon / cellSize);
@@ -1568,14 +1475,6 @@ function indexedGeoLinesInBounds(lines, bbox, spatialIndex = null) {
     }
   }
   return out;
-}
-
-function sncfRailLinesInBounds(lines, bbox) {
-  return indexedGeoLinesInBounds(lines, bbox, sncfRailLineSpatialIndex);
-}
-
-function sncfRailSpeedSegmentsInBounds(segments, bbox) {
-  return indexedGeoLinesInBounds(segments, bbox, sncfRailSpeedSpatialIndex);
 }
 
 function rfnCoordKey(lon, lat) {
@@ -2071,37 +1970,6 @@ function projectPointOnGeoPolyline(point, coords) {
   return best;
 }
 
-const stationNearestPassengerDistanceCache = new Map();
-
-function nearestPassengerStationDistanceKm(station) {
-  const id = currentStationId(station?.id);
-  if (!station || !id) return Infinity;
-  if (stationNearestPassengerDistanceCache.has(id)) return stationNearestPassengerDistanceCache.get(id);
-  const point = stationRoutePoint(station) || stationRawPoint(station);
-  if (!point) return Infinity;
-  let best = Infinity;
-  for (const candidate of Object.values(communeCache.byId || {})) {
-    const candidateId = currentStationId(candidate?.id);
-    if (!candidate || candidateId === id || !candidate.hasPassengerStation) continue;
-    const candidatePoint = stationRoutePoint(candidate) || stationRawPoint(candidate);
-    if (!candidatePoint) continue;
-    const distance = haversine(point.lat, point.lon, candidatePoint.lat, candidatePoint.lon);
-    if (Number.isFinite(distance) && distance < best) best = distance;
-  }
-  stationNearestPassengerDistanceCache.set(id, best);
-  return best;
-}
-
-function stopProjectionAllowedDistanceKm(station, fallbackAllowed, isTerminal, options = {}) {
-  let allowed = Number(fallbackAllowed);
-  if (!Number.isFinite(allowed) || allowed <= 0) allowed = isTerminal ? 1.7 : 1.0;
-  if (isTerminal || options.disableDenseStopTightening === true) return allowed;
-  const nearest = nearestPassengerStationDistanceKm(station);
-  if (nearest <= 1.8) return Math.min(allowed, Number(options.denseStopDistanceKm ?? 0.28));
-  if (nearest <= 3.2) return Math.min(allowed, Number(options.suburbanStopDistanceKm ?? 0.45));
-  return allowed;
-}
-
 function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
   const coords = Array.isArray(geometry) ? geometry : [];
   if (!Array.isArray(ids) || ids.length < 2 || coords.length < 2) return { ok: false, reason: 'empty' };
@@ -2124,8 +1992,7 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
     const point = stationRoutePoint(stop) || stationRawPoint(stop);
     const projection = projectPointOnGeoPolyline(point, coords);
     if (!projection) return { ok: false, reason: 'projection', stationId: ids[i] };
-    const isTerminal = i === 0 || i === ids.length - 1;
-    let allowed = stopProjectionAllowedDistanceKm(stop, isTerminal ? maxTerminalDistanceKm : maxStationDistanceKm, isTerminal, options);
+    let allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
     if (allowLargeTerminalOffset && (i === 0 || i === ids.length - 1)) allowed = Math.max(allowed, projection.distanceKm);
     if (projection.distanceKm > allowed) {
       return { ok: false, reason: 'too-far', stationId: ids[i], distanceKm: projection.distanceKm, allowed };
@@ -2616,97 +2483,17 @@ function polylineDistanceKm(coords) {
   return total;
 }
 
-function routeProfileForOperatingModel(model) {
-  return isHighSpeedTrainsetModel(model) ? 'highspeed' : 'classic';
-}
-
-function lineSpeedFallbackKmh(line, profile = 'classic') {
-  if (line && isLikelyHighSpeedRailShapeLine(line)) return 300;
-  return profile === 'highspeed' ? 180 : 120;
-}
-
-function nearestNominalSpeedForSegment(coordA, coordB, speedSegments, profile = 'classic') {
-  const mid = [(Number(coordA?.[0]) + Number(coordB?.[0])) / 2, (Number(coordA?.[1]) + Number(coordB?.[1])) / 2];
-  if (!mid.every(Number.isFinite)) return profile === 'highspeed' ? 180 : 120;
-  const bbox = {
-    minLon: mid[0] - 0.045,
-    maxLon: mid[0] + 0.045,
-    minLat: mid[1] - 0.045,
-    maxLat: mid[1] + 0.045
-  };
-  const nearby = sncfRailSpeedSegmentsInBounds(speedSegments, bbox).slice(0, 80);
-  let best = null;
-  for (const segment of nearby) {
-    const coords = segment.coords || [];
-    for (let i = 1; i < coords.length; i += 1) {
-      const distance = geoPointToSegmentDistanceKm(mid, coords[i - 1], coords[i]);
-      if (!Number.isFinite(distance)) continue;
-      if (!best || distance < best.distance) best = { distance, speedKmh: Number(segment.speedKmh || 0) };
-    }
-  }
-  if (best && best.distance <= 4.5 && Number(best.speedKmh) > 0) return clamp(best.speedKmh, 5, 350);
-  return profile === 'highspeed' ? 180 : 120;
-}
-
-function estimateRouteTimingFromGeometry(geometry, stops, operatingModel = null, speedSegments = [], profile = 'classic') {
-  const coords = Array.isArray(geometry) ? geometry : [];
-  const trainMax = Math.max(25, Number(operatingModel?.speed || 160));
-  let travelHours = 0;
-  let distanceKm = 0;
-  let highSpeedKm = 0;
-  let classicKm = 0;
-  let weightedSpeed = 0;
-  for (let i = 1; i < coords.length; i += 1) {
-    const a = coords[i - 1];
-    const b = coords[i];
-    const segmentKm = haversine(a[1], a[0], b[1], b[0]);
-    if (!Number.isFinite(segmentKm) || segmentKm <= 0) continue;
-    const nominal = nearestNominalSpeedForSegment(a, b, speedSegments, profile);
-    const effective = clamp(Math.min(trainMax, nominal) * 0.82, 18, 350);
-    travelHours += segmentKm / effective;
-    distanceKm += segmentKm;
-    weightedSpeed += nominal * segmentKm;
-    if (nominal >= 220) highSpeedKm += segmentKm;
-    else classicKm += segmentKm;
-  }
-  const stopCount = Math.max(0, sanitizeStopsPayload(stops, null, null).length);
-  const dwellMinutes = Math.max(0, stopCount) * 1;
-  const travelMinutes = travelHours * 60;
-  const totalMinutes = travelMinutes + dwellMinutes;
-  return {
-    distance: Math.round(distanceKm),
-    travelMinutes: Math.max(1, Math.round(travelMinutes)),
-    dwellMinutes,
-    durationMinutes: Math.max(1, Math.round(totalMinutes)),
-    averageSpeedKmh: totalMinutes > 0 ? round2(distanceKm / (totalMinutes / 60)) : 0,
-    nominalAverageSpeedKmh: distanceKm > 0 ? Math.round(weightedSpeed / distanceKm) : lineSpeedFallbackKmh(null, profile),
-    highSpeedShare: distanceKm > 0 ? round2(highSpeedKm / distanceKm) : 0,
-    classicShare: distanceKm > 0 ? round2(classicKm / distanceKm) : 0,
-    stopCount,
-    dwellPerStopMinutes: 1,
-    source: 'vitesse-maximale-nominale-sur-ligne'
-  };
-}
-
-async function realRailRouteBetweenStops(stops, options = {}) {
+async function realRailRouteBetweenStops(stops) {
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, distance: 0, maxSegment: 0, segments: [], missing: null };
-  const profile = normalizeRailRouteProfile(options.profile || routeProfileForOperatingModel(options.operatingModel));
-  let speedSegments = [];
-  try {
-    speedSegments = await loadSncfRailSpeedSegments();
-  } catch (error) {
-    console.warn('Vitesses RFN indisponibles, estimation fallback:', error.message);
-  }
 
   const segments = [];
-  const geometries = [];
   let distance = 0;
   let maxSegment = 0;
   for (let i = 1; i < ids.length; i += 1) {
     const from = ids[i - 1];
     const to = ids[i];
-    const geometry = await sncfRouteGeometryForStations(from, to, { profile });
+    const geometry = await sncfRouteGeometryForStations(from, to);
     const segmentDistance = polylineDistanceKm(geometry || []);
     if (!Array.isArray(geometry) || geometry.length < 2 || !Number.isFinite(segmentDistance) || segmentDistance <= 0) {
       return {
@@ -2718,155 +2505,18 @@ async function realRailRouteBetweenStops(stops, options = {}) {
       };
     }
     const rounded = Math.max(1, Math.round(segmentDistance));
-    const timing = estimateRouteTimingFromGeometry(geometry, [from, to], options.operatingModel, speedSegments, profile);
-    segments.push({
-      from,
-      to,
-      distance: rounded,
-      travelMinutes: timing.travelMinutes,
-      durationMinutes: timing.durationMinutes,
-      averageSpeedKmh: timing.averageSpeedKmh,
-      nominalAverageSpeedKmh: timing.nominalAverageSpeedKmh,
-      highSpeedShare: timing.highSpeedShare,
-      classicShare: timing.classicShare
-    });
-    geometries.push(geometry);
+    segments.push({ from, to, distance: rounded });
     distance += segmentDistance;
     maxSegment = Math.max(maxSegment, segmentDistance);
   }
-  const geometry = mergeGeoCoordinateSequences(geometries);
-  const timing = estimateRouteTimingFromGeometry(geometry, ids, options.operatingModel, speedSegments, profile);
 
   return {
     ids,
     distance: Math.round(distance),
     maxSegment: Math.round(maxSegment),
     segments,
-    profile,
-    geometryPointCount: geometry.length,
-    travelMinutes: timing.travelMinutes,
-    dwellMinutes: timing.dwellMinutes,
-    durationMinutes: timing.durationMinutes,
-    averageSpeedKmh: timing.averageSpeedKmh,
-    nominalAverageSpeedKmh: timing.nominalAverageSpeedKmh,
-    highSpeedShare: timing.highSpeedShare,
-    classicShare: timing.classicShare,
-    dwellPerStopMinutes: 1,
-    speedSource: timing.source,
     missing: null
   };
-}
-
-function maxGeoSegmentDistanceKm(geometry) {
-  const coords = Array.isArray(geometry) ? geometry : [];
-  let max = 0;
-  for (let i = 1; i < coords.length; i += 1) {
-    const a = coords[i - 1];
-    const b = coords[i];
-    if (!Array.isArray(a) || !Array.isArray(b)) continue;
-    const distance = haversine(a[1], a[0], b[1], b[0]);
-    if (Number.isFinite(distance) && distance > max) max = distance;
-  }
-  return max;
-}
-
-async function routeInfoForLineStops(stops, model = null, profile = 'default', options = {}) {
-  const ids = sanitizeStopsPayload(stops, null, null);
-  const normalizedProfile = normalizeRailRouteProfile(profile || routeProfileForOperatingModel(model));
-  let route = null;
-  if (options.cacheOnly) {
-    ensureSncfPersistentRouteCacheLoaded();
-    route = sncfRouteGeometrySequenceResultCache.get(sncfRouteSequenceCacheKey(ids, normalizedProfile)) || null;
-  } else {
-    route = await sncfRouteGeometryForStopSequence(ids, { profile: normalizedProfile });
-  }
-  const geometry = Array.isArray(route?.geometry) ? route.geometry : [];
-  if (geometry.length < 2) return null;
-  let speedSegments = [];
-  try {
-    speedSegments = await loadSncfRailSpeedSegments();
-  } catch (error) {
-    console.warn('Vitesses RFN indisponibles pour un profil de ligne:', error.message);
-  }
-  const timing = estimateRouteTimingFromGeometry(geometry, route.ids || ids, model, speedSegments, normalizedProfile);
-  return {
-    ids: route.ids || ids,
-    distance: timing.distance || Math.round(polylineDistanceKm(geometry)),
-    maxSegment: Math.round(maxGeoSegmentDistanceKm(geometry)),
-    profile: normalizedProfile,
-    travelMinutes: timing.travelMinutes,
-    dwellMinutes: timing.dwellMinutes,
-    durationMinutes: timing.durationMinutes,
-    averageSpeedKmh: timing.averageSpeedKmh,
-    nominalAverageSpeedKmh: timing.nominalAverageSpeedKmh,
-    highSpeedShare: timing.highSpeedShare,
-    classicShare: timing.classicShare,
-    dwellPerStopMinutes: 1,
-    speedSource: timing.source,
-    geometryPointCount: geometry.length
-  };
-}
-
-function lineMissingRealRouteTiming(line) {
-  return !Number.isFinite(Number(line?.durationMinutes))
-    || Number(line.durationMinutes) <= 0
-    || !Number.isFinite(Number(line?.averageSpeedKmh))
-    || Number(line.averageSpeedKmh) <= 0
-    || !line?.speedSource;
-}
-
-let missingRouteTimingBackfillRunning = false;
-let missingRouteTimingBackfillScheduled = false;
-const ROUTE_TIMING_BACKFILL_PER_PASS = 3;
-
-function scheduleMissingRouteTimingBackfill(delayMs = 0) {
-  if (missingRouteTimingBackfillRunning || missingRouteTimingBackfillScheduled) return;
-  missingRouteTimingBackfillScheduled = true;
-  const timer = setTimeout(() => {
-    missingRouteTimingBackfillScheduled = false;
-    backfillMissingRouteTimings().catch(error => console.warn('Backfill temps RFN differe:', error.message));
-  }, Math.max(0, Number(delayMs || 0)));
-  if (typeof timer.unref === 'function') timer.unref();
-}
-
-async function backfillMissingRouteTimings() {
-  if (missingRouteTimingBackfillRunning) return;
-  if (!communeCacheHasPlayableStations(communeCache)) return;
-  missingRouteTimingBackfillRunning = true;
-  let changed = false;
-  let updated = 0;
-  let remaining = 0;
-  try {
-    for (const player of activePlayers()) {
-      for (const line of player.lines || []) {
-        if (!line?.active || !lineMissingRealRouteTiming(line)) continue;
-        if (updated >= ROUTE_TIMING_BACKFILL_PER_PASS) {
-          remaining += 1;
-          continue;
-        }
-        normalizeLine(line);
-        const train = lineTrainIds(line).map(id => player.trains.find(t => t.id === id)).find(Boolean);
-        const model = train ? BALANCE.trains[train.modelId] : null;
-        const profile = normalizeRailRouteProfile(line.routeProfile || routeProfileForOperatingModel(model));
-        const routeInfo = await routeInfoForLineStops(lineStops(line), model, profile, { cacheOnly: true });
-        if (!routeInfo) {
-          remaining += 1;
-          continue;
-        }
-        applyValidatedRouteToLine(line, routeInfo);
-        normalizeLine(line);
-        changed = true;
-        updated += 1;
-      }
-    }
-    if (changed) {
-      saveState();
-      console.log(`Temps RFN recalcules pour ${updated} ligne(s).`);
-    }
-  } finally {
-    missingRouteTimingBackfillRunning = false;
-  }
-  if (remaining > 0 && updated > 0) scheduleMissingRouteTimingBackfill(2500);
 }
 
 function mimeType(file) {
@@ -3383,16 +3033,20 @@ function deduplicatePublicStations(stations, existingStations = []) {
 
 
 function publicWorld() {
+  const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
   const communeCount = Object.keys(communeCache.byId || {}).length;
-  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCache.error || ''}`;
+  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}`;
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
-  const communeStations = Object.values(communeCache.byId || {}).map(stationRailPlacement).filter(Boolean);
-  const stations = communeStations.map(publicStationPayload);
+  const baseStations = [];
+  const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement), baseStations);
+  const stations = deduplicatePublicStations([...baseStations, ...communeStations]);
   const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
     stations,
+    stationIndex,
+    communeStations,
     communesStatus: {
       status: communeCache.status,
       count: communeStations.length,
@@ -3408,40 +3062,8 @@ function publicWorld() {
     railPlacement: railPlacementStats(stations),
     regions: [...new Set(WORLD.regions)].sort()
   };
-  Object.defineProperty(world, 'stationIndex', { value: stationIndex, enumerable: false, configurable: true });
-  Object.defineProperty(world, 'communeStations', { value: communeStations, enumerable: false, configurable: true });
   publicWorldCache = { key: cacheKey, value: world };
   return world;
-}
-
-function publicStationPayload(station) {
-  if (!station || typeof station !== 'object') return station;
-  const out = {
-    id: station.id,
-    code: station.code,
-    name: station.name,
-    lat: roundCoord(Number(station.lat)),
-    lon: roundCoord(Number(station.lon)),
-    population: Math.round(Number(station.population || 0)),
-    region: station.region,
-    codesPostaux: Array.isArray(station.codesPostaux) ? station.codesPostaux.slice(0, 2) : [],
-    codeDepartement: station.codeDepartement || '',
-    baseDemand: Math.round(Number(station.baseDemand || 0)),
-    freight: Math.round(Number(station.freight || 0)),
-    tourism: Math.round(Number(station.tourism || 0)),
-    railLat: Number.isFinite(Number(station.railLat)) ? roundCoord(Number(station.railLat)) : undefined,
-    railLon: Number.isFinite(Number(station.railLon)) ? roundCoord(Number(station.railLon)) : undefined,
-    hasPassengerStation: Boolean(station.hasPassengerStation),
-    hasFreightStation: Boolean(station.hasFreightStation)
-  };
-  for (const key of ['annualPassengers', 'passengerTrafficYear', 'purchaseCost']) {
-    if (Number.isFinite(Number(station[key])) && Number(station[key]) > 0) out[key] = Math.round(Number(station[key]));
-  }
-  for (const key of ['stationKind', 'stationUic']) {
-    if (station[key]) out[key] = station[key];
-  }
-  if (station.majorTerminal) out.majorTerminal = true;
-  return out;
 }
 
 function sanitizeStateStationReferencesForPublicWorld() {
@@ -3546,7 +3168,6 @@ function enrichBaseStationsWithPopulation(stations) {
 
 function invalidatePublicWorldCache() {
   publicWorldCache = { key: '', value: null };
-  stationNearestPassengerDistanceCache.clear();
 }
 
 function stationCommuneCode(station) {
@@ -3854,55 +3475,6 @@ async function fetchSncfRailwayStations() {
   return pages.flatMap(sncfRecordsFromPayload).map(normalizeSncfRailwayStation).filter(Boolean);
 }
 
-async function fetchSncfStationTrafficIndex() {
-  try {
-    const exported = await fetchJsonWithTimeout(SNCF_STATION_TRAFFIC_EXPORT_URL, 90000);
-    const records = sncfRecordsFromPayload(exported);
-    const byUic = new Map();
-    const byName = new Map();
-    for (const raw of records) {
-      const normalized = normalizeSncfStationTrafficRecord(raw);
-      if (!normalized) continue;
-      if (normalized.uic) byUic.set(normalized.uic, normalized);
-      if (normalized.nameKey && !byName.has(normalized.nameKey)) byName.set(normalized.nameKey, normalized);
-    }
-    return { byUic, byName, count: byUic.size || records.length, year: 2024, source: SNCF_STATION_TRAFFIC_DATASET };
-  } catch (error) {
-    console.warn('Fréquentation gares SNCF indisponible:', error.message);
-    return { byUic: new Map(), byName: new Map(), count: 0, year: 2024, source: SNCF_STATION_TRAFFIC_DATASET, error: error.message };
-  }
-}
-
-function normalizeSncfStationTrafficRecord(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const name = cleanOptionalText(raw.nom_gare || raw.NOM_GARE || raw.gare || raw.libelle || '', 80);
-  const rawUic = raw.code_uic_complet ?? raw.code_uic ?? raw.uic ?? '';
-  const uic = String(Array.isArray(rawUic) ? rawUic[0] : rawUic || '').replace(/\D+/g, '').slice(0, 16);
-  const annualPassengers = Number(
-    raw.total_voyageurs_2024
-    ?? raw.total_voyageurs_2023
-    ?? raw.total_voyageurs_2022
-    ?? raw.totalvoyageurs2017
-    ?? 0
-  );
-  if ((!uic && !name) || !Number.isFinite(annualPassengers) || annualPassengers < 0) return null;
-  return {
-    uic,
-    name,
-    nameKey: normalizeNameKey(name),
-    annualPassengers: Math.round(annualPassengers),
-    passengerTrafficYear: Number.isFinite(Number(raw.total_voyageurs_2024)) ? 2024 : Number.isFinite(Number(raw.total_voyageurs_2023)) ? 2023 : 2022
-  };
-}
-
-function trafficForSncfStation(primary, trafficIndex) {
-  if (!primary || !trafficIndex) return null;
-  const uic = String(primary.codeUic || '').split(',')[0].replace(/\D+/g, '');
-  if (uic && trafficIndex.byUic?.has(uic)) return trafficIndex.byUic.get(uic);
-  const nameKey = normalizeNameKey(primary.label || primary.communeName || '');
-  return nameKey ? trafficIndex.byName?.get(nameKey) || null : null;
-}
-
 function sncfRecordsFromPayload(payload) {
   if (Array.isArray(payload)) return payload.map(flattenSncfRecord);
   if (Array.isArray(payload?.results)) return payload.results.map(flattenSncfRecord);
@@ -4204,7 +3776,7 @@ function populationForSncfStation(station, populationIndex) {
   return sameName.length === 1 ? sameName[0] : null;
 }
 
-function buildStationsFromSncfList(sncfStations, populationIndex, trafficIndex = null) {
+function buildStationsFromSncfList(sncfStations, populationIndex) {
   const groups = new Map();
   for (const record of sncfStations || []) {
     const key = sncfStationGroupKey(record);
@@ -4220,15 +3792,13 @@ function buildStationsFromSncfList(sncfStations, populationIndex, trafficIndex =
     if (!primary) continue;
     duplicateRecords += Math.max(0, records.length - 1);
     const population = populationForSncfStation(primary, populationIndex);
-    const traffic = trafficForSncfStation(primary, trafficIndex);
     if (population) populationMatched += 1;
     const inhabitants = Math.max(0, Number(population?.population || 0));
-    const annualPassengers = Math.max(0, Number(traffic?.annualPassengers || 0));
     const populationSourceLabel = populationIndex?.source || 'population municipale';
     const hasPassengerStation = records.some(record => record.voyageurs);
     const hasFreightStation = records.some(record => record.fret);
     const baseDemand = hasPassengerStation
-      ? (annualPassengers > 0 ? passengerDemandFromAnnualPassengers(annualPassengers) : (inhabitants > 0 ? passengerDemandFromPopulation(inhabitants) : 90))
+      ? (inhabitants > 0 ? passengerDemandFromPopulation(inhabitants) : 90)
       : (inhabitants > 0 ? Math.max(35, Math.round(passengerDemandFromPopulation(inhabitants) * 0.35)) : 35);
     const freight = Math.round(clamp((inhabitants > 0 ? Math.sqrt(inhabitants) * 0.62 : 30) + (hasFreightStation ? 42 : 0), 10, 190));
     const tourism = Math.round(clamp(30 + (inhabitants > 0 ? Math.log10(Math.max(inhabitants, 1)) * 12 : 8), 35, 120));
@@ -4263,9 +3833,7 @@ function buildStationsFromSncfList(sncfStations, populationIndex, trafficIndex =
       hasFreightStation,
       stationKind: hasPassengerStation && hasFreightStation ? 'mixed' : hasPassengerStation ? 'passenger' : 'freight',
       codeLignes,
-      sourceRecords: records.length,
-      annualPassengers: annualPassengers || undefined,
-      passengerTrafficYear: traffic?.passengerTrafficYear || undefined
+      sourceRecords: records.length
     }));
   }
 
@@ -4278,10 +3846,7 @@ function buildStationsFromSncfList(sncfStations, populationIndex, trafficIndex =
       duplicateRecords,
       populationMatched,
       populationTotal: populationIndex?.records?.length || 0,
-      populationSource: populationIndex?.source || '',
-      trafficMatched: stations.filter(station => Number(station?.annualPassengers || 0) > 0).length,
-      trafficTotal: trafficIndex?.count || 0,
-      trafficSource: trafficIndex?.source || ''
+      populationSource: populationIndex?.source || ''
     }
   };
 }
@@ -4472,12 +4037,11 @@ async function refreshCommuneCache(force = false) {
 
   communeCache.status = 'loading';
   try {
-    const [populationIndex, sncfStations, trafficIndex] = await Promise.all([
+    const [populationIndex, sncfStations] = await Promise.all([
       fetchPopulationMunicipaleIndex(),
-      fetchSncfRailwayStations(),
-      fetchSncfStationTrafficIndex()
+      fetchSncfRailwayStations()
     ]);
-    const built = buildStationsFromSncfList(sncfStations, populationIndex, trafficIndex);
+    const built = buildStationsFromSncfList(sncfStations, populationIndex);
     const byId = {};
     for (const station of built.stations) byId[station.id] = station;
     applyParisInterchangeStations(byId);
@@ -4491,10 +4055,7 @@ async function refreshCommuneCache(force = false) {
       matched: built.stats.populationMatched,
       source: SNCF_STATION_DATASET,
       populationSource: built.stats.populationSource || 'population-municipale-des-communes-france-entiere',
-      populationResourceId: POPULATION_TABULAR_RESOURCE_ID,
-      trafficMatched: built.stats.trafficMatched || 0,
-      trafficTotal: built.stats.trafficTotal || 0,
-      trafficSource: built.stats.trafficSource || SNCF_STATION_TRAFFIC_DATASET
+      populationResourceId: POPULATION_TABULAR_RESOURCE_ID
     };
     communeCache = { status: 'ready-live', updatedAt: Date.now(), byId, error: '', sncfStats, sourceVersion: COMMUNE_CACHE_SOURCE_VERSION };
     rebuildStationAliasMap(byId);
@@ -4528,16 +4089,8 @@ function passengerDemandFromPopulation(population) {
   return Math.round(clamp(35 + Math.pow(pop / 1000, 0.70) * 24, 70, 1600));
 }
 
-function passengerDemandFromAnnualPassengers(annualPassengers) {
-  const passengers = Math.max(0, Number(annualPassengers || 0));
-  if (!Number.isFinite(passengers) || passengers <= 0) return 0;
-  return Math.round(clamp(55 + Math.pow(passengers / 1000, 0.54) * 18, 75, 2200));
-}
-
 function effectiveStationPassengerDemand(station) {
   if (!station) return 80;
-  const annualPassengers = Number(station.annualPassengers || station.passengers2024 || 0);
-  if (Number.isFinite(annualPassengers) && annualPassengers > 0) return passengerDemandFromAnnualPassengers(annualPassengers);
   const population = Number(station.population || 0);
   if (Number.isFinite(population) && population > 0) return passengerDemandFromPopulation(population);
   const commune = closestCommuneForStation(station);
@@ -5161,7 +4714,7 @@ async function actionCreateLine(player, payload) {
   const operatingModel = getTrainOperatingProfile(train, model, player);
   if (!lineServiceCompatibleWithProfile(service, operatingModel)) return fail('Ce train n’est pas compatible avec ce type de service.');
 
-  const routeInfo = await realRailRouteBetweenStops(stops, { operatingModel });
+  const routeInfo = await realRailRouteBetweenStops(stops);
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
     const missing = routeInfo.missing;
     const from = missing ? stationById(missing.from)?.name || missing.from : '';
@@ -5207,7 +4760,7 @@ async function actionAssignTrainToLine(player, payload) {
   const operatingModel = getTrainOperatingProfile(train, model, player);
   if (!lineServiceCompatibleWithProfile(line.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
 
-  const routeInfo = await realRailRouteBetweenStops(lineStops(line), { operatingModel });
+  const routeInfo = await realRailRouteBetweenStops(lineStops(line));
   if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
   const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
   if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
@@ -5264,7 +4817,7 @@ async function actionSetTrainLineAssignment(player, payload) {
   const operatingModel = getTrainOperatingProfile(train, model, player);
   if (!lineServiceCompatibleWithProfile(targetLine.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
 
-  const routeInfo = await realRailRouteBetweenStops(lineStops(targetLine), { operatingModel });
+  const routeInfo = await realRailRouteBetweenStops(lineStops(targetLine));
   if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
   const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
   if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
@@ -5363,7 +4916,7 @@ async function actionUpdateLine(player, payload) {
   if (serviceStopProblem) return fail(serviceStopProblem);
   if (!nextTrainIds.length) return fail('Sélectionne au moins un train pour cette ligne.');
 
-  let routeInfo = await realRailRouteBetweenStops(nextStops);
+  const routeInfo = await realRailRouteBetweenStops(nextStops);
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
     const missing = routeInfo.missing;
     const from = missing ? stationById(missing.from)?.name || missing.from : '';
@@ -5388,13 +4941,6 @@ async function actionUpdateLine(player, payload) {
 
   const bundle = combinedOperatingProfile(player, selectedTrains);
   if (!bundle) return fail('Aucun matériel exploitable sélectionné.');
-  routeInfo = await realRailRouteBetweenStops(nextStops, { operatingModel: bundle.profile });
-  if (!routeInfo.ids.length || routeInfo.distance <= 0) {
-    const missing = routeInfo.missing;
-    const from = missing ? stationById(missing.from)?.name || missing.from : '';
-    const to = missing ? stationById(missing.to)?.name || missing.to : '';
-    return fail('Impossible de calculer un itinÃ©raire RFN rÃ©el pour cette suite dâ€™arrÃªts.', missing ? `Segment introuvable dans formes-des-lignes-du-rfn : ${from} â†’ ${to}.` : '');
-  }
   const effectiveRange = effectiveTrainRange(player, bundle.profile, routeInfo);
   if (routeInfo.distance > effectiveRange) {
     return fail(
@@ -6422,8 +5968,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveTicketPrice = lineTicketPrice(line, distance);
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
-    const stopRevenue = computePassengerStopRevenue(effectiveLine, linePax, effectiveTicketPrice, operatingModel, player, stationAgentFlowFactor);
-    const baseTicketRevenue = stopRevenue.total;
+    const baseTicketRevenue = linePax * distance * effectiveTariff * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
     const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
     const ancillaryRevenue = linePax * 0.35 * averageCommerce(player, line);
     const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
@@ -6494,8 +6039,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         passengerScore: passengerDetails ? round2(passengerDetails.score) : null,
         freightScore: freightDetails ? round2(freightDetails.score) : null,
         passengerDemandCapture: passengerDetails ? round2(passengerCapture * 100) : null,
-        freightDemandCapture: freightDetails ? round2(freightCapture * 100) : null,
-        passengerStopRevenue: stopRevenue.stops
+        freightDemandCapture: freightDetails ? round2(freightCapture * 100) : null
       },
       attractiveness: {
         passenger: passengerDetails,
@@ -6526,11 +6070,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       finance: {
         ticketPrice: Math.round(effectiveTicketPrice),
         farePerKm: round2(effectiveTariff),
-        travelMinutes: lineTravelMinutes(effectiveLine, operatingModel),
-        dwellMinutes: Math.max(0, Number(effectiveLine.dwellMinutes || lineStops(effectiveLine).length)),
-        averageSpeedKmh: round2(Number(effectiveLine.averageSpeedKmh || distance / Math.max(0.1, lineTravelMinutes(effectiveLine, operatingModel) / 60))),
         ticketRevenue: Math.round(ticketRevenue),
-        stationStopRevenue: stopRevenue.stops,
         ancillaryRevenue: Math.round(ancillaryRevenue),
         freightRevenue: Math.round(freightRevenue),
         dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - serviceRevenue)),
@@ -6572,7 +6112,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const model = BALANCE.trains[train.modelId];
     return sum + (!used && model ? model.price * ECONOMY.idleTrainStorageFactor : 0);
   }, 0);
-  const stationRevenue = computeOwnedStationRevenue(player, activeLineStats);
+  const stationRevenue = computeOwnedStationRevenue(player, passengers, freight);
   const researchCost = researchOperatingCost(player);
   if (!dryRun && player.researchProject && researchCost > 0) {
     const refundableLabCost = Math.max(0, Math.round(ECONOMY.researchLabBaseCost || 0));
@@ -6776,7 +6316,7 @@ function computeLineAttractiveness(player, line, model, train, distance, staffin
 }
 
 function computeLineAttractivenessDetails(player, line, model, train, distance, staffing, market = 'passengers') {
-  const time = lineTravelMinutes(line, model) / 60;
+  const time = distance / Math.max(25, model.speed);
   const frequencyBoost = Math.sqrt(line.frequency);
   const ticketPrice = lineTicketPrice(line, distance);
   const fareCap = ticketPriceCeiling(distance);
@@ -6819,7 +6359,6 @@ function computeLineAttractivenessDetails(player, line, model, train, distance, 
 function computeRouteDemand(from, to, line, player, eventFactor) {
   const stops = lineStops(line);
   const distance = lineDistance(line);
-  const travelMinutes = lineTravelMinutes(line);
   const mids = stops.slice(1, -1).map(id => stationById(id)).filter(Boolean);
   const fromDemand = effectiveStationPassengerDemand(from);
   const toDemand = effectiveStationPassengerDemand(to);
@@ -6828,58 +6367,16 @@ function computeRouteDemand(from, to, line, player, eventFactor) {
   const tourismMid = mids.reduce((sum, s) => sum + s.tourism, 0);
   const tourism = 1 + (from.tourism + to.tourism + tourismMid * 0.5) / 160;
   const distanceFactor = clamp(1.25 - distance / 900, 0.25, 1.2);
-  const timeFactor = clamp((Math.max(25, distance) / Math.max(18, travelMinutes / 60 * 95)) ** 0.35, 0.55, 1.18);
   const eraFactor = 0.85 + player.epoch * 0.18;
   const reputation = 0.75 + player.reputation / 190;
   const stationTech = (1 + Math.min(0.13, techLevel(player, 'passenger_flow') * 0.026)) * (1 + Math.min(0.16, techLevel(player, 'intermodal_hubs') * 0.032));
   const stopBonus = 1 + Math.max(0, stops.length - 2) * 0.07;
-  const passengerDemand = demandBase * tourism * distanceFactor * timeFactor * eraFactor * state.market.demand * eventFactor.passenger * reputation * stationTech * stopBonus * ECONOMY.passengerDemandMultiplier;
+  const passengerDemand = demandBase * tourism * distanceFactor * eraFactor * state.market.demand * eventFactor.passenger * reputation * stationTech * stopBonus * ECONOMY.passengerDemandMultiplier;
   const freightMid = mids.reduce((sum, s) => sum + s.freight, 0);
   const freightBase = Math.sqrt((from.freight + 18) * (to.freight + 18)) * 5.5 + freightMid * 1.8;
   const freightTech = (1 + Math.min(0.15, techLevel(player, 'specialized_wagons') * 0.03)) * (1 + Math.min(0.2, techLevel(player, 'container_hubs') * 0.04));
   const freightDemand = freightBase * clamp(distance / 180, 0.5, 2.2) * state.market.freight * eventFactor.freight * (0.75 + player.tech.freight * 0.08) * freightTech * Math.max(1, 1 + Math.max(0, stops.length - 2) * 0.05) * ECONOMY.freightDemandMultiplier;
   return { passengers: passengerDemand, freight: freightDemand };
-}
-
-function stationAnnualPassengerReference(station) {
-  const annual = Number(station?.annualPassengers || station?.passengers2024 || 0);
-  if (Number.isFinite(annual) && annual > 0) return annual;
-  const demand = effectiveStationPassengerDemand(station);
-  return Math.max(12000, Math.round(Math.pow(Math.max(1, demand), 1.65) * 42));
-}
-
-function computePassengerStopRevenue(line, linePax, ticketPrice, operatingModel, player, stationAgentFlowFactor = 1) {
-  const stops = lineStops(line).map(id => stationById(id)).filter(Boolean);
-  if (!stops.length || linePax <= 0) return { total: 0, stops: [] };
-  const weights = stops.map(station => {
-    const annualPassengers = stationAnnualPassengerReference(station);
-    const hubWeight = Math.pow(Math.max(1, annualPassengers), 0.46);
-    const stopPositionFactor = stops.length <= 2 ? 1 : (station.id === stops[0].id || station.id === stops[stops.length - 1].id ? 1.08 : 0.74);
-    return { station, annualPassengers, weight: hubWeight * stopPositionFactor };
-  });
-  const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0) || 1;
-  const routeMinutes = lineTravelMinutes(line, operatingModel);
-  const cyclesPerHour = lineCyclesPerHour(line, operatingModel);
-  const timeYield = clamp(1.18 - routeMinutes / 520, 0.62, 1.12);
-  const stopTech = (1 + Math.min(0.12, techLevel(player, 'passenger_flow') * 0.024)) * (1 + Math.min(0.14, techLevel(player, 'intermodal_hubs') * 0.028));
-  const profitability = Number(operatingModel?.profitabilityMultiplier || 1);
-  const fare = Math.max(0.8, Number(ticketPrice || 0));
-  let total = 0;
-  const details = [];
-  for (const item of weights) {
-    const stopPax = linePax * item.weight / totalWeight;
-    const stationYield = clamp(Math.log10(Math.max(10, item.annualPassengers)) / 6.2, 0.42, 1.22);
-    const revenue = stopPax * fare * stationYield * timeYield * stopTech * stationAgentFlowFactor * profitability * Math.max(0.45, cyclesPerHour) * ECONOMY.passengerRevenueMultiplier;
-    total += revenue;
-    details.push({
-      stationId: item.station.id,
-      stationName: item.station.name,
-      annualPassengers: Math.round(item.annualPassengers),
-      passengers: Math.round(stopPax),
-      revenue: Math.round(revenue)
-    });
-  }
-  return { total, stops: details };
 }
 
 
@@ -7021,32 +6518,18 @@ function actionSetElectricityOrder(player, payload) {
 }
 
 
-function computeOwnedStationRevenue(player, activeLineStats = []) {
+function computeOwnedStationRevenue(player, passengers, freightTons) {
   const assets = Object.values(player.stations || {});
   if (!assets.length) return 0;
-  const ownedIds = new Set(Object.keys(player.stations || {}));
-  let servedIncome = 0;
-  for (const item of activeLineStats || []) {
-    const stopRevenues = item?.stats?.finance?.stationStopRevenue || item?.stats?.market?.passengerStopRevenue || [];
-    for (const stop of stopRevenues) {
-      if (!ownedIds.has(stop.stationId)) continue;
-      const asset = normalizeStationAsset(player, stop.stationId);
-      const quality = 0.16
-        + Math.max(0, Number(asset.level || 1) - 1) * 0.035
-        + Math.max(0, Number(asset.commerce || 0)) * 0.045
-        + Math.max(0, Number(asset.maintenance || 0)) * 0.012
-        + (asset.depot ? 0.018 : 0);
-      servedIncome += Number(stop.revenue || 0) * quality;
-    }
-  }
-  const stationBase = assets.reduce((sum, asset) => {
-    const id = Object.entries(player.stations || {}).find(([, value]) => value === asset)?.[0];
-    const station = stationById(id);
-    const annual = stationAnnualPassengerReference(station);
-    return sum + Math.pow(Math.max(1, annual), 0.33) * (asset.level || 1) * 0.42 + (asset.depot ? 24 : 0);
-  }, 0);
+  const stationBase = assets.reduce((sum, asset) => (
+    sum
+    + (asset.level || 1) * ECONOMY.ownedStationIncomeBase
+    + (asset.commerce || 0) * ECONOMY.ownedStationCommerceIncome
+    + (asset.depot ? 24 : 0)
+  ), 0);
+  const trafficIncome = passengers * 0.18 + freightTons * 0.032;
   const flowBonus = 1 + Math.min(0.18, techLevel(player, 'passenger_flow') * 0.025 + techLevel(player, 'intermodal_hubs') * 0.035);
-  return (stationBase + servedIncome) * flowBonus;
+  return (stationBase + trafficIncome) * flowBonus;
 }
 
 function researchOperatingCost(player) {
@@ -7742,28 +7225,12 @@ function applyValidatedRouteToLine(line, routeInfo) {
   const distance = Math.max(0, Math.round(Number(routeInfo.distance || 0)));
   if (distance > 0) line.distance = distance;
   if (Number.isFinite(Number(routeInfo.maxSegment))) line.maxSegment = Math.max(0, Math.round(Number(routeInfo.maxSegment || 0)));
-  if (routeInfo.profile) line.routeProfile = normalizeRailRouteProfile(routeInfo.profile);
-  if (Number.isFinite(Number(routeInfo.travelMinutes))) line.travelMinutes = Math.max(1, Math.round(Number(routeInfo.travelMinutes)));
-  if (Number.isFinite(Number(routeInfo.dwellMinutes))) line.dwellMinutes = Math.max(0, Math.round(Number(routeInfo.dwellMinutes)));
-  if (Number.isFinite(Number(routeInfo.durationMinutes))) line.durationMinutes = Math.max(1, Math.round(Number(routeInfo.durationMinutes)));
-  if (Number.isFinite(Number(routeInfo.averageSpeedKmh))) line.averageSpeedKmh = round2(Number(routeInfo.averageSpeedKmh));
-  if (Number.isFinite(Number(routeInfo.nominalAverageSpeedKmh))) line.nominalAverageSpeedKmh = Math.round(Number(routeInfo.nominalAverageSpeedKmh));
-  if (Number.isFinite(Number(routeInfo.highSpeedShare))) line.highSpeedShare = round2(Number(routeInfo.highSpeedShare));
-  if (Number.isFinite(Number(routeInfo.classicShare))) line.classicShare = round2(Number(routeInfo.classicShare));
-  if (Number.isFinite(Number(routeInfo.dwellPerStopMinutes))) line.dwellPerStopMinutes = Math.max(0, Math.round(Number(routeInfo.dwellPerStopMinutes)));
-  if (routeInfo.speedSource) line.speedSource = String(routeInfo.speedSource).slice(0, 80);
   if (Array.isArray(routeInfo.segments)) {
     line.routeSegments = routeInfo.segments
       .map(segment => ({
         from: currentStationId(segment.from),
         to: currentStationId(segment.to),
-        distance: Math.max(1, Math.round(Number(segment.distance || 0))),
-        travelMinutes: Number.isFinite(Number(segment.travelMinutes)) ? Math.max(1, Math.round(Number(segment.travelMinutes))) : undefined,
-        durationMinutes: Number.isFinite(Number(segment.durationMinutes)) ? Math.max(1, Math.round(Number(segment.durationMinutes))) : undefined,
-        averageSpeedKmh: Number.isFinite(Number(segment.averageSpeedKmh)) ? round2(Number(segment.averageSpeedKmh)) : undefined,
-        nominalAverageSpeedKmh: Number.isFinite(Number(segment.nominalAverageSpeedKmh)) ? Math.round(Number(segment.nominalAverageSpeedKmh)) : undefined,
-        highSpeedShare: Number.isFinite(Number(segment.highSpeedShare)) ? round2(Number(segment.highSpeedShare)) : undefined,
-        classicShare: Number.isFinite(Number(segment.classicShare)) ? round2(Number(segment.classicShare)) : undefined
+        distance: Math.max(1, Math.round(Number(segment.distance || 0)))
       }))
       .filter(segment => segment.from && segment.to && segment.from !== segment.to && segment.distance > 0);
   }
@@ -8024,19 +7491,6 @@ function lineDistance(line) {
   const stored = Number(line?.distance);
   if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
   return routeBetweenStops(lineStops(line)).distance;
-}
-
-function lineTravelMinutes(line, model = null) {
-  const stored = Number(line?.durationMinutes);
-  if (Number.isFinite(stored) && stored > 0) return Math.max(1, Math.round(stored));
-  const distance = lineDistance(line);
-  const speed = Math.max(25, Number(model?.speed || line?.averageSpeedKmh || 95));
-  return Math.max(1, Math.round(distance / speed * 60 + lineStops(line).length));
-}
-
-function lineCyclesPerHour(line, model = null) {
-  const minutes = lineTravelMinutes(line, model);
-  return minutes > 0 ? 60 / minutes : 1;
 }
 
 function lineSegmentKey(a, b) {
