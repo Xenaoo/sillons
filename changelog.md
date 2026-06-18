@@ -1,3 +1,11 @@
+## Version v65.5.0 — timer global de file R&D
+
+- incrément de version : badge interface `v65.5.0`, version serveur/client `v65.5.0`, package `65.5.0` et schéma serveur `126` ;
+- ajout dans le menu `R&D` d’un encart `Fin de la file R&D complète` ;
+- affichage d’un compte à rebours global incluant le projet actif et toutes les recherches en attente ;
+- affichage de l’heure/date réelle estimée de fin de toutes les recherches lancées ;
+- les durées affichées dans la file tiennent compte de la capacité R&D actuelle.
+
 ## Version v65.4.1 — corrections des notifications
 
 - incrément de version : badge interface `v65.4.1`, version serveur/client `v65.4.1`, package `65.4.1` et schéma serveur `125` ;

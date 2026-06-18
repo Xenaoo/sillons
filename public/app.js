@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.4.1';
+const PROJECT_VERSION = 'v65.5.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -2643,6 +2643,34 @@ function formatResearchTime(valueMs) {
   return [hours, minutes, seconds].map(n => String(n).padStart(2, '0')).join(':');
 }
 
+function researchQueueCompletionInfo(me = app.state?.me) {
+  if (!me) return null;
+  const queue = Array.isArray(me.researchQueue) ? me.researchQueue : [];
+  const project = me.researchProject || null;
+  const launchedCount = queue.length + (project ? 1 : 0);
+  if (!launchedCount) return null;
+  const workRate = Math.max(0.01, Number(researchWorkRateClient(me) || 1));
+  let remainingRealMs = 0;
+  if (project) {
+    if (Number.isFinite(Number(project.endAt)) && Number(project.endAt) > 0) {
+      remainingRealMs += Math.max(0, Number(project.endAt) - serverNow());
+    } else {
+      remainingRealMs += Math.max(0, Number(project.realRemainingMs ?? project.remainingMs ?? 0));
+    }
+  }
+  for (const item of queue) {
+    remainingRealMs += Math.max(0, Number(item.durationMs || 0)) / workRate;
+  }
+  const endAt = serverNow() + remainingRealMs;
+  return {
+    launchedCount,
+    queueCount: queue.length,
+    workRate,
+    remainingRealMs,
+    endAt
+  };
+}
+
 function formatCycles(value) {
   const n = Math.max(0, Math.ceil(Number(value || 0)));
   return n <= 1 ? '1 cycle' : `${n} cycles`;
@@ -2681,7 +2709,7 @@ function applyResearchProgress(el, rawProgress) {
 
 function updateResearchTimers() {
   const now = serverNow();
-  document.querySelectorAll('[data-research-timer]').forEach(el => {
+  document.querySelectorAll('[data-research-timer], [data-research-total-timer]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
     el.textContent = formatResearchTime(Math.max(0, endAt - now));
   });
@@ -5795,6 +5823,7 @@ function renderResearch() {
           </div>
         </div>
       ` : `<p class="small muted">Aucun projet actif. Lancer une recherche applique un coût initial, puis ajoute ${moneyPerHour(economyValue('researchLabBaseCost', 180))} aux dépenses/h jusqu’à la fin du projet.</p>`}
+      ${renderResearchQueueCompletion(me)}
       ${renderResearchQueue(me)}
       <hr>
       ${next ? `
@@ -5944,9 +5973,32 @@ function renderResearchNodeGrid(group) {
   }).join('')}</div>`;
 }
 
+function renderResearchQueueCompletion(me) {
+  const info = researchQueueCompletionInfo(me);
+  if (!info) return '';
+  const queuedText = info.queueCount
+    ? `${info.queueCount} recherche${info.queueCount > 1 ? 's' : ''} en attente`
+    : 'aucune recherche en attente';
+  const activeText = me?.researchProject ? 'projet en cours inclus' : 'aucun projet actif';
+  return `
+    <hr>
+    <div class="research-total-timer-card">
+      <div class="item-title">
+        <strong>Fin de la file R&D complète</strong>
+        <span class="tag warn research-clock" data-research-total-timer data-end-at="${Math.round(info.endAt || 0)}">${formatResearchTime(info.remainingRealMs)}</span>
+      </div>
+      <div class="research-total-details">
+        <span>Toutes les recherches lancées seront terminées vers <b>${escapeHtml(formatDateTime(info.endAt))}</b>.</span>
+        <small>Calcul au rythme actuel : ${round(info.workRate)}x · ${activeText} · ${queuedText}.</small>
+      </div>
+    </div>
+  `;
+}
+
 function renderResearchQueue(me) {
   const queue = me.researchQueue || [];
   if (!queue.length) return '';
+  const workRate = Math.max(0.01, Number(researchWorkRateClient(me) || 1));
   return `
     <hr>
     <div class="research-queue">
@@ -5955,16 +6007,19 @@ function renderResearchQueue(me) {
         <span class="tag">${queue.length}/12</span>
       </div>
       <div class="research-queue-list">
-        ${queue.map((item, index) => `
+        ${queue.map((item, index) => {
+          const realDurationMs = Math.max(0, Number(item.durationMs || 0)) / workRate;
+          return `
           <div class="research-queue-item" data-action="focus-research" data-id="${escapeAttr(item.nodeId)}">
             <span class="queue-rank">${index + 1}</span>
             <div>
               <strong>${escapeHtml(item.title || item.nodeId)} niv. ${item.targetLevel}</strong>
-              <span>${formatResearchTime(item.durationMs)} · ${money(item.costMoney || 0)}</span>
+              <span>${formatResearchTime(realDurationMs)} à capacité actuelle · ${money(item.costMoney || 0)}</span>
             </div>
             <button class="danger research-cancel-btn" data-action="cancel-research" data-source="queue" data-index="${index}" data-id="${escapeAttr(item.nodeId)}" data-level="${Number(item.targetLevel || 1)}" ${tooltipAttr(`Retire cette recherche de la file et rembourse ${money(item.costMoney || 0)}. Toute recherche suivante qui en dépend serait aussi annulée et remboursée.`)}>Annuler</button>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     </div>
   `;

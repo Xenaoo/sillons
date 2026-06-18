@@ -9199,3 +9199,28 @@ dialog.modal--wide {
     height: 23px;
   }
 }
+
+/* v65.5.0 — timer global de file R&D */
+.research-total-timer-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(239,200,117,.24);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background:
+    radial-gradient(circle at top left, rgba(239,200,117,.13), transparent 42%),
+    rgba(2, 6, 23, .38);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+}
+.research-total-details {
+  display: grid;
+  gap: 3px;
+  color: #efe2c2;
+  font-size: 13px;
+}
+.research-total-details small {
+  color: var(--muted);
+}
+.research-total-details b {
+  color: #fff3cf;
+}
