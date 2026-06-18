@@ -1,3 +1,10 @@
+## Version v65.1.0 — bouton carte explicite pour les lignes des autres joueurs
+
+- incrément de version : badge interface `v65.1.0`, version serveur/client `v65.1.0`, package `65.1.0` et schéma serveur `119` ;
+- carte : remplacement du bouton `Autres joueurs` par un contrôle plus explicite `Lignes des autres joueurs` ;
+- ajout d’un état visuel clair `Affichées sur la carte` / `Masquées sur la carte` ;
+- ajout d’un pictogramme de lignes et d’un interrupteur visuel pour mieux comprendre que le bouton affiche ou masque les lignes et trains des autres joueurs.
+
 ## Version v65.0.0 — tutoriel corrigé, capital de départ et signalements de bugs
 
 - incrément de version : badge interface `v65.0.0`, version serveur/client `v65.0.0`, package `65.0.0` et schéma serveur `118` ;

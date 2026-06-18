@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.0.0';
+const PROJECT_VERSION = 'v65.1.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -362,9 +362,11 @@ function bindStaticEvents() {
   const showOtherLinesBox = $('#showOtherLines');
   if (showOtherLinesBox) {
     showOtherLinesBox.checked = app.showOtherLines;
+    syncOtherLinesToggle();
     showOtherLinesBox.addEventListener('change', event => {
       app.showOtherLines = !!event.target.checked;
       localStorage.setItem('sillons.showOtherLines', app.showOtherLines ? '1' : '0');
+      syncOtherLinesToggle();
       invalidateMapProjection('line-filter');
       drawMap();
     });
@@ -434,6 +436,23 @@ function bindStaticEvents() {
   bindGlobalTooltips();
 }
 
+
+function syncOtherLinesToggle() {
+  const input = $('#showOtherLines');
+  const toggle = $('.other-lines-toggle');
+  const state = $('#showOtherLinesState');
+  if (!input || !toggle) return;
+  const active = !!input.checked;
+  toggle.classList.toggle('is-active', active);
+  toggle.classList.toggle('is-muted', !active);
+  toggle.setAttribute('aria-label', active
+    ? 'Les lignes des autres joueurs sont affichées sur la carte. Cliquer pour les masquer.'
+    : 'Les lignes des autres joueurs sont masquées sur la carte. Cliquer pour les afficher.');
+  toggle.title = active
+    ? 'Les lignes et trains des autres joueurs sont actuellement visibles. Clique pour les masquer.'
+    : 'Les lignes et trains des autres joueurs sont actuellement masqués. Clique pour les afficher.';
+  if (state) state.textContent = active ? 'Affichées sur la carte' : 'Masquées sur la carte';
+}
 
 function bindGlobalTooltips() {
   document.addEventListener('pointerover', event => {

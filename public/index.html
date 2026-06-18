@@ -88,9 +88,14 @@
             <span><i class="line-sample"></i> Ligne joueur</span>
           </div>
           <div class="map-controls">
-            <label class="map-filter-toggle" title="Affiche ou masque les tracés et trains des autres compagnies.">
+            <label class="map-filter-toggle other-lines-toggle" title="Afficher ou masquer les lignes et trains des autres joueurs sur la carte.">
               <input id="showOtherLines" type="checkbox" checked>
-              <span>Autres joueurs</span>
+              <span class="other-lines-toggle__icon" aria-hidden="true"><i></i><i></i></span>
+              <span class="other-lines-toggle__text">
+                <b id="showOtherLinesLabel">Lignes des autres joueurs</b>
+                <small id="showOtherLinesState">Affichées sur la carte</small>
+              </span>
+              <span class="other-lines-toggle__switch" aria-hidden="true"></span>
             </label>
             <button id="clearFocusedLineBtn" class="ghost hidden" type="button" title="Réaffiche toutes les lignes sur la carte.">Toutes lignes</button>
             <button id="addStopBtn" class="ghost hidden" type="button" title="Création manuelle désactivée.">Ajout désactivé</button>
@@ -142,6 +147,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/app.js"></script>
-  <button id="versionBadge" type="button" title="Afficher le changelog complet">v65.0.0</button>
+  <button id="versionBadge" type="button" title="Afficher le changelog complet">v65.1.0</button>
 </body>
 </html>

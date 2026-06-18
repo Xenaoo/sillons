@@ -8909,3 +8909,157 @@ dialog.modal--wide {
     justify-content: flex-start;
   }
 }
+
+/* ===== V65.1.0 : bouton carte explicite pour les lignes des autres joueurs ===== */
+.map-filter-toggle.other-lines-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 5px 9px 5px 8px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, .88), rgba(7, 12, 23, .76));
+  color: #d8e2f2;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 8px 22px rgba(0,0,0,.20);
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.map-filter-toggle.other-lines-toggle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(216, 174, 88, .46);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(0,0,0,.26);
+}
+
+.other-lines-toggle input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.other-lines-toggle__icon {
+  width: 30px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  background: rgba(15, 23, 42, .76);
+}
+
+.other-lines-toggle__icon i {
+  display: block;
+  width: 20px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .75);
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, .36);
+}
+
+.other-lines-toggle__icon i:first-child {
+  transform: rotate(-10deg) translateY(3px);
+}
+
+.other-lines-toggle__icon i:last-child {
+  transform: rotate(12deg) translateY(-3px);
+}
+
+.other-lines-toggle__text {
+  display: grid;
+  gap: 1px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.other-lines-toggle__text b {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.other-lines-toggle__text small {
+  color: #aeb7c7;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.other-lines-toggle__switch {
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  background: rgba(15, 23, 42, .95);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.other-lines-toggle__switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+  transition: transform .16s ease, background .16s ease;
+}
+
+.other-lines-toggle.is-active {
+  border-color: rgba(106, 197, 143, .48);
+  background: linear-gradient(180deg, rgba(20, 65, 50, .72), rgba(10, 28, 24, .78));
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__icon {
+  border-color: rgba(106, 197, 143, .38);
+  background: rgba(12, 46, 35, .82);
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__icon i:first-child {
+  background: #f4c671;
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__icon i:last-child {
+  background: #6ac58f;
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__text small {
+  color: #c8f0d5;
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__switch {
+  border-color: rgba(106, 197, 143, .42);
+  background: rgba(22, 101, 52, .82);
+}
+
+.other-lines-toggle.is-active .other-lines-toggle__switch::after {
+  transform: translateX(12px);
+  background: #d9f99d;
+}
+
+.other-lines-toggle.is-muted {
+  opacity: .78;
+}
+
+@media (max-width: 700px) {
+  .map-filter-toggle.other-lines-toggle {
+    min-height: 36px;
+    padding: 4px 8px;
+  }
+  .other-lines-toggle__text b {
+    font-size: 10px;
+  }
+  .other-lines-toggle__text small {
+    font-size: 9px;
+  }
+  .other-lines-toggle__icon {
+    width: 26px;
+    height: 23px;
+  }
+}
