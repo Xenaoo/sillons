@@ -1,3 +1,10 @@
+## Version v69.1.2 — pastilles trains au-dessus des tracés
+
+- incrément de version : badge interface `v69.1.2`, version serveur/client `v69.1.2`, package `69.1.2` et schéma serveur `153` ;
+- correction de l'ordre de rendu de la carte : les tracés de lignes sont désormais dessinés en premier, puis toutes les pastilles trains sont rendues dans un second passage ;
+- les pastilles trains restent visibles au-dessus de tous les tracés, y compris lorsque plusieurs lignes se chevauchent ou lorsqu'une ligne concurrente est dessinée après une autre ;
+- le rendu allégé pendant navigation/zoom reste inchangé afin de préserver les performances.
+
 ## Version v69.1.1 — correction temps réel des pastilles trains
 
 - incrément de version : badge interface `v69.1.1`, version serveur/client `v69.1.1`, package `69.1.1` et schéma serveur `152` ;

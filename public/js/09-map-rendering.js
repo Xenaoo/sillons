@@ -292,6 +292,7 @@ function visualLineWithEffectiveFrequency(line) {
 
 function drawAllLines(ctx, lite = false) {
   if (!lite) app.map.lineHit = [];
+  const trainDrawQueue = [];
   const players = app.state.players || [];
   const me = app.state.me || null;
   const maxZoom = mapMaxZoomReached();
@@ -338,7 +339,17 @@ function drawAllLines(ctx, lite = false) {
       trains.forEach((train, index) => {
         const model = app.state.balance.trains[train.modelId];
         if (!model) return;
-        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed }, model, own, train, index, trains.length, visualRoute);
+        trainDrawQueue.push({
+          points: route.points,
+          color: player.color,
+          line: { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed },
+          model,
+          own,
+          train,
+          instanceIndex: index,
+          instanceCount: trains.length,
+          route: visualRoute
+        });
       });
     }
   };
@@ -351,6 +362,25 @@ function drawAllLines(ctx, lite = false) {
   }
   drawLinesForPlayer(me, true);
   drawLineDraftPreview(ctx, lite);
+
+  // Second passage : toutes les pastilles trains passent après tous les tracés.
+  // Cela évite qu'une ligne dessinée ensuite masque un train lorsqu'elles se chevauchent.
+  if (!lite && trainDrawQueue.length) {
+    for (const job of trainDrawQueue) {
+      drawTrainSprite(
+        ctx,
+        job.points,
+        job.color,
+        job.line,
+        job.model,
+        job.own,
+        job.train,
+        job.instanceIndex,
+        job.instanceCount,
+        job.route
+      );
+    }
+  }
 }
 
 function drawLineDraftPreview(ctx, lite = false) {
