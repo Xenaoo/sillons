@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.4.0';
+const PROJECT_VERSION = 'v65.4.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -173,6 +173,8 @@ const app = {
   serverClockOffset: 0,
   lastRenderKey: '',
   lastNotificationKey: '',
+  notificationRenderSignature: '',
+  notificationReadSyncInFlight: false,
   notificationsOpen: false,
   stationListCache: { source: null, signature: '', deduped: [] },
   stationSignatureCache: { source: null, signature: '' },
@@ -459,13 +461,14 @@ function bindStaticEvents() {
     if (toggle) {
       event.preventDefault();
       app.notificationsOpen = !app.notificationsOpen;
-      renderNotificationDropdown();
+      if (app.notificationsOpen) markNotificationsRead({ syncServer: true, skipRender: true });
+      renderNotificationDropdown(true);
       return;
     }
     if (panel) return;
     if (app.notificationsOpen) {
       app.notificationsOpen = false;
-      renderNotificationDropdown();
+      renderNotificationDropdown(true);
     }
   });
 
@@ -1193,50 +1196,106 @@ function maybeNotify(me) {
 }
 
 function notificationKey(notification) {
-  return String(notification?.id || `${notification?.day ?? ''}:${notification?.text || ''}`);
+  return String(notification?.id || `${notification?.createdAt ?? ''}:${notification?.text || ''}`);
 }
 
-function notificationDayLabel(notification) {
-  const day = Number(notification?.day);
-  if (Number.isFinite(day) && day > 0) return `Jour ${formatInt(day)}`;
-  return 'Notification';
+function notificationCreatedAt(notification) {
+  const value = Number(notification?.createdAt || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function renderNotificationDropdown() {
+function notificationDateTimeLabel(notification) {
+  const createdAt = notificationCreatedAt(notification);
+  return createdAt ? formatDateTime(createdAt) : 'Horodatage indisponible';
+}
+
+function notificationReadStorageKey() {
+  const playerId = app.state?.me?.id || app.playerId || 'anonymous';
+  return `sillons.notificationsReadAt.${playerId}`;
+}
+
+function localNotificationReadAt() {
+  return Number(localStorage.getItem(notificationReadStorageKey()) || 0) || 0;
+}
+
+function currentNotificationReadAt() {
+  return Math.max(Number(app.state?.me?.notificationsReadAt || 0) || 0, localNotificationReadAt());
+}
+
+function latestNotificationCreatedAt(notifications = []) {
+  return notifications.reduce((max, item) => Math.max(max, notificationCreatedAt(item)), 0);
+}
+
+function unreadNotificationCount(notifications = []) {
+  const readAt = currentNotificationReadAt();
+  return notifications.filter(item => notificationCreatedAt(item) > readAt).length;
+}
+
+function markNotificationsRead({ syncServer = false, skipRender = false } = {}) {
+  const me = app.state?.me;
+  const notifications = Array.isArray(me?.notifications) ? me.notifications : [];
+  const latest = latestNotificationCreatedAt(notifications);
+  if (!latest || latest <= currentNotificationReadAt()) return;
+  localStorage.setItem(notificationReadStorageKey(), String(latest));
+  if (me) me.notificationsReadAt = Math.max(Number(me.notificationsReadAt || 0) || 0, latest);
+  if (!skipRender) renderNotificationDropdown(true);
+  if (!syncServer || app.notificationReadSyncInFlight) return;
+  app.notificationReadSyncInFlight = true;
+  post('/api/action', { playerId: app.playerId, type: 'markNotificationsRead', payload: { readAt: latest } })
+    .then(response => {
+      if (response?.state) app.state = response.state;
+      renderNotificationDropdown(true);
+    })
+    .catch(() => null)
+    .finally(() => { app.notificationReadSyncInFlight = false; });
+}
+
+function notificationRenderSignature(notifications, open, unreadCount) {
+  const items = notifications.map(item => `${notificationKey(item)}:${notificationCreatedAt(item)}:${item.text || ''}`).join('|');
+  return `${app.state?.me?.id || ''}::${open ? 1 : 0}::${unreadCount}::${items}`;
+}
+
+function renderNotificationDropdown(force = false) {
   const mount = $('#notificationMount');
   if (!mount) return;
   const me = app.state?.me;
   if (!me) {
+    app.notificationRenderSignature = '';
     mount.innerHTML = '';
     return;
   }
   const notifications = Array.isArray(me.notifications) ? me.notifications : [];
-  const count = notifications.length;
-  const hasItems = count > 0;
   const open = !!app.notificationsOpen;
+  if (open) markNotificationsRead({ syncServer: true, skipRender: true });
+  const total = notifications.length;
+  const unreadCount = unreadNotificationCount(notifications);
+  const hasItems = total > 0;
+  const signature = notificationRenderSignature(notifications, open, unreadCount);
+  if (!force && signature === app.notificationRenderSignature) return;
+  app.notificationRenderSignature = signature;
   const items = notifications.map(notification => `
-    <article class="notification-item">
-      <div class="notification-item__meta">${escapeHtml(notificationDayLabel(notification))}</div>
+    <article class="notification-item ${notificationCreatedAt(notification) > currentNotificationReadAt() ? 'is-unread' : ''}">
+      <div class="notification-item__meta">${escapeHtml(notificationDateTimeLabel(notification))}</div>
       <div class="notification-item__text">${escapeHtml(notification.text || 'Notification sans contenu.')}</div>
     </article>
   `).join('');
   mount.innerHTML = `
     <div class="notification-dropdown ${open ? 'is-open' : ''}">
-      <button id="notificationToggleBtn" class="notification-toggle" type="button" aria-expanded="${open ? 'true' : 'false'}" title="Ouvrir les notifications persistantes de ta compagnie.">
+      <button id="notificationToggleBtn" class="notification-toggle ${unreadCount ? 'has-unread' : ''}" type="button" aria-expanded="${open ? 'true' : 'false'}" title="Afficher ou masquer l’historique des notifications.">
         <span class="notification-toggle__icon" aria-hidden="true">◆</span>
         <span class="notification-toggle__label">Notifications</span>
-        <span class="notification-toggle__count">${formatInt(count)}</span>
+        <span class="notification-toggle__count" aria-label="${formatInt(unreadCount)} notification${unreadCount > 1 ? 's' : ''} non lue${unreadCount > 1 ? 's' : ''}">${formatInt(unreadCount)}</span>
       </button>
       ${open ? `
-        <div class="notification-dropdown-panel" role="region" aria-label="Notifications persistantes">
+        <div class="notification-dropdown-panel" role="region" aria-label="Notifications">
           <div class="notification-dropdown-head">
-            <strong>Notifications persistantes</strong>
-            <span>${formatInt(count)} affichée${count > 1 ? 's' : ''}</span>
+            <strong>Notifications</strong>
+            <span>${formatInt(total)} enregistrée${total > 1 ? 's' : ''}</span>
           </div>
           <div class="notification-dropdown-list">
             ${hasItems ? items : '<div class="notification-empty">Aucune notification enregistrée pour le moment.</div>'}
           </div>
-          <p class="notification-dropdown-foot">Historique conservé dans la sauvegarde serveur. Les nouvelles notifications restent consultables ici après disparition du toast.</p>
+          <p class="notification-dropdown-foot">Historique conservé dans la sauvegarde serveur. Les nouvelles notifications restent ici après disparition du message temporaire.</p>
         </div>
       ` : ''}
     </div>
@@ -2055,7 +2114,7 @@ function renderBugCard(bug) {
       <div class="bug-card-head">
         <div>
           <h3>${escapeHtml(bug.title)}</h3>
-          <p class="small muted">Signalé par ${escapeHtml(bug.reporterName || 'Joueur')} · jour ${formatInt(bug.createdDay || 0)} · ${escapeHtml(formatDateTime(bug.createdAt))}</p>
+          <p class="small muted">Signalé par ${escapeHtml(bug.reporterName || 'Joueur')} · ${escapeHtml(formatDateTime(bug.createdAt))}</p>
         </div>
         <div class="bug-tags">
           <span class="tag ${closed ? '' : 'warn'}">${escapeHtml(bugStatusLabel(bug.status))}</span>

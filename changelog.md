@@ -1,8 +1,17 @@
-## Version v65.4.0 — notifications persistantes en haut de fenêtre
+## Version v65.4.1 — corrections des notifications
+
+- incrément de version : badge interface `v65.4.1`, version serveur/client `v65.4.1`, package `65.4.1` et schéma serveur `125` ;
+- notifications : remplacement des anciens libellés basés sur le compteur de partie par un horodatage réel date/heure ;
+- notifications : le compteur indique uniquement les notifications non lues et repasse à `0` dès l’ouverture du panneau ;
+- notifications : ajout d’un état de lecture sauvegardé côté serveur par compagnie ;
+- interface : suppression des formulations trop longues autour du panneau de notifications ;
+- performance : la zone de notifications n’est plus reconstruite à chaque tick serveur si son contenu, son état ouvert/fermé et son compteur n’ont pas changé.
+
+## Version v65.4.0 — historique des notifications
 
 - incrément de version : badge interface `v65.4.0`, version serveur/client `v65.4.0`, package `65.4.0` et schéma serveur `124` ;
-- ajout d’un onglet déroulant `Notifications` dans la barre supérieure ;
-- affichage persistant des dernières notifications de compagnie conservées dans la sauvegarde serveur ;
+- ajout d’un panneau `Notifications` dans la barre supérieure ;
+- affichage des dernières notifications de compagnie conservées dans la sauvegarde serveur ;
 - les notifications restent consultables après disparition du toast temporaire ;
 - extension de l’historique public des notifications à 40 entrées ;
 - normalisation serveur des notifications avec identifiant et date de création pour les nouvelles entrées.

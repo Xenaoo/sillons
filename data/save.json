@@ -1,5 +1,5 @@
 {
-  "version": 124,
+  "version": 125,
   "createdAt": 1781511648911,
   "now": 1781777001786,
   "day": 102382,
@@ -4159,163 +4159,123 @@
       },
       "notifications": [
         {
-          "day": 100176,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 2."
         },
         {
-          "day": 100300,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 2."
         },
         {
-          "day": 100300,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 3."
         },
         {
-          "day": 100490,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 3."
         },
         {
-          "day": 100490,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 4."
         },
         {
-          "day": 100767,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 4."
         },
         {
-          "day": 100767,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 5."
         },
         {
-          "day": 100825,
           "text": "Locomotive vapeur 220 express vendu pour 57 789 €."
         },
         {
-          "day": 100826,
           "text": "Locomotive vapeur 220 express vendu pour 42 772 €."
         },
         {
-          "day": 100827,
           "text": "Locomotive vapeur 220 express vendu pour 42 777 €."
         },
         {
-          "day": 100828,
           "text": "Locomotive vapeur 220 express vendu pour 57 789 €."
         },
         {
-          "day": 100835,
           "text": "15 train(s) envoyés en maintenance (Révision atelier) : 2 cycles, 181 330 €."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur 220 express ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100837,
           "text": "Locomotive vapeur articulée 241 ressort d’atelier : État 92%."
         },
         {
-          "day": 100862,
           "text": "Achat confirmé : 1 exemplaire de Locomotive vapeur articulée 241 pour 390 000 €."
         },
         {
-          "day": 100867,
           "text": "Locomotive vapeur 220 express vendu pour 56 019 €."
         },
         {
-          "day": 100874,
           "text": "Composition mise à jour pour Locomotive vapeur articulée 241 : 10 voiture(s) · Banlieue. Coût : 191 540 €."
         },
         {
-          "day": 101100,
           "text": "21 compositions mises à jour. Coût : 1 921 288 €."
         },
         {
-          "day": 101104,
           "text": "4 Conducteurs recrutés."
         },
         {
-          "day": 101108,
           "text": "3 Contrôleurs recrutés."
         },
         {
-          "day": 101110,
           "text": "1 Régulateur recruté."
         },
         {
-          "day": 101110,
           "text": "1 Agent de l’infra recruté."
         },
         {
-          "day": 101172,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 5."
         },
         {
-          "day": 101172,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 6."
         },
         {
-          "day": 101778,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 6."
         },
         {
-          "day": 101778,
           "text": "Projet R&D démarré depuis la file : Premiers moteurs diesel niveau 7."
         },
         {
-          "day": 102157,
           "text": "Recherche terminée : Premiers moteurs diesel niveau 7."
         }
       ],
@@ -4333,7 +4293,8 @@
         "startedAt": 1781602421811,
         "updatedAt": 1781727682325
       },
-      "epochStartedAt": 1781640468412
+      "epochStartedAt": 1781640468412,
+      "notificationsReadAt": 0
     },
     "2ab0580e-4fc2-477f-b1ab-b46649e5e590": {
       "id": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
@@ -5139,163 +5100,123 @@
       },
       "notifications": [
         {
-          "day": 101190,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 24% d’état."
         },
         {
-          "day": 101220,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 24% d’état."
         },
         {
-          "day": 101250,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 24% d’état."
         },
         {
-          "day": 101280,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 24% d’état."
         },
         {
-          "day": 101310,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 24% d’état."
         },
         {
-          "day": 101340,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101370,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101400,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101430,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101460,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101490,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101520,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101550,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101580,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 23% d’état."
         },
         {
-          "day": 101610,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101640,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101670,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101700,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101730,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101760,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101790,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101820,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101850,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101880,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 22% d’état."
         },
         {
-          "day": 101910,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 101940,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 101970,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102000,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102030,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102060,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102090,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102120,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102150,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 21% d’état."
         },
         {
-          "day": 102180,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102210,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102240,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102270,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102300,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102330,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         },
         {
-          "day": 102360,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 20% d’état."
         }
       ],
@@ -5309,7 +5230,8 @@
         "startedAt": 1781636135193,
         "updatedAt": 1781636154320
       },
-      "epochStartedAt": 1781598832060
+      "epochStartedAt": 1781598832060,
+      "notificationsReadAt": 0
     },
     "991c6e96-442d-46eb-bea3-8410dacb7d96": {
       "id": "991c6e96-442d-46eb-bea3-8410dacb7d96",
@@ -12751,169 +12673,130 @@
       },
       "notifications": [
         {
-          "day": 101310,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101340,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101370,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101400,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101430,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101460,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101490,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 24% d’état."
         },
         {
-          "day": 101520,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101550,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101580,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101610,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101640,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101670,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101700,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101730,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 23% d’état."
         },
         {
-          "day": 101760,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101790,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101820,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101850,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101880,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101910,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101940,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 22% d’état."
         },
         {
-          "day": 101970,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102000,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102030,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102060,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102090,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102120,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102150,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102156,
           "text": "Recherche terminée : Caténaire haute vitesse niveau 7."
         },
         {
-          "day": 102156,
           "text": "Projet R&D démarré depuis la file : Caténaire haute vitesse niveau 8."
         },
         {
-          "day": 102180,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 21% d’état."
         },
         {
-          "day": 102210,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         },
         {
-          "day": 102240,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         },
         {
-          "day": 102270,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         },
         {
-          "day": 102300,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         },
         {
-          "day": 102330,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         },
         {
-          "day": 102338,
           "text": "Recherche terminée : Caténaire haute vitesse niveau 8."
         },
         {
-          "day": 102338,
           "text": "Projet R&D démarré depuis la file : Freinage électrique niveau 2."
         },
         {
-          "day": 102360,
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 20% d’état."
         }
       ],
       "createdAt": 1781638544462,
       "lastSeen": 1781717291135,
-      "epochStartedAt": 1781640468413
+      "epochStartedAt": 1781640468413,
+      "notificationsReadAt": 0
     },
     "fc19a7db-39ea-40c5-bb5f-8411f1446f68": {
       "id": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
@@ -16023,169 +15906,130 @@
       },
       "notifications": [
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90227,
           "text": "Automotrice courant continu régionale ressort d’atelier : État 92%."
         },
         {
-          "day": 90243,
           "text": "Électrification terminée sur Villeneuve-St-Georges → Malesherbes pour 5 796 000 €."
         },
         {
-          "day": 90245,
           "text": "Électrification terminée sur Juvisy → Melun pour 3 220 000 €."
         },
         {
-          "day": 90301,
           "text": "Recherche terminée : Moteurs électriques améliorés niveau 4."
         },
         {
-          "day": 90301,
           "text": "Projet R&D démarré depuis la file : Moteurs électriques améliorés niveau 5."
         },
         {
-          "day": 90330,
           "text": "Projet R&D démarré depuis la file : Premiers trains rapides niveau 1."
         },
         {
-          "day": 90330,
           "text": "R&D annulée : Moteurs électriques améliorés niv. 5. Remboursement total : 1 741 044 €."
         },
         {
-          "day": 90352,
           "text": "Projet R&D ajouté à la file : Moteurs électriques améliorés niveau 5."
         },
         {
-          "day": 90473,
           "text": "Recherche terminée : Premiers trains rapides niveau 1."
         },
         {
-          "day": 90473,
           "text": "Projet R&D démarré depuis la file : Moteurs électriques améliorés niveau 5."
         },
         {
-          "day": 90502,
           "text": "Achat confirmé : Train rapide Intercités 200 pour 2 001 600 €."
         },
         {
-          "day": 90525,
           "text": "Projet R&D ajouté à la file : Premiers trains rapides niveau 2."
         },
         {
-          "day": 90529,
           "text": "Projet R&D ajouté à la file : Premiers trains rapides niveau 3."
         },
         {
-          "day": 90531,
           "text": "Projet R&D ajouté à la file : Premiers trains rapides niveau 4."
         },
         {
-          "day": 90531,
           "text": "Projet R&D ajouté à la file : Premiers trains rapides niveau 5."
         },
         {
-          "day": 90877,
           "text": "Recherche terminée : Moteurs électriques améliorés niveau 5."
         },
         {
-          "day": 90877,
           "text": "Projet R&D démarré depuis la file : Premiers trains rapides niveau 2."
         },
         {
-          "day": 91089,
           "text": "Recherche terminée : Premiers trains rapides niveau 2."
         },
         {
-          "day": 91089,
           "text": "Projet R&D démarré depuis la file : Premiers trains rapides niveau 3."
         },
         {
-          "day": 91402,
           "text": "Recherche terminée : Premiers trains rapides niveau 3."
         },
         {
-          "day": 91402,
           "text": "Projet R&D démarré depuis la file : Premiers trains rapides niveau 4."
         },
         {
-          "day": 91861,
           "text": "Recherche terminée : Premiers trains rapides niveau 4."
         },
         {
-          "day": 91861,
           "text": "Projet R&D démarré depuis la file : Premiers trains rapides niveau 5."
         },
         {
-          "day": 92548,
           "text": "Recherche terminée : Premiers trains rapides niveau 5."
         }
       ],
       "createdAt": 1781638594795,
       "lastSeen": 1781706310751,
-      "epochStartedAt": 1781640468414
+      "epochStartedAt": 1781640468414,
+      "notificationsReadAt": 0
     }
   }
 }

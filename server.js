@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.4.0';
-const STATE_SCHEMA_VERSION = 124;
+const PROJECT_VERSION = 'v65.4.1';
+const STATE_SCHEMA_VERSION = 125;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -1823,6 +1823,7 @@ function migratePlayer(player, fallbackId) {
   p.energyStrategy = BALANCE.energyStrategies[p.energyStrategy] ? p.energyStrategy : 'spot';
   p.resources = normalizeResources(p.resources);
   p.notifications = normalizeNotifications(p.notifications);
+  p.notificationsReadAt = Number.isFinite(Number(p.notificationsReadAt)) ? Math.max(0, Number(p.notificationsReadAt)) : 0;
   p.reputation = Number.isFinite(Number(p.reputation)) ? Number(p.reputation) : 50;
   p.co2 = Number.isFinite(Number(p.co2)) ? Number(p.co2) : 0;
   p.region = cleanText(p.region || 'France', 40);
@@ -3333,7 +3334,8 @@ function publicPlayer(p) {
     energyStrategy: p.energyStrategy,
     resources: normalizeResources(p.resources),
     resourceFlow: computePlayerResourceFlow(p),
-    notifications: normalizeNotifications(p.notifications).slice(-40).reverse()
+    notifications: normalizeNotifications(p.notifications).slice(-40).reverse(),
+    notificationsReadAt: Number(p.notificationsReadAt || 0) || 0
   };
 }
 
@@ -3430,10 +3432,10 @@ function createPlayer(input) {
     },
     notifications: [{
       id: crypto.randomUUID(),
-      day: state.day,
       text: `Compagnie créée avec ${money(STARTING_CASH)}. Lance d’abord une recherche de traction, puis achète ton premier matériel roulant dans l’onglet Parc.`,
       createdAt: Date.now()
     }],
+    notificationsReadAt: 0,
     createdAt: Date.now(),
     lastSeen: Date.now()
   };
@@ -3478,7 +3480,8 @@ async function applyAction(playerId, type, payload) {
     resetCompany: () => actionResetCompany(player, payload),
     tutorial: () => actionTutorial(player, payload),
     submitBugReport: () => actionSubmitBugReport(player, payload),
-    closeBugReport: () => actionCloseBugReport(player, payload)
+    closeBugReport: () => actionCloseBugReport(player, payload),
+    markNotificationsRead: () => actionMarkNotificationsRead(player, payload)
   };
 
   const handler = handlers[type];
@@ -6892,16 +6895,14 @@ function normalizeNotifications(raw) {
     .map(item => {
       if (typeof item === 'string') {
         const text = cleanText(item, 180);
-        return text ? { id: crypto.randomUUID(), day: 0, text, createdAt: Date.now() } : null;
+        return text ? { id: crypto.randomUUID(), text, createdAt: Date.now() } : null;
       }
       if (!item || typeof item !== 'object') return null;
       const text = cleanText(item.text || item.message || '', 220);
       if (!text) return null;
-      const day = Number.isFinite(Number(item.day)) ? Math.floor(Number(item.day)) : 0;
       const createdAt = Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : Date.now();
       return {
         id: cleanText(item.id || '', 80) || crypto.randomUUID(),
-        day,
         text,
         createdAt
       };
@@ -6910,9 +6911,17 @@ function normalizeNotifications(raw) {
     .slice(-40);
 }
 
+function actionMarkNotificationsRead(player, payload = {}) {
+  player.notifications = normalizeNotifications(player.notifications);
+  const newest = player.notifications.reduce((max, item) => Math.max(max, Number(item.createdAt || 0) || 0), 0);
+  const requested = Number(payload.readAt || 0);
+  player.notificationsReadAt = Math.max(Number(player.notificationsReadAt || 0) || 0, newest, Number.isFinite(requested) ? requested : 0);
+  return ok('Notifications lues.');
+}
+
 function notify(player, text) {
   player.notifications = normalizeNotifications(player.notifications);
-  player.notifications.push({ id: crypto.randomUUID(), day: state.day, text: cleanText(text, 220), createdAt: Date.now() });
+  player.notifications.push({ id: crypto.randomUUID(), text: cleanText(text, 220), createdAt: Date.now() });
   player.notifications = player.notifications.slice(-40);
 }
 
