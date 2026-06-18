@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.3.0';
-const STATE_SCHEMA_VERSION = 122;
+const PROJECT_VERSION = 'v65.3.1';
+const STATE_SCHEMA_VERSION = 123;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -5866,7 +5866,8 @@ function compositionUnitCost(model, mode, variantId = '') {
 
 function compositionAssetValue(model, composition, mode = null) {
   if (!model || !composition) return 0;
-  const activeMode = mode || composition.mode || compositionDefaultModeForModel(model);
+  const requestedMode = mode || composition.mode || compositionDefaultModeForModel(model);
+  const activeMode = compositionSpecForModel(model, requestedMode).mode;
   if (activeMode === 'multiple_unit') {
     const spec = compositionSpecForModel(model, 'multiple_unit');
     const count = clamp(Math.round(Number(composition.powerUnits ?? spec.powerUnits?.default ?? 1)), spec.powerUnits.min, spec.powerUnits.max);

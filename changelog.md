@@ -1,3 +1,11 @@
+## Version v65.3.1 — correction accès Parc > Compositions
+
+- incrément de version : badge interface `v65.3.1`, version serveur/client `v65.3.1`, package `65.3.1` et schéma serveur `123` ;
+- correction du sous-menu `Parc > Compositions` : les anciennes compositions de type locomotive + voitures/wagons stockées sur des automotrices/rames désormais converties en unités multiples ne font plus planter le panneau ;
+- normalisation côté client et serveur du mode de composition demandé afin qu’un matériel classé `multiple_unit` reste toujours rendu comme rame voyageurs ;
+- ajout de garde-fous côté client autour du calcul de profil, des lignes compatibles, du résumé de composition et de l’éditeur ;
+- ajout d’une vignette de repli explicite pour les trains dont le modèle est absent ou impossible à interpréter, afin que le menu reste accessible.
+
 ## Version v65.3.0 — refonte des rames et unités multiples
 
 - incrément de version : badge interface `v65.3.0`, version serveur/client `v65.3.0`, package `65.3.0` et schéma serveur `122` ;

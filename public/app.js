@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.3.0';
+const PROJECT_VERSION = 'v65.3.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -3423,7 +3423,8 @@ function buildClientCompositionSpec(model, preferredMode = null) {
 }
 
 function activeCompositionMode(train, model = app.state.balance.trains[train.modelId]) {
-  return app.compositionEditorModes?.[train.id] || train?.composition?.mode || train?.compositionMode || train?.compositionSpec?.mode || compositionDefaultModeForModelClient(model);
+  const requested = app.compositionEditorModes?.[train.id] || train?.composition?.mode || train?.compositionMode || train?.compositionSpec?.mode || compositionDefaultModeForModelClient(model);
+  return buildClientCompositionSpec(model, requested).mode;
 }
 
 function trainCompositionSpec(train, model = app.state.balance.trains[train.modelId]) {
@@ -3492,7 +3493,8 @@ function compositionUnitCostClient(model, mode, variantId = '') {
 
 function compositionAssetValueClient(model, composition, mode = null) {
   if (!model || !composition) return 0;
-  const activeMode = mode || composition.mode || compositionDefaultModeForModelClient(model);
+  const requestedMode = mode || composition.mode || compositionDefaultModeForModelClient(model);
+  const activeMode = buildClientCompositionSpec(model, requestedMode).mode;
   if (activeMode === 'multiple_unit') {
     const spec = buildClientCompositionSpec(model, 'multiple_unit');
     const count = clamp(Math.round(Number(composition.powerUnits ?? spec.powerUnits?.default ?? 1)), spec.powerUnits.min, spec.powerUnits.max);
@@ -4003,15 +4005,67 @@ function slotPurchaseCostClient(line, count = 1) {
   return Math.round(Math.max(2500, distance * 780 + stops * 240) * Math.max(1, Number(count || 1)));
 }
 
+
+function renderCompositionTrainFallbackCard(train, reason = '') {
+  const trainId = escapeAttr(train?.id || '');
+  const modelId = escapeHtml(train?.modelId || 'matériel inconnu');
+  const detail = reason ? ` · ${escapeHtml(reason)}` : '';
+  return `
+    <article class="composition-train-vignette composition-train-vignette-error" data-composition-select-card data-id="${trainId}" role="button" tabindex="0">
+      <div class="composition-vignette-main">
+        <div class="composition-vignette-media"><div class="train-art train-art-placeholder"><span>Matériel</span><b>Erreur</b></div></div>
+        <div class="composition-vignette-body">
+          <div class="composition-vignette-title">
+            <strong>${modelId}</strong>
+            <span>Composition indisponible${detail}</span>
+          </div>
+          <span class="small muted">Cette vignette est neutralisée pour ne pas bloquer tout le menu Compositions.</span>
+        </div>
+      </div>
+    </article>`;
+}
+
+function safeTrainProfileForComposition(train, model) {
+  try {
+    return previewOperatingProfile(train, model);
+  } catch (error) {
+    console.warn('Profil de composition indisponible', train?.id, train?.modelId, error);
+    return trainRuntimeProfile(train, model);
+  }
+}
+
+function safeAssignableLinesForTrain(train, currentLine = null) {
+  try {
+    return assignableLinesForTrain(train, currentLine);
+  } catch (error) {
+    console.warn('Lignes compatibles indisponibles pour le train', train?.id, train?.modelId, error);
+    return [];
+  }
+}
+
+function safeCompositionSummary(train, model = null) {
+  try {
+    return deriveCompositionSummary(train);
+  } catch (error) {
+    console.warn('Résumé de composition indisponible', train?.id, train?.modelId, error);
+    const spec = model ? buildClientCompositionSpec(model, compositionDefaultModeForModelClient(model)) : null;
+    if (spec?.mode === 'multiple_unit') return `${spec.powerUnits?.default || 1} rame en UM`;
+    if (spec?.mode === 'freight_loco') return `${spec.freightCars?.default || 0} wagon(s)`;
+    if (spec?.mode === 'passenger_loco') return `${spec.passengerCars?.default || 0} voiture(s)`;
+    return 'Composition à vérifier';
+  }
+}
+
 function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compositionSelectedIds())) {
   const model = app.state.balance.trains[train.modelId];
-  const profile = previewOperatingProfile(train, model);
+  if (!model) return renderCompositionTrainFallbackCard(train, 'modèle absent du référentiel');
+  const profile = safeTrainProfileForComposition(train, model);
   const active = app.selectedCompositionTrainId === train.id;
   const selected = selectedTrainIds.has(train.id);
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inMaint;
-  const assignable = assignableLinesForTrain(train, line);
+  const assignable = safeAssignableLinesForTrain(train, line);
   const hasAssignmentAction = !!line || (assignable.length > 0 && !inMaint);
   const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
   const assignButtonLabel = line ? 'Appliquer' : 'Affecter';
@@ -4032,7 +4086,7 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
             <strong>${escapeHtml(model.name)}</strong>
             <span>${escapeHtml(era)} · ${escapeHtml(serviceLabel)}</span>
           </div>
-          <span class="small muted">${escapeHtml(deriveCompositionSummary(train))}</span>
+          <span class="small muted">${escapeHtml(safeCompositionSummary(train, model))}</span>
           <div class="composition-mini-stats">
             <b>${formatInt(profile.capacity)} voy.</b>
             <b>${formatInt(profile.freight)} t</b>
@@ -4074,7 +4128,13 @@ function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositi
         </span>
         <span class="research-era-meta">${group.trains.length} train${group.trains.length > 1 ? 's' : ''}${selectedCount ? ` · ${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}` : ''} · ${collapsed ? 'Déplier' : 'Réduire'}</span>
       </button>
-      ${collapsed ? '' : `<div class="composition-vignette-grid">${group.trains.map(train => renderCompositionTrainVignette(train, selectedTrainIds)).join('')}</div>`}
+      ${collapsed ? '' : `<div class="composition-vignette-grid">${group.trains.map(train => {
+        try { return renderCompositionTrainVignette(train, selectedTrainIds); }
+        catch (error) {
+          console.warn('Vignette de composition ignorée', train?.id, train?.modelId, error);
+          return renderCompositionTrainFallbackCard(train, error?.message || 'erreur de rendu');
+        }
+      }).join('')}</div>`}
     </section>
   `;
 }
@@ -4201,12 +4261,22 @@ function renderCompositionMarginalImpact(train, model, spec, profile) {
 function renderCompositionEditor(train) {
   if (!train) return '<p class="muted">Sélectionne un train à configurer.</p>';
   const model = app.state.balance.trains[train.modelId];
+  if (!model) return `<p class="muted">Modèle introuvable pour ce train : ${escapeHtml(train.modelId || 'inconnu')}.</p>`;
   const targetIds = compositionEditTargetIds(train.id);
   const targetCount = Math.max(1, targetIds.length);
   const spec = trainCompositionSpec(train, model);
-  const detailBundle = computeOperatingProfileDetailed(train, model);
-  const profile = detailBundle.profile;
-  const metricDetails = detailBundle.metrics;
+  let detailBundle;
+  try {
+    detailBundle = computeOperatingProfileDetailed(train, model);
+  } catch (error) {
+    console.warn('Détail de composition indisponible', train?.id, train?.modelId, error);
+    detailBundle = { profile: trainRuntimeProfile(train, model), metrics: {} };
+  }
+  const profile = detailBundle.profile || trainRuntimeProfile(train, model);
+  const metricDetails = detailBundle.metrics || {};
+  for (const key of ['capacity', 'freight', 'speed', 'range', 'reliability', 'comfort', 'energy', 'maintenance']) {
+    if (!metricDetails[key]) metricDetails[key] = { key, label: key, description: '', base: Number(model?.[key] || 0), final: Number(profile?.[key] || 0), steps: [] };
+  }
   const composition = train.composition || {};
   const line = trainCurrentLine(train.id);
   const variant = selectedCompositionVariant(train, model);
@@ -4273,7 +4343,7 @@ function renderCompositionEditor(train) {
           ${renderTrainArt(model)}
           <div>
             <strong>${escapeHtml(model.name)}</strong>
-            <p class="small muted">${escapeHtml(deriveCompositionSummary(train))}</p>
+            <p class="small muted">${escapeHtml(safeCompositionSummary(train, model))}</p>
             <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'Unité multiple voyageurs' : spec.mode === 'freight_loco' ? 'Locomotive + wagons' : 'Locomotive + voitures'}</p>
             ${variant ? `<p class="small muted">Variante active : <b>${escapeHtml(variant.name)}</b>${variant.cargoType ? ` · ${escapeHtml(variant.cargoType)}` : ''}</p>` : ''}
           </div>
@@ -4358,7 +4428,13 @@ function renderFleetCompositionPanel() {
         </div>
       </div>
 
-      ${selected ? `<div class="card composition-editor-card composition-refit-editor">${renderCompositionEditor(selected)}</div>` : ''}
+      ${selected ? `<div class="card composition-editor-card composition-refit-editor">${(() => {
+        try { return renderCompositionEditor(selected); }
+        catch (error) {
+          console.warn('Éditeur de composition indisponible', selected?.id, selected?.modelId, error);
+          return `<p class="muted">Impossible d’ouvrir l’éditeur pour ce train. La liste reste accessible.</p>`;
+        }
+      })()}</div>` : ''}
     </div>
   `;
 }
@@ -4377,7 +4453,7 @@ function renderFleet() {
     ? 'Achète du matériel adapté à tes lignes : Capacité, vitesse, énergie, confort, fret ou fiabilité.'
     : active === 'maintenance'
       ? 'Choisis une politique d’entretien et planifie les interventions pour éviter l’usure excessive du parc.'
-      : 'Allonge ou raccourcis les trains pour ajuster la capacité : voitures voyageurs, wagons fret et engins moteurs.';
+      : 'Allonge ou raccourcis les trains pour ajuster la capacité : voitures voyageurs, wagons fret ou rames en unité multiple.';
 
   return `
     ${renderSectionHero('PARC FERROVIAIRE', heroTitle, heroText, ART.tabs.fleet, ['Matériel', 'Atelier', 'Compositions'])}
