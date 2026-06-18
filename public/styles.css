@@ -9457,3 +9457,43 @@ dialog.modal--wide {
   font-weight: 900;
   line-height: 1;
 }
+
+/* ===== V66.5.0 : Compositions — sélection puis modification + filtres ===== */
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-filter-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 9px;
+  align-items: end;
+  width: 100%;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-filter-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #b8aa84;
+  font-size: 12px;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-filter-toolbar select {
+  width: 100%;
+  min-width: 0;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-selection-actions .primary[disabled] {
+  opacity: .55;
+}
+
+#tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-empty-filter {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed rgba(217,168,82,.2);
+  border-radius: 14px;
+  background: rgba(2,6,23,.24);
+}
+
+@media (max-width: 900px) {
+  #tabContent[data-tab="fleet"][data-fleet-subtab="composition"] .composition-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+}

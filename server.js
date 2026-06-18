@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.4.0';
-const STATE_SCHEMA_VERSION = 137;
+const PROJECT_VERSION = 'v66.5.1';
+const STATE_SCHEMA_VERSION = 139;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -1682,7 +1682,12 @@ function buildPathFromRailShapeLines(lines, start, end, directKm) {
     graph.get(anchor.key)?.push([endKey, anchor.distance]);
   }
 
-  const ids = dijkstraWeightedGraph(graph, startKey, endKey, 60000);
+  // Ne pas borner artificiellement la recherche pour les longues liaisons.
+  // Le RFN complet autour d’un axe comme Paris-Est → Strasbourg dépasse 100 000
+  // nœuds dans la boîte de calcul ; l’ancien plafond fixe à 60 000 visites arrêtait
+  // Dijkstra avant d’atteindre le terminus, puis la création de ligne échouait.
+  const maxVisited = Math.max(60000, graph.size);
+  const ids = dijkstraWeightedGraph(graph, startKey, endKey, maxVisited);
   if (ids.length < 2) return [];
   const path = ids
     .filter(id => id !== startKey && id !== endKey)

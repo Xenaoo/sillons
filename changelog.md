@@ -1,3 +1,11 @@
+## Version v66.5.1 — correction RFN longues liaisons
+
+- incrément de version : badge interface `v66.5.1`, version serveur/client `v66.5.1`, package `66.5.1` et schéma serveur `139` ;
+- RFN : suppression du plafond fixe de 60 000 nœuds dans la recherche Dijkstra des géométries SNCF ;
+- correction : les longues liaisons denses comme `Paris-Est → Strasbourg-Ville` peuvent désormais calculer leur itinéraire RFN complet ;
+- robustesse : la recherche RFN parcourt maintenant tout le graphe utile si nécessaire au lieu d’échouer prématurément ;
+- cache navigateur : invalidation du cache des géométries RFN afin de ne pas conserver d’anciennes réponses vides.
+
 ## Version v66.4.0 — pastille Bugs pour Xenao
 
 - incrément de version : badge interface `v66.4.0`, version serveur/client `v66.4.0`, package `66.4.0` et schéma serveur `137` ;

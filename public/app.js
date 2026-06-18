@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.4.0';
+const PROJECT_VERSION = 'v66.5.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v3';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v4';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -126,6 +126,9 @@ const app = {
   fleetSortMode: localStorage.getItem('sillons.fleetSortMode') || 'era',
   compositionGroupCollapsed: loadJson('sillons.compositionGroupCollapsed', {}),
   selectedCompositionTrainIds: loadJson('sillons.selectedCompositionTrainIds', []),
+  compositionModelFilter: localStorage.getItem('sillons.compositionModelFilter') || 'all',
+  compositionAssignmentFilter: localStorage.getItem('sillons.compositionAssignmentFilter') || 'all',
+  compositionEditorTrainId: localStorage.getItem('sillons.compositionEditorTrainId') || '',
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
   hoverLine: null,
@@ -203,8 +206,8 @@ const TUTORIAL_STEPS = [
   { id: 'fleet-catalog', target: 'button[data-fleet-subtab="catalog"]', tab: 'fleet', title: 'Catalogue du matériel', body: 'Le catalogue liste les trains disponibles. Compare prix, vitesse, puissance, énergie, fiabilité et portée avant d’acheter.', wait: 'fleetSubtab:catalog' },
   { id: 'buy-train', target: '[data-action="buy-train"]:not([disabled])', tab: 'fleet', subtab: 'catalog', title: 'Acheter un train', body: 'Achète un premier train adapté à une ligne courte. Si tu as déjà un train, cette étape est automatiquement validée.', wait: 'hasTrain' },
   { id: 'fleet-composition-tab', target: 'button[data-fleet-subtab="composition"]', tab: 'fleet', title: 'Atelier de compositions', body: 'Clique sur Compositions. Tu vas choisir manuellement les voitures ou wagons pour adapter le train à ton service.', wait: 'fleetSubtab:composition' },
-  { id: 'select-composition-train', target: '.composition-train-card, [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Clique sur une vignette de train pour la sélectionner. Les réglages de composition apparaissent ensuite à droite.', wait: 'compositionTrainSelected' },
-  { id: 'manual-composition', target: '.composition-editor-card, [data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Composition manuelle', body: 'Règle le nombre de voitures voyageurs ou de wagons. La composition modifie capacité, vitesse, maintenance et rentabilité.', action: 'J’ai compris' },
+  { id: 'select-composition-train', target: '.composition-train-vignette[data-composition-select-card], [data-action="open-composition"]', tab: 'fleet', subtab: 'composition', title: 'Choisir le train à régler', body: 'Clique sur une vignette de train pour la sélectionner. Le bouton Modifier devient ensuite disponible.', wait: 'compositionTrainSelected' },
+  { id: 'manual-composition', target: '[data-action="edit-composition-selection"]:not([disabled]), .composition-editor-card', tab: 'fleet', subtab: 'composition', title: 'Ouvrir la modification', body: 'Clique sur Modifier pour afficher l’atelier d’édition de la composition.', wait: 'compositionEditorOpen' },
   { id: 'save-composition', target: '[data-action="save-train-composition"]', tab: 'fleet', subtab: 'composition', title: 'Enregistrer la composition', body: 'Clique sur Enregistrer la composition pour valider le réglage. Cette étape attend une vraie sauvegarde.', wait: 'compositionSaved' },
   { id: 'lines-tab', target: '#tabs [data-tab="lines"]', title: 'Créer une ligne', body: 'Clique sur Lignes. C’est le cœur du jeu : une ligne relie des gares, utilise un train et produit des recettes.', wait: 'activeTab:lines' },
   { id: 'lines-create', target: '[data-lines-subtab="create"]', tab: 'lines', title: 'Sous-menu Créer', body: 'Le sous-menu Créer sert à préparer une nouvelle desserte : départ, terminus, arrêts, train et prix.', wait: 'linesSubtab:create' },
@@ -1394,7 +1397,7 @@ function renderNotificationDropdown(force = false) {
 
 function currentCompositionScrollKey() {
   if (app.activeTab !== 'fleet' || app.activeFleetSubtab !== 'composition') return null;
-  return app.selectedCompositionTrainId || 'default';
+  return app.compositionEditorTrainId || app.selectedCompositionTrainId || 'default';
 }
 
 function captureCompositionScrollPosition() {
@@ -1693,7 +1696,8 @@ function tutorialConditionMet(step) {
   if (wait.startsWith('linesSubtab:')) return app.activeTab === 'lines' && app.activeLinesSubtab === wait.split(':')[1];
   if (wait === 'hasTrain') return (me.trains || []).length > 0;
   if (wait === 'hasLine') return (me.lines || []).some(line => line.active);
-  if (wait === 'compositionTrainSelected') return Boolean(app.selectedCompositionTrainId);
+  if (wait === 'compositionTrainSelected') return compositionSelectedIds().length > 0;
+  if (wait === 'compositionEditorOpen') return Boolean(app.compositionEditorTrainId);
   if (wait === 'compositionSaved') return Boolean(me.tutorial?.actionLog?.compositionSaved);
   if (wait.startsWith('tech:')) {
     const [, nodeId, level] = wait.split(':');
@@ -4254,9 +4258,22 @@ function setCompositionSelection(ids, primaryId = '') {
   const cleaned = [...new Set((ids || []).map(id => String(id || '').trim()).filter(id => valid.has(id)))];
   app.selectedCompositionTrainIds = cleaned;
   app.selectedCompositionTrainId = cleaned.includes(primaryId) ? primaryId : (cleaned[0] || '');
+  if (app.compositionEditorTrainId && !cleaned.includes(app.compositionEditorTrainId)) {
+    app.compositionEditorTrainId = '';
+    localStorage.removeItem('sillons.compositionEditorTrainId');
+  }
   localStorage.setItem('sillons.selectedCompositionTrainIds', JSON.stringify(cleaned));
   if (app.selectedCompositionTrainId) localStorage.setItem('sillons.selectedCompositionTrainId', app.selectedCompositionTrainId);
   else localStorage.removeItem('sillons.selectedCompositionTrainId');
+}
+
+function setCompositionEditorTrain(trainId = '') {
+  const id = String(trainId || '').trim();
+  if (id && !compositionValidTrainIds().has(id)) return false;
+  app.compositionEditorTrainId = id;
+  if (id) localStorage.setItem('sillons.compositionEditorTrainId', id);
+  else localStorage.removeItem('sillons.compositionEditorTrainId');
+  return true;
 }
 
 
@@ -4331,6 +4348,66 @@ function groupCompositionTrains(trains) {
     group.trains.push(train);
   }
   return groups;
+}
+
+
+function compositionOwnedModelOptions(trains = app.state?.me?.trains || []) {
+  const map = new Map();
+  for (const train of trains || []) {
+    const model = app.state?.balance?.trains?.[train.modelId] || null;
+    const id = train.modelId || '';
+    if (!id) continue;
+    const existing = map.get(id) || { id, label: model?.name || id, count: 0 };
+    existing.count += 1;
+    existing.label = model?.name || existing.label;
+    map.set(id, existing);
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+}
+
+function compositionAssignmentFilterOptions() {
+  const lines = (app.state?.me?.lines || [])
+    .filter(line => line.active)
+    .slice()
+    .sort((a, b) => linePublicName(a).localeCompare(linePublicName(b), 'fr'));
+  return [
+    { id: 'all', label: 'Tous les trains' },
+    { id: 'free', label: 'Trains libres' },
+    ...lines.map(line => ({ id: `line:${line.id}`, label: linePublicName(line) }))
+  ];
+}
+
+function compositionTrainAssignmentKey(train) {
+  if (!train) return 'free';
+  const line = trainCurrentLine(train.id);
+  if (line) return `line:${line.id}`;
+  return 'free';
+}
+
+function compositionFilteredTrains(trains = app.state?.me?.trains || []) {
+  const modelFilter = app.compositionModelFilter || 'all';
+  const assignmentFilter = app.compositionAssignmentFilter || 'all';
+  return (trains || []).filter(train => {
+    if (modelFilter !== 'all' && train.modelId !== modelFilter) return false;
+    if (assignmentFilter !== 'all' && compositionTrainAssignmentKey(train) !== assignmentFilter) return false;
+    return true;
+  });
+}
+
+function compositionFilteredTrainIds() {
+  return compositionFilteredTrains().map(train => train.id).filter(Boolean);
+}
+
+function setCompositionModelFilter(value) {
+  const allowed = new Set(['all', ...compositionOwnedModelOptions().map(option => option.id)]);
+  app.compositionModelFilter = allowed.has(value) ? value : 'all';
+  localStorage.setItem('sillons.compositionModelFilter', app.compositionModelFilter);
+}
+
+function setCompositionAssignmentFilter(value) {
+  const allowed = new Set(compositionAssignmentFilterOptions().map(option => option.id));
+  app.compositionAssignmentFilter = allowed.has(value) ? value : 'all';
+  localStorage.setItem('sillons.compositionAssignmentFilter', app.compositionAssignmentFilter);
 }
 
 function assignableLinesForTrain(train, currentLine = null) {
@@ -4421,7 +4498,7 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
   const model = app.state.balance.trains[train.modelId];
   if (!model) return renderCompositionTrainFallbackCard(train, 'modèle absent du référentiel');
   const profile = safeTrainProfileForComposition(train, model);
-  const active = app.selectedCompositionTrainId === train.id;
+  const active = app.compositionEditorTrainId === train.id;
   const selected = selectedTrainIds.has(train.id);
   const line = trainCurrentLine(train.id);
   const inMaint = !!train.maintenance?.active;
@@ -4500,20 +4577,48 @@ function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositi
   `;
 }
 
-function renderCompositionSelectionToolbar(selectedIds) {
+function renderCompositionFilterToolbar(displayedTrains) {
+  const modelOptions = compositionOwnedModelOptions();
+  const assignmentOptions = compositionAssignmentFilterOptions();
+  const modelFilter = modelOptions.some(option => option.id === app.compositionModelFilter) ? app.compositionModelFilter : 'all';
+  const assignmentFilter = assignmentOptions.some(option => option.id === app.compositionAssignmentFilter) ? app.compositionAssignmentFilter : 'all';
+  const visibleCount = displayedTrains.length;
+  return `
+    <div class="composition-filter-toolbar">
+      <label>
+        <span>Modèle affiché</span>
+        <select data-composition-filter="model">
+          <option value="all" ${modelFilter === 'all' ? 'selected' : ''}>Tous les modèles possédés</option>
+          ${modelOptions.map(option => `<option value="${escapeAttr(option.id)}" ${modelFilter === option.id ? 'selected' : ''}>${escapeHtml(option.label)} · ${option.count}</option>`).join('')}
+        </select>
+      </label>
+      <label>
+        <span>Affectation</span>
+        <select data-composition-filter="assignment">
+          ${assignmentOptions.map(option => `<option value="${escapeAttr(option.id)}" ${assignmentFilter === option.id ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </label>
+      <span class="tag">${visibleCount} affiché${visibleCount > 1 ? 's' : ''}</span>
+    </div>
+  `;
+}
+
+function renderCompositionSelectionToolbar(selectedIds, displayedTrains) {
   const selectedCount = selectedIds.length;
-  const totalCount = compositionValidTrainIds().size;
-  const allSelected = totalCount > 0 && selectedCount >= totalCount;
+  const visibleIds = (displayedTrains || []).map(train => train.id).filter(Boolean);
+  const visibleCount = visibleIds.length;
+  const allVisibleSelected = visibleCount > 0 && visibleIds.every(id => selectedIds.includes(id));
   const hint = selectedCount
-    ? 'Clique sur une zone libre d’une vignette pour ajouter ou retirer un train de la sélection.'
-    : 'Clique sur une zone libre d’une vignette pour commencer une sélection multiple.';
+    ? 'Sélection faite. Clique sur Modifier pour ouvrir l’atelier d’édition de la composition.'
+    : 'Clique sur une zone libre d’une vignette pour sélectionner un ou plusieurs trains.';
   return `
     <div class="composition-list-toolbar composition-refit-toolbar">
+      ${renderCompositionFilterToolbar(displayedTrains || [])}
       <div class="composition-selection-hint small muted">${escapeHtml(hint)}</div>
       <div class="composition-selection-actions">
         <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
-        <button type="button" class="ghost" data-action="select-all-composition-trains" ${allSelected ? 'disabled' : ''}>Tout sélectionner</button>
-        <button type="button" class="ghost" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Éditer la sélection</button>
+        <button type="button" class="ghost" data-action="select-visible-composition-trains" ${allVisibleSelected || !visibleCount ? 'disabled' : ''}>Tout sélectionner affiché</button>
+        <button type="button" class="primary" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Modifier</button>
         <button type="button" class="ghost" data-action="clear-composition-selection" ${selectedCount ? '' : 'disabled'}>Vider</button>
       </div>
     </div>
@@ -4760,8 +4865,14 @@ function renderFleetCompositionPanel() {
     app.selectedCompositionTrainId = '';
     localStorage.removeItem('sillons.selectedCompositionTrainId');
   }
-  const selected = me.trains.find(t => t.id === app.selectedCompositionTrainId) || null;
-  const groups = groupCompositionTrains(me.trains);
+  setCompositionModelFilter(app.compositionModelFilter || 'all');
+  setCompositionAssignmentFilter(app.compositionAssignmentFilter || 'all');
+  if (app.compositionEditorTrainId && !validIds.has(app.compositionEditorTrainId)) setCompositionEditorTrain('');
+  if (app.compositionEditorTrainId && cleanedSelection.length && !cleanedSelection.includes(app.compositionEditorTrainId)) setCompositionEditorTrain(cleanedSelection[0] || '');
+  if (app.compositionEditorTrainId && !cleanedSelection.length) setCompositionEditorTrain('');
+  const selected = me.trains.find(t => t.id === app.compositionEditorTrainId) || null;
+  const displayedTrains = compositionFilteredTrains(me.trains);
+  const groups = groupCompositionTrains(displayedTrains);
   const selectedTrainIds = new Set(cleanedSelection);
   const configurable = me.trains.filter(t => !!t.compositionSpec).length;
   const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
@@ -4779,13 +4890,13 @@ function renderFleetCompositionPanel() {
         <div class="fleet-card-heading">
           <div>
             <h2>Trains de la compagnie</h2>
-            <p class="muted small">Les trains sont présentés en vignettes. Clique sur une zone libre d’une vignette pour la sélectionner, puis édite un train ou un ensemble.</p>
+            <p class="muted small">Sélectionne un ou plusieurs matériels, puis clique sur Modifier pour ouvrir l’atelier de composition.</p>
           </div>
-          <span class="tag">${me.trains.length} unité(s)</span>
+          <span class="tag">${displayedTrains.length}/${me.trains.length} unité(s)</span>
         </div>
-        ${renderCompositionSelectionToolbar(cleanedSelection)}
+        ${renderCompositionSelectionToolbar(cleanedSelection, displayedTrains)}
         <div class="composition-train-list composition-group-list">
-          ${groups.map(group => renderCompositionTrainGroup(group, selectedTrainIds)).join('')}
+          ${groups.length ? groups.map(group => renderCompositionTrainGroup(group, selectedTrainIds)).join('') : '<p class="muted composition-empty-filter">Aucun train ne correspond aux filtres sélectionnés.</p>'}
         </div>
       </div>
 
@@ -6858,6 +6969,14 @@ async function onTabContentClick(event) {
   }
 
 
+  const compositionFilter = event.target.closest('[data-composition-filter]');
+  if (compositionFilter) {
+    if (compositionFilter.dataset.compositionFilter === 'model') setCompositionModelFilter(compositionFilter.value || 'all');
+    if (compositionFilter.dataset.compositionFilter === 'assignment') setCompositionAssignmentFilter(compositionFilter.value || 'all');
+    renderAll();
+    return;
+  }
+
   const compositionModeTab = event.target.closest('[data-comp-mode]');
   if (compositionModeTab) {
     app.compositionEditorModes[compositionModeTab.dataset.id] = compositionModeTab.dataset.compMode;
@@ -6935,6 +7054,7 @@ if (action === 'select-composition-train') {
   const existingSelection = compositionSelectedIds();
   const nextSelection = existingSelection.includes(trainId) && existingSelection.length > 1 ? existingSelection : [trainId];
   setCompositionSelection(nextSelection, trainId);
+  setCompositionEditorTrain(trainId);
   renderAll();
   return;
 }
@@ -6947,8 +7067,8 @@ if (action === 'toggle-composition-train-selection') {
   renderAll();
   return;
 }
-if (action === 'select-all-composition-trains') {
-  const ids = [...compositionValidTrainIds()];
+if (action === 'select-all-composition-trains' || action === 'select-visible-composition-trains') {
+  const ids = action === 'select-visible-composition-trains' ? compositionFilteredTrainIds() : [...compositionValidTrainIds()];
   setCompositionSelection(ids, ids[0] || '');
   renderAll();
   return;
@@ -6957,17 +7077,18 @@ if (action === 'edit-composition-selection') {
   const ids = compositionSelectedIds();
   if (!ids.length) return toast('Sélectionne au moins un train.', 'error');
   setCompositionSelection(ids, ids[0]);
+  setCompositionEditorTrain(ids[0]);
   renderAll();
   return;
 }
 if (action === 'clear-composition-selection') {
   setCompositionSelection([], '');
+  setCompositionEditorTrain('');
   renderAll();
   return;
 }
 if (action === 'close-composition-editor') {
-  app.selectedCompositionTrainId = '';
-  localStorage.removeItem('sillons.selectedCompositionTrainId');
+  setCompositionEditorTrain('');
   renderAll();
   return;
 }
@@ -6983,6 +7104,7 @@ if (action === 'open-composition') {
   app.activeTab = 'fleet';
   app.activeFleetSubtab = 'composition';
   setCompositionSelection([trainId], trainId);
+  setCompositionEditorTrain(trainId);
   localStorage.setItem('sillons.fleetSubtab', app.activeFleetSubtab);
   renderAll();
   return;
@@ -9372,7 +9494,7 @@ async function ensureRailwayRouteGeometry(a, b) {
 
 async function fetchSncfRouteGeometry(a, b) {
   try {
-    const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}`, {
+    const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
       cache: 'force-cache',
       headers: authHeaders()
     });
@@ -9391,7 +9513,7 @@ async function fetchSncfRouteGeometryForStopSequence(ids) {
   try {
     const cleanIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
     if (cleanIds.length < 2) return [];
-    const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}`, {
+    const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
       cache: 'force-cache',
       headers: authHeaders()
     });
