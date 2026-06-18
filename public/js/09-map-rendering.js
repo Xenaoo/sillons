@@ -118,6 +118,13 @@ function drawLoop(timestamp = performance.now()) {
 
 function drawMap(options = {}) {
   if (!app.state?.world || !app.map.ctx) return;
+  if (app.map.panOverlay?.active && !options.forcePanOverlayRedraw) {
+    // Pendant un glissement Leaflet, le canvas déjà rendu est déplacé par transform CSS.
+    // Redessiner avec la nouvelle projection alors que cette transform est encore active
+    // décale les pastilles/tracés et donne une impression de téléportation.
+    app.map.redrawAfterPan = true;
+    return;
+  }
   const ctx = app.map.ctx;
   const w = app.map.width;
   const h = app.map.height;

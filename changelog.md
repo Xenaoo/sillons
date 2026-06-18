@@ -1,3 +1,11 @@
+## Version v69.1.3 — stabilité des pastilles pendant déplacement carte
+
+- incrément de version : badge interface `v69.1.3`, version serveur/client `v69.1.3`, package `69.1.3` et schéma serveur `154` ;
+- correction d’un bug de rendu pendant le déplacement Leaflet : certaines fonctions redessinaient la carte alors que le canvas était encore déplacé par transform CSS ;
+- les redessins demandés pendant un pan sont maintenant différés jusqu’à la fin du déplacement, puis exécutés après suppression de la transform temporaire ;
+- les pastilles trains conservent ainsi leur position relative aux tracés et ne donnent plus d’effet de téléportation quand la carte est déplacée ;
+- aucun changement de cache RFN : les géométries et profils vitesse restent compatibles.
+
 ## Version v69.1.2 — pastilles trains au-dessus des tracés
 
 - incrément de version : badge interface `v69.1.2`, version serveur/client `v69.1.2`, package `69.1.2` et schéma serveur `153` ;

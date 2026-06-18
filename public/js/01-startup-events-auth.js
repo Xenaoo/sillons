@@ -416,6 +416,13 @@ function endPanOverlay() {
   app.map.canvas.style.transform = '';
   app.map.canvas.style.willChange = '';
   app.map.canvas.classList.remove('map-pan-overlay');
+  app.map.redrawAfterPan = true;
+  requestAnimationFrame(() => {
+    if (!app.map.panOverlay?.active && app.map.redrawAfterPan) {
+      app.map.redrawAfterPan = false;
+      drawMap({ forcePanOverlayRedraw: true });
+    }
+  });
 }
 
 function worldRouteSignature(state = app.state) {
