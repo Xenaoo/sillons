@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.2.1';
+const PROJECT_VERSION = 'v66.2.2';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -1083,7 +1083,7 @@ function onOsmMouseMove(event) {
 
 async function onOsmClick(event) {
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
-  const stationHit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
+  const stationHit = hitStationAt(p) || nearestStationAt(p, 10) || nearestProjectedStationAt(p, 12);
   if (stationHit) {
     if (app.focusedLineId) clearFocusedLine();
     setSelectedStation(stationHit.id);
@@ -8426,6 +8426,15 @@ function stationMarkerRadiusForItem(item) {
   return 4.8;
 }
 
+function stationHitRadiusForItem(item) {
+  // Hitbox resserrée : la gare reste cliquable sur son marqueur,
+  // mais elle ne bloque plus abusivement la sélection des lignes proches.
+  if (item.selected) return 9;
+  if (item.asset) return 7;
+  if (item.served) return 6;
+  return 5;
+}
+
 function stationSquareSizeForItem(item) {
   const zoom = Number(app.map.leaflet?.getZoom?.() || 6);
   if (item.selected) return 12;
@@ -8562,7 +8571,7 @@ function drawStations(ctx, lite = false) {
 
     if (!lite) {
       // Les gares restent cliquables même si elles ne sont pas rendues visuellement.
-      app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: asset ? 14 : 11 });
+      app.map.stationHit.push({ id: s.id, x: p.x, y: p.y, r: stationHitRadiusForItem(item) });
     }
 
     drawStationSquareMarker(ctx, item);
@@ -8585,7 +8594,8 @@ function drawStations(ctx, lite = false) {
     ctx.stroke();
     ctx.fillStyle = 'rgba(246,236,214,.98)';
     ctx.fillText(label, lx + 6, ly + 12);
-    if (!lite) app.map.stationHit.push({ id: s.id, x: lx, y: ly, width: labelW, height: 17, r: 0 });
+    // Le libellé reste visuel uniquement : la hitbox reste centrée sur le marqueur
+    // pour éviter qu'un long nom de gare capture les clics destinés aux lignes.
     ctx.restore();
   }
 }
@@ -9008,7 +9018,7 @@ function onMapMove(event) {
 function onMapClick(event) {
   if (app.map.drag.moved) { app.map.drag.moved = false; return; }
   const p = pointer(event);
-  const stationHit = hitStationAt(p) || nearestStationAt(p, 24);
+  const stationHit = hitStationAt(p) || nearestStationAt(p, 10);
   if (stationHit) {
     setSelectedStation(stationHit.id);
     app.activeTab = 'stations';

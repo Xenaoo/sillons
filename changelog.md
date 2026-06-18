@@ -1,3 +1,10 @@
+## Version v66.2.2 — hitbox des gares resserrée
+
+- incrément de version : badge interface `v66.2.2`, version serveur/client `v66.2.2`, package `66.2.2` et schéma serveur `134` ;
+- réduction de la hitbox des marqueurs de gares sur la carte ;
+- suppression de la hitbox cliquable étendue sur les libellés de gares, désormais uniquement visuels ;
+- réduction des recherches de gare proche au clic pour que les lignes proches restent plus faciles à sélectionner.
+
 ## Version v66.2.1 — désélection de ligne au clic carte
 
 - incrément de version : badge interface `v66.2.1`, version serveur/client `v66.2.1`, package `66.2.1` et schéma serveur `133` ;
