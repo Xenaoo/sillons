@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.5.1';
+const PROJECT_VERSION = 'v66.6.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -519,7 +519,7 @@ function bindStaticEvents() {
       updateLinePreview(event.target.id);
     }
     if (event.target?.dataset?.buyTrainQty) {
-      updateTrainPurchaseTotal(event.target);
+      updateTrainPurchaseTotal(event.target, { commit: false });
     }
     if (event.target?.id === 'researchSearchInput') {
       app.researchSearchQuery = event.target.value || '';
@@ -5340,19 +5340,28 @@ function trainPurchaseUnitPriceClient(model) {
   return Math.round(Number(model.price || 0) * multiplier);
 }
 
-function normalizeTrainPurchaseQuantity(value) {
-  return clamp(Math.floor(Number(value || 1)), 1, 99);
+function parseTrainPurchaseQuantityDraft(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const quantity = Math.floor(Number(raw));
+  if (!Number.isFinite(quantity)) return null;
+  return clamp(quantity, 1, 99);
 }
 
-function updateTrainPurchaseTotal(input) {
+function normalizeTrainPurchaseQuantity(value) {
+  return parseTrainPurchaseQuantityDraft(value) ?? 1;
+}
+
+function updateTrainPurchaseTotal(input, options = {}) {
   if (!input) return;
   const modelId = input.dataset.buyTrainQty || '';
-  const quantity = normalizeTrainPurchaseQuantity(input.value);
-  if (String(input.value) !== String(quantity)) input.value = String(quantity);
+  const quantity = parseTrainPurchaseQuantityDraft(input.value);
+  const committedQuantity = quantity ?? 1;
+  if (options.commit) input.value = String(committedQuantity);
   const card = input.closest('.train-catalog-card');
   const total = card?.querySelector(`[data-buy-train-total="${CSS.escape(modelId)}"]`);
   const unitPrice = Math.max(0, Math.round(Number(input.dataset.unitPrice || 0)));
-  if (total) total.textContent = money(unitPrice * quantity);
+  if (total) total.textContent = quantity === null ? '—' : money(unitPrice * quantity);
 }
 
 
@@ -7154,7 +7163,7 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       const modelId = button.dataset.id || '';
       const input = document.querySelector(`[data-buy-train-qty="${CSS.escape(modelId)}"]`);
       const quantity = normalizeTrainPurchaseQuantity(input?.value || 1);
-      if (input) updateTrainPurchaseTotal(input);
+      if (input) updateTrainPurchaseTotal(input, { commit: true });
       if (quantity > 1) {
         const model = app.state?.balance?.trains?.[modelId];
         const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
@@ -7335,6 +7344,10 @@ function onTabContentChange(event) {
   if (['lineTrain', 'lineService'].includes(event.target.id)) {
     updateLineDraftFromForm(event.target.id);
     updateLinePreview(event.target.id);
+  }
+  if (event.target?.dataset?.buyTrainQty) {
+    updateTrainPurchaseTotal(event.target, { commit: true });
+    return;
   }
 }
 

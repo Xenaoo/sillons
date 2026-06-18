@@ -1,3 +1,11 @@
+## Version v66.6.0 — compositions filtrées et achat catalogue corrigé
+
+- incrément de version : badge interface `v66.6.0`, version serveur/client `v66.6.0`, package `66.6.0` et schéma serveur `140` ;
+- Parc > Compositions : confirmation du flux de sélection puis bouton `Modifier`, afin que l’atelier d’édition ne s’ouvre qu’après choix explicite du matériel ;
+- Parc > Compositions : maintien des filtres par modèle possédé et par affectation (`tous`, `trains libres` ou ligne possédée) ;
+- Parc > Catalogue : correction du champ `Quantité`, qui peut désormais être vidé avant de saisir une nouvelle valeur comme `5` ;
+- Parc > Catalogue : la quantité est normalisée uniquement à la validation/changement de champ ou au clic sur `Acheter`, sans réimposer immédiatement `1` pendant la saisie.
+
 ## Version v66.5.1 — correction RFN longues liaisons
 
 - incrément de version : badge interface `v66.5.1`, version serveur/client `v66.5.1`, package `66.5.1` et schéma serveur `139` ;
