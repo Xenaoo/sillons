@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.6.0';
+const PROJECT_VERSION = 'v65.7.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -2340,12 +2340,12 @@ function renderOverview() {
     <div class="card">
       <h2>${escapeHtml(me.name)}</h2>
       <div class="card-grid">
-        ${metric('Score', formatInt(me.score))}
+        ${metric('Score', formatInt(me.score), '', scoreTooltipClient(me, activeLines))}
         ${metric('Classement', `${myRank}/${ranking.length}`)}
         ${metric('Voyageurs transportés', formatInt(me.stats.passengers))}
         ${metric('Fret transporté', `${formatInt(me.stats.freightTons)} t`)}
         ${metric('Dette', money(me.debt), me.debt > 0 ? 'warn-text' : '')}
-        ${metric('CO₂ cumulé', `${formatInt(me.co2)} t`, me.co2 > 5000 ? 'warn-text' : '')}
+        ${metric('CO₂ cumulé', `${formatInt(me.co2)} t`, me.co2 > 5000 ? 'warn-text' : '', co2TooltipClient(me))}
       </div>
     </div>
 
@@ -2387,13 +2387,6 @@ function renderOverview() {
         `).join('')}
       </div>
     </div>
-
-    <div class="card">
-      <h3>Journal</h3>
-      <div class="list">
-        ${app.state.game.news.map(n => `<div class="list-item">${escapeHtml(n.text)}</div>`).join('')}
-      </div>
-    </div>
   `;
 }
 
@@ -2401,26 +2394,132 @@ function metric(label, value, cls = '', tip = '') {
   return `<div class="metric" ${tooltipAttr(tip)}><span>${escapeHtml(label)}</span><b class="${cls}">${escapeHtml(String(value))}</b></div>`;
 }
 
+function scoreTooltipClient(me, activeLines = 0) {
+  const cashScore = Math.round(Number(me?.cash || 0) * 0.01);
+  const debtScore = Math.round(-Number(me?.debt || 0) * 0.006);
+  const reputationScore = Math.round(Number(me?.reputation || 0) * 800);
+  const passengerScore = Math.round(Number(me?.stats?.passengers || 0) * 0.04);
+  const freightScore = Math.round(Number(me?.stats?.freightTons || 0) * 0.08);
+  const lineScore = Math.round(activeLines * 2000);
+  const epochScore = Math.round(Number(me?.epoch || 0) * 45000);
+  const total = cashScore + debtScore + reputationScore + passengerScore + freightScore + lineScore + epochScore;
+  return [
+    'Score : indicateur global de progression de la compagnie.',
+    `Total actuel calculé : ${formatInt(total)} pts.`,
+    '---------------------------------------------',
+    'Sources du score :',
+    `Trésorerie : ${formatInt(cashScore)} pts`,
+    `Dette : ${formatInt(debtScore)} pts`,
+    `Réputation : ${formatInt(reputationScore)} pts`,
+    `Voyageurs cumulés : ${formatInt(passengerScore)} pts`,
+    `Fret cumulé : ${formatInt(freightScore)} pts`,
+    `Lignes actives (${activeLines}) : ${formatInt(lineScore)} pts`,
+    `Époque : ${formatInt(epochScore)} pts`,
+    '---------------------------------------------',
+    'Les voyageurs, le fret et les lignes actives viennent directement de l’exploitation des lignes.'
+  ].join('\n');
+}
+
+function co2TooltipClient(me) {
+  const activeLines = (me?.lines || [])
+    .filter(line => line?.active)
+    .map(line => ({
+      name: linePublicName(line),
+      co2: Number(line?.stats?.environment?.co2PerHour ?? line?.stats?.co2PerHour ?? 0),
+      energy: line?.stats?.environment?.energyType || line?.stats?.finance?.resourceType || '—'
+    }))
+    .filter(item => item.co2 > 0)
+    .sort((a, b) => b.co2 - a.co2);
+  const totalNow = activeLines.reduce((sum, item) => sum + item.co2, 0);
+  const lines = [
+    'CO₂ cumulé : total historique émis par la compagnie.',
+    'Il augmente à chaque cycle d’exploitation selon les trains actifs, leur énergie, leur consommation, la distance et la fréquence.',
+    `Cumul actuel : ${formatInt(me?.co2 || 0)} t.`,
+    `Émissions actuelles estimées : ${formatInt(totalNow)} t/h.`,
+    '---------------------------------------------',
+    'Sources actuelles par ligne :'
+  ];
+  if (!activeLines.length) {
+    lines.push('Aucune émission actuelle : aucune ligne active émettrice détectée.');
+  } else {
+    for (const item of activeLines.slice(0, 8)) {
+      lines.push(`${item.name} : ${formatInt(item.co2)} t/h · énergie ${item.energy}`);
+    }
+    if (activeLines.length > 8) lines.push(`+ ${activeLines.length - 8} autre(s) ligne(s).`);
+  }
+  return lines.join('\n');
+}
+
+function financeMetric(label, amount, kind, tip = '') {
+  const cls = kind === 'income' ? 'good-text' : (kind === 'expense' ? 'bad-text' : (Number(amount || 0) >= 0 ? 'good-text' : 'bad-text'));
+  return metric(label, moneyPerHour(amount || 0), cls, tip);
+}
+
+function financeBreakdownTooltip(label, amount, details = []) {
+  const lines = [
+    `${label} : ${moneyPerHour(amount || 0)}.`,
+    '---------------------------------------------',
+    ...details.filter(Boolean)
+  ];
+  return lines.join('\n');
+}
+
 function renderFinanceSummary(me) {
   const b = me.stats?.lastBreakdown || {};
   const operatingMargin = me.stats.lastRevenue > 0 ? Math.round((me.stats.lastProfit / me.stats.lastRevenue) * 100) : 0;
+  const variableLineCost = Number(b.variableLineCost || 0);
+  const sharedCosts = Number(b.sharedCosts || 0);
   return `
     <div class="card">
       <h3>Résultat d’exploitation</h3>
-      <div class="card-grid">
-        ${metric('Revenus lignes /h', moneyPerHour(b.lineRevenue || me.stats.lastRevenue))}
-        ${metric('Revenus gares /h', moneyPerHour(b.stationRevenue || 0), (b.stationRevenue || 0) > 0 ? 'good-text' : '')}
-        ${metric('Coûts variables /h', moneyPerHour(b.variableLineCost || 0), 'warn-text')}
-        ${metric('Charges fixes /h', moneyPerHour(b.sharedCosts || 0), 'warn-text')}
-        ${metric('Résultat net /h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text')}
-        ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text')}
-      </div>
-      <div class="kv finance-kv">
-        <span>Personnel</span><b>${moneyPerHour(b.staffCost || 0)}</b>
-        <span>Gares</span><b>${moneyPerHour(b.stationCost || 0)}</b>
-        <span>Dette</span><b>${moneyPerHour(b.debtCost || 0)}</b>
-        <span>Parc inutilisé</span><b>${moneyPerHour(b.idleTrainCost || 0)}</b>
-        <span>R&D</span><b>${moneyPerHour(b.researchCost || 0)}</b>
+      <div class="card-grid finance-card-grid">
+        ${financeMetric('Revenus lignes /h', b.lineRevenue || me.stats.lastRevenue, 'income', financeBreakdownTooltip('Revenus lignes', b.lineRevenue || me.stats.lastRevenue, [
+          `Billets voyageurs : ${moneyPerHour(b.ticketRevenue || 0)}`,
+          `Recettes annexes voyageurs : ${moneyPerHour(b.ancillaryRevenue || 0)}`,
+          `Fret : ${moneyPerHour(b.freightRevenue || 0)}`,
+          `Bonus exploitation / dispatch : ${moneyPerHour(b.dispatchRevenueBoost || 0)}`
+        ]))}
+        ${financeMetric('Revenus gares /h', b.stationRevenue || 0, 'income', financeBreakdownTooltip('Revenus gares', b.stationRevenue || 0, [
+          'Sources : niveau des gares possédées, commerce, dépôts, trafic voyageurs et trafic fret.',
+          'Les recherches de flux voyageurs et de pôles intermodaux peuvent augmenter cette recette.'
+        ]))}
+        ${financeMetric('Coûts variables /h', variableLineCost, 'expense', financeBreakdownTooltip('Coûts variables', variableLineCost, [
+          `Énergie : ${moneyPerHour(b.energyCost || 0)}`,
+          `Maintenance trains : ${moneyPerHour(b.trainMaintenanceCost || 0)}`,
+          `Infrastructure des lignes : ${moneyPerHour(b.lineInfrastructureCost || 0)}`,
+          `Exploitation commerciale : ${moneyPerHour(b.commercialOperatingCost || 0)}`,
+          `Péages : ${moneyPerHour(b.accessCost || 0)} dont infrastructure ${moneyPerHour(b.infrastructurePassageCost || 0)} et gares ${moneyPerHour(b.stationAccessCost || 0)}`
+        ]))}
+        ${financeMetric('Charges fixes /h', sharedCosts, 'expense', financeBreakdownTooltip('Charges fixes', sharedCosts, [
+          `Personnel : ${moneyPerHour(b.staffCost || 0)}`,
+          `Gares possédées : ${moneyPerHour(b.stationCost || 0)}`,
+          `Intérêts de dette : ${moneyPerHour(b.debtCost || 0)}`,
+          `Parc inutilisé : ${moneyPerHour(b.idleTrainCost || 0)}`,
+          `Laboratoire R&D actif : ${moneyPerHour(b.researchCost || 0)}`
+        ]))}
+        ${financeMetric('Personnel /h', b.staffCost || 0, 'expense', financeBreakdownTooltip('Personnel', b.staffCost || 0, [
+          'Somme des salaires horaires : conducteurs, contrôleurs, agents de gare, mécaniciens, régulateurs et ingénieurs.',
+          'La Formation équipages réduit une partie de cette charge.'
+        ]))}
+        ${financeMetric('Gares /h', b.stationCost || 0, 'expense', financeBreakdownTooltip('Gares', b.stationCost || 0, [
+          'Coût d’exploitation des gares possédées : niveau, commerces, maintenance et dépôts.'
+        ]))}
+        ${financeMetric('Dette /h', b.debtCost || 0, 'expense', financeBreakdownTooltip('Dette', b.debtCost || 0, [
+          'Intérêts appliqués à la dette de la compagnie.'
+        ]))}
+        ${financeMetric('Parc inutilisé /h', b.idleTrainCost || 0, 'expense', financeBreakdownTooltip('Parc inutilisé', b.idleTrainCost || 0, [
+          'Coût de stockage et d’immobilisation des trains non affectés à une ligne active.'
+        ]))}
+        ${financeMetric('R&D /h', b.researchCost || 0, 'expense', financeBreakdownTooltip('R&D', b.researchCost || 0, [
+          'Coût du laboratoire quand une recherche est en cours.'
+        ]))}
+        ${metric('Résultat net /h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text', financeBreakdownTooltip('Résultat net', me.stats.lastProfit, [
+          'Calcul : revenus lignes + revenus gares - coûts variables - charges fixes.'
+        ]))}
+        ${metric('Marge', `${operatingMargin}%`, operatingMargin >= 0 ? 'good-text' : 'bad-text', [
+          `Marge d’exploitation : ${operatingMargin}%.`,
+          'Calcul : résultat net / revenus totaux.'
+        ].join('\n'))}
       </div>
     </div>
   `;

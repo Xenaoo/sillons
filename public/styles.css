@@ -9363,3 +9363,23 @@ dialog.modal--wide {
     flex-direction: row;
   }
 }
+
+/* ===== V65.7 : Vue financière lisible ===== */
+.finance-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.finance-card-grid .metric b.good-text,
+.metric b.good-text {
+  color: var(--good) !important;
+}
+.finance-card-grid .metric b.bad-text,
+.metric b.bad-text {
+  color: var(--bad) !important;
+}
+.finance-card-grid .metric b.warn-text,
+.metric b.warn-text {
+  color: var(--warn) !important;
+}
+.finance-card-grid .metric[data-tooltip] {
+  cursor: help;
+}

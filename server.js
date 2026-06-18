@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.6.0';
-const STATE_SCHEMA_VERSION = 127;
+const PROJECT_VERSION = 'v65.7.0';
+const STATE_SCHEMA_VERSION = 128;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -4881,6 +4881,13 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
           trainComposition: operatingModel.compositionSummary,
           sillons: sillonStatsPayload(sillonInfo)
         },
+        environment: {
+          co2PerHour: 0,
+          energyType: operatingModel.energyType || resourceCheck.type || '—',
+          distance: round2(distance),
+          frequency: round2(effectiveFrequency)
+        },
+        co2PerHour: 0,
         resource: {
           type: resourceCheck.type,
           requiredPerHour: round2(resourceCheck.amountPerHour || 0),
@@ -4955,6 +4962,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const commercialOperatingCost = commercialSalesCost + commercialControlCost + commercialAdministrationCost;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
     const contribution = lineRevenue - variableExpenses;
+    const lineCo2 = computeCo2(operatingModel, distance, serviceFactor);
     revenue += lineRevenue;
     expenses += variableExpenses;
 
@@ -5011,6 +5019,14 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         passenger: passengerDetails,
         freight: freightDetails
       },
+      environment: {
+        co2PerHour: Math.round(lineCo2),
+        energyType: operatingModel.energyType || resourceCheck.type || '—',
+        distance: round2(distance),
+        frequency: round2(serviceFactor),
+        consumptionReference: round2(operatingModel.energy || 0)
+      },
+      co2PerHour: Math.round(lineCo2),
       capacity: {
         passengers: Math.round(maxPax),
         freightTons: Math.round(maxFreight),

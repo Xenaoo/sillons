@@ -1,11 +1,13 @@
-## Version v65.6.0 — recherche rapide R&D
+## Version v65.7.0 — lisibilité du menu Vue
 
-- incrément de version : badge interface `v65.6.0`, version serveur/client `v65.6.0`, package `65.6.0` et schéma serveur `127` ;
-- ajout d’une zone de recherche dans le menu `R&D` ;
-- la recherche couvre l’intégralité de l’arbre technologique, tous onglets confondus ;
-- résultats affichés avec branche, époque, niveau actuel/prévu, coût, durée, déblocages/améliorations et actions rapides ;
-- ajout d’un bouton `Voir` pour ouvrir automatiquement la branche concernée et centrer la recherche dans l’arbre ;
-- ajout d’un bouton `Lancer` / `Ajouter` directement depuis un résultat lorsque la recherche est disponible.
+- incrément de version : badge interface `v65.7.0`, version serveur/client `v65.7.0`, package `65.7.0` et schéma serveur `128` ;
+- menu `Vue` : ajout d’un tooltip détaillé sur la vignette `Score`, avec les sources du score ligne par ligne : trésorerie, dette, réputation, voyageurs, fret, lignes actives et époque ;
+- menu `Vue` : ajout d’un tooltip détaillé sur la vignette `CO₂ cumulé`, avec les émissions actuelles par ligne active quand elles sont disponibles ;
+- serveur : ajout d’un détail d’émissions CO₂ par ligne dans les statistiques d’exploitation ;
+- section `Résultat d’exploitation` : toutes les données sont désormais présentées sous forme de vignettes harmonisées ;
+- section `Résultat d’exploitation` : code couleur vert pour les revenus/bénéfices et rouge pour les dépenses ;
+- section `Résultat d’exploitation` : ajout de tooltips expliquant les sources des revenus, coûts variables, charges fixes et postes de dépenses ;
+- menu `Vue` : retrait du bloc `Journal` en bas de page.
 
 ## Version v65.5.0 — timer global de file R&D
 
