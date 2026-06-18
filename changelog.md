@@ -1,3 +1,12 @@
+## Version v65.6.0 — recherche rapide R&D
+
+- incrément de version : badge interface `v65.6.0`, version serveur/client `v65.6.0`, package `65.6.0` et schéma serveur `127` ;
+- ajout d’une zone de recherche dans le menu `R&D` ;
+- la recherche couvre l’intégralité de l’arbre technologique, tous onglets confondus ;
+- résultats affichés avec branche, époque, niveau actuel/prévu, coût, durée, déblocages/améliorations et actions rapides ;
+- ajout d’un bouton `Voir` pour ouvrir automatiquement la branche concernée et centrer la recherche dans l’arbre ;
+- ajout d’un bouton `Lancer` / `Ajouter` directement depuis un résultat lorsque la recherche est disponible.
+
 ## Version v65.5.0 — timer global de file R&D
 
 - incrément de version : badge interface `v65.5.0`, version serveur/client `v65.5.0`, package `65.5.0` et schéma serveur `126` ;

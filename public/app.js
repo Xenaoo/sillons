@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.5.0';
+const PROJECT_VERSION = 'v65.6.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -111,6 +111,7 @@ const app = {
   state: null,
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
   activeResearchTab: localStorage.getItem('sillons.researchTab') || 'traction',
+  researchSearchQuery: localStorage.getItem('sillons.researchSearchQuery') || '',
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
@@ -511,6 +512,11 @@ function bindStaticEvents() {
     }
     if (event.target?.dataset?.buyTrainQty) {
       updateTrainPurchaseTotal(event.target);
+    }
+    if (event.target?.id === 'researchSearchInput') {
+      app.researchSearchQuery = event.target.value || '';
+      localStorage.setItem('sillons.researchSearchQuery', app.researchSearchQuery);
+      refreshResearchSearchResults();
     }
     if (event.target.classList?.contains('station-search-input')) {
       updateStationSearch(event.target.dataset.role, event.target.value);
@@ -5783,6 +5789,153 @@ function epochTrafficTotalClient(me = app.state?.me) {
   return Math.max(0, Math.round(Number(me?.stats?.passengers || 0) + Number(me?.stats?.freightTons || 0)));
 }
 
+
+function allResearchEntriesClient() {
+  const tree = app.state?.balance?.techTree || {};
+  const entries = [];
+  for (const group of Object.values(tree)) {
+    for (const node of group.nodes || []) entries.push({ group, node });
+  }
+  return entries;
+}
+
+function researchSearchHaystack(entry) {
+  const { group, node } = entry || {};
+  const prereqs = [];
+  for (const req of researchPrereqsForLevelClient(node, Math.max(1, plannedTechLevel(node?.id) + 1))) {
+    prereqs.push(researchPrereqLabelClient(req));
+  }
+  return normalizeSearchText([
+    node?.id,
+    node?.title,
+    node?.description,
+    node?.branch,
+    node?.eraLabel,
+    group?.label,
+    group?.description,
+    ...(node?.unlocks || []),
+    ...(node?.improves || []),
+    ...prereqs
+  ].filter(Boolean).join(' '));
+}
+
+function researchSearchResults(query) {
+  const q = normalizeSearchText(query || '');
+  if (!q) return [];
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  return allResearchEntriesClient()
+    .map(entry => {
+      const haystack = researchSearchHaystack(entry);
+      if (!tokens.every(token => haystack.includes(token))) return null;
+      const title = normalizeSearchText(entry.node?.title || '');
+      const group = normalizeSearchText(entry.group?.label || '');
+      const id = normalizeSearchText(entry.node?.id || '');
+      let score = 0;
+      if (title === q) score += 120;
+      if (title.startsWith(q)) score += 80;
+      if (title.includes(q)) score += 55;
+      if (id.includes(q)) score += 35;
+      if (group.includes(q)) score += 18;
+      score += Math.max(0, 12 - Math.max(0, title.length - q.length) / 8);
+      return { ...entry, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || String(a.node?.title || '').localeCompare(String(b.node?.title || ''), 'fr'));
+}
+
+function renderResearchSearchStatus(node) {
+  const acquiredLevel = techLevel(node.id);
+  const plannedLevel = plannedTechLevel(node.id);
+  const maxLevel = techMaxLevel(node);
+  const complete = Number.isFinite(maxLevel) && plannedLevel >= maxLevel;
+  if (complete) return `<span class="tag good">Niveau max</span>`;
+  if (plannedLevel > acquiredLevel) return `<span class="tag warn">Niv. ${acquiredLevel} · prévu ${plannedLevel}</span>`;
+  if (acquiredLevel > 0) return `<span class="tag good">Niv. ${acquiredLevel}</span>`;
+  return '<span class="tag">Non lancé</span>';
+}
+
+function renderResearchSearchResult(entry) {
+  const { group, node } = entry;
+  const acquiredLevel = techLevel(node.id);
+  const plannedLevel = plannedTechLevel(node.id);
+  const maxLevel = techMaxLevel(node);
+  const complete = Number.isFinite(maxLevel) && plannedLevel >= maxLevel;
+  const targetLevel = complete ? maxLevel : (Number.isFinite(maxLevel) ? Math.min(maxLevel, plannedLevel + 1) : plannedLevel + 1);
+  const locked = complete ? '' : techLockedReason(node, targetLevel);
+  const costMoney = complete ? 0 : researchCostMoneyClient(node, targetLevel);
+  const durationMs = complete ? 0 : researchDurationClient(node, targetLevel);
+  const affordable = app.state.me.cash >= costMoney;
+  const unlocks = (node.unlocks || []).slice(0, 3);
+  const improves = (node.improves || []).filter(effect => !String(effect || '').toLowerCase().startsWith('niveaux suivants')).slice(0, 3);
+  const image = artForTechNode(node.id);
+  return `
+    <article class="research-search-result" data-node-id="${escapeAttr(node.id)}">
+      ${image ? `<div class="research-search-thumb" style="--node-image:url('${escapeAttr(image)}')"></div>` : '<div class="research-search-thumb placeholder">R&D</div>'}
+      <div class="research-search-main">
+        <div class="item-title">
+          <strong>${escapeHtml(node.title)}</strong>
+          ${renderResearchSearchStatus(node)}
+        </div>
+        <p class="small muted">${escapeHtml(group.label || 'Recherche')} · ${escapeHtml(node.eraLabel || trainEraLabel(node.requiredEpoch || 0))}</p>
+        <div class="research-search-meta">
+          <span>Prochain : <b>${complete ? 'Terminé' : `niv. ${targetLevel}`}</b></span>
+          <span>Coût : <b>${complete ? '-' : money(costMoney)}</b></span>
+          <span>Durée : <b>${complete ? '-' : formatResearchTime(durationMs)}</b></span>
+        </div>
+        <div class="research-search-effects">
+          ${unlocks.length ? unlocks.map(effect => `<span>${escapeHtml(effect)}</span>`).join('') : '<span>Aucun déblocage immédiat</span>'}
+          ${improves.length ? improves.map(effect => `<span>${escapeHtml(effect)}</span>`).join('') : ''}
+        </div>
+      </div>
+      <div class="research-search-actions">
+        <button type="button" data-action="focus-research" data-id="${escapeAttr(node.id)}">Voir</button>
+        <button type="button" class="primary" data-action="research-node" data-id="${escapeAttr(node.id)}" ${complete || locked || !affordable ? 'disabled' : ''}>${complete ? 'Max' : app.state.me.researchProject ? 'Ajouter' : 'Lancer'}</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderResearchSearchResults(query = app.researchSearchQuery) {
+  const raw = String(query || '').trim();
+  if (!raw) {
+    return '<p class="small muted">Saisis le nom d’une recherche, d’un matériel, d’un bonus, d’une branche ou d’une époque. La recherche couvre tout l’arbre R&D, pas seulement l’onglet ouvert.</p>';
+  }
+  const results = researchSearchResults(raw);
+  if (!results.length) {
+    return `<p class="small muted">Aucune recherche trouvée pour <b>${escapeHtml(raw)}</b>.</p>`;
+  }
+  return `
+    <div class="research-search-summary">${results.length} résultat${results.length > 1 ? 's' : ''} trouvé${results.length > 1 ? 's' : ''}</div>
+    <div class="research-search-list">${results.map(renderResearchSearchResult).join('')}</div>
+  `;
+}
+
+function renderResearchSearchPanel() {
+  const query = app.researchSearchQuery || '';
+  return `
+    <div class="research-search-panel">
+      <div class="research-search-header">
+        <div>
+          <h3>Recherche rapide R&D</h3>
+          <p class="small muted">Retrouve n’importe quelle recherche de l’arbre, même dans une autre branche.</p>
+        </div>
+        ${query ? `<button type="button" data-action="clear-research-search">Effacer</button>` : ''}
+      </div>
+      <label class="research-search-box">
+        <span>Rechercher</span>
+        <input id="researchSearchInput" value="${escapeAttr(query)}" placeholder="Ex : TGV, diesel, signalisation, confort, fret..." autocomplete="off">
+      </label>
+      <div id="researchSearchResults" class="research-search-results">${renderResearchSearchResults(query)}</div>
+    </div>
+  `;
+}
+
+function refreshResearchSearchResults() {
+  const results = $('#researchSearchResults');
+  if (results) results.innerHTML = renderResearchSearchResults(app.researchSearchQuery);
+}
+
 function renderResearch() {
   const me = app.state.me;
   const next = app.state.balance.epochs[me.epoch + 1];
@@ -5853,6 +6006,7 @@ function renderResearch() {
 
     <div class="card">
       <h2>Arbre technologique</h2>
+      ${renderResearchSearchPanel()}
       <div class="research-tabs">
         ${tabs.map(group => `<button data-action="research-tab" data-id="${group.id}" class="${group.id === active.id ? 'active' : ''}">${escapeHtml(group.label)}</button>`).join('')}
       </div>
@@ -6706,6 +6860,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
   if (action === 'submit-bug-report') {
     try {
       const title = $('#bugTitle')?.value || '';
