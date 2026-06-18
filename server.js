@@ -464,7 +464,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
-  refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
+  refreshCommuneCache(false)
+    .then(() => scheduleMissingRouteTimingBackfill(5000))
+    .catch(error => console.warn('Chargement des populations communales impossible:', error.message));
 });
 
 async function handleApi(req, res, url) {
@@ -495,6 +497,7 @@ async function handleApi(req, res, url) {
     const playerId = auth?.user?.playerId || '';
     await waitForCommuneCache(3500);
     if (sanitizeStateStationReferencesForPublicWorld()) saveState();
+    scheduleMissingRouteTimingBackfill(2000);
     sendJson(res, 200, publicState(playerId, auth?.user || null));
     return;
   }
@@ -2752,6 +2755,118 @@ async function realRailRouteBetweenStops(stops, options = {}) {
     speedSource: timing.source,
     missing: null
   };
+}
+
+function maxGeoSegmentDistanceKm(geometry) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  let max = 0;
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    if (!Array.isArray(a) || !Array.isArray(b)) continue;
+    const distance = haversine(a[1], a[0], b[1], b[0]);
+    if (Number.isFinite(distance) && distance > max) max = distance;
+  }
+  return max;
+}
+
+async function routeInfoForLineStops(stops, model = null, profile = 'default', options = {}) {
+  const ids = sanitizeStopsPayload(stops, null, null);
+  const normalizedProfile = normalizeRailRouteProfile(profile || routeProfileForOperatingModel(model));
+  let route = null;
+  if (options.cacheOnly) {
+    ensureSncfPersistentRouteCacheLoaded();
+    route = sncfRouteGeometrySequenceResultCache.get(sncfRouteSequenceCacheKey(ids, normalizedProfile)) || null;
+  } else {
+    route = await sncfRouteGeometryForStopSequence(ids, { profile: normalizedProfile });
+  }
+  const geometry = Array.isArray(route?.geometry) ? route.geometry : [];
+  if (geometry.length < 2) return null;
+  let speedSegments = [];
+  try {
+    speedSegments = await loadSncfRailSpeedSegments();
+  } catch (error) {
+    console.warn('Vitesses RFN indisponibles pour un profil de ligne:', error.message);
+  }
+  const timing = estimateRouteTimingFromGeometry(geometry, route.ids || ids, model, speedSegments, normalizedProfile);
+  return {
+    ids: route.ids || ids,
+    distance: timing.distance || Math.round(polylineDistanceKm(geometry)),
+    maxSegment: Math.round(maxGeoSegmentDistanceKm(geometry)),
+    profile: normalizedProfile,
+    travelMinutes: timing.travelMinutes,
+    dwellMinutes: timing.dwellMinutes,
+    durationMinutes: timing.durationMinutes,
+    averageSpeedKmh: timing.averageSpeedKmh,
+    nominalAverageSpeedKmh: timing.nominalAverageSpeedKmh,
+    highSpeedShare: timing.highSpeedShare,
+    classicShare: timing.classicShare,
+    dwellPerStopMinutes: 1,
+    speedSource: timing.source,
+    geometryPointCount: geometry.length
+  };
+}
+
+function lineMissingRealRouteTiming(line) {
+  return !Number.isFinite(Number(line?.durationMinutes))
+    || Number(line.durationMinutes) <= 0
+    || !Number.isFinite(Number(line?.averageSpeedKmh))
+    || Number(line.averageSpeedKmh) <= 0
+    || !line?.speedSource;
+}
+
+let missingRouteTimingBackfillRunning = false;
+let missingRouteTimingBackfillScheduled = false;
+const ROUTE_TIMING_BACKFILL_PER_PASS = 3;
+
+function scheduleMissingRouteTimingBackfill(delayMs = 0) {
+  if (missingRouteTimingBackfillRunning || missingRouteTimingBackfillScheduled) return;
+  missingRouteTimingBackfillScheduled = true;
+  const timer = setTimeout(() => {
+    missingRouteTimingBackfillScheduled = false;
+    backfillMissingRouteTimings().catch(error => console.warn('Backfill temps RFN differe:', error.message));
+  }, Math.max(0, Number(delayMs || 0)));
+  if (typeof timer.unref === 'function') timer.unref();
+}
+
+async function backfillMissingRouteTimings() {
+  if (missingRouteTimingBackfillRunning) return;
+  if (!communeCacheHasPlayableStations(communeCache)) return;
+  missingRouteTimingBackfillRunning = true;
+  let changed = false;
+  let updated = 0;
+  let remaining = 0;
+  try {
+    for (const player of activePlayers()) {
+      for (const line of player.lines || []) {
+        if (!line?.active || !lineMissingRealRouteTiming(line)) continue;
+        if (updated >= ROUTE_TIMING_BACKFILL_PER_PASS) {
+          remaining += 1;
+          continue;
+        }
+        normalizeLine(line);
+        const train = lineTrainIds(line).map(id => player.trains.find(t => t.id === id)).find(Boolean);
+        const model = train ? BALANCE.trains[train.modelId] : null;
+        const profile = normalizeRailRouteProfile(line.routeProfile || routeProfileForOperatingModel(model));
+        const routeInfo = await routeInfoForLineStops(lineStops(line), model, profile, { cacheOnly: true });
+        if (!routeInfo) {
+          remaining += 1;
+          continue;
+        }
+        applyValidatedRouteToLine(line, routeInfo);
+        normalizeLine(line);
+        changed = true;
+        updated += 1;
+      }
+    }
+    if (changed) {
+      saveState();
+      console.log(`Temps RFN recalcules pour ${updated} ligne(s).`);
+    }
+  } finally {
+    missingRouteTimingBackfillRunning = false;
+  }
+  if (remaining > 0 && updated > 0) scheduleMissingRouteTimingBackfill(2500);
 }
 
 function mimeType(file) {
