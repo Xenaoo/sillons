@@ -1,3 +1,11 @@
+## Version v66.4.0 — pastille Bugs pour Xenao
+
+- incrément de version : badge interface `v66.4.0`, version serveur/client `v66.4.0`, package `66.4.0` et schéma serveur `137` ;
+- signalements : ajout d’un compteur non lu réservé au compte `Xenao` sur le bouton `Bugs` ;
+- bugs : quand un joueur dépose un signalement, le compte `Xenao` reçoit une notification persistante et la pastille du bouton `Bugs` s’active ;
+- lecture : l’ouverture du menu `Bugs` par `Xenao` marque les nouveaux signalements comme lus et remet la pastille à zéro ;
+- serveur : état de lecture des signalements conservé côté compte utilisateur.
+
 ## Version v66.3.1 — correction RFN des branches parallèles
 
 - incrément de version : badge interface `v66.3.1`, version serveur/client `v66.3.1`, package `66.3.1` et schéma serveur `136` ;

@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.3.1';
-const STATE_SCHEMA_VERSION = 136;
+const PROJECT_VERSION = 'v66.4.0';
+const STATE_SCHEMA_VERSION = 137;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -680,7 +680,8 @@ function createUserRecord(username, password, playerId) {
     passwordHash: passwordHash(password, salt),
     sessions: {},
     createdAt: Date.now(),
-    lastLoginAt: null
+    lastLoginAt: null,
+    bugReportsReadAt: 0
   };
 }
 
@@ -752,7 +753,8 @@ function normalizeUsers(raw = {}) {
       sessions,
       createdAt: Number(value.createdAt || now),
       lastLoginAt: value.lastLoginAt || null,
-      loginHistory: normalizeLoginHistory(value.loginHistory, value.lastLoginAt)
+      loginHistory: normalizeLoginHistory(value.loginHistory, value.lastLoginAt),
+      bugReportsReadAt: Number.isFinite(Number(value.bugReportsReadAt)) ? Math.max(0, Number(value.bugReportsReadAt)) : 0
     };
   }
   return out;
@@ -887,6 +889,28 @@ function publicBugReports(authUser = null) {
   }));
 }
 
+function latestBugReportCreatedAt() {
+  return normalizeBugReports(state.bugReports || [])
+    .reduce((max, bug) => Math.max(max, Number(bug.createdAt || 0) || 0), 0);
+}
+
+function unreadBugReportCountForUser(user = null) {
+  if (!isAdminUser(user)) return 0;
+  const readAt = Number.isFinite(Number(user.bugReportsReadAt)) ? Math.max(0, Number(user.bugReportsReadAt)) : 0;
+  return normalizeBugReports(state.bugReports || [])
+    .filter(bug => bug.status !== 'closed' && (Number(bug.createdAt || 0) || 0) > readAt)
+    .length;
+}
+
+function notifyAdminBugReport(report, reporterPlayer) {
+  for (const user of Object.values(state.users || {})) {
+    if (!isAdminUser(user)) continue;
+    const adminPlayer = state.players?.[user.playerId];
+    if (!adminPlayer) continue;
+    notify(adminPlayer, `Nouveau bug signalé par ${reporterPlayer?.name || report.reporterName || 'un joueur'} : ${report.title}`);
+  }
+}
+
 function actionSubmitBugReport(player, payload = {}) {
   const title = cleanText(payload.title || '', 120);
   const description = cleanText(payload.description || '', 4000);
@@ -916,6 +940,7 @@ function actionSubmitBugReport(player, payload = {}) {
   };
   state.bugReports = normalizeBugReports([report, ...(state.bugReports || [])]);
   notify(player, 'Bug signalé : Il apparaît maintenant dans la liste commune des signalements.');
+  notifyAdminBugReport(report, player);
   return ok('Bug signalé.');
 }
 
@@ -934,6 +959,19 @@ function actionCloseBugReport(player, payload = {}) {
   bug.resolution = cleanText(payload.resolution || 'Réglé', 500);
   state.bugReports = normalizeBugReports(state.bugReports);
   return ok('Signalement clôturé.');
+}
+
+function actionMarkBugReportsRead(player, payload = {}) {
+  const user = Object.values(state.users || {}).find(item => item.playerId === player.id);
+  if (!isAdminUser(user)) return fail('Accès réservé au compte Xenao.');
+  const latest = latestBugReportCreatedAt();
+  const requested = Number(payload.readAt || 0);
+  user.bugReportsReadAt = Math.max(
+    Number(user.bugReportsReadAt || 0) || 0,
+    latest,
+    Number.isFinite(requested) ? requested : 0
+  );
+  return ok('Signalements lus.');
 }
 
 function createTutorialState(raw = null) {
@@ -3495,7 +3533,13 @@ function publicState(playerId, authUser = null) {
   return {
     ok: true,
     serverTime: Date.now(),
-    auth: authUser ? { username: authUser.username, playerId: authUser.playerId, isAdmin: isAdminUser(authUser) } : null,
+    auth: authUser ? {
+      username: authUser.username,
+      playerId: authUser.playerId,
+      isAdmin: isAdminUser(authUser),
+      bugReportsReadAt: Number(authUser.bugReportsReadAt || 0) || 0,
+      bugReportsUnreadCount: unreadBugReportCountForUser(authUser)
+    } : null,
     world: publicWorld(),
     balance: BALANCE.public,
     game: {
@@ -3708,6 +3752,7 @@ async function applyAction(playerId, type, payload) {
     tutorial: () => actionTutorial(player, payload),
     submitBugReport: () => actionSubmitBugReport(player, payload),
     closeBugReport: () => actionCloseBugReport(player, payload),
+    markBugReportsRead: () => actionMarkBugReportsRead(player, payload),
     markNotificationsRead: () => actionMarkNotificationsRead(player, payload)
   };
 

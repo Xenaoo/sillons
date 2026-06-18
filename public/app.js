@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.3.1';
+const PROJECT_VERSION = 'v66.4.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -179,6 +179,7 @@ const app = {
   lastNotificationKey: '',
   notificationRenderSignature: '',
   notificationReadSyncInFlight: false,
+  bugReportReadSyncInFlight: false,
   notificationsOpen: false,
   stationListCache: { source: null, signature: '', deduped: [] },
   stationSignatureCache: { source: null, signature: '' },
@@ -425,6 +426,7 @@ function bindStaticEvents() {
     if (!button) return;
     app.activeTab = button.dataset.tab;
     localStorage.setItem('sillons.activeTab', app.activeTab);
+    if (app.activeTab === 'bugs') markBugReportsRead({ syncServer: true, skipRender: true });
     renderAll();
   });
 
@@ -796,6 +798,7 @@ function stateRenderSignature(state = app.state) {
   const news = (game.news || []).map(n => `${n.day}:${n.text}`).join('|');
   const world = state.world?.communesStatus;
   const bugSig = (state.bugReports || []).map(bug => `${bug.id}:${bug.status}:${bug.createdAt}:${bug.closedAt || 0}`).join('|');
+  const bugReadSig = `${state.auth?.bugReportsReadAt || 0}:${state.auth?.bugReportsUnreadCount || 0}`;
   const meSig = me ? [
     me.id,
     me.cash,
@@ -827,6 +830,7 @@ function stateRenderSignature(state = app.state) {
     world?.count || 0,
     worldRouteSignature(state),
     bugSig,
+    bugReadSig,
     meSig
   ].join('::');
 }
@@ -1204,6 +1208,71 @@ function renderSetupLogoPicker() {
     </button>
   `).join('');
   selectSetupLogo(currentSetupLogoId());
+}
+
+
+function bugReportsReadStorageKey() {
+  const playerId = app.state?.auth?.playerId || app.playerId || 'anonymous';
+  return `sillons.bugReportsReadAt.${playerId}`;
+}
+
+function localBugReportsReadAt() {
+  return Number(localStorage.getItem(bugReportsReadStorageKey()) || 0) || 0;
+}
+
+function currentBugReportsReadAt() {
+  return Math.max(Number(app.state?.auth?.bugReportsReadAt || 0) || 0, localBugReportsReadAt());
+}
+
+function latestBugReportCreatedAtClient(reports = app.state?.bugReports || []) {
+  return (Array.isArray(reports) ? reports : []).reduce((max, bug) => Math.max(max, Number(bug?.createdAt || 0) || 0), 0);
+}
+
+function unreadBugReportCountClient(reports = app.state?.bugReports || []) {
+  if (!app.state?.auth?.isAdmin) return 0;
+  const readAt = currentBugReportsReadAt();
+  return (Array.isArray(reports) ? reports : [])
+    .filter(bug => bug?.status !== 'closed' && (Number(bug?.createdAt || 0) || 0) > readAt)
+    .length;
+}
+
+function syncBugTabBadge() {
+  const button = document.querySelector('#tabs [data-tab="bugs"]');
+  if (!button) return;
+  const count = unreadBugReportCountClient();
+  const label = 'Bugs';
+  button.classList.toggle('has-bug-unread', count > 0);
+  button.title = count > 0
+    ? `${formatInt(count)} nouveau${count > 1 ? 'x' : ''} signalement${count > 1 ? 's' : ''} de bug à lire.`
+    : 'Signalements de bugs';
+  button.innerHTML = count > 0
+    ? `${label}<span class="tab-badge" aria-label="${formatInt(count)} nouveau${count > 1 ? 'x' : ''} bug${count > 1 ? 's' : ''}">${formatInt(count)}</span>`
+    : label;
+}
+
+function markBugReportsRead({ syncServer = false, skipRender = false } = {}) {
+  if (!app.state?.auth?.isAdmin) return;
+  const latest = latestBugReportCreatedAtClient();
+  if (!latest || latest <= currentBugReportsReadAt()) {
+    syncBugTabBadge();
+    return;
+  }
+  localStorage.setItem(bugReportsReadStorageKey(), String(latest));
+  if (app.state?.auth) {
+    app.state.auth.bugReportsReadAt = Math.max(Number(app.state.auth.bugReportsReadAt || 0) || 0, latest);
+    app.state.auth.bugReportsUnreadCount = 0;
+  }
+  syncBugTabBadge();
+  if (!skipRender) renderTabs();
+  if (!syncServer || app.bugReportReadSyncInFlight) return;
+  app.bugReportReadSyncInFlight = true;
+  post('/api/action', { playerId: app.playerId, type: 'markBugReportsRead', payload: { readAt: latest } })
+    .then(response => {
+      if (response?.state) app.state = response.state;
+      syncBugTabBadge();
+    })
+    .catch(() => null)
+    .finally(() => { app.bugReportReadSyncInFlight = false; });
 }
 
 
@@ -2075,6 +2144,8 @@ function renderTabs() {
     localStorage.setItem('sillons.activeTab', app.activeTab);
   }
   $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === app.activeTab));
+  if (app.activeTab === 'bugs') markBugReportsRead({ syncServer: true, skipRender: true });
+  syncBugTabBadge();
   const content = $('#tabContent');
   const side = $('.side.panel');
   const menuImage = ART.tabs[app.activeTab] || ART.tabs.overview;

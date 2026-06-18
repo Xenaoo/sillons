@@ -9430,3 +9430,30 @@ dialog.modal--wide {
 .era-transition-panel button {
   justify-self: start;
 }
+
+/* v66.4.0 — pastille Bugs admin */
+.tabs button {
+  position: relative;
+}
+.tabs button.has-bug-unread {
+  color: #ffe8aa;
+}
+.tab-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ef4444;
+  color: #fff7ed;
+  border: 1px solid rgba(255,255,255,.38);
+  box-shadow: 0 0 0 2px rgba(127,29,29,.38), 0 8px 18px rgba(0,0,0,.28);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
