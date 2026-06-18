@@ -1,9 +1,11 @@
-## v66.8.0 - 2026-06-18
+## Version v66.8.1 — affinage RFN anti-boucle urbaine
 
-- Affine le calcul RFN des tracés de lignes avec une validation plus stricte des gares intermédiaires.
-- Ajoute une sélection de sous-parcours RFN par score de fidélité pour éviter les branches parallèles visuellement incohérentes.
-- Accélère la recherche d’itinéraire RFN avec une heuristique de type A* conservant la priorité à la fidélité.
-- Ajoute un cache serveur dédié aux géométries RFN de suites d’arrêts et invalide le cache navigateur des anciens tracés.
+- incrément de version : badge interface `v66.8.1`, version serveur/client `v66.8.1`, package `66.8.1` et schéma serveur `143` ;
+- RFN : ajout d’une pénalité progressive de corridor pour éviter qu’un itinéraire court parte sur une boucle ferroviaire trop éloignée de l’axe naturel départ → arrivée ;
+- RFN : ajout de raccords virtuels courts autour des gares/jonctions pour mieux relier les branches SNCF proches dans les grands nœuds urbains ;
+- RFN : ajout d’une tentative de passage par une gare-corridor intermédiaire quand le tracé direct validé reste visuellement trop détourné ;
+- correction : les itinéraires lyonnais comme `Collonges-Fontaines → Vénissieux` évitent désormais le détour visuel par Vaise/Perrache quand un axe plus cohérent par Part-Dieu existe ;
+- cache navigateur RFN invalidé en `sncf-geometry-v8`.
 
 ## Version v66.7.0 — prévisualisation de ligne et profils RFN LGV/classique
 

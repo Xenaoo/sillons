@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.8.0';
-const STATE_SCHEMA_VERSION = 142;
+const PROJECT_VERSION = 'v66.8.1';
+const STATE_SCHEMA_VERSION = 143;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -1464,14 +1464,212 @@ function connectNearbyRfnComponents(graph, coordsByKey, directKm) {
   return added;
 }
 
+function connectStationRfnJunctions(graph, coordsByKey, start, end, directKm) {
+  if (!graph?.size || !coordsByKey?.size || !start || !end) return 0;
+  const direct = Number(directKm || 0);
+  if (!Number.isFinite(direct) || direct <= 0) return 0;
+
+  const radiusKm = direct <= 35 ? 0.95 : direct <= 100 ? 0.7 : 0.45;
+  const pad = Math.min(1.2, Math.max(0.08, direct / 120));
+  const bbox = {
+    minLat: Math.min(start.lat, end.lat) - pad,
+    maxLat: Math.max(start.lat, end.lat) + pad,
+    minLon: Math.min(start.lon, end.lon) - pad,
+    maxLon: Math.max(start.lon, end.lon) + pad
+  };
+
+  const { componentByNode } = buildRfnGraphComponents(graph);
+  const cellSize = Math.max(0.004, radiusKm / 90);
+  const cells = new Map();
+  const cellKey = (ix, iy) => `${ix}:${iy}`;
+
+  for (const [key, coord] of coordsByKey.entries()) {
+    const lon = Number(coord?.[0]);
+    const lat = Number(coord?.[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const ix = Math.floor(lon / cellSize);
+    const iy = Math.floor(lat / cellSize);
+    const bucketKey = cellKey(ix, iy);
+    const bucket = cells.get(bucketKey) || [];
+    bucket.push(key);
+    cells.set(bucketKey, bucket);
+  }
+
+  const stations = Object.values(communeCache.byId || {});
+  let added = 0;
+  for (const rawStation of stations) {
+    const station = canonicalizeStationDisplay(rawStation);
+    const point = stationRoutePoint(station) || stationRawPoint(station);
+    if (!point) continue;
+    if (point.lat < bbox.minLat || point.lat > bbox.maxLat || point.lon < bbox.minLon || point.lon > bbox.maxLon) continue;
+
+    const ix = Math.floor(point.lon / cellSize);
+    const iy = Math.floor(point.lat / cellSize);
+    const byComponent = new Map();
+    for (let dx = -2; dx <= 2; dx += 1) {
+      for (let dy = -2; dy <= 2; dy += 1) {
+        const bucket = cells.get(cellKey(ix + dx, iy + dy));
+        if (!bucket?.length) continue;
+        for (const key of bucket) {
+          const coord = coordsByKey.get(key);
+          if (!coord) continue;
+          const distance = haversine(point.lat, point.lon, coord[1], coord[0]);
+          if (!Number.isFinite(distance) || distance <= 0 || distance > radiusKm) continue;
+          const component = componentByNode.get(key);
+          if (component === undefined) continue;
+          const previous = byComponent.get(component);
+          if (!previous || distance < previous.distance) byComponent.set(component, { key, distance });
+        }
+      }
+    }
+    const anchors = [...byComponent.values()].sort((a, b) => a.distance - b.distance).slice(0, 5);
+    if (anchors.length < 2) continue;
+    for (let i = 0; i < anchors.length; i += 1) {
+      for (let j = i + 1; j < anchors.length; j += 1) {
+        const a = anchors[i];
+        const b = anchors[j];
+        if (!a?.key || !b?.key || a.key === b.key) continue;
+        const coordA = coordsByKey.get(a.key);
+        const coordB = coordsByKey.get(b.key);
+        if (!coordA || !coordB) continue;
+        const distance = haversine(coordA[1], coordA[0], coordB[1], coordB[0]);
+        if (!Number.isFinite(distance) || distance <= 0 || distance > radiusKm * 1.25) continue;
+        const weight = distance * 1.45 + 0.04;
+        graph.get(a.key)?.push([b.key, weight]);
+        graph.get(b.key)?.push([a.key, weight]);
+        added += 1;
+      }
+    }
+  }
+  return added;
+}
+
+function routeProgressOnSegment(point, start, end) {
+  if (!point || !start || !end) return null;
+  const lon = Number(point.lon ?? point[0]);
+  const lat = Number(point.lat ?? point[1]);
+  const lonA = Number(start.lon ?? start[0]);
+  const latA = Number(start.lat ?? start[1]);
+  const lonB = Number(end.lon ?? end[0]);
+  const latB = Number(end.lat ?? end[1]);
+  if (![lon, lat, lonA, latA, lonB, latB].every(Number.isFinite)) return null;
+  const meanLat = ((lat + latA + latB) / 3) * Math.PI / 180;
+  const kmPerLon = 111.32 * (Math.cos(meanLat) || 1);
+  const kmPerLat = 110.57;
+  const px = lon * kmPerLon;
+  const py = lat * kmPerLat;
+  const ax = lonA * kmPerLon;
+  const ay = latA * kmPerLat;
+  const bx = lonB * kmPerLon;
+  const by = latB * kmPerLat;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 0) return null;
+  return clamp(((px - ax) * dx + (py - ay) * dy) / lenSq, 0, 1);
+}
+
+function routeCorridorMetrics(start, end, geometry) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (!start || !end || coords.length < 2) return { maxDeviationKm: Infinity, averageDeviationKm: Infinity, p95DeviationKm: Infinity };
+  const deviations = [];
+  for (const coord of coords) {
+    const distance = routeCorridorDistanceKm(coord, start, end);
+    if (Number.isFinite(distance)) deviations.push(distance);
+  }
+  if (!deviations.length) return { maxDeviationKm: Infinity, averageDeviationKm: Infinity, p95DeviationKm: Infinity };
+  deviations.sort((a, b) => a - b);
+  const average = deviations.reduce((sum, value) => sum + value, 0) / deviations.length;
+  return {
+    maxDeviationKm: deviations[deviations.length - 1],
+    averageDeviationKm: average,
+    p95DeviationKm: deviations[Math.min(deviations.length - 1, Math.floor(deviations.length * 0.95))]
+  };
+}
+
+function corridorDeviationLimitKm(directKm) {
+  const direct = Number(directKm || 0);
+  if (!Number.isFinite(direct) || direct <= 0) return Infinity;
+  if (direct <= 35) return Math.max(2.6, direct * 0.18);
+  if (direct <= 90) return Math.max(4.8, direct * 0.13);
+  return Math.max(10, direct * 0.10);
+}
+
+function routeCorridorScore(start, end, geometry) {
+  const metrics = routeCorridorMetrics(start, end, geometry);
+  const distance = polylineDistanceKm(geometry || []);
+  if (!Number.isFinite(distance) || distance <= 0) return Infinity;
+  return distance + metrics.averageDeviationKm * 5 + metrics.p95DeviationKm * 3 + metrics.maxDeviationKm * 2;
+}
+
+function corridorWaypointCandidates(fromKey, toKey, start, end, directKm) {
+  const direct = Number(directKm || 0);
+  if (!Number.isFinite(direct) || direct <= 0 || direct > 120) return [];
+  const corridorWidth = direct <= 35 ? Math.max(2.9, direct * 0.19) : Math.max(4.5, direct * 0.12);
+  const exclude = new Set([currentStationId(fromKey), currentStationId(toKey)]);
+  const candidates = [];
+  for (const rawStation of Object.values(communeCache.byId || {})) {
+    const station = canonicalizeStationDisplay(rawStation);
+    const id = currentStationId(station?.id || '');
+    if (!id || exclude.has(id)) continue;
+    const point = stationRoutePoint(station) || stationRawPoint(station);
+    if (!point) continue;
+    const progress = routeProgressOnSegment(point, start, end);
+    if (!Number.isFinite(progress) || progress < 0.16 || progress > 0.86) continue;
+    const deviation = routeCorridorDistanceKm([point.lon, point.lat], start, end);
+    if (!Number.isFinite(deviation) || deviation > corridorWidth) continue;
+    const fromDistance = haversine(start.lat, start.lon, point.lat, point.lon);
+    const toDistance = haversine(point.lat, point.lon, end.lat, end.lon);
+    if (fromDistance < Math.max(1.8, direct * 0.08) || toDistance < Math.max(1.8, direct * 0.08)) continue;
+    const importance = (station.hasPassengerStation ? 1.5 : 0) + Math.min(3, Number(station.baseDemand || station.population || 0) / 90000);
+    candidates.push({ id, station, point, progress, deviation, importance, score: deviation + Math.abs(progress - 0.5) * 1.2 - importance * 0.25 });
+  }
+  return candidates.sort((a, b) => a.score - b.score).slice(0, 5);
+}
+
+async function improveSncfRouteGeometryWithCorridorWaypoint(fromKey, toKey, geometry, profile, directKm) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (coords.length < 2) return coords;
+  const fromStation = stationById(fromKey);
+  const toStation = stationById(toKey);
+  const start = stationRoutePoint(fromStation) || stationRawPoint(fromStation);
+  const end = stationRoutePoint(toStation) || stationRawPoint(toStation);
+  if (!start || !end) return coords;
+  if (Number(directKm || 0) > 65) return coords;
+  const limit = corridorDeviationLimitKm(directKm);
+  const currentMetrics = routeCorridorMetrics(start, end, coords);
+  if (currentMetrics.p95DeviationKm <= limit && currentMetrics.maxDeviationKm <= limit * 1.8) return coords;
+
+  const currentDistance = polylineDistanceKm(coords);
+  const currentScore = routeCorridorScore(start, end, coords);
+  let best = { geometry: coords, score: currentScore, metrics: currentMetrics, distance: currentDistance, waypoint: null };
+  for (const candidate of corridorWaypointCandidates(fromKey, toKey, start, end, directKm)) {
+    const first = await sncfRouteGeometryForStations(fromKey, candidate.id, { profile, disableAutoWaypoint: true, disableStationJunctions: true });
+    const second = await sncfRouteGeometryForStations(candidate.id, toKey, { profile, disableAutoWaypoint: true, disableStationJunctions: true });
+    if (!Array.isArray(first) || first.length < 2 || !Array.isArray(second) || second.length < 2) continue;
+    const merged = mergeGeoCoordinateSequences([first, second]);
+    const distance = polylineDistanceKm(merged);
+    if (!Number.isFinite(distance) || distance <= 0) continue;
+    if (distance > Math.max(currentDistance * 1.42, directKm + 24)) continue;
+    const metrics = routeCorridorMetrics(start, end, merged);
+    const score = routeCorridorScore(start, end, merged);
+    const materiallyBetter = metrics.p95DeviationKm < best.metrics.p95DeviationKm * 0.72 || metrics.maxDeviationKm < best.metrics.maxDeviationKm * 0.72;
+    if (materiallyBetter && score < best.score - 1.5) {
+      best = { geometry: merged, score, metrics, distance, waypoint: candidate.id };
+    }
+  }
+  return best.geometry;
+}
+
 async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
   const fromKey = currentStationId(fromId);
   const toKey = currentStationId(toId);
+  const disableAutoWaypoint = options.disableAutoWaypoint === true;
   const key = sncfRouteCacheKey(fromKey, toKey, profile);
-  if (sncfRouteGeometryResultCache.has(key)) return sncfRouteGeometryResultCache.get(key);
+  if (!disableAutoWaypoint && sncfRouteGeometryResultCache.has(key)) return sncfRouteGeometryResultCache.get(key);
   const reverseKey = sncfRouteCacheKey(toKey, fromKey, profile);
-  if (sncfRouteGeometryResultCache.has(reverseKey)) {
+  if (!disableAutoWaypoint && sncfRouteGeometryResultCache.has(reverseKey)) {
     const reversed = [...sncfRouteGeometryResultCache.get(reverseKey)].reverse();
     return rememberSncfRouteGeometry(key, reversed);
   }
@@ -1506,8 +1704,10 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
       const tighter = lines.filter(line => boundsIntersects(line.bounds, tightBox));
       if (tighter.length >= 1) relevant.splice(0, relevant.length, ...tighter);
     }
-    const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm, { profile });
-    return geometry?.length ? rememberSncfRouteGeometry(key, geometry) : [];
+    const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm, { profile, stationJunctions: options.disableStationJunctions !== true });
+    if (!Array.isArray(geometry) || geometry.length < 2) return [];
+    const improved = disableAutoWaypoint ? geometry : await improveSncfRouteGeometryWithCorridorWaypoint(fromKey, toKey, geometry, profile, directKm);
+    return disableAutoWaypoint ? improved : rememberSncfRouteGeometry(key, improved);
   } catch (error) {
     console.warn('Géométrie SNCF RFN indisponible:', error.message);
     return [];
@@ -1850,13 +2050,50 @@ function isLikelyHighSpeedRailShapeLine(line) {
   return bestHits >= Math.ceil(samples.length * 0.72) && bestAverage <= 9.5;
 }
 
-function railRouteEdgeWeight(distanceKm, line, profile) {
+function routeCorridorDistanceKm(coord, start, end) {
+  if (!coord || !start || !end) return 0;
+  return geoPointToSegmentDistanceKm(coord, [start.lon, start.lat], [end.lon, end.lat]);
+}
+
+function railRouteCorridorPenalty(distanceKm, coordA, coordB, start, end, directKm, profile) {
+  const distance = Number(distanceKm);
+  const direct = Number(directKm);
+  if (!Number.isFinite(distance) || distance <= 0 || !Number.isFinite(direct) || direct <= 0) return 0;
+  const mid = [
+    (Number(coordA?.[0]) + Number(coordB?.[0])) / 2,
+    (Number(coordA?.[1]) + Number(coordB?.[1])) / 2
+  ];
+  if (!mid.every(Number.isFinite)) return 0;
+
+  // Le RFN réel peut s'écarter d'une ligne droite, mais sur des parcours urbains
+  // courts, le plus court chemin brut privilégiait parfois une boucle ferroviaire
+  // opposée à l'axe naturel de la ligne (cas Lyon : passage par Vaise/Perrache au
+  // lieu de l'axe Sathonay/Part-Dieu). On ajoute donc une pénalité progressive de
+  // corridor : faible sur les longues liaisons, plus sensible sur les petits
+  // itinéraires où deux branches parallèles existent.
+  const corridorKm = direct <= 35
+    ? Math.max(0.9, direct * 0.10)
+    : direct <= 90
+      ? Math.max(2.8, direct * 0.10)
+      : Math.max(8, direct * 0.08);
+  const deviationKm = routeCorridorDistanceKm(mid, start, end);
+  if (!Number.isFinite(deviationKm) || deviationKm <= corridorKm) return 0;
+
+  const excess = deviationKm - corridorKm;
+  const relative = excess / corridorKm;
+  const corridorFactor = direct <= 35 ? 8.5 : direct <= 90 ? 2.2 : 0.65;
+  const profileFactor = profile === 'highspeed' ? 0.65 : 1;
+  return distance * Math.min(7, relative * relative * corridorFactor * profileFactor);
+}
+
+function railRouteEdgeWeight(distanceKm, line, profile, context = {}) {
   const distance = Number(distanceKm);
   if (!Number.isFinite(distance) || distance <= 0) return distanceKm;
   const highSpeed = isLikelyHighSpeedRailShapeLine(line);
-  if (profile === 'highspeed') return highSpeed ? distance * 0.34 : distance;
-  if (profile === 'classic') return highSpeed ? distance * 8.5 : distance;
-  return distance;
+  let weight = distance;
+  if (profile === 'highspeed') weight = highSpeed ? distance * 0.34 : distance;
+  else if (profile === 'classic') weight = highSpeed ? distance * 8.5 : distance;
+  return weight + railRouteCorridorPenalty(distance, context.coordA, context.coordB, context.start, context.end, context.directKm, profile);
 }
 
 function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) {
@@ -1878,13 +2115,14 @@ function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) 
       const b = addNode(lonB, latB);
       if (a === b) continue;
       const distanceKm = haversine(latA, lonA, latB, lonB);
-      const weight = railRouteEdgeWeight(distanceKm, line, profile);
+      const weight = railRouteEdgeWeight(distanceKm, line, profile, { coordA: [lonA, latA], coordB: [lonB, latB], start, end, directKm });
       graph.get(a).push([b, weight]);
       graph.get(b).push([a, weight]);
     }
   }
   if (graph.size < 2) return [];
   connectNearbyRfnComponents(graph, coordsByKey, directKm);
+  if (options.stationJunctions !== false) connectStationRfnJunctions(graph, coordsByKey, start, end, directKm);
 
   const maxGap = Math.min(14, Math.max(3.5, directKm * 0.18));
   const startAnchors = nearestRfnNodeKeys(coordsByKey, start, { maxDistanceKm: maxGap, maxCount: 24 });
