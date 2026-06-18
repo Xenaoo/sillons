@@ -39,7 +39,7 @@ const SNCF_RFN_SPEED_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
 const SNCF_RFN_SPEED_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-speed-cache.json');
 const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
-const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v10';
+const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v11';
 const SNCF_RFN_SPATIAL_CELL_DEG = 0.18;
 const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
 const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
@@ -2068,6 +2068,37 @@ function projectPointOnGeoPolyline(point, coords) {
   return best;
 }
 
+const stationNearestPassengerDistanceCache = new Map();
+
+function nearestPassengerStationDistanceKm(station) {
+  const id = currentStationId(station?.id);
+  if (!station || !id) return Infinity;
+  if (stationNearestPassengerDistanceCache.has(id)) return stationNearestPassengerDistanceCache.get(id);
+  const point = stationRoutePoint(station) || stationRawPoint(station);
+  if (!point) return Infinity;
+  let best = Infinity;
+  for (const candidate of Object.values(communeCache.byId || {})) {
+    const candidateId = currentStationId(candidate?.id);
+    if (!candidate || candidateId === id || !candidate.hasPassengerStation) continue;
+    const candidatePoint = stationRoutePoint(candidate) || stationRawPoint(candidate);
+    if (!candidatePoint) continue;
+    const distance = haversine(point.lat, point.lon, candidatePoint.lat, candidatePoint.lon);
+    if (Number.isFinite(distance) && distance < best) best = distance;
+  }
+  stationNearestPassengerDistanceCache.set(id, best);
+  return best;
+}
+
+function stopProjectionAllowedDistanceKm(station, fallbackAllowed, isTerminal, options = {}) {
+  let allowed = Number(fallbackAllowed);
+  if (!Number.isFinite(allowed) || allowed <= 0) allowed = isTerminal ? 1.7 : 1.0;
+  if (isTerminal || options.disableDenseStopTightening === true) return allowed;
+  const nearest = nearestPassengerStationDistanceKm(station);
+  if (nearest <= 1.8) return Math.min(allowed, Number(options.denseStopDistanceKm ?? 0.28));
+  if (nearest <= 3.2) return Math.min(allowed, Number(options.suburbanStopDistanceKm ?? 0.45));
+  return allowed;
+}
+
 function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
   const coords = Array.isArray(geometry) ? geometry : [];
   if (!Array.isArray(ids) || ids.length < 2 || coords.length < 2) return { ok: false, reason: 'empty' };
@@ -2090,7 +2121,8 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
     const point = stationRoutePoint(stop) || stationRawPoint(stop);
     const projection = projectPointOnGeoPolyline(point, coords);
     if (!projection) return { ok: false, reason: 'projection', stationId: ids[i] };
-    let allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
+    const isTerminal = i === 0 || i === ids.length - 1;
+    let allowed = stopProjectionAllowedDistanceKm(stop, isTerminal ? maxTerminalDistanceKm : maxStationDistanceKm, isTerminal, options);
     if (allowLargeTerminalOffset && (i === 0 || i === ids.length - 1)) allowed = Math.max(allowed, projection.distanceKm);
     if (projection.distanceKm > allowed) {
       return { ok: false, reason: 'too-far', stationId: ids[i], distanceKm: projection.distanceKm, allowed };
@@ -3399,6 +3431,7 @@ function enrichBaseStationsWithPopulation(stations) {
 
 function invalidatePublicWorldCache() {
   publicWorldCache = { key: '', value: null };
+  stationNearestPassengerDistanceCache.clear();
 }
 
 function stationCommuneCode(station) {
