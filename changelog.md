@@ -1,10 +1,9 @@
-## Version v65.2.0 — lisibilité R&D, stocks énergie et renommage Paris Montparnasse
+## Version v65.2.1 — correction définitive Paris Montparnasse
 
-- incrément de version : badge interface `v65.2.0`, version serveur/client `v65.2.0`, package `65.2.0` et schéma serveur `120` ;
-- renommage de la gare `Paris-Vaugirard` en `Paris Montparnasse` dans le référentiel gares et dans les libellés persistés de la sauvegarde ;
-- menu Vue : ajout d’un tooltip sur `Capacité R&D` expliquant la vitesse de recherche et détaillant les sources de bonus ;
-- menu Énergie : ajout de l’heure prévisionnelle d’épuisement du stock pour chaque ressource, ou d’un statut de rupture/absence de rupture quand il n’y a pas de stock consommable ;
-- barre supérieure : les tooltips des ressources indiquent maintenant l’heure à laquelle le stock atteindra 0 au rythme actuel.
+- incrément de version : badge interface `v65.2.1`, version serveur/client `v65.2.1`, package `65.2.1` et schéma serveur `121` ;
+- correction runtime du libellé `Paris-Vaugirard` : le serveur force désormais `Paris Montparnasse` pour les anciens caches SNCF et les UIC Montparnasse concernés ;
+- ajout d'une sécurité côté client : même si une ancienne save ou un ancien cache renvoie encore `Paris-Vaugirard`, l'affichage carte, les tooltips et les libellés de lignes utilisent `Paris Montparnasse` ;
+- nettoyage défensif de `data/save.json` et du cache des gares inclus dans l'archive.
 
 ## Version v65.1.0 — bouton carte explicite pour les lignes des autres joueurs
 

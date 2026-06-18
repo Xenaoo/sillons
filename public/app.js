@@ -4,13 +4,81 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.2.0';
+const PROJECT_VERSION = 'v65.2.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
 const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v1';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
+
+const STATION_DISPLAY_NAME_ALIASES = Object.freeze({
+  'paris-vaugirard': 'Paris Montparnasse',
+  'paris vaugirard': 'Paris Montparnasse',
+  'paris-vaugirard-ceinture': 'Paris Montparnasse',
+  'paris vaugirard ceinture': 'Paris Montparnasse'
+});
+const MONTPARNASSE_STATION_UIC_ALIASES = new Set(['87391003', '87391102']);
+
+function canonicalStationDisplayNameClient(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return raw;
+  const normalized = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[’']/g, ' ')
+    .replace(/[._]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const compact = normalized.replace(/\s+/g, '-');
+  return STATION_DISPLAY_NAME_ALIASES[normalized]
+    || STATION_DISPLAY_NAME_ALIASES[compact]
+    || raw;
+}
+
+function canonicalizeStationDisplayClient(station) {
+  if (!station || typeof station !== 'object') return station;
+  const uic = String(station.stationUic || station.codeUic || '').split(',')[0].trim();
+  const id = String(station.id || '').trim();
+  const forcedMontparnasse = id === 'PAR_MONTPARNASSE' || MONTPARNASSE_STATION_UIC_ALIASES.has(uic);
+  const nextName = forcedMontparnasse ? 'Paris Montparnasse' : canonicalStationDisplayNameClient(station.name);
+  const nextStationName = forcedMontparnasse ? 'Paris Montparnasse' : canonicalStationDisplayNameClient(station.stationName || station.name);
+  if (nextName === station.name && nextStationName === station.stationName) return station;
+  return { ...station, name: nextName || station.name, stationName: nextStationName || station.stationName };
+}
+
+function canonicalizeStationLabelTextClient(value) {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/Paris[- ]Vaugirard(?:[- ]Ceinture)?/gi, 'Paris Montparnasse')
+    .replace(/Paris Montparnasse[- ]Ceinture/gi, 'Paris Montparnasse');
+}
+
+function canonicalizeLineLabelsClient(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  if (Array.isArray(obj)) {
+    obj.forEach(canonicalizeLineLabelsClient);
+    return;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string') obj[key] = canonicalizeStationLabelTextClient(value);
+    else if (value && typeof value === 'object') canonicalizeLineLabelsClient(value);
+  }
+}
+
+function canonicalizeStateStationDisplays(data) {
+  const world = data?.world;
+  if (world?.stations && Array.isArray(world.stations)) {
+    world.stations = world.stations.map(canonicalizeStationDisplayClient);
+    world.stationIndex = Object.fromEntries(world.stations.map(station => [station.id, station]));
+  } else if (world?.stationIndex && typeof world.stationIndex === 'object') {
+    world.stationIndex = Object.fromEntries(Object.entries(world.stationIndex).map(([id, station]) => [id, canonicalizeStationDisplayClient(station)]));
+  }
+  canonicalizeLineLabelsClient(data?.me?.lines || []);
+  canonicalizeLineLabelsClient(data?.players || []);
+  return data;
+}
 
 const COMPANY_LOGOS = [
   { id: 'steam_front', label: 'Locomotive vapeur', src: '/assets/company_logos/steam_front.png' },
@@ -750,6 +818,7 @@ async function refreshState(first) {
       $('#setup')?.classList.remove('hidden');
     }
     if (!data.ok) throw new Error(data.error || 'État indisponible.');
+    canonicalizeStateStationDisplays(data);
     app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
     const previousSignature = app.routeDataSignature;
     const previousCash = Number(app.state?.me?.cash);
@@ -8344,7 +8413,8 @@ function stationOptions(selectedId = '') {
 
 
 function station(id) {
-  return app.state.world.stationIndex[id] || dedupedStations(app.state.world.stations).find(s => s.id === id);
+  const found = app.state.world.stationIndex[id] || dedupedStations(app.state.world.stations).find(s => s.id === id);
+  return canonicalizeStationDisplayClient(found);
 }
 
 function trainName(train) {

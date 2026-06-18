@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.2.0';
-const STATE_SCHEMA_VERSION = 120;
+const PROJECT_VERSION = 'v65.2.1';
+const STATE_SCHEMA_VERSION = 121;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -123,6 +123,68 @@ const PARIS_INTERCHANGE_STATIONS = Object.freeze([
   }
 ]);
 const PARIS_COMMUNE_POPULATION = 2133111;
+
+const STATION_DISPLAY_NAME_ALIASES = Object.freeze({
+  'paris-vaugirard': 'Paris Montparnasse',
+  'paris vaugirard': 'Paris Montparnasse',
+  'paris-vaugirard-ceinture': 'Paris Montparnasse',
+  'paris vaugirard ceinture': 'Paris Montparnasse'
+});
+const MONTPARNASSE_STATION_UIC_ALIASES = new Set(['87391003', '87391102']);
+
+function canonicalStationDisplayName(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return raw;
+  const normalized = raw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’']/g, ' ')
+    .replace(/[._]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const compact = normalized.replace(/\s+/g, '-');
+  return STATION_DISPLAY_NAME_ALIASES[normalized]
+    || STATION_DISPLAY_NAME_ALIASES[compact]
+    || raw;
+}
+
+function canonicalizeStationDisplay(station) {
+  if (!station || typeof station !== 'object') return station;
+  const next = { ...station };
+  const uic = String(next.stationUic || next.codeUic || '').split(',')[0].trim();
+  const id = String(next.id || '').trim();
+  const forcedMontparnasse = id === 'PAR_MONTPARNASSE' || MONTPARNASSE_STATION_UIC_ALIASES.has(uic);
+  const canonicalName = forcedMontparnasse ? 'Paris Montparnasse' : canonicalStationDisplayName(next.name);
+  if (canonicalName && canonicalName !== next.name) next.name = canonicalName;
+  const canonicalStationName = forcedMontparnasse ? 'Paris Montparnasse' : canonicalStationDisplayName(next.stationName || next.name);
+  if (canonicalStationName && canonicalStationName !== next.stationName) next.stationName = canonicalStationName;
+  return next;
+}
+
+function canonicalizeStationLabelText(value) {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/Paris[- ]Vaugirard(?:[- ]Ceinture)?/gi, 'Paris Montparnasse')
+    .replace(/Paris Montparnasse[- ]Ceinture/gi, 'Paris Montparnasse');
+}
+
+function canonicalizePersistedStationLabels(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i += 1) {
+      const value = obj[i];
+      if (typeof value === 'string') obj[i] = canonicalizeStationLabelText(value);
+      else canonicalizePersistedStationLabels(value);
+    }
+    return obj;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string') obj[key] = canonicalizeStationLabelText(value);
+    else canonicalizePersistedStationLabels(value);
+  }
+  return obj;
+}
 
 const DEPARTMENT_NAME_TO_CODE = Object.freeze({
   AIN: '01',
@@ -1594,7 +1656,7 @@ function migrateState(loaded) {
   for (const [id, player] of Object.entries(loaded.players || {})) {
     players[id] = migratePlayer(player, id);
   }
-  return {
+  const migrated = {
     version: STATE_SCHEMA_VERSION,
     createdAt: loaded.createdAt || Date.now(),
     now: loaded.now || Date.now(),
@@ -1608,6 +1670,8 @@ function migrateState(loaded) {
     users: normalizeUsers(loaded.users || {}),
     players: purgeUnlinkedPlayers(players, loaded.users || {}),
   };
+  canonicalizePersistedStationLabels(migrated.players);
+  return migrated;
 }
 
 
@@ -2012,7 +2076,7 @@ function deduplicatePublicStations(stations, existingStations = []) {
   const existing = Array.isArray(existingStations) ? existingStations : [];
   for (const raw of stations || []) {
     if (!raw || !raw.id) continue;
-    const station = { ...raw, id: currentStationId(raw.id) };
+    const station = canonicalizeStationDisplay({ ...raw, id: currentStationId(raw.id) });
     const id = String(station.id || '').trim();
     if (!id || seenIds.has(id)) continue;
     if (isDuplicatePublicStation(station, [...existing, ...out])) continue;
@@ -2317,10 +2381,11 @@ function loadCommuneCache() {
     const parsed = JSON.parse(fs.readFileSync(COMMUNE_CACHE_FILE, 'utf8'));
     const byId = {};
     for (const station of parsed.stations || []) {
-      const normalized = normalizeCommuneStation(station);
+      const normalized = canonicalizeStationDisplay(normalizeCommuneStation(station));
       if (normalized) byId[normalized.id] = normalized;
     }
     applyParisInterchangeStations(byId);
+    for (const [id, station] of Object.entries(byId)) byId[id] = canonicalizeStationDisplay(station);
     rebuildStationAliasMap(byId);
     const sourceVersion = Number(parsed.sourceVersion || 0);
     const missingAuthoritativePlacement = Object.values(byId).some(s => (s.hasPassengerStation || s.hasFreightStation) && (!Number.isFinite(Number(s.stationLat)) || !Number.isFinite(Number(s.stationLon)))) || !parsed.sncfStats;
@@ -6828,7 +6893,8 @@ function nearestStation(stationId, maxKm, preferredRegion) {
 
 function stationById(id) {
   const canonical = currentStationId(id);
-  return communeCache.byId?.[canonical] || communeCache.byId?.[id] || null;
+  const found = communeCache.byId?.[canonical] || communeCache.byId?.[id] || null;
+  return found ? canonicalizeStationDisplay(found) : null;
 }
 
 
