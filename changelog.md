@@ -1,3 +1,15 @@
+## Version v68.0.0 — refonte technique du découpage du code
+
+- incrément de version : badge interface `v68.0.0`, version serveur/client `v68.0.0`, package `68.0.0` et schéma serveur `148` ;
+- refactorisation sans changement de gameplay : conservation du moteur RFN, de la save, des mécaniques économiques et des interfaces existantes ;
+- serveur : remplacement du monolithe direct par un point d’entrée `server.js` minimal et des fichiers métier dans `src/server/parts/` ;
+- serveur : découpage par domaines (`HTTP/API`, `authentification/bugs/admin`, `RFN/routage`, `état/monde/gares`, `actions`, `simulation/économie`, `matériel/lignes/infrastructure`, `balance/monde/utilitaires`) ;
+- client : remplacement du gros `public/app.js` par un loader ordonné et des fichiers dans `public/js/` ;
+- client : découpage par domaines (`core/state`, `startup/events/auth`, `tutoriel/vue`, `R&D`, `lignes`, `parc/compositions`, `gares/RH`, `énergie/budget/marché`, `actions/modales`, `carte`, `routage/utilitaires`) ;
+- maintenance : ajout de `scripts/check-split-code.js` pour contrôler la syntaxe de tous les fichiers découpés ;
+- client CSS : remplacement du gros `public/styles.css` par un fichier d’imports et des sections dans `public/css/` ;
+- documentation : README enrichi avec la nouvelle structure du projet.
+
 ## Version v67.2.0 — calcul RFN parallèle et caches persistants renforcés
 
 - incrément de version : badge interface `v67.2.0`, version serveur/client `v67.2.0`, package `67.2.0` et schéma serveur `147` ;

@@ -1,0 +1,824 @@
+// Score, routes simplifiées, balance, arbre R&D, monde de base et utilitaires généraux.
+function fail(error, hint = '') { return { ok: false, error, hint }; }
+
+function scorePlayer(player) {
+  return player.cash * 0.01 - player.debt * 0.006 + player.reputation * 800 + player.stats.passengers * 0.04 + player.stats.freightTons * 0.08 + player.lines.filter(l => l.active).length * 2000 + player.epoch * 45000;
+}
+
+function routeKey(from, to, service) {
+  const sorted = [from, to].sort().join('-');
+  const market = service === 'mixed' ? 'mixed' : service;
+  return `${sorted}:${market}`;
+}
+
+function nearestStation(stationId, maxKm, preferredRegion) {
+  const origin = stationById(stationId);
+  if (!origin) return null;
+  const candidates = WORLD.stations
+    .filter(s => s.id !== stationId)
+    .map(s => ({ ...s, dist: distanceBetween(stationId, s.id), sameRegion: s.region === preferredRegion }))
+    .filter(s => s.dist <= maxKm || s.sameRegion)
+    .sort((a, b) => (b.sameRegion - a.sameRegion) || a.dist - b.dist);
+  return candidates[0] || null;
+}
+
+function stationById(id) {
+  const canonical = currentStationId(id);
+  const found = communeCache.byId?.[canonical] || communeCache.byId?.[id] || null;
+  return found ? canonicalizeStationDisplay(found) : null;
+}
+
+
+function routeAdjacencyFor(a, b) {
+  const adjacency = {};
+  for (const [id, list] of Object.entries(WORLD.railAdjacency || {})) adjacency[id] = [...list];
+
+  addLocalRouteShortcut(adjacency, a, b);
+
+  for (const id of [a, b]) {
+    if (!id || WORLD.stationIndex[id]) continue;
+    const station = stationById(id);
+    if (!station) continue;
+    adjacency[id] ||= [];
+    const anchors = nearestRailAnchorsForStation(station, station.commune ? 6 : 4);
+    const stationPoint = stationRoutePoint(station) || stationRawPoint(station);
+    const nearest = anchors.length
+      ? anchors.map(anchorId => ({ id: anchorId }))
+      : WORLD.stations
+          .map(s => {
+            const candidatePoint = stationRoutePoint(s) || stationRawPoint(s);
+            return { id: s.id, d: candidatePoint && stationPoint ? haversine(stationPoint.lat, stationPoint.lon, candidatePoint.lat, candidatePoint.lon) : Infinity };
+          })
+          .sort((x, y) => x.d - y.d)
+          .slice(0, station.commune ? 4 : 3);
+    for (const n of nearest) {
+      adjacency[id].push(n.id);
+      (adjacency[n.id] ||= []).push(id);
+    }
+  }
+  return adjacency;
+}
+
+
+function stationsShareProjectedRailSegment(a, b) {
+  const pa = stationRailPlacement(stationById(a));
+  const pb = stationRailPlacement(stationById(b));
+  if (!pa || !pb) return false;
+  if (pa.railSegment && pb.railSegment && pa.railSegment === pb.railSegment) return true;
+  if (pa.stationUic && pb.stationUic && pa.stationUic === pb.stationUic) return true;
+  return false;
+}
+
+function addLocalRouteShortcut(adjacency, a, b) {
+  if (!a || !b || a === b) return;
+  const sa = stationById(a);
+  const sb = stationById(b);
+  if (!sa || !sb) return;
+  const direct = edgeDistance(a, b);
+  if (!Number.isFinite(direct) || direct <= 0) return;
+  const allowDirect = direct <= 45 || stationsShareProjectedRailSegment(a, b);
+  if (!allowDirect) return;
+  adjacency[a] ||= [];
+  adjacency[b] ||= [];
+  if (!adjacency[a].includes(b)) adjacency[a].push(b);
+  if (!adjacency[b].includes(a)) adjacency[b].push(a);
+}
+
+const _routeCache = new Map();
+
+function getRouteCache(key) {
+  if (!_routeCache.has(key)) return null;
+  const value = _routeCache.get(key);
+  _routeCache.delete(key);
+  _routeCache.set(key, value);
+  return value;
+}
+
+function rememberRouteCache(key, route) {
+  if (_routeCache.has(key)) _routeCache.delete(key);
+  _routeCache.set(key, route);
+  while (_routeCache.size > ROUTE_CACHE_MAX_ENTRIES) {
+    const oldestKey = _routeCache.keys().next().value;
+    _routeCache.delete(oldestKey);
+  }
+  return route;
+}
+
+
+function distanceBetween(a, b) {
+  return routeBetween(a, b).distance;
+}
+
+function routeBetweenStops(stops) {
+  const ids = sanitizeStopsPayload(stops, null, null);
+  if (ids.length < 2) return { ids, distance: 0, maxSegment: 0 };
+  const key = `multi::${ids.join('::')}`;
+  const cached = getRouteCache(key);
+  if (cached) return cached;
+
+  let mergedIds = [ids[0]];
+  let distance = 0;
+  let maxSegment = 0;
+
+  for (let i = 1; i < ids.length; i++) {
+    const segment = routeBetween(ids[i - 1], ids[i]);
+    distance += segment.distance || 0;
+    maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
+    const segIds = segment.ids?.length ? segment.ids : [ids[i - 1], ids[i]];
+    mergedIds.push(...segIds.slice(1));
+  }
+
+  const route = { ids: mergedIds, distance: Math.round(distance), maxSegment: Math.round(maxSegment) };
+  return rememberRouteCache(key, route);
+}
+
+function routeBetween(a, b) {
+  if (a === b) return { ids: [a], distance: 0, maxSegment: 0 };
+  const key = `${a}::${b}`;
+  const cached = getRouteCache(key);
+  if (cached) return cached;
+  const reverseKey = `${b}::${a}`;
+  const reverse = getRouteCache(reverseKey);
+  if (reverse) {
+    const route = { ...reverse, ids: [...reverse.ids].reverse() };
+    return rememberRouteCache(key, route);
+  }
+
+  const adjacency = routeAdjacencyFor(a, b);
+  const nodes = new Set([...Object.keys(adjacency), a, b]);
+  const dist = {};
+  const prev = {};
+  const visited = new Set();
+
+  for (const n of nodes) dist[n] = Number.POSITIVE_INFINITY;
+  dist[a] = 0;
+
+  while (visited.size < nodes.size) {
+    let u = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const n of nodes) {
+      if (!visited.has(n) && dist[n] < best) {
+        best = dist[n];
+        u = n;
+      }
+    }
+    if (!u || u === b || !Number.isFinite(best)) break;
+    visited.add(u);
+
+    for (const v of adjacency[u] || []) {
+      if (visited.has(v)) continue;
+      const alt = dist[u] + edgeDistance(u, v);
+      if (alt < dist[v]) {
+        dist[v] = alt;
+        prev[v] = u;
+      }
+    }
+  }
+
+  let ids = [];
+  if (Number.isFinite(dist[b])) {
+    let cur = b;
+    ids.push(cur);
+    while (prev[cur]) {
+      cur = prev[cur];
+      ids.push(cur);
+    }
+    ids.reverse();
+  } else {
+    ids = [a, b];
+    dist[b] = edgeDistance(a, b);
+  }
+
+  const direct = edgeDistance(a, b);
+  if (direct > 0 && Number.isFinite(dist[b]) && dist[b] > Math.max(35, direct * 2.35) && direct <= 85) {
+    ids = [a, b];
+    dist[b] = direct;
+  }
+
+  let maxSegment = 0;
+  for (let i = 1; i < ids.length; i++) {
+    maxSegment = Math.max(maxSegment, edgeDistance(ids[i - 1], ids[i]));
+  }
+
+  const route = {
+    ids,
+    distance: Math.round(dist[b] || 0),
+    maxSegment: Math.round(maxSegment || 0)
+  };
+  return rememberRouteCache(key, route);
+}
+
+function effectiveTrainRange(player, model, routeInfo) {
+  return Math.max(1, Math.round(Number(model?.range || 0)));
+}
+
+function edgeDistance(a, b) {
+  const sa = stationRoutePoint(stationById(a));
+  const sb = stationRoutePoint(stationById(b));
+  if (!sa || !sb) return 0;
+  return haversine(sa.lat, sa.lon, sb.lat, sb.lon);
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function randomColor() {
+  const colors = ['#60a5fa', '#f97316', '#22c55e', '#e879f9', '#f43f5e', '#facc15', '#14b8a6', '#a78bfa'];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function sanitizeCompanyLogo(value) {
+  const id = String(value || '').trim();
+  return COMPANY_LOGOS.includes(id) ? id : COMPANY_LOGOS[0];
+}
+
+function validateColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : null;
+}
+
+function cleanText(value, max) {
+  return String(value).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) || 'Compagnie';
+}
+
+function cleanOptionalText(value, max) {
+  return String(value || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function round2(value) { return Math.round(value * 100) / 100; }
+function roundCoord(value) { return Math.round(Number(value) * 1000000) / 1000000; }
+function money(value) { return `${Math.round(value).toLocaleString('fr-FR')} €`; }
+function formatCycles(value) {
+  const cycles = Math.max(1, Math.ceil(Number(value || 1)));
+  return cycles <= 1 ? '1 cycle' : `${cycles} cycles`;
+}
+
+function buildBalance() {
+  const epochs = [
+    { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0 },
+    { id: 1, name: 'Ère du diesel', year: 1930, requiredTech: 4, requiredTraffic: 15000000 },
+    { id: 2, name: 'Ère de l’électrique', year: 1950, requiredTech: 9, requiredTraffic: 75000000 },
+    { id: 3, name: 'Ère de la grande vitesse', year: 1980, requiredTech: 17, requiredTraffic: 300000000 },
+    { id: 4, name: 'Ère de l’hydrogène', year: 2025, requiredTech: 28, requiredTraffic: 1200000000 },
+    { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 42, requiredTraffic: 4000000000 },
+    { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 58, requiredTraffic: 12000000000 }
+  ];
+  const trains = {
+    steam_030_mixte: { id: 'steam_030_mixte', name: 'Locomotive vapeur 030 mixte', unlockEpoch: 0, type: 'Vapeur mixte', speed: 55, capacity: 140, freight: 120, energyType: 'coal', energy: 9.5, maintenance: 0.62, price: 95000, reliability: 0.78, comfort: 0.32, range: 50, description: 'Modèle de départ polyvalent, lent mais économique pour ouvrir les premières lignes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 1 },
+    steam_120_omnibus: { id: 'steam_120_omnibus', name: 'Locomotive vapeur 120 omnibus', unlockEpoch: 0, type: 'Vapeur voyageurs', speed: 70, capacity: 210, freight: 60, energyType: 'coal', energy: 10.8, maintenance: 0.66, price: 135000, reliability: 0.75, comfort: 0.38, range: 75, description: 'Vapeur de desserte voyageurs, adaptée aux lignes régionales naissantes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 3 },
+    steam_040_freight: { id: 'steam_040_freight', name: 'Locomotive vapeur 040 marchandises', unlockEpoch: 0, type: 'Vapeur fret', speed: 45, capacity: 40, freight: 360, energyType: 'coal', energy: 13.2, maintenance: 0.74, price: 155000, reliability: 0.8, comfort: 0.22, range: 90, description: 'Machine lente et tractrice pour les premiers trafics de marchandises.', requiredTech: 'steam_freight_locomotives', requiredTechLevel: 4 },
+    steam_220_express: { id: 'steam_220_express', name: 'Locomotive vapeur 220 express', unlockEpoch: 0, type: 'Vapeur express', speed: 95, capacity: 300, freight: 80, energyType: 'coal', energy: 14.2, maintenance: 0.86, price: 235000, reliability: 0.79, comfort: 0.48, range: 125, description: 'Vapeur rapide pour les grands axes voyageurs de l’ère vapeur.', requiredTech: 'steam_passenger_locomotives', requiredTechLevel: 5 },
+    steam_241_articulated: { id: 'steam_241_articulated', name: 'Locomotive vapeur articulée 241', unlockEpoch: 0, type: 'Vapeur lourde articulée', speed: 90, capacity: 420, freight: 520, energyType: 'coal', energy: 17.0, maintenance: 1.02, price: 390000, reliability: 0.82, comfort: 0.5, range: 150, description: 'Matériel vapeur lourd de fin d’ère, puissant mais coûteux à entretenir.', requiredTech: 'steam_articulated_locomotives', requiredTechLevel: 8 },
+
+    diesel_shunter_030: { id: 'diesel_shunter_030', name: 'Locotracteur diesel de manœuvre', unlockEpoch: 1, type: 'Diesel manœuvre', speed: 70, capacity: 40, freight: 420, energyType: 'diesel', energy: 6.0, maintenance: 0.43, price: 310000, reliability: 0.83, comfort: 0.24, range: 125, description: 'Engin simple et fiable pour manœuvres, embranchements et fret court.', requiredTech: 'diesel_shunters', requiredTechLevel: 1 },
+    diesel_light_railcar: { id: 'diesel_light_railcar', name: 'Autorail diesel léger', unlockEpoch: 1, type: 'Autorail diesel', speed: 110, capacity: 540, freight: 0, energyType: 'diesel', energy: 4.8, maintenance: 0.4, price: 420000, reliability: 0.86, comfort: 0.56, range: 150, description: 'Matériel économique pour lignes secondaires non électrifiées.', requiredTech: 'diesel_light_railcars', requiredTechLevel: 3 },
+    diesel_mechanical_regional: { id: 'diesel_mechanical_regional', name: 'Automotrice diesel mécanique', unlockEpoch: 1, type: 'Diesel régional', speed: 125, capacity: 620, freight: 0, energyType: 'diesel', energy: 5.4, maintenance: 0.44, price: 650000, reliability: 0.87, comfort: 0.62, range: 175, description: 'Rame régionale diesel plus capacitaire, efficace hors caténaire.', requiredTech: 'diesel_mechanical', requiredTechLevel: 4 },
+    diesel_hydraulic_express: { id: 'diesel_hydraulic_express', name: 'Locomotive diesel hydraulique voyageurs', unlockEpoch: 1, type: 'Diesel voyageurs', speed: 150, capacity: 430, freight: 120, energyType: 'diesel', energy: 7.2, maintenance: 0.56, price: 1150000, reliability: 0.88, comfort: 0.66, range: 210, description: 'Locomotive diesel rapide pour relations voyageurs sans électrification.', requiredTech: 'diesel_passenger_locomotives', requiredTechLevel: 6 },
+    diesel_electric_freight: { id: 'diesel_electric_freight', name: 'Locomotive diesel-électrique fret', unlockEpoch: 1, type: 'Diesel-électrique fret', speed: 110, capacity: 0, freight: 950, energyType: 'diesel', energy: 8.8, maintenance: 0.58, price: 1450000, reliability: 0.9, comfort: 0.2, range: 250, description: 'Fret lourd non électrifié, performant sur longues distances.', requiredTech: 'diesel_freight_locomotives', requiredTechLevel: 8 },
+
+    electric_pioneer_loco: { id: 'electric_pioneer_loco', name: 'Locomotive électrique pionnière', unlockEpoch: 2, type: 'Électrique pionnière', speed: 115, capacity: 260, freight: 180, energyType: 'electricity', energy: 6.4, maintenance: 0.55, price: 520000, reliability: 0.84, comfort: 0.5, range: 250, description: 'Premier matériel électrique polyvalent pour lignes équipées.', requiredTech: 'electric_first_trains', requiredTechLevel: 1 },
+    electric_third_rail_emu: { id: 'electric_third_rail_emu', name: 'Automotrice troisième rail', unlockEpoch: 2, type: 'Électrique urbain', speed: 100, capacity: 780, freight: 0, energyType: 'electricity', energy: 5.2, maintenance: 0.42, price: 980000, reliability: 0.88, comfort: 0.56, range: 280, description: 'Rame dense pour dessertes urbaines et périurbaines électrifiées.', requiredTech: 'electric_third_rail', requiredTechLevel: 3 },
+    electric_dc_regional_emu: { id: 'electric_dc_regional_emu', name: 'Automotrice courant continu régionale', unlockEpoch: 2, type: 'Électrique régionale', speed: 160, capacity: 650, freight: 0, energyType: 'electricity', energy: 5.6, maintenance: 0.38, price: 1250000, reliability: 0.91, comfort: 0.68, range: 320, description: 'Rame régionale performante sur réseau électrifié continu.', requiredTech: 'electric_dc_catenary', requiredTechLevel: 4 },
+    electric_dual_current_loco: { id: 'electric_dual_current_loco', name: 'Locomotive bicourant multiservice', unlockEpoch: 2, type: 'Électrique bicourant', speed: 200, capacity: 520, freight: 520, energyType: 'electricity', energy: 8.2, maintenance: 0.64, price: 4200000, reliability: 0.92, comfort: 0.7, range: 360, description: 'Locomotive voyageurs/fret capable de passer entre réseaux électriques.', requiredTech: 'electric_dual_current_trains', requiredTechLevel: 6 },
+    electric_heavy_freight: { id: 'electric_heavy_freight', name: 'Locomotive électrique fret lourd', unlockEpoch: 2, type: 'Fret électrique', speed: 140, capacity: 0, freight: 1450, energyType: 'electricity', energy: 9.5, maintenance: 0.62, price: 5100000, reliability: 0.93, comfort: 0.22, range: 400, description: 'Fret lourd électrifié avec très bonne fiabilité et coût énergétique bas.', requiredTech: 'electric_locomotives', requiredTechLevel: 8 },
+
+    hsv_intercity_200: { id: 'hsv_intercity_200', name: 'Train rapide Intercités 200', unlockEpoch: 3, type: 'Train rapide', speed: 200, capacity: 560, freight: 60, energyType: 'electricity', energy: 7.2, maintenance: 0.5, price: 1800000, reliability: 0.9, comfort: 0.72, range: 350, description: 'Matériel de transition vers la grande vitesse, adapté aux grands axes classiques.', requiredTech: 'hsv_first_fast_trains', requiredTechLevel: 1 },
+    hsv_trainset_pioneer: { id: 'hsv_trainset_pioneer', name: 'Rame grande vitesse première génération', unlockEpoch: 3, type: 'Grande vitesse', speed: 300, capacity: 760, freight: 0, energyType: 'electricity', energy: 13.5, maintenance: 1.1, price: 14500000, reliability: 0.93, comfort: 0.82, range: 450, description: 'Première rame très rapide, chère mais structurante pour les grands axes.', requiredTech: 'hsv_trainsets', requiredTechLevel: 3 },
+    hsv_duplex_capacity: { id: 'hsv_duplex_capacity', name: 'Rame grande vitesse Duplex', unlockEpoch: 3, type: 'Grande vitesse haute capacité', speed: 320, capacity: 1040, freight: 0, energyType: 'electricity', energy: 15.2, maintenance: 1.25, price: 23000000, reliability: 0.94, comfort: 0.86, range: 550, description: 'Grande vitesse à très forte capacité pour axes saturés.', requiredTech: 'hsv_trainsets', requiredTechLevel: 5 },
+    hsv_distributed_trainset: { id: 'hsv_distributed_trainset', name: 'Rame grande vitesse à traction répartie', unlockEpoch: 3, type: 'Grande vitesse avancée', speed: 330, capacity: 850, freight: 0, energyType: 'electricity', energy: 13.8, maintenance: 1.05, price: 26000000, reliability: 0.95, comfort: 0.87, range: 625, description: 'Rame de grande vitesse plus efficace grâce à la traction répartie.', requiredTech: 'hsv_distributed_traction', requiredTechLevel: 6 },
+    hsv_premium_long_distance: { id: 'hsv_premium_long_distance', name: 'Rame grande distance premium', unlockEpoch: 3, type: 'Grande vitesse premium', speed: 320, capacity: 690, freight: 0, energyType: 'electricity', energy: 14.6, maintenance: 1.18, price: 28500000, reliability: 0.95, comfort: 0.94, range: 700, description: 'Matériel très confortable pour relations longues distances à forte marge.', requiredTech: 'hsv_premium_long_distance', requiredTechLevel: 8 },
+
+    hydrogen_regional_unit: { id: 'hydrogen_regional_unit', name: 'Rame hydrogène régionale', unlockEpoch: 4, type: 'Hydrogène régional', speed: 140, capacity: 580, freight: 0, energyType: 'hydrogen', energy: 4.2, maintenance: 0.36, price: 6200000, reliability: 0.9, comfort: 0.76, range: 250, description: 'Rame propre pour lignes non électrifiées à autonomie correcte.', requiredTech: 'hydrogen_regional_trains', requiredTechLevel: 1 },
+    hydrogen_fuel_cell_unit: { id: 'hydrogen_fuel_cell_unit', name: 'Rame hydrogène à pile combustible', unlockEpoch: 4, type: 'Hydrogène optimisé', speed: 150, capacity: 600, freight: 0, energyType: 'hydrogen', energy: 3.9, maintenance: 0.34, price: 7400000, reliability: 0.92, comfort: 0.78, range: 310, description: 'Chaîne hydrogène plus efficace et plus fiable pour dessertes régionales.', requiredTech: 'hydrogen_fuel_cell', requiredTechLevel: 3 },
+    hydrogen_rural_unit: { id: 'hydrogen_rural_unit', name: 'Rame hydrogène lignes rurales', unlockEpoch: 4, type: 'Hydrogène rural', speed: 130, capacity: 540, freight: 0, energyType: 'hydrogen', energy: 3.4, maintenance: 0.3, price: 5600000, reliability: 0.91, comfort: 0.72, range: 350, description: 'Matériel sobre pour lignes peu denses et longues antennes rurales.', requiredTech: 'hydrogen_rural_lines', requiredTechLevel: 4 },
+    hydrogen_long_range_unit: { id: 'hydrogen_long_range_unit', name: 'Rame hydrogène longue distance', unlockEpoch: 4, type: 'Hydrogène longue distance', speed: 170, capacity: 650, freight: 0, energyType: 'hydrogen', energy: 4.6, maintenance: 0.42, price: 9800000, reliability: 0.92, comfort: 0.82, range: 425, description: 'Autonomie élevée pour itinéraires non électrifiés de grande longueur.', requiredTech: 'hydrogen_long_distance_tanks', requiredTechLevel: 6 },
+    hydrogen_next_gen_unit: { id: 'hydrogen_next_gen_unit', name: 'Rame hydrogène nouvelle génération', unlockEpoch: 4, type: 'Hydrogène avancé', speed: 180, capacity: 720, freight: 0, energyType: 'hydrogen', energy: 3.7, maintenance: 0.36, price: 13200000, reliability: 0.94, comfort: 0.84, range: 500, description: 'Hydrogène late game : propre, fiable et adapté aux longues relations régionales.', requiredTech: 'hydrogen_next_generation', requiredTechLevel: 8 },
+
+    battery_suburban_unit: { id: 'battery_suburban_unit', name: 'Rame batterie périurbaine', unlockEpoch: 5, type: 'Batterie périurbaine', speed: 140, capacity: 680, freight: 0, energyType: 'battery', energy: 3.7, maintenance: 0.24, price: 5400000, reliability: 0.95, comfort: 0.82, range: 150, description: 'Rame à batterie pour courtes antennes non électrifiées autour des pôles urbains.', requiredTech: 'battery_suburban_trains', requiredTechLevel: 1 },
+    battery_regional_unit: { id: 'battery_regional_unit', name: 'Rame batterie régionale', unlockEpoch: 5, type: 'Batterie régionale', speed: 160, capacity: 650, freight: 0, energyType: 'battery', energy: 3.9, maintenance: 0.25, price: 6900000, reliability: 0.95, comfort: 0.84, range: 220, description: 'Rame régionale à batterie pour lignes partiellement électrifiées.', requiredTech: 'battery_regional_trains', requiredTechLevel: 3 },
+    battery_fast_charge_unit: { id: 'battery_fast_charge_unit', name: 'Rame batterie recharge rapide', unlockEpoch: 5, type: 'Batterie recharge rapide', speed: 160, capacity: 700, freight: 0, energyType: 'battery', energy: 3.6, maintenance: 0.26, price: 7600000, reliability: 0.94, comfort: 0.84, range: 280, description: 'Exploite les gares équipées pour réduire les temps de recharge.', requiredTech: 'battery_fast_station_charging', requiredTechLevel: 4 },
+    battery_modular_unit: { id: 'battery_modular_unit', name: 'Rame batterie modulaire', unlockEpoch: 5, type: 'Batterie modulaire', speed: 165, capacity: 760, freight: 0, energyType: 'battery', energy: 3.8, maintenance: 0.23, price: 8600000, reliability: 0.96, comfort: 0.86, range: 340, description: 'Architecture modulaire, plus fiable et plus simple à adapter au service.', requiredTech: 'battery_modular', requiredTechLevel: 6 },
+    battery_high_density_unit: { id: 'battery_high_density_unit', name: 'Rame batterie haute densité', unlockEpoch: 5, type: 'Batterie haute densité', speed: 180, capacity: 820, freight: 0, energyType: 'battery', energy: 3.5, maintenance: 0.24, price: 11800000, reliability: 0.96, comfort: 0.88, range: 400, description: 'Batterie avancée à forte autonomie, adaptée aux services régionaux ambitieux.', requiredTech: 'battery_high_density', requiredTechLevel: 8 },
+
+    maglev_shuttle_pioneer: { id: 'maglev_shuttle_pioneer', name: 'Navette maglev pionnière', unlockEpoch: 6, type: 'Maglev pionnier', speed: 360, capacity: 620, freight: 0, energyType: 'electricity', energy: 10.5, maintenance: 0.88, price: 32000000, reliability: 0.9, comfort: 0.86, range: 650, description: 'Première navette à sustentation magnétique, très coûteuse mais très rapide.', requiredTech: 'maglev_levitation', requiredTechLevel: 1 },
+    maglev_guided_regional: { id: 'maglev_guided_regional', name: 'Rame maglev guidée', unlockEpoch: 6, type: 'Maglev guidé', speed: 420, capacity: 700, freight: 0, energyType: 'electricity', energy: 10.8, maintenance: 0.82, price: 39000000, reliability: 0.93, comfort: 0.88, range: 850, description: 'Maglev plus fiable grâce au guidage magnétique maîtrisé.', requiredTech: 'maglev_guidance', requiredTechLevel: 3 },
+    maglev_linear_express: { id: 'maglev_linear_express', name: 'Maglev express linéaire', unlockEpoch: 6, type: 'Maglev express', speed: 500, capacity: 760, freight: 0, energyType: 'electricity', energy: 11.5, maintenance: 0.9, price: 52000000, reliability: 0.94, comfort: 0.9, range: 1050, description: 'Propulsion linéaire pour liaisons express à très haute vitesse.', requiredTech: 'maglev_linear_propulsion', requiredTechLevel: 4 },
+    maglev_metropolitan_express: { id: 'maglev_metropolitan_express', name: 'Maglev express métropolitain', unlockEpoch: 6, type: 'Maglev métropolitain', speed: 520, capacity: 900, freight: 0, energyType: 'electricity', energy: 12.4, maintenance: 0.92, price: 68000000, reliability: 0.95, comfort: 0.91, range: 1250, description: 'Très forte capacité pour liaisons express entre métropoles.', requiredTech: 'maglev_metro_express_links', requiredTechLevel: 6 },
+    maglev_next_gen_unit: { id: 'maglev_next_gen_unit', name: 'Maglev nouvelle génération', unlockEpoch: 6, type: 'Maglev nouvelle génération', speed: 600, capacity: 980, freight: 0, energyType: 'electricity', energy: 10.9, maintenance: 0.78, price: 92000000, reliability: 0.97, comfort: 0.95, range: 1500, description: 'Matériel ultime de très late game : vitesse extrême, confort et fiabilité.', requiredTech: 'maglev_next_generation', requiredTechLevel: 8 }
+  };
+  const staff = {
+    drivers: { label: 'Conducteur', salary: 4300, hireCost: 9000 },
+    controllers: { label: 'Contrôleur', salary: 3300, hireCost: 6500 },
+    stationAgents: { label: 'Agent de gare', salary: 3100, hireCost: 5200 },
+    mechanics: { label: 'Mainteneur', salary: 3700, hireCost: 7200 },
+    dispatchers: { label: 'Régulateur', salary: 4600, hireCost: 10500 },
+    engineers: { label: 'Agent de l’infra', salary: 5600, hireCost: 14000 }
+  };
+  const energyStrategies = {
+    spot: { name: 'Marché spot', defaultMultiplier: 1, multiplier: {} },
+    stable: { name: 'Contrat stable', defaultMultiplier: 1.08, multiplier: { diesel: 1.03, electricity: 1.04, coal: 1.05, hydrogen: 1.04, battery: 1.04 } },
+    cheap: { name: 'Achat opportuniste', defaultMultiplier: 0.92, multiplier: { diesel: 0.93, electricity: 0.94, coal: 0.9, hydrogen: 0.98, battery: 0.96 } },
+    green: { name: 'Énergie bas carbone', defaultMultiplier: 1.16, multiplier: { electricity: 1.08, hydrogen: 1.1, battery: 1.07, diesel: 1.25, coal: 1.35 } }
+  };
+  const maintenancePolicies = {
+    economy: { id: 'economy', name: 'Économie', description: 'Coûts bas, usure accélérée et fiabilité plus faible.', costMultiplier: 0.82, wearMultiplier: 1.22, reliabilityBonus: -0.025 },
+    standard: { id: 'standard', name: 'Standard', description: 'Équilibre entre coût, usure et disponibilité.', costMultiplier: 1.0, wearMultiplier: 1.0, reliabilityBonus: 0 },
+    preventive: { id: 'preventive', name: 'Préventive', description: 'Plus chère, mais réduit l’usure et les retards.', costMultiplier: 1.18, wearMultiplier: 0.78, reliabilityBonus: 0.018 },
+    intensive: { id: 'intensive', name: 'Intensive', description: 'Très chère, adaptée au matériel stratégique et aux lignes fortes.', costMultiplier: 1.38, wearMultiplier: 0.62, reliabilityBonus: 0.035 }
+  };
+
+  const maintenanceActions = {
+    light: { id: 'light', name: 'Révision légère', description: 'Intervention courte. Remonte légèrement l’état.', baseCost: 4500, priceFactor: 0.018, restore: 0.18, target: 0.82, days: 1, requiresDepot: false },
+    standard: { id: 'standard', name: 'Révision atelier', description: 'Remise à niveau solide. Demande un atelier ou dépôt.', baseCost: 12000, priceFactor: 0.045, restore: 0.38, target: 0.92, days: 3, requiresDepot: true },
+    heavy: { id: 'heavy', name: 'Grande révision', description: 'Réparation lourde pour matériel très usé.', baseCost: 32000, priceFactor: 0.085, restore: 0.62, target: 0.98, days: 6, requiresDepot: true, requiredTech: 'steam_workshops' },
+    refurbish: { id: 'refurbish', name: 'Rénovation complète', description: 'Très coûteux, mais remet presque à neuf.', baseCost: 70000, priceFactor: 0.13, restore: 0.9, target: 1, days: 10, requiresDepot: true, requiredTech: 'electric_standardized_maintenance' }
+  };
+
+  normalizeTrainModelCompositionFlags(trains);
+  for (const model of Object.values(trains)) {
+    model.compositionSpec = compositionSpecForModel(model);
+  }
+  const techTree = buildTechTree();
+
+  return {
+    epochs,
+    trains,
+    staff,
+    techLabels: {
+      traction: 'Traction',
+      energy: 'Énergie',
+      operations: 'Exploitation',
+      stations: 'Gares',
+      social: 'Social',
+      freight: 'Fret'
+    },
+    energyStrategies,
+    maintenancePolicies,
+    maintenanceActions,
+    techTree,
+    public: { epochs, trains, staff, energyStrategies, maintenancePolicies, maintenanceActions, techTree, economy: {
+      researchLabBaseCost: ECONOMY.researchLabBaseCost,
+      stationLevelCost: ECONOMY.stationLevelCost,
+      stationCommerceCost: ECONOMY.stationCommerceCost,
+      stationMaintenanceCost: ECONOMY.stationMaintenanceCost,
+      stationDepotCost: ECONOMY.stationDepotCost,
+      stationAccessTollBase: ECONOMY.stationAccessTollBase,
+      stationAccessTollCapacityFactor: ECONOMY.stationAccessTollCapacityFactor
+    }, techLabels: {
+      traction: 'Traction',
+      energy: 'Énergie',
+      operations: 'Exploitation',
+      stations: 'Gares',
+      social: 'Social',
+      freight: 'Fret'
+    } }
+  };
+}
+
+
+function buildTechTree() {
+  const groups = {
+    traction: { id: 'traction', label: 'Traction', description: 'Matériels roulants, chaînes de traction, vitesse et types de trains.', nodes: [] },
+    energy: { id: 'energy', label: 'Énergie', description: 'Alimentation, carburants, stockage, recharge, autonomie et consommation.', nodes: [] },
+    maintenance: { id: 'maintenance', label: 'Maintenance', description: 'Dépôts, ateliers, freinage, fiabilité, sécurité et standardisation.', nodes: [] },
+    operations: { id: 'operations', label: 'Exploitation', description: 'Signalisation, régulation, débit et ponctualité.', nodes: [] },
+    stations: { id: 'stations', label: 'Gares', description: 'Capacité, services voyageurs, hubs et immobilier ferroviaire.', nodes: [] },
+    freight: { id: 'freight', label: 'Fret', description: 'Wagons, contrats, terminaux et corridors logistiques.', nodes: [] },
+    social: { id: 'social', label: 'RH', description: 'Formation, sécurité, productivité et organisation humaine.', nodes: [] }
+  };
+
+  const add = (group, id, title, description, requiredEpoch, prereq, unlocks, improves, options = {}) => {
+    groups[group].nodes.push({
+      id,
+      branch: options.branch || group,
+      title,
+      description,
+      requiredEpoch,
+      prereq,
+      unlocks,
+      improves,
+      effects: [...(unlocks || []), ...(improves || [])],
+      maxLevel: options.maxLevel ?? 0,
+      baseCostMoney: options.baseCostMoney || 45000 + requiredEpoch * 65000,
+      baseDurationSeconds: options.baseDurationSeconds,
+      costGrowth: options.costGrowth || 1.62,
+      durationGrowth: options.durationGrowth || 1.48,
+      levelValue: options.levelValue || 1,
+      levelPrereq: options.levelPrereq || [],
+      era: options.era || null,
+      eraLabel: options.eraLabel || '',
+      infiniteScaling: options.infiniteScaling ?? null,
+      disableAutoLevelEffect: Boolean(options.disableAutoLevelEffect)
+    });
+  };
+
+
+  // Arbre Traction refondu depuis le document utilisateur : 7 ères ferroviaires avec dépendances par niveaux.
+  add('traction', "steam_first_locomotives", "Premières locomotives à vapeur", "Ère 1 — Train à vapeur. Effets : +0,5% portée, +0,3% vitesse max.", 0, [], [], ["+0,5% portée", "+0,3% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "steam_improved_boilers", "Chaudières améliorées", "Ère 1 — Train à vapeur. Effets : +0,8% vitesse max, -0,4% consommation.", 0, [{"id": "steam_first_locomotives", "level": 3}], [], ["+0,8% vitesse max", "-0,4% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "steam_coal_water_reserves", "Réserves de charbon et d’eau", "Ère 1 — Train à vapeur. Effets : +1,2% portée.", 0, [{"id": "steam_first_locomotives", "level": 3}], [], ["+1,2% portée", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "steam_depots", "Dépôts vapeur", "Ère 1 — Train à vapeur. Effets : +1% portée, +0,4% fiabilité.", 0, [{"id": "steam_coal_water_reserves", "level": 3}], [], ["+1% portée", "+0,4% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "steam_passenger_locomotives", "Locomotives voyageurs vapeur", "Ère 1 — Train à vapeur. Effets : +1% vitesse max, +0,5% rentabilité.", 0, [{"id": "steam_improved_boilers", "level": 4}], ["Locomotive vapeur 220 express"], ["+1% vitesse max", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "steam_freight_locomotives", "Locomotives marchandises vapeur", "Ère 1 — Train à vapeur. Effets : +0,6% rentabilité, +0,5% fiabilité.", 0, [{"id": "steam_improved_boilers", "level": 4}], ["Locomotive vapeur 040 marchandises"], ["+0,6% rentabilité", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "steam_economized", "Vapeur économisée", "Ère 1 — Train à vapeur. Effets : -0,8% consommation, +0,6% rentabilité.", 0, [{"id": "steam_improved_boilers", "level": 5}], [], ["-0,8% consommation", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "steam_superheated", "Vapeur surchauffée", "Ère 1 — Train à vapeur. Effets : +1% vitesse max, -0,6% consommation, +0,4% fiabilité.", 0, [{"id": "steam_economized", "level": 5}], [], ["+1% vitesse max", "-0,6% consommation", "+0,4% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "steam_articulated_locomotives", "Locomotives articulées", "Ère 1 — Train à vapeur. Effets : +0,8% portée, +0,6% rentabilité.", 0, [{"id": "steam_freight_locomotives", "level": 5}, {"id": "steam_superheated", "level": 3}], ["Locomotive vapeur articulée 241"], ["+0,8% portée", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "steam_reinforced_brakes", "Freins renforcés", "Ère 1 — Train à vapeur. Effets : +0,4% vitesse max, +0,8% fiabilité.", 0, [{"id": "steam_passenger_locomotives", "level": 3}, {"id": "steam_freight_locomotives", "level": 3}], [], ["+0,4% vitesse max", "+0,8% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "steam_workshops", "Ateliers vapeur", "Ère 1 — Train à vapeur. Effets : +1% fiabilité, +0,5% rentabilité.", 0, [{"id": "steam_depots", "level": 5}], [], ["+1% fiabilité", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "steam_oil_fired", "Vapeur au fuel", "Ère 1 — Train à vapeur. Effets : -0,7% consommation, +0,6% fiabilité, -0,4% impact environnemental.", 0, [{"id": "steam_superheated", "level": 5}, {"id": "steam_workshops", "level": 5}], [], ["-0,7% consommation", "+0,6% fiabilité", "-0,4% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 1, "eraLabel": "Train à vapeur", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_first_engines", "Premiers moteurs diesel", "Ère 2 — Train diesel. Effets : +0,8% portée, +0,5% fiabilité, -0,5% consommation.", 1, [{"id": "steam_workshops", "level": 5}, {"id": "steam_economized", "level": 5}], ["Autorail diesel léger"], ["+0,8% portée", "+0,5% fiabilité", "-0,5% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_light_railcars", "Autorails légers", "Ère 2 — Train diesel. Effets : -1% consommation, +0,8% rentabilité.", 1, [{"id": "diesel_first_engines", "level": 3}], ["Autorail diesel léger", "Automotrice diesel mécanique"], ["-1% consommation", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_shunters", "Locomotives de manœuvre diesel", "Ère 2 — Train diesel. Effets : +0,6% fiabilité, +0,5% rentabilité.", 1, [{"id": "diesel_first_engines", "level": 3}], ["Locotracteur diesel de manœuvre"], ["+0,6% fiabilité", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "diesel_long_range_tanks", "Réservoirs grande autonomie", "Ère 2 — Train diesel. Effets : +1,5% portée.", 1, [{"id": "diesel_first_engines", "level": 4}], [], ["+1,5% portée", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "diesel_fuel_depots", "Dépôts carburant", "Ère 2 — Train diesel. Effets : +1% portée, +0,5% fiabilité.", 1, [{"id": "diesel_long_range_tanks", "level": 3}], [], ["+1% portée", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_mechanical", "Diesel mécanique", "Ère 2 — Train diesel. Effets : +0,5% fiabilité, +0,4% rentabilité.", 1, [{"id": "diesel_first_engines", "level": 5}], ["Automotrice diesel mécanique"], ["+0,5% fiabilité", "+0,4% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_hydraulic", "Diesel hydraulique", "Ère 2 — Train diesel. Effets : +0,7% vitesse max, -0,4% consommation.", 1, [{"id": "diesel_mechanical", "level": 5}], [], ["+0,7% vitesse max", "-0,4% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_electric", "Diesel-électrique", "Ère 2 — Train diesel. Effets : +0,8% fiabilité, -0,6% consommation, +0,5% rentabilité.", 1, [{"id": "diesel_mechanical", "level": 5}, {"id": "diesel_shunters", "level": 3}], [], ["+0,8% fiabilité", "-0,6% consommation", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_passenger_locomotives", "Locomotives diesel voyageurs", "Ère 2 — Train diesel. Effets : +0,8% vitesse max, +0,6% rentabilité.", 1, [{"anyOf": [{"id": "diesel_hydraulic", "level": 4}, {"id": "diesel_electric", "level": 4}]}], ["Locomotive diesel hydraulique voyageurs"], ["+0,8% vitesse max", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_freight_locomotives", "Locomotives diesel fret", "Ère 2 — Train diesel. Effets : +1% rentabilité, +0,5% fiabilité.", 1, [{"id": "diesel_electric", "level": 5}], ["Locomotive diesel-électrique fret"], ["+1% rentabilité", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "diesel_multiple_units", "Unités multiples diesel", "Ère 2 — Train diesel. Effets : +0,7% vitesse max, +0,6% fiabilité.", 1, [{"id": "diesel_passenger_locomotives", "level": 5}, {"id": "diesel_electric", "level": 3}], [], ["+0,7% vitesse max", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "diesel_modern", "Diesel moderne", "Ère 2 — Train diesel. Effets : -1% consommation, -0,8% impact environnemental, +0,8% rentabilité.", 1, [{"id": "diesel_electric", "level": 8}, {"id": "diesel_fuel_depots", "level": 5}], [], ["-1% consommation", "-0,8% impact environnemental", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 2, "eraLabel": "Train diesel", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_first_trains", "Premiers trains électriques", "Ère 3 — Train électrique. Effets : +0,8% vitesse max, -0,8% consommation, -1% impact environnemental.", 2, [{"anyOf": [{"id": "steam_workshops", "level": 5}, {"id": "diesel_first_engines", "level": 5}]}], ["Locomotive électrique pionnière"], ["+0,8% vitesse max", "-0,8% consommation", "-1% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "electric_third_rail", "Troisième rail", "Ère 3 — Train électrique. Effets : +0,6% rentabilité, +0,5% fiabilité.", 2, [{"id": "electric_first_trains", "level": 3}], ["Automotrice troisième rail"], ["+0,6% rentabilité", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "electric_dc_catenary", "Caténaire à courant continu", "Ère 3 — Train électrique. Effets : +0,8% portée, -0,6% consommation.", 2, [{"id": "electric_third_rail", "level": 5}], [], ["+0,8% portée", "-0,6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "electric_ac_catenary", "Caténaire à courant alternatif monophasé", "Ère 3 — Train électrique. Effets : +1,2% portée, -0,8% consommation.", 2, [{"id": "electric_dc_catenary", "level": 8}], [], ["+1,2% portée", "-0,8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "electric_substations", "Sous-stations électriques", "Ère 3 — Train électrique. Effets : +0,8% fiabilité, -0,5% consommation.", 2, [{"id": "electric_dc_catenary", "level": 5}], [], ["+0,8% fiabilité", "-0,5% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_emus", "Automotrices électriques", "Ère 3 — Train électrique. Effets : +1% vitesse max, +0,6% rentabilité.", 2, [{"id": "electric_third_rail", "level": 5}, {"id": "electric_improved_motors", "level": 3}], ["Automotrice courant continu régionale"], ["+1% vitesse max", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_locomotives", "Locomotives électriques", "Ère 3 — Train électrique. Effets : +0,8% vitesse max, +0,7% rentabilité.", 2, [{"id": "electric_dc_catenary", "level": 5}, {"id": "electric_substations", "level": 3}], ["Locomotive bicourant multiservice", "Locomotive électrique fret lourd"], ["+0,8% vitesse max", "+0,7% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_improved_motors", "Moteurs électriques améliorés", "Ère 3 — Train électrique. Effets : +0,8% vitesse max, -0,6% consommation, +0,5% fiabilité.", 2, [{"id": "electric_first_trains", "level": 5}], [], ["+0,8% vitesse max", "-0,6% consommation", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_electronic_control", "Commande électronique de traction", "Ère 3 — Train électrique. Effets : -0,8% consommation, +0,6% fiabilité.", 2, [{"id": "electric_improved_motors", "level": 5}], [], ["-0,8% consommation", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "electric_braking", "Freinage électrique", "Ère 3 — Train électrique. Effets : -0,5% consommation, +0,8% fiabilité.", 2, [{"id": "electric_electronic_control", "level": 3}], [], ["-0,5% consommation", "+0,8% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('energy', "electric_energy_recovery", "Récupération d’énergie", "Ère 3 — Train électrique. Effets : -1% consommation, +0,8% rentabilité, -0,6% impact environnemental.", 2, [{"id": "electric_braking", "level": 5}, {"id": "electric_substations", "level": 5}], [], ["-1% consommation", "+0,8% rentabilité", "-0,6% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_dual_current_trains", "Trains bicourants", "Ère 3 — Train électrique. Effets : +1% portée, +0,6% rentabilité.", 2, [{"id": "electric_dc_catenary", "level": 8}, {"id": "electric_ac_catenary", "level": 5}], ["Locomotive bicourant multiservice"], ["+1% portée", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "electric_multi_current_trains", "Trains multicourants", "Ère 3 — Train électrique. Effets : +1,5% portée, +0,8% rentabilité.", 2, [{"id": "electric_dual_current_trains", "level": 8}], [], ["+1,5% portée", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "electric_antislip", "Antipatinage automatique", "Ère 3 — Train électrique. Effets : +1% fiabilité, +0,4% vitesse max.", 2, [{"id": "electric_electronic_control", "level": 5}], [], ["+1% fiabilité", "+0,4% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('maintenance', "electric_standardized_maintenance", "Maintenance électrique standardisée", "Ère 3 — Train électrique. Effets : +1% fiabilité, +0,6% rentabilité.", 2, [{"id": "electric_locomotives", "level": 5}, {"id": "electric_emus", "level": 5}], [], ["+1% fiabilité", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 3, "eraLabel": "Train électrique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true});
+  add('traction', "hsv_first_fast_trains", "Premiers trains rapides", "Ère 4 — Train à grande vitesse. Effets : +1,2% vitesse max, +0,6% rentabilité.", 3, [{"anyOf": [{"id": "steam_passenger_locomotives", "level": 8}, {"id": "diesel_passenger_locomotives", "level": 8}, {"id": "electric_locomotives", "level": 5}]}], ["Train rapide Intercités 200"], ["+1,2% vitesse max", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_aerodynamics", "Aérodynamique ferroviaire", "Ère 4 — Train à grande vitesse. Effets : +1% vitesse max, -0,8% consommation.", 3, [{"id": "hsv_first_fast_trains", "level": 5}], [], ["+1% vitesse max", "-0,8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_lightweight_materials", "Matériel allégé", "Ère 4 — Train à grande vitesse. Effets : +0,8% vitesse max, -0,6% consommation.", 3, [{"id": "hsv_first_fast_trains", "level": 5}], [], ["+0,8% vitesse max", "-0,6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('maintenance', "hsv_high_speed_braking", "Freinage haute vitesse", "Ère 4 — Train à grande vitesse. Effets : +0,8% vitesse max, +1% fiabilité.", 3, [{"anyOf": [{"id": "steam_reinforced_brakes", "level": 8}, {"id": "electric_braking", "level": 5}]}], [], ["+0,8% vitesse max", "+1% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_adapted_tracks", "Voies adaptées à la grande vitesse", "Ère 4 — Train à grande vitesse. Effets : +1,5% vitesse max, +0,8% rentabilité.", 3, [{"id": "hsv_aerodynamics", "level": 5}, {"id": "hsv_high_speed_braking", "level": 5}], [], ["+1,5% vitesse max", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('energy', "hsv_catenary", "Caténaire haute vitesse", "Ère 4 — Train à grande vitesse. Effets : +1% vitesse max, -0,6% consommation.", 3, [{"id": "electric_ac_catenary", "level": 8}, {"id": "electric_substations", "level": 8}], [], ["+1% vitesse max", "-0,6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_trainsets", "Rames à grande vitesse", "Ère 4 — Train à grande vitesse. Effets : +1,8% vitesse max, +1% rentabilité.", 3, [{"id": "hsv_adapted_tracks", "level": 5}, {"id": "hsv_catenary", "level": 5}], ["Rame grande vitesse première génération"], ["+1,8% vitesse max", "+1% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('energy', "hsv_high_power_onboard", "Puissance embarquée élevée", "Ère 4 — Train à grande vitesse. Effets : +1,2% vitesse max, -0,5% consommation.", 3, [{"id": "hsv_trainsets", "level": 5}, {"id": "electric_improved_motors", "level": 8}], [], ["+1,2% vitesse max", "-0,5% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_stability", "Stabilité à haute vitesse", "Ère 4 — Train à grande vitesse. Effets : +0,8% vitesse max, +1% fiabilité.", 3, [{"id": "hsv_aerodynamics", "level": 8}, {"id": "hsv_lightweight_materials", "level": 5}], [], ["+0,8% vitesse max", "+1% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_signaling", "Signalisation haute vitesse", "Ère 4 — Train à grande vitesse. Effets : +1% vitesse max, +0,8% fiabilité.", 3, [{"id": "hsv_adapted_tracks", "level": 8}], [], ["+1% vitesse max", "+0,8% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_distributed_traction", "Traction répartie haute vitesse", "Ère 4 — Train à grande vitesse. Effets : +0,8% vitesse max, -0,6% consommation, +0,6% fiabilité.", 3, [{"id": "hsv_trainsets", "level": 8}, {"id": "electric_electronic_control", "level": 8}], ["Rame grande vitesse Duplex"], ["+0,8% vitesse max", "-0,6% consommation", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hsv_premium_long_distance", "Services grande distance premium", "Ère 4 — Train à grande vitesse. Effets : +1,2% rentabilité.", 3, [{"id": "hsv_trainsets", "level": 5}, {"id": "hsv_stability", "level": 5}], ["Rame grande distance premium"], ["+1,2% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 4, "eraLabel": "Train à grande vitesse", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 520000, "baseDurationSeconds": 350});
+  add('traction', "hydrogen_first_trains", "Premiers trains à hydrogène", "Ère 5 — Train à hydrogène. Effets : +0,8% portée, -1,2% impact environnemental.", 4, [{"id": "diesel_modern", "level": 5}, {"id": "electric_electronic_control", "level": 5}], ["Rame hydrogène régionale"], ["+0,8% portée", "-1,2% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_fuel_cell", "Pile à combustible ferroviaire", "Ère 5 — Train à hydrogène. Effets : -0,8% consommation, +0,6% fiabilité.", 4, [{"id": "hydrogen_first_trains", "level": 3}], ["Rame hydrogène à pile combustible"], ["-0,8% consommation", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_secure_tanks", "Réservoirs hydrogène sécurisés", "Ère 5 — Train à hydrogène. Effets : +1,2% portée, +0,6% fiabilité.", 4, [{"id": "hydrogen_first_trains", "level": 3}], [], ["+1,2% portée", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_refueling_stations", "Stations de ravitaillement hydrogène", "Ère 5 — Train à hydrogène. Effets : +1,5% portée, +0,5% rentabilité.", 4, [{"id": "hydrogen_secure_tanks", "level": 5}], [], ["+1,5% portée", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_green", "Hydrogène vert", "Ère 5 — Train à hydrogène. Effets : -1,5% impact environnemental, +0,5% rentabilité.", 4, [{"id": "hydrogen_refueling_stations", "level": 5}], [], ["-1,5% impact environnemental", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('maintenance', "hydrogen_specialized_maintenance", "Maintenance hydrogène spécialisée", "Ère 5 — Train à hydrogène. Effets : +1% fiabilité, +0,5% rentabilité.", 4, [{"id": "hydrogen_fuel_cell", "level": 5}], [], ["+1% fiabilité", "+0,5% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('traction', "hydrogen_regional_trains", "Trains régionaux hydrogène", "Ère 5 — Train à hydrogène. Effets : +0,8% portée, +0,6% rentabilité.", 4, [{"id": "hydrogen_fuel_cell", "level": 5}, {"id": "hydrogen_refueling_stations", "level": 3}], ["Rame hydrogène régionale"], ["+0,8% portée", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_optimized_energy_recharge", "Recharge énergétique optimisée", "Ère 5 — Train à hydrogène. Effets : -0,8% consommation, +0,8% rentabilité.", 4, [{"id": "hydrogen_fuel_cell", "level": 8}], [], ["-0,8% consommation", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('maintenance', "hydrogen_enhanced_safety", "Sécurité hydrogène renforcée", "Ère 5 — Train à hydrogène. Effets : +1,2% fiabilité.", 4, [{"id": "hydrogen_secure_tanks", "level": 8}], [], ["+1,2% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_long_distance_tanks", "Réservoirs longue distance", "Ère 5 — Train à hydrogène. Effets : +1,8% portée.", 4, [{"id": "hydrogen_secure_tanks", "level": 8}, {"id": "hydrogen_enhanced_safety", "level": 5}], ["Rame hydrogène longue distance"], ["+1,8% portée", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('traction', "hydrogen_rural_lines", "Hydrogène pour lignes rurales", "Ère 5 — Train à hydrogène. Effets : +1% rentabilité, -0,8% impact environnemental.", 4, [{"id": "hydrogen_regional_trains", "level": 5}], [], ["+1% rentabilité", "-0,8% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('energy', "hydrogen_next_generation", "Hydrogène nouvelle génération", "Ère 5 — Train à hydrogène. Effets : +1,2% portée, -1% consommation, -1% impact environnemental.", 4, [{"id": "hydrogen_green", "level": 8}, {"id": "hydrogen_fuel_cell", "level": 8}, {"id": "hydrogen_enhanced_safety", "level": 5}], ["Rame hydrogène nouvelle génération"], ["+1,2% portée", "-1% consommation", "-1% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 5, "eraLabel": "Train à hydrogène", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 745000, "baseDurationSeconds": 415});
+  add('traction', "battery_first_trains", "Premiers trains à batterie", "Ère 6 — Train à batterie. Effets : +1% autonomie, -1,5% impact environnemental.", 5, [{"id": "electric_energy_recovery", "level": 5}, {"id": "electric_electronic_control", "level": 5}], ["Rame batterie périurbaine"], ["+1% autonomie", "-1,5% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_railway_batteries", "Batteries ferroviaires", "Ère 6 — Train à batterie. Effets : +1,2% autonomie, +0,5% fiabilité.", 5, [{"id": "battery_first_trains", "level": 3}], [], ["+1,2% autonomie", "+0,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_catenary_charging", "Recharge sous caténaire", "Ère 6 — Train à batterie. Effets : +1% autonomie, -0,6% consommation.", 5, [{"id": "battery_railway_batteries", "level": 3}, {"id": "electric_ac_catenary", "level": 5}], [], ["+1% autonomie", "-0,6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_fast_station_charging", "Recharge rapide en gare", "Ère 6 — Train à batterie. Effets : +0,8% autonomie, +0,6% rentabilité.", 5, [{"id": "battery_railway_batteries", "level": 5}, {"id": "electric_substations", "level": 5}], ["Rame batterie recharge rapide"], ["+0,8% autonomie", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_long_range", "Batteries longue autonomie", "Ère 6 — Train à batterie. Effets : +1,8% autonomie.", 5, [{"id": "battery_railway_batteries", "level": 8}], [], ["+1,8% autonomie", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('maintenance', "battery_thermal_management", "Gestion thermique des batteries", "Ère 6 — Train à batterie. Effets : +1% fiabilité, +0,6% autonomie.", 5, [{"id": "battery_railway_batteries", "level": 5}], [], ["+1% fiabilité", "+0,6% autonomie", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_brake_energy_recovery", "Récupération d’énergie au freinage", "Ère 6 — Train à batterie. Effets : +1% autonomie, -0,8% consommation.", 5, [{"id": "electric_energy_recovery", "level": 8}, {"id": "battery_railway_batteries", "level": 5}], [], ["+1% autonomie", "-0,8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('traction', "battery_suburban_trains", "Trains périurbains à batterie", "Ère 6 — Train à batterie. Effets : +0,8% rentabilité, -0,8% impact environnemental.", 5, [{"id": "battery_fast_station_charging", "level": 5}, {"id": "battery_thermal_management", "level": 3}], ["Rame batterie périurbaine"], ["+0,8% rentabilité", "-0,8% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('traction', "battery_regional_trains", "Trains régionaux à batterie", "Ère 6 — Train à batterie. Effets : +1,2% autonomie, +0,6% rentabilité.", 5, [{"id": "battery_long_range", "level": 5}, {"id": "battery_catenary_charging", "level": 5}], ["Rame batterie régionale"], ["+1,2% autonomie", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('maintenance', "battery_modular", "Batteries modulaires", "Ère 6 — Train à batterie. Effets : +0,8% fiabilité, +0,6% rentabilité.", 5, [{"id": "battery_thermal_management", "level": 5}], ["Rame batterie modulaire"], ["+0,8% fiabilité", "+0,6% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_auto_charge_optimization", "Optimisation automatique de charge", "Ère 6 — Train à batterie. Effets : -1% consommation, +0,8% autonomie.", 5, [{"id": "battery_modular", "level": 5}, {"id": "electric_electronic_control", "level": 8}], [], ["-1% consommation", "+0,8% autonomie", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('energy', "battery_high_density", "Batteries haute densité", "Ère 6 — Train à batterie. Effets : +2% autonomie, +0,6% vitesse max.", 5, [{"id": "battery_long_range", "level": 8}, {"id": "battery_thermal_management", "level": 8}], ["Rame batterie haute densité"], ["+2% autonomie", "+0,6% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 6, "eraLabel": "Train à batterie", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 800000, "baseDurationSeconds": 480});
+  add('traction', "maglev_levitation", "Sustentation magnétique", "Ère 7 — Train à sustentation magnétique. Effets : +2% vitesse max, -0,8% consommation. Note : Si le moteur du jeu ne permet pas de dépendre d’une recherche située plus bas, remplacer par : Rames à grande vitesse niveau 8 + Caténaire haute vitesse niveau 8.", 6, [{"id": "hsv_trainsets", "level": 8}, {"id": "maglev_high_power_energy", "level": 1}], ["Navette maglev pionnière"], ["+2% vitesse max", "-0,8% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_guidance", "Guidage magnétique", "Ère 7 — Train à sustentation magnétique. Effets : +1,2% fiabilité, +0,8% vitesse max.", 6, [{"id": "maglev_levitation", "level": 3}], ["Rame maglev guidée"], ["+1,2% fiabilité", "+0,8% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_linear_propulsion", "Propulsion linéaire", "Ère 7 — Train à sustentation magnétique. Effets : +1,8% vitesse max, -0,6% consommation.", 6, [{"id": "maglev_levitation", "level": 5}, {"id": "maglev_guidance", "level": 3}], ["Maglev express linéaire"], ["+1,8% vitesse max", "-0,6% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_special_tracks", "Voies magnétiques spéciales", "Ère 7 — Train à sustentation magnétique. Effets : +1,5% vitesse max, +0,8% fiabilité.", 6, [{"id": "maglev_guidance", "level": 5}], [], ["+1,5% vitesse max", "+0,8% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_stations", "Gares maglev", "Ère 7 — Train à sustentation magnétique. Effets : +0,8% rentabilité, +0,6% fiabilité.", 6, [{"id": "maglev_special_tracks", "level": 3}], [], ["+0,8% rentabilité", "+0,6% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_very_high_speed", "Très haute vitesse", "Ère 7 — Train à sustentation magnétique. Effets : +2,5% vitesse max, +1% rentabilité.", 6, [{"id": "maglev_linear_propulsion", "level": 8}, {"id": "maglev_special_tracks", "level": 8}], [], ["+2,5% vitesse max", "+1% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_silence_comfort", "Silence et confort avancés", "Ère 7 — Train à sustentation magnétique. Effets : +1% rentabilité, -0,6% impact environnemental.", 6, [{"id": "maglev_levitation", "level": 5}, {"id": "maglev_stations", "level": 3}], [], ["+1% rentabilité", "-0,6% impact environnemental", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('maintenance', "maglev_contactless_maintenance", "Maintenance sans contact roue-rail", "Ère 7 — Train à sustentation magnétique. Effets : +1,2% fiabilité, +0,8% rentabilité.", 6, [{"id": "maglev_guidance", "level": 8}], [], ["+1,2% fiabilité", "+0,8% rentabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('maintenance', "maglev_advanced_high_speed_safety", "Sécurité haute vitesse avancée", "Ère 7 — Train à sustentation magnétique. Effets : +1,5% fiabilité.", 6, [{"id": "maglev_very_high_speed", "level": 5}, {"id": "hsv_signaling", "level": 8}], [], ["+1,5% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('energy', "maglev_high_power_energy", "Énergie haute puissance", "Ère 7 — Train à sustentation magnétique. Effets : +1,2% vitesse max, -0,5% consommation.", 6, [{"id": "hsv_catenary", "level": 8}, {"id": "electric_substations", "level": 8}], [], ["+1,2% vitesse max", "-0,5% consommation", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_metro_express_links", "Liaisons express métropolitaines", "Ère 7 — Train à sustentation magnétique. Effets : +1,5% rentabilité, +1% vitesse max.", 6, [{"id": "maglev_very_high_speed", "level": 5}, {"id": "maglev_stations", "level": 5}], ["Maglev express métropolitain"], ["+1,5% rentabilité", "+1% vitesse max", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+  add('traction', "maglev_next_generation", "Maglev nouvelle génération", "Ère 7 — Train à sustentation magnétique. Effets : +2% vitesse max, -1% consommation, +1% fiabilité.", 6, [{"id": "maglev_very_high_speed", "level": 8}, {"id": "maglev_advanced_high_speed_safety", "level": 8}, {"id": "maglev_contactless_maintenance", "level": 8}], ["Maglev nouvelle génération"], ["+2% vitesse max", "-1% consommation", "+1% fiabilité", "Niveaux suivants : 10% des bonus initiaux par niveau."], {"era": 7, "eraLabel": "Train à sustentation magnétique", "infiniteScaling": 0.1, "disableAutoLevelEffect": true, "baseCostMoney": 855000, "baseDurationSeconds": 545});
+
+
+  add('operations', 'manual_dispatch', 'Régulation manuelle structurée', 'Pose les bases des roulements et priorités de circulation.', 0, [], [], ['Ponctualité de base par niveau']);
+  add('operations', 'block_signaling', 'Block automatique', 'Augmente le débit et réduit les conflits de circulation.', 1, ['manual_dispatch'], [], ['Attractivité et ponctualité par niveau']);
+  add('operations', 'passing_loops', 'Évitements cadencés', 'Augmente le débit exploitable des lignes secondaires.', 1, ['manual_dispatch'], [], ['Débit soutenable sur petites lignes']);
+  add('operations', 'centralized_control', 'Commande centralisée', 'Supervise plusieurs lignes depuis un poste unique.', 2, ['block_signaling'], [], ['Attractivité réseau et prérequis grande vitesse']);
+  add('operations', 'clockface_timetable', 'Horaire cadencé', 'Rend les lignes plus lisibles pour les voyageurs.', 2, ['centralized_control'], [], ['Demande voyageurs et satisfaction accrues']);
+  add('operations', 'incident_protocols', 'Plans incidents', 'Réduit l’impact des événements météo et sociaux.', 2, ['centralized_control'], [], ['Résilience événementielle par niveau']);
+  add('operations', 'platform_dispatching', 'Gestion quais centralisée', 'Réduit les conflits dans les grandes gares.', 3, ['clockface_timetable', 'passenger_flow'], [], ['Capacité des nœuds accrue']);
+  add('operations', 'traffic_simulation', 'Simulation de trafic', 'Prévoit la saturation avant ouverture des lignes.', 3, ['centralized_control'], [], ['Meilleure marge sur axes saturés']);
+  add('operations', 'night_services', 'Exploitation de nuit', 'Organise sûreté, roulements et maintenance nocturne.', 4, ['centralized_control'], ['Trains de nuit modernes'], ['Revenus longue distance et disponibilité améliorés']);
+  add('operations', 'dynamic_pricing', 'Yield management ferroviaire', 'Optimise le prix moyen sans casser l’attractivité.', 4, ['traffic_simulation'], [], ['Revenus voyageurs par niveau']);
+  add('operations', 'automated_dispatch', 'Régulation automatisée', 'Optimise les priorités à grande échelle.', 5, ['traffic_simulation', 'electric_electronic_control'], [], ['Ponctualité réseau avancée']);
+  add('operations', 'driverless_corridors', 'Corridors supervisés', 'Prépare le fret autonome et les corridors très cadencés.', 5, ['automated_dispatch'], ['Rame batterie modulaire mieux exploité'], ['Débit et coûts RH réduits']);
+
+  add('stations', 'passenger_flow', 'Gestion des flux voyageurs', 'Améliore la capacité effective et la lisibilité des gares.', 0, [], [], ['Capacité gares et demande voyageurs par niveau']);
+  add('stations', 'ticket_halls', 'Salles des billets modernisées', 'Réduit les frictions d’accès aux trains.', 0, ['passenger_flow'], [], ['Satisfaction voyageurs par niveau']);
+  add('stations', 'platform_canopies', 'Abris de quais', 'Améliore le confort des gares exposées.', 0, ['ticket_halls'], [], ['Confort et réputation locale']);
+  add('stations', 'station_retail', 'Commerces de gare', 'Augmente les revenus annexes des flux voyageurs.', 1, ['ticket_halls'], [], ['Revenus gares par niveau']);
+  add('stations', 'park_and_ride', 'Parcs relais', 'Améliore la capture périurbaine.', 1, ['passenger_flow'], [], ['Demande régionale par niveau']);
+  add('stations', 'accessibility_program', 'Accessibilité universelle', 'Rend les gares plus efficaces et attractives.', 2, ['platform_canopies'], [], ['Satisfaction et flux par niveau']);
+  add('stations', 'intermodal_hubs', 'Hubs intermodaux', 'Connecte trains, bus, tramways, vélos et parkings.', 2, ['park_and_ride', 'passenger_flow'], [], ['Demande voyageurs et capacité intermodale']);
+  add('stations', 'major_terminal_design', 'Conception grands terminaux', 'Débloque une exploitation dense des métropoles.', 3, ['intermodal_hubs'], [], ['Capacité grands nœuds par niveau']);
+  add('stations', 'station_hotels', 'Services longue distance', 'Améliore les gares de correspondance premium.', 3, ['station_retail'], [], ['Revenus annexes et satisfaction']);
+  add('stations', 'real_time_information', 'Information voyageurs temps réel', 'Réduit l’impact des retards perçus.', 3, ['centralized_control', 'accessibility_program'], [], ['Satisfaction et réputation par niveau']);
+  add('stations', 'urban_air_rights', 'Valorisation immobilière', 'Transforme les grandes gares en actifs de long terme.', 4, ['major_terminal_design', 'station_retail'], [], ['Revenus gares par niveau']);
+  add('stations', 'smart_station_ops', 'Gares intelligentes', 'Automatise flux, énergie et maintenance bâtiment.', 5, ['real_time_information', 'electric_electronic_control'], [], ['Charges fixes de gare réduites']);
+
+  add('freight', 'basic_freight_yards', 'Triages marchandises', 'Structure les premiers flux fret exploitables.', 0, [], [], ['Demande fret locale par niveau']);
+  add('freight', 'specialized_wagons', 'Wagons spécialisés', 'Adapte les wagons aux céréales, bois, citernes et vracs.', 1, ['basic_freight_yards'], [], ['Demande et revenus fret par niveau']);
+  add('freight', 'midi_freight_stock', 'Wagons Midi électriques', 'Débloque les wagons fret des compositions électriques pionnières.', 1, ['specialized_wagons'], ['6 variantes fret Midi'], ['Rendement des wagons par niveau']);
+  add('freight', 'cold_chain', 'Chaîne du froid ferroviaire', 'Ouvre des contrats alimentaires plus rentables.', 1, ['specialized_wagons'], [], ['Revenus fret premium par niveau']);
+  add('freight', 'bulk_contracts', 'Contrats vrac lourds', 'Sécurise minerais, granulats et céréales.', 1, ['basic_freight_yards'], [], ['Volume fret par niveau']);
+  add('freight', 'freight_diesel', 'Diesel fret lourd', 'Débloque les locomotives diesel fret non électrifiées.', 2, ['specialized_wagons', 'diesel_freight_locomotives'], ['Locomotive diesel-électrique fret'], ['Coût et fiabilité fret diesel']);
+  add('freight', 'port_shuttles', 'Navettes portuaires', 'Améliore les flux depuis ports et zones logistiques.', 2, ['freight_diesel'], [], ['Demande fret maritime par niveau']);
+  add('freight', 'container_hubs', 'Terminaux conteneurs', 'Organise le fret intermodal longue distance.', 3, ['port_shuttles'], ['Locomotive électrique fret lourd'], ['Demande conteneurs par niveau']);
+  add('freight', 'hazmat_protocols', 'Protocoles matières dangereuses', 'Accède à des contrats difficiles mais rentables.', 3, ['cold_chain'], [], ['Revenus fret spécialisés par niveau']);
+  add('freight', 'last_mile_rail', 'Dernier kilomètre ferroviaire', 'Relie zones industrielles et terminaux urbains.', 4, ['container_hubs'], [], ['Capture fret locale par niveau']);
+  add('freight', 'automated_freight_ops', 'Exploitation fret automatisée', 'Prépare les trains autonomes de marchandises.', 5, ['driverless_corridors', 'container_hubs'], ['Rame batterie modulaire'], ['Coûts RH fret réduits']);
+  add('freight', 'freight_marketplace', 'Bourse contrats fret', 'Met en concurrence les flux et améliore le remplissage.', 5, ['automated_freight_ops'], [], ['Taux de chargement fret par niveau']);
+
+  add('social', 'crew_training', 'Formation polyvalente', 'Améliore la productivité des équipes de circulation.', 0, [], [], ['Efficacité RH et masse salariale par niveau']);
+  add('social', 'safety_training', 'Culture sécurité', 'Réduit les erreurs d’exploitation et améliore la fiabilité perçue.', 1, ['crew_training'], [], ['Fiabilité et Agents de gare plus efficaces']);
+  add('social', 'apprenticeship_tracks', 'Écoles métiers ferroviaires', 'Réduit le coût des recrutements futurs.', 0, ['crew_training'], [], ['Recrutement moins coûteux par niveau']);
+  add('social', 'driver_rosters', 'Roulements Conducteurs', 'Stabilise les lignes à fort trafic.', 1, ['crew_training'], [], ['Besoin Conducteur mieux couvert']);
+  add('social', 'controller_service', 'Service commercial embarqué', 'Améliore satisfaction et revenus annexes.', 1, ['safety_training'], [], ['Satisfaction voyageurs par niveau']);
+  add('social', 'mechanic_certification', 'Certification Mainteneurs', 'Améliore la qualité des interventions atelier.', 1, ['crew_training'], [], ['Maintenance plus efficace par niveau']);
+  add('social', 'dispatcher_school', 'École de régulation', 'Renforce la ponctualité des réseaux complexes.', 2, ['driver_rosters', 'manual_dispatch'], [], ['Régulation et ponctualité par niveau']);
+  add('social', 'social_dialogue', 'Dialogue social structuré', 'Réduit l’impact des tensions sociales.', 2, ['safety_training'], [], ['Résilience sociale par niveau']);
+  add('social', 'engineering_office', 'Bureau d’études interne', 'Accélère légèrement les projets R&D complexes.', 2, ['apprenticeship_tracks'], [], ['Vitesse de recherche par niveau']);
+  add('social', 'knowledge_management', 'Capitalisation technique', 'Rend chaque technologie plus facile à exploiter.', 3, ['engineering_office'], [], ['Effets de niveau plus rentables']);
+  add('social', 'digital_training', 'Formation simulateur', 'Améliore la conduite des matériels modernes.', 4, ['dispatcher_school', 'real_time_information'], [], ['Fiabilité matériel moderne par niveau']);
+  add('social', 'autonomous_supervision', 'Supervision des systèmes autonomes', 'Prépare les équipes au rail automatisé.', 5, ['digital_training', 'automated_dispatch'], [], ['Réduction coûts RH futurs']);
+
+  add('operations', 'network_revenue_control', 'Pilotage revenu réseau', 'Arbitre prix, capacité et saturation entre lignes concurrentes.', 4, ['dynamic_pricing', 'traffic_simulation'], [], ['Marge des lignes denses améliorée']);
+  add('operations', 'ai_timetable_planner', 'Planificateur horaire assisté', 'Construit des sillons robustes sur réseau complexe.', 5, ['automated_dispatch', 'knowledge_management'], [], ['Ponctualité et capacité réseau futures']);
+  add('stations', 'station_energy_retrofit', 'Rénovation énergétique des gares', 'Réduit les coûts fixes des bâtiments voyageurs.', 3, ['electric_electronic_control', 'station_retail'], [], ['Charges de gares réduites par niveau']);
+  add('stations', 'crowd_simulation', 'Simulation de foule', 'Évite la saturation des terminaux majeurs.', 4, ['major_terminal_design', 'real_time_information'], [], ['Capacité des grandes gares accrue']);
+  add('freight', 'rail_road_interfaces', 'Interfaces rail-route', 'Améliore les plateformes combinées régionales.', 3, ['container_hubs'], [], ['Capture fret intermodal accrue']);
+  add('freight', 'premium_logistics', 'Logistique premium', 'Structure les contrats urgents à forte marge.', 4, ['hazmat_protocols', 'cold_chain'], [], ['Revenus fret premium par niveau']);
+  add('social', 'talent_retention', 'Fidélisation des talents', 'Stabilise les équipes qualifiées sur le long terme.', 3, ['social_dialogue', 'apprenticeship_tracks'], [], ['Coûts RH et qualité de service améliorés']);
+  add('social', 'research_campus', 'Campus R&D ferroviaire', 'Accélère les recherches avancées sans achat instantané.', 4, ['engineering_office', 'knowledge_management'], [], ['Vitesse laboratoire par niveau']);
+
+  return finalizeTechTree(groups);
+}
+
+function researchNodePrereqWeight(node) {
+  const weightOf = item => {
+    const req = normalizeResearchPrereqItem(item);
+    if (!req) return 0;
+    if (req.anyOf) return Math.min(...req.anyOf.map(weightOf));
+    return Math.max(1, Math.floor(Number(req.level || 1)));
+  };
+  return (node.prereq || []).reduce((sum, item) => sum + weightOf(item), 0);
+}
+
+function computedResearchBaseDurationSeconds(node) {
+  // Niveau 1 début de jeu : environ 30 secondes.
+  // Plus l’époque et la profondeur de l’arbre augmentent, plus le niveau 1 démarre long.
+  const epoch = Math.max(0, Number(node.requiredEpoch || 0));
+  const prereqWeight = researchNodePrereqWeight(node);
+  const branchExtra = prereqWeight ? (node.branch === 'social' ? 0 : node.branch === 'operations' ? 8 : node.branch === 'traction' ? 10 : 6) : 0;
+  return Math.round(30 * Math.pow(2.05, epoch) + prereqWeight * 14 + branchExtra);
+}
+
+function finalizeTechTree(tree) {
+  for (const group of Object.values(tree)) {
+    for (const node of group.nodes || []) {
+      // 0/null/undefined = illimité côté jeu. Les anciens plafonds ne sont plus utilisés.
+      node.maxLevel = 0;
+      node.unlimited = true;
+      node.baseCostMoney ??= node.costMoney ?? 50000;
+      node.baseDurationSeconds ??= node.baseDuration ?? node.duration ?? computedResearchBaseDurationSeconds(node);
+      node.costGrowth ??= node.unlockOnly ? 1.35 : 1.62;
+      node.durationGrowth ??= node.unlockOnly ? 1.34 : 1.50;
+      node.levelValue ??= 1;
+      node.unlocks ||= [];
+      node.improves ||= node.effects || [];
+      const levelEffect = node.disableAutoLevelEffect ? '' : researchLevelEffectText(node);
+      if (levelEffect && !node.improves.includes(levelEffect)) node.improves.push(levelEffect);
+      node.effects = [...node.unlocks, ...node.improves];
+    }
+  }
+  return tree;
+}
+
+function researchLevelEffectText(node) {
+  const byId = {
+    steam_power: '+4 % de portée vapeur par niveau.',
+    regen_braking: '-3,5 % de coût électricité/batterie par niveau, plafonné à -18 %.',
+    energy_dispatch: '-2,4 % de coût énergie général par niveau, plafonné à -12 %.',
+    depot_methods: '-2,5 % de coût maintenance et -1,8 % d’usure par niveau, avec plafond.',
+    rapid_workshops: '-4,5 % de durée d’atelier par niveau, avec plafond.',
+    predictive_maintenance: '-2,5 % d’usure et +0,16 capacité maintenance par niveau.',
+    safety_training: '+0,6 point de fiabilité et meilleure efficacité des agents par niveau.',
+    block_signaling: '+2 % d’attractivité exploitation par niveau, plafonné à +10 %.',
+    centralized_control: '+2,4 % d’attractivité réseau par niveau, plafonné à +12 %.',
+    passenger_flow: '+2,6 % de flux voyageurs et capacité gares par niveau, plafonné à +13 %.',
+    intermodal_hubs: '+3,2 % de demande intermodale par niveau, plafonné à +16 %.',
+    specialized_wagons: '+3 % de demande fret spécialisée par niveau, plafonné à +15 %.',
+    container_hubs: '+4 % de demande conteneurs par niveau, plafonné à +20 %.',
+    crew_training: '+4,5 % d’efficacité RH par niveau et baisse progressive de masse salariale.'
+  };
+  if (byId[node.id]) return byId[node.id];
+  const byBranch = {
+    traction: '+1 niveau de branche Traction : Meilleure portée, vitesse commerciale ou confort selon le matériel concerné.',
+    energy: '+1 niveau de branche Énergie : Coûts de traction plus stables et meilleure efficacité énergétique.',
+    maintenance: '+1 niveau de branche Maintenance : Moins d’usure, moins d’immobilisation ou moins de coût atelier.',
+    operations: '+1 niveau de branche Exploitation : Meilleure ponctualité, débit ou robustesse des sillons.',
+    stations: '+1 niveau de branche Gares : Plus de capacité, satisfaction ou revenus annexes.',
+    freight: '+1 niveau de branche Fret : Meilleure capture de demande, taux de chargement ou revenu par tonne.',
+    social: '+1 niveau de branche RH : Meilleure productivité, sécurité ou vitesse de recherche.'
+  };
+  return byBranch[node.branch] || byBranch[node.group] || '';
+}
+
+function buildWorld() {
+  const stations = [
+    st('PAR', 'Paris', 48.8566, 2.3522, 'Île-de-France', 1000, 90, 100),
+    st('LYO', 'Lyon Part-Dieu', 45.7600, 4.8590, 'Auvergne-Rhône-Alpes', 720, 85, 72),
+    st('MAR', 'Marseille Saint-Charles', 43.3027, 5.3806, 'Provence-Alpes-Côte d’Azur', 650, 95, 88),
+    st('LIL', 'Lille Flandres', 50.6366, 3.0709, 'Hauts-de-France', 560, 80, 55),
+    st('BOR', 'Bordeaux Saint-Jean', 44.8259, -0.5567, 'Nouvelle-Aquitaine', 520, 70, 78),
+    st('NAN', 'Nantes', 47.2173, -1.5419, 'Pays de la Loire', 470, 74, 65),
+    st('STR', 'Strasbourg', 48.5850, 7.7330, 'Grand Est', 420, 70, 68),
+    st('REN', 'Rennes', 48.1035, -1.6722, 'Bretagne', 390, 48, 58),
+    st('TOU', 'Toulouse Matabiau', 43.6111, 1.4536, 'Occitanie', 520, 60, 67),
+    st('MON', 'Montpellier Saint-Roch', 43.6045, 3.8806, 'Occitanie', 360, 48, 75),
+    st('NIC', 'Nice-Ville', 43.7046, 7.2619, 'Provence-Alpes-Côte d’Azur', 400, 42, 96),
+    st('GRE', 'Grenoble', 45.1910, 5.7140, 'Auvergne-Rhône-Alpes', 270, 42, 82),
+    st('DIJ', 'Dijon', 47.3230, 5.0270, 'Bourgogne-Franche-Comté', 260, 70, 45),
+    st('MET', 'Metz', 49.1090, 6.1770, 'Grand Est', 230, 74, 35),
+    st('NAN2', 'Nancy', 48.6890, 6.1740, 'Grand Est', 220, 62, 42),
+    st('REI', 'Reims', 49.2583, 4.0317, 'Grand Est', 240, 48, 46),
+    st('AMI', 'Amiens', 49.8940, 2.2950, 'Hauts-de-France', 200, 42, 35),
+    st('ROU', 'Rouen Rive-Droite', 49.4480, 1.0940, 'Normandie', 260, 58, 45),
+    st('LEH', 'Le Havre', 49.4920, 0.1250, 'Normandie', 220, 120, 46),
+    st('BRET', 'Brétigny-sur-Orge', 48.6114, 2.3059, 'Île-de-France', passengerDemandFromPopulation(26658), 26, 34, 26658),
+    st('LONJ', 'Longjumeau', 48.6951, 2.2943, 'Île-de-France', passengerDemandFromPopulation(21700), 24, 30, 21700),
+    st('CAE', 'Caen', 49.1829, -0.3707, 'Normandie', 220, 38, 50),
+    st('FAL', 'Falaise', 48.8920, -0.1970, 'Normandie', passengerDemandFromPopulation(8000), 20, 30, 8000),
+    st('BAY', 'Bayeux', 49.2765, -0.7039, 'Normandie', 80, 18, 58),
+    st('ARP', 'Arpajon', 48.5896, 2.2467, 'Île-de-France', passengerDemandFromPopulation(11144), 22, 28, 11144),
+    st('CHB', 'Cherbourg', 49.6337, -1.6221, 'Normandie', 120, 55, 42),
+    st('BRE', 'Brest', 48.3904, -4.4861, 'Bretagne', 210, 62, 63),
+    st('QUI', 'Quimper', 47.9960, -4.0960, 'Bretagne', 140, 28, 64),
+    st('LOR', 'Lorient', 47.7480, -3.3660, 'Bretagne', 140, 55, 54),
+    st('VAN', 'Vannes', 47.6580, -2.7600, 'Bretagne', 150, 26, 70),
+    st('STB', 'Saint-Brieuc', 48.5070, -2.7650, 'Bretagne', 140, 30, 48),
+    st('ANG', 'Angers Saint-Laud', 47.4640, -0.5560, 'Pays de la Loire', 230, 44, 52),
+    st('LEM', 'Le Mans', 48.0060, 0.1990, 'Pays de la Loire', 260, 60, 45),
+    st('TOU2', 'Tours', 47.3900, 0.6930, 'Centre-Val de Loire', 250, 46, 70),
+    st('ORL', 'Orléans', 47.9020, 1.9040, 'Centre-Val de Loire', 230, 48, 46),
+    st('LIM', 'Limoges', 45.8360, 1.2670, 'Nouvelle-Aquitaine', 190, 38, 42),
+    st('POI', 'Poitiers', 46.5820, 0.3400, 'Nouvelle-Aquitaine', 210, 40, 45),
+    st('LAR', 'La Rochelle', 46.1520, -1.1450, 'Nouvelle-Aquitaine', 180, 48, 82),
+    st('BIA', 'Biarritz', 43.4590, -1.5450, 'Nouvelle-Aquitaine', 170, 30, 88),
+    st('PAU', 'Pau', 43.2950, -0.3700, 'Nouvelle-Aquitaine', 160, 28, 58),
+    st('AGE', 'Agen', 44.2040, 0.6170, 'Nouvelle-Aquitaine', 120, 36, 38),
+    st('CLE', 'Clermont-Ferrand', 45.7780, 3.0870, 'Auvergne-Rhône-Alpes', 230, 44, 62),
+    st('STE', 'Saint-Étienne', 45.4430, 4.3990, 'Auvergne-Rhône-Alpes', 220, 58, 35),
+    st('VAL', 'Valence TGV', 44.9910, 4.9780, 'Auvergne-Rhône-Alpes', 200, 52, 52),
+    st('AVI', 'Avignon TGV', 43.9210, 4.7860, 'Provence-Alpes-Côte d’Azur', 230, 42, 80),
+    st('TOU3', 'Toulon', 43.1280, 5.9290, 'Provence-Alpes-Côte d’Azur', 260, 80, 82),
+    st('CAN', 'Cannes', 43.5528, 7.0174, 'Provence-Alpes-Côte d’Azur', 220, 28, 96),
+    st('PER', 'Perpignan', 42.6960, 2.8790, 'Occitanie', 190, 44, 72),
+    st('NIM', 'Nîmes', 43.8330, 4.3660, 'Occitanie', 220, 42, 62),
+    st('BEZ', 'Béziers', 43.3440, 3.2190, 'Occitanie', 150, 40, 62),
+    st('CAR', 'Carcassonne', 43.2130, 2.3530, 'Occitanie', 130, 22, 80),
+    st('ALB', 'Albi', 43.9290, 2.1460, 'Occitanie', 120, 28, 55),
+    st('MUL', 'Mulhouse', 47.7420, 7.3430, 'Grand Est', 210, 92, 42),
+    st('BES', 'Besançon', 47.2380, 6.0250, 'Bourgogne-Franche-Comté', 170, 48, 48),
+    st('BEL', 'Belfort-Montbéliard TGV', 47.5860, 6.8990, 'Bourgogne-Franche-Comté', 140, 70, 36),
+    st('CHA', 'Chambéry', 45.5720, 5.9200, 'Auvergne-Rhône-Alpes', 180, 34, 86),
+    st('ANN', 'Annecy', 45.9010, 6.1220, 'Auvergne-Rhône-Alpes', 170, 28, 90),
+    st('MAC', 'Mâcon-Loché TGV', 46.2830, 4.7780, 'Bourgogne-Franche-Comté', 130, 52, 42),
+    st('AUX', 'Auxerre', 47.7970, 3.5700, 'Bourgogne-Franche-Comté', 110, 34, 42),
+    st('TRO', 'Troyes', 48.2970, 4.0740, 'Grand Est', 160, 44, 40),
+    st('DUN', 'Dunkerque', 51.0340, 2.3770, 'Hauts-de-France', 160, 130, 34),
+    st('CAL', 'Calais', 50.9510, 1.8580, 'Hauts-de-France', 150, 75, 45),
+    st('ARR', 'Arras', 50.2860, 2.7810, 'Hauts-de-France', 190, 46, 42),
+    st('VAL2', 'Valenciennes', 50.3570, 3.5260, 'Hauts-de-France', 170, 75, 32),
+    st('LAV', 'Laval', 48.0730, -0.7710, 'Pays de la Loire', 110, 26, 35),
+    st('LRS', 'La Roche-sur-Yon', 46.6710, -1.4350, 'Pays de la Loire', 120, 34, 50),
+    st('NEV', 'Nevers', 46.9930, 3.1580, 'Bourgogne-Franche-Comté', 120, 44, 35),
+    st('BOU', 'Bourges', 47.0830, 2.3960, 'Centre-Val de Loire', 130, 40, 42),
+    st('CHA2', 'Châteauroux', 46.8090, 1.6910, 'Centre-Val de Loire', 100, 30, 32)
+  ];
+  const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
+  const regions = [...new Set(stations.map(s => s.region))].sort();
+  const outlines = franceOutlines();
+  const railGraph = buildRailGraph();
+  const railSegments = buildRailSegments(railGraph, stationIndex);
+  return {
+    bounds: computeBounds(outlines),
+    stations,
+    stationIndex,
+    regions,
+    outline: outlines[0],
+    outlines,
+    railGraph,
+    railSegments,
+    railAdjacency: buildRailAdjacencyIndex(railGraph)
+  };
+}
+
+function franceOutlines() {
+  const mainland = [
+    [2.55, 51.09], [2.13, 51.04], [1.58, 50.99], [1.25, 50.73], [1.64, 50.22], [1.36, 50.06], [1.08, 49.95],
+    [0.68, 49.51], [0.22, 49.47], [-0.10, 49.42], [-0.36, 49.34], [-0.65, 49.33], [-1.00, 49.37], [-1.27, 49.39],
+    [-1.62, 49.66], [-1.86, 49.72], [-2.20, 49.49], [-2.48, 49.31], [-2.80, 49.18], [-3.22, 48.85], [-3.52, 48.79],
+    [-3.91, 48.73], [-4.37, 48.52], [-4.77, 48.41], [-4.73, 48.22], [-4.56, 48.06], [-4.70, 47.85], [-4.46, 47.75],
+    [-4.18, 47.79], [-3.75, 47.72], [-3.49, 47.63], [-3.19, 47.53], [-2.82, 47.43], [-2.48, 47.33], [-2.17, 47.27],
+    [-1.86, 47.06], [-1.62, 46.82], [-1.30, 46.42], [-1.17, 46.16], [-1.17, 45.72], [-1.08, 45.41], [-1.20, 45.12],
+    [-1.10, 44.79], [-1.24, 44.65], [-1.16, 44.37], [-1.29, 44.10], [-1.54, 43.78], [-1.78, 43.49], [-1.48, 43.35],
+    [-1.19, 43.25], [-0.74, 43.12], [-0.38, 42.98], [0.00, 42.87], [0.56, 42.82], [1.14, 42.72], [1.64, 42.62],
+    [2.13, 42.43], [2.51, 42.34], [3.04, 42.32], [3.15, 42.43], [3.07, 42.78], [3.30, 43.05], [3.73, 43.23],
+    [4.24, 43.34], [4.70, 43.38], [5.05, 43.26], [5.36, 43.20], [5.77, 43.10], [6.17, 43.09], [6.57, 43.16],
+    [6.93, 43.36], [7.39, 43.55], [7.53, 43.79], [7.72, 44.05], [7.47, 44.31], [7.05, 44.71], [6.82, 45.08],
+    [7.05, 45.46], [6.78, 45.75], [6.84, 46.18], [6.43, 46.43], [6.53, 46.78], [6.14, 47.04], [6.55, 47.49],
+    [7.05, 47.67], [7.50, 47.62], [7.60, 47.82], [7.80, 48.13], [7.62, 48.58], [7.15, 48.97], [6.72, 49.17],
+    [6.18, 49.46], [5.82, 49.55], [5.47, 49.50], [5.04, 49.78], [4.58, 49.99], [4.08, 49.99], [3.62, 50.31],
+    [3.15, 50.52], [2.78, 50.73], [2.55, 51.09]
+  ];
+  const corsica = [
+    [8.55, 42.95], [8.78, 43.02], [9.08, 42.86], [9.28, 42.66], [9.44, 42.43], [9.54, 42.10], [9.50, 41.78],
+    [9.30, 41.42], [8.98, 41.34], [8.73, 41.52], [8.57, 41.82], [8.62, 42.16], [8.54, 42.46], [8.55, 42.72], [8.55, 42.95]
+  ];
+  return [mainland, corsica];
+}
+
+function buildRailGraph() {
+  return [
+    ['PAR', 'LIL'], ['PAR', 'AMI'], ['PAR', 'ROU'], ['PAR', 'CAE'], ['ROU', 'PAR'], ['CAE', 'REN'], ['REN', 'NAN'], ['LIL', 'DUN'], ['LIL', 'CAL'], ['LIL', 'ARR'], ['ARR', 'AMI'], ['AMI', 'ROU'], ['ROU', 'LEH'], ['ROU', 'CAE'], ['CAE', 'BAY'], ['BAY', 'CHB'],
+    ['PAR', 'REI'], ['REI', 'MET'], ['MET', 'NAN2'], ['NAN2', 'STR'], ['STR', 'MUL'], ['MUL', 'BEL'], ['BEL', 'BES'], ['BES', 'DIJ'], ['DIJ', 'PAR'],
+    ['PAR', 'ORL'], ['ORL', 'TOU2'], ['TOU2', 'POI'], ['POI', 'BOR'], ['BOR', 'BIA'], ['BIA', 'PAU'], ['BOR', 'AGE'], ['AGE', 'TOU'],
+    ['PAR', 'LEM'], ['LEM', 'LAV'], ['LAV', 'REN'], ['REN', 'STB'], ['STB', 'BRE'], ['BRE', 'QUI'], ['QUI', 'LOR'], ['LOR', 'VAN'], ['VAN', 'NAN'], ['NAN', 'ANG'], ['ANG', 'TOU2'],
+    ['NAN', 'LRS'], ['LRS', 'LAR'], ['LAR', 'BOR'], ['PAR', 'AUX'], ['AUX', 'DIJ'], ['DIJ', 'MAC'], ['MAC', 'LYO'], ['LYO', 'STE'], ['LYO', 'VAL'], ['VAL', 'AVI'],
+    ['AVI', 'MAR'], ['MAR', 'TOU3'], ['TOU3', 'CAN'], ['CAN', 'NIC'], ['AVI', 'NIM'], ['NIM', 'MON'], ['MON', 'BEZ'], ['BEZ', 'PER'], ['BEZ', 'CAR'], ['CAR', 'TOU'],
+    ['TOU', 'ALB'], ['TOU', 'AGE'], ['PAR', 'NEV'], ['NEV', 'BOU'], ['BOU', 'CHA2'], ['CHA2', 'LIM'], ['LIM', 'POI'], ['LYO', 'GRE'], ['GRE', 'CHA'], ['CHA', 'ANN'], ['CLE', 'LYO'], ['CLE', 'NEV']
+  ];
+}
+
+function buildRailSegments(graph, stationIndex) {
+  return (graph || [])
+    .map(([from, to]) => {
+      const a = stationIndex[from];
+      const b = stationIndex[to];
+      if (!a || !b) return null;
+      return {
+        from,
+        to,
+        distance: Math.round(haversine(a.lat, a.lon, b.lat, b.lon)),
+        geometry: [
+          [Number(a.lon), Number(a.lat)],
+          [Number(b.lon), Number(b.lat)]
+        ]
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildRailAdjacencyIndex(graph) {
+  const adj = {};
+  for (const [a, b] of graph) {
+    (adj[a] ||= []).push(b);
+    (adj[b] ||= []).push(a);
+  }
+  return adj;
+}
+
+function computeBounds(outlines) {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const shape of outlines) {
+    for (const [lon, lat] of shape) {
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+  return { minLon: minLon - 0.35, maxLon: maxLon + 0.35, minLat: minLat - 0.25, maxLat: maxLat + 0.2 };
+}
+
+function st(id, name, lat, lon, region, baseDemand, freight, tourism, population = 0) {
+  const station = { id, name, lat, lon, region, baseDemand, freight, tourism };
+  if (Number.isFinite(Number(population)) && Number(population) > 0) {
+    station.population = Math.round(Number(population));
+    station.baseDemand = passengerDemandFromPopulation(population);
+    station.populationSource = 'manuel';
+  }
+  return station;
+}
