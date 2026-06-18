@@ -298,6 +298,7 @@ function rememberCacheEntry(cache, key, value, maxEntries) {
   while (cache.size > maxEntries) {
     const oldestKey = cache.keys().next().value;
     cache.delete(oldestKey);
+    if (cache === app.osmRouteCache) app.routeSpeedCache.delete(oldestKey);
   }
   if (cache === app.osmRouteCache) schedulePersistedOsmRouteCacheSave();
   return value;
@@ -312,8 +313,9 @@ function getCacheEntry(cache, key) {
 }
 
 function normalizePersistedRouteGeometry(value) {
-  if (!Array.isArray(value) || value.length < 2) return null;
-  const coords = value
+  const rawGeometry = Array.isArray(value) ? value : (Array.isArray(value?.geometry) ? value.geometry : []);
+  if (!Array.isArray(rawGeometry) || rawGeometry.length < 2) return null;
+  const coords = rawGeometry
     .map(pair => Array.isArray(pair) ? [Number(pair[0]), Number(pair[1])] : null)
     .filter(pair => pair && Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
   return coords.length >= 2 ? coords : null;
@@ -322,8 +324,13 @@ function normalizePersistedRouteGeometry(value) {
 function persistableOsmRouteCacheEntries() {
   return [...app.osmRouteCache.entries()]
     .slice(-OSM_ROUTE_CACHE_MAX_ENTRIES)
-    .map(([key, geometry]) => [key, normalizePersistedRouteGeometry(geometry)])
-    .filter(([, geometry]) => geometry);
+    .map(([key, geometry]) => {
+      const normalized = normalizePersistedRouteGeometry(geometry);
+      if (!normalized) return null;
+      const speedProfile = normalizeRouteSpeedProfile(app.routeSpeedCache.get(key), normalized);
+      return [key, speedProfile ? { geometry: normalized, speedProfile } : normalized];
+    })
+    .filter(Boolean);
 }
 
 function hydratePersistedOsmRouteCache() {
@@ -340,8 +347,12 @@ function hydratePersistedOsmRouteCache() {
     const normalized = normalizePersistedRouteGeometry(geometry);
     if (typeof key === 'string' && normalized) {
       app.osmRouteCache.set(key, normalized);
+      const speedProfile = normalizeRouteSpeedProfile(geometry?.speedProfile, normalized);
+      if (speedProfile) app.routeSpeedCache.set(key, speedProfile);
       while (app.osmRouteCache.size > OSM_ROUTE_CACHE_MAX_ENTRIES) {
-        app.osmRouteCache.delete(app.osmRouteCache.keys().next().value);
+        const oldestKey = app.osmRouteCache.keys().next().value;
+        app.osmRouteCache.delete(oldestKey);
+        app.routeSpeedCache.delete(oldestKey);
       }
     }
   }

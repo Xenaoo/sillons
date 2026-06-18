@@ -87,6 +87,101 @@ function cachedRailGeometryForRoute(a, b, profile = 'default') {
   return null;
 }
 
+
+function normalizeRouteSpeedProfile(profile, geometry = null) {
+  if (!profile || typeof profile !== 'object') return null;
+  const geometryDistance = Array.isArray(geometry) && geometry.length >= 2 ? polylineGeoDistance(geometry) : 0;
+  const totalKm = Number(profile.totalKm || geometryDistance || 0);
+  const rawSegments = Array.isArray(profile.segments) ? profile.segments : [];
+  const segments = [];
+  for (const raw of rawSegments) {
+    const fromKm = Math.max(0, Number(raw?.fromKm));
+    const toKm = Math.max(0, Number(raw?.toKm));
+    const speedKmh = Math.round(Number(raw?.speedKmh));
+    if (![fromKm, toKm, speedKmh].every(Number.isFinite) || toKm <= fromKm || speedKmh < 5) continue;
+    segments.push({
+      fromKm,
+      toKm,
+      distanceKm: Math.max(0, Number(raw?.distanceKm || (toKm - fromKm))),
+      speedKmh: Math.min(350, Math.max(5, speedKmh)),
+      source: raw?.source || 'sncf-speed'
+    });
+  }
+  if (!segments.length) return null;
+  const safeTotal = Number.isFinite(totalKm) && totalKm > 0 ? totalKm : segments[segments.length - 1].toKm;
+  const speeds = segments.map(segment => segment.speedKmh).filter(Number.isFinite);
+  return {
+    source: profile.source || 'sncf-speed',
+    totalKm: safeTotal,
+    coverage: Math.max(0, Math.min(1, Number(profile.coverage || 0))),
+    averageSpeedKmh: Number(profile.averageSpeedKmh || 0) || null,
+    minSpeedKmh: speeds.length ? Math.min(...speeds) : null,
+    maxSpeedKmh: speeds.length ? Math.max(...speeds) : null,
+    segments
+  };
+}
+
+function reverseRouteSpeedProfile(profile, totalKm = null) {
+  if (!profile?.segments?.length) return null;
+  const distance = Number(totalKm || profile.totalKm || profile.segments[profile.segments.length - 1]?.toKm || 0);
+  if (!Number.isFinite(distance) || distance <= 0) return profile;
+  const segments = profile.segments
+    .map(segment => ({
+      fromKm: Math.max(0, distance - Number(segment.toKm || 0)),
+      toKm: Math.max(0, distance - Number(segment.fromKm || 0)),
+      distanceKm: Math.max(0, Number(segment.distanceKm || 0)),
+      speedKmh: Number(segment.speedKmh),
+      source: segment.source || 'sncf-speed'
+    }))
+    .filter(segment => segment.toKm > segment.fromKm)
+    .sort((a, b) => a.fromKm - b.fromKm);
+  return normalizeRouteSpeedProfile({ ...profile, totalKm: distance, segments });
+}
+
+function rememberRouteSpeedProfile(key, profile, geometry = null) {
+  if (typeof key !== 'string') return null;
+  const normalized = normalizeRouteSpeedProfile(profile, geometry);
+  if (normalized) app.routeSpeedCache.set(key, normalized);
+  return normalized;
+}
+
+function routeSpeedProfileForKey(key) {
+  return typeof key === 'string' ? (app.routeSpeedCache.get(key) || null) : null;
+}
+
+function routeSpeedProfileForRoute(a, b, profile = 'default') {
+  const directKey = routeGeometryKey(a, b, profile);
+  const direct = routeSpeedProfileForKey(directKey);
+  if (direct) return direct;
+  const reverseKey = routeGeometryKey(b, a, profile);
+  const reverse = routeSpeedProfileForKey(reverseKey);
+  return reverse ? reverseRouteSpeedProfile(reverse) : null;
+}
+
+function appendRouteSpeedProfileSegments(out, profile, offsetKm = 0) {
+  if (!Array.isArray(out) || !profile?.segments?.length) return;
+  const offset = Number(offsetKm) || 0;
+  for (const segment of profile.segments) {
+    const fromKm = offset + Number(segment.fromKm || 0);
+    const toKm = offset + Number(segment.toKm || 0);
+    const speedKmh = Number(segment.speedKmh || 0);
+    if (![fromKm, toKm, speedKmh].every(Number.isFinite) || toKm <= fromKm || speedKmh < 5) continue;
+    const previous = out[out.length - 1];
+    if (previous && previous.speedKmh === speedKmh && previous.source === (segment.source || 'sncf-speed') && Math.abs(previous.toKm - fromKm) < 0.03) {
+      previous.toKm = toKm;
+      previous.distanceKm = Math.max(0, previous.toKm - previous.fromKm);
+    } else {
+      out.push({ fromKm, toKm, distanceKm: toKm - fromKm, speedKmh, source: segment.source || 'sncf-speed' });
+    }
+  }
+}
+
+function combinedRouteSpeedProfile(segments, totalKm = 0) {
+  if (!Array.isArray(segments) || !segments.length) return null;
+  const safeTotal = Number(totalKm) > 0 ? Number(totalKm) : segments[segments.length - 1]?.toKm || 0;
+  return normalizeRouteSpeedProfile({ source: 'sncf-speed-combined', totalKm: safeTotal, coverage: 1, segments });
+}
+
 function routeGeometryMarkedMissing(key) {
   const at = Number(app.osmRouteMissing?.get?.(key) || 0);
   if (!at) return false;
@@ -153,9 +248,11 @@ async function fetchSncfRouteGeometry(a, b, profile = 'default') {
     if (!response.ok) return [];
     const data = await response.json();
     const coords = Array.isArray(data.geometry) ? data.geometry : [];
-    return coords
+    const normalized = coords
       .map(pair => [Number(pair[0]), Number(pair[1])])
       .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+    if (normalized.length >= 2) rememberRouteSpeedProfile(routeGeometryKey(a, b, routeProfile), data.speedProfile, normalized);
+    return normalized;
   } catch {
     return [];
   }
@@ -173,9 +270,11 @@ async function fetchSncfRouteGeometryForStopSequence(ids, profile = 'default') {
     if (!response.ok) return [];
     const data = await response.json();
     const coords = Array.isArray(data.geometry) ? data.geometry : [];
-    return coords
+    const normalized = coords
       .map(pair => [Number(pair[0]), Number(pair[1])])
       .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+    if (normalized.length >= 2) rememberRouteSpeedProfile(geometryKeyForStops(cleanIds, routeProfile), data.speedProfile, normalized);
+    return normalized;
   } catch {
     return [];
   }
@@ -285,7 +384,8 @@ function getRoute(a, b, options = {}) {
     const route = {
       ...reverse,
       ids: [...reverse.ids].reverse(),
-      points: [...(reverse.points || [])].reverse()
+      points: [...(reverse.points || [])].reverse(),
+      speedProfile: reverseRouteSpeedProfile(reverse.speedProfile, reverse.distance)
     };
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
@@ -304,7 +404,8 @@ function getRoute(a, b, options = {}) {
     ids: [a, b],
     distance,
     maxSegment: distance,
-    points
+    points,
+    speedProfile: routeSpeedProfileForRoute(a, b, profile)
   };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
@@ -909,7 +1010,8 @@ function getRouteForStops(stops, options = {}) {
         ids,
         distance,
         maxSegment: distance,
-        points: cleanRoutePoints(sequencePoints)
+        points: cleanRoutePoints(sequencePoints),
+        speedProfile: routeSpeedProfileForKey(key)
       };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
     }
@@ -919,6 +1021,7 @@ function getRouteForStops(stops, options = {}) {
   let distanceTotal = 0;
   let maxSegment = 0;
   let points = [];
+  const mergedSpeedSegments = [];
 
   for (let i = 1; i < ids.length; i++) {
     const segment = getRoute(ids[i - 1], ids[i], { profile });
@@ -927,8 +1030,10 @@ function getRouteForStops(stops, options = {}) {
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
     }
     mergedIds.push(...segment.ids.slice(1));
+    const offsetKm = distanceTotal;
     distanceTotal += segment.distance || 0;
     maxSegment = Math.max(maxSegment, segment.maxSegment || 0);
+    appendRouteSpeedProfileSegments(mergedSpeedSegments, segment.speedProfile, offsetKm);
 
     if (!points.length) points.push(...segment.points);
     else points.push(...segment.points.slice(1));
@@ -938,7 +1043,7 @@ function getRouteForStops(stops, options = {}) {
   // Ne plus remplacer un tracé détaillé par une spline organique.
   // Cette ancienne sécurité était utile pour certains fallbacks, mais elle pouvait
   // dégrader un vrai parcours RFN en le simplifiant visuellement.
-  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points };
+  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points, speedProfile: combinedRouteSpeedProfile(mergedSpeedSegments, distanceTotal) };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
 

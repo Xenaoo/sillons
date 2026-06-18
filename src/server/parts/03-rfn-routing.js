@@ -2,6 +2,10 @@
 let sncfRailLinesCache = null;
 let sncfRailLinesLoadedAt = 0;
 let sncfRailLineSpatialIndex = null;
+let sncfRailSpeedSegmentsCache = null;
+let sncfRailSpeedSegmentSpatialIndex = null;
+let sncfRailSpeedSegmentsLoadedAt = 0;
+const sncfRouteSpeedProfileCache = new Map();
 let sncfPersistentRouteCacheLoaded = false;
 let sncfPersistentRouteCacheSaveTimer = null;
 const sncfRouteGeometryResultCache = new Map();
@@ -494,6 +498,333 @@ function buildSncfRailLineSpatialIndex(lines) {
     }
   }
   return { cellSize, cells };
+}
+
+
+function buildSncfSpeedSegmentSpatialIndex(segments) {
+  const cells = new Map();
+  const cellSize = SNCF_RFN_SPEED_SPATIAL_CELL_DEG;
+  for (let index = 0; index < (segments || []).length; index += 1) {
+    const bounds = segments[index]?.bounds;
+    if (!bounds) continue;
+    const minX = Math.floor(bounds.minLon / cellSize);
+    const maxX = Math.floor(bounds.maxLon / cellSize);
+    const minY = Math.floor(bounds.minLat / cellSize);
+    const maxY = Math.floor(bounds.maxLat / cellSize);
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) {
+        const key = `${x}:${y}`;
+        const bucket = cells.get(key) || [];
+        bucket.push(index);
+        cells.set(key, bucket);
+      }
+    }
+  }
+  return { cellSize, cells };
+}
+
+function speedCandidateFieldsFromObject(source, depth = 0) {
+  if (!source || typeof source !== 'object' || depth > 2) return [];
+  const out = [];
+  for (const [key, value] of Object.entries(source)) {
+    const normalizedKey = String(key || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    const keyLooksLikeSpeed = normalizedKey.includes('vitesse')
+      || normalizedKey.includes('vmax')
+      || normalizedKey.includes('vnom')
+      || /^vit/.test(normalizedKey)
+      || normalizedKey === 'maxspeed';
+    if (keyLooksLikeSpeed) {
+      const numeric = Number(String(value).replace(',', '.'));
+      if (Number.isFinite(numeric) && numeric >= 5 && numeric <= 350) out.push(numeric);
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out.push(...speedCandidateFieldsFromObject(value, depth + 1));
+    }
+  }
+  return out;
+}
+
+function speedKmhFromSncfProperties(properties) {
+  const values = speedCandidateFieldsFromObject(properties || {})
+    .filter(value => Number.isFinite(value) && value >= 5 && value <= 350);
+  if (!values.length) return null;
+  // Les exports Opendatasoft peuvent exposer plusieurs colonnes de PK/section ; on
+  // retient la plus élevée des colonnes vitesse car le dataset est une vitesse
+  // maximale nominale de section.
+  return Math.round(Math.max(...values));
+}
+
+function speedDatasetRecords(payload) {
+  if (Array.isArray(payload?.features)) return payload.features;
+  if (Array.isArray(payload?.records)) return payload.records;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function extractSncfRailSpeedSegments(payload) {
+  const segments = [];
+  for (const record of speedDatasetRecords(payload)) {
+    const properties = record?.properties || record?.fields || record || {};
+    const geometry = record?.geometry || record?.geo_shape || properties.geo_shape || properties.geometry || properties.GeoShape;
+    const speedKmh = speedKmhFromSncfProperties(properties);
+    if (!Number.isFinite(speedKmh) || speedKmh < 5 || speedKmh > 350) continue;
+    const status = String(properties.mnemo || properties.MNEMO || properties.statut || properties.status || '').toUpperCase();
+    const rejected = /FERM|DÉPOS|DEPOS|HORS|ABANDON|NON\s*EXPLOIT/.test(status);
+    if (rejected) continue;
+    for (const coords of geometryToLineStrings(geometry)) {
+      const clean = coords
+        .map(pair => [Number(pair[0]), Number(pair[1])])
+        .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && isInFranceBounds(lat, lon));
+      if (clean.length < 2) continue;
+      segments.push({
+        coords: clean,
+        speedKmh,
+        codeLigne: String(properties.code_ligne || properties.CODE_LIGNE || properties.codeLigne || properties.ligne || '').trim(),
+        libelle: String(properties.libelle || properties.LIBELLE || properties.nom || properties.nom_ligne || '').trim(),
+        bounds: geoLineBounds(clean)
+      });
+    }
+  }
+  return segments;
+}
+
+async function fetchSncfRailSpeedDataset() {
+  try {
+    return await fetchJsonWithTimeout(SNCF_RFN_SPEED_GEOJSON_URL, SNCF_RFN_SPEED_FETCH_TIMEOUT_MS);
+  } catch (geojsonError) {
+    return await fetchJsonWithTimeout(SNCF_RFN_SPEED_JSON_URL, SNCF_RFN_SPEED_FETCH_TIMEOUT_MS);
+  }
+}
+
+async function loadSncfRailSpeedSegments() {
+  if (sncfRailSpeedSegmentsCache) {
+    if (sncfRailSpeedSegmentsCache.length || Date.now() - Number(sncfRailSpeedSegmentsLoadedAt || 0) < 300000) return sncfRailSpeedSegmentsCache;
+    sncfRailSpeedSegmentsCache = null;
+    sncfRailSpeedSegmentSpatialIndex = null;
+  }
+  try {
+    if (fs.existsSync(SNCF_RFN_SPEED_CACHE_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SNCF_RFN_SPEED_CACHE_FILE, 'utf8'));
+      if (parsed?.version === SNCF_RFN_SPEED_CACHE_VERSION && Array.isArray(parsed.segments) && parsed.segments.length) {
+        sncfRailSpeedSegmentsCache = parsed.segments
+          .filter(segment => Array.isArray(segment?.coords) && segment.coords.length >= 2 && Number.isFinite(Number(segment.speedKmh)))
+          .map(segment => ({ ...segment, speedKmh: Math.round(Number(segment.speedKmh)), bounds: segment.bounds || geoLineBounds(segment.coords) }));
+        sncfRailSpeedSegmentSpatialIndex = buildSncfSpeedSegmentSpatialIndex(sncfRailSpeedSegmentsCache);
+        sncfRailSpeedSegmentsLoadedAt = Number(parsed.updatedAt || Date.now());
+        return sncfRailSpeedSegmentsCache;
+      }
+    }
+  } catch (error) {
+    console.warn('Cache vitesses RFN SNCF illisible:', error.message);
+  }
+
+  try {
+    const payload = await fetchSncfRailSpeedDataset();
+    const segments = extractSncfRailSpeedSegments(payload);
+    if (!segments.length) throw new Error('Aucune vitesse RFN exploitable.');
+    sncfRailSpeedSegmentsCache = segments;
+    sncfRailSpeedSegmentSpatialIndex = buildSncfSpeedSegmentSpatialIndex(sncfRailSpeedSegmentsCache);
+    sncfRailSpeedSegmentsLoadedAt = Date.now();
+    try {
+      fs.writeFileSync(SNCF_RFN_SPEED_CACHE_FILE, JSON.stringify({
+        version: SNCF_RFN_SPEED_CACHE_VERSION,
+        updatedAt: sncfRailSpeedSegmentsLoadedAt,
+        source: SNCF_RFN_SPEED_DATASET,
+        segments
+      }));
+    } catch (error) {
+      console.warn('Cache vitesses RFN SNCF non écrit:', error.message);
+    }
+  } catch (error) {
+    console.warn('Vitesses RFN SNCF indisponibles:', error.message);
+    sncfRailSpeedSegmentsCache = [];
+    sncfRailSpeedSegmentsLoadedAt = Date.now();
+    sncfRailSpeedSegmentSpatialIndex = buildSncfSpeedSegmentSpatialIndex(sncfRailSpeedSegmentsCache);
+  }
+  return sncfRailSpeedSegmentsCache;
+}
+
+function sncfSpeedSegmentsInBounds(segments, bbox) {
+  const source = Array.isArray(segments) ? segments : [];
+  if (!bbox) return source;
+  if (!sncfRailSpeedSegmentSpatialIndex?.cells?.size) return source.filter(segment => boundsIntersects(segment.bounds, bbox));
+  const { cellSize, cells } = sncfRailSpeedSegmentSpatialIndex;
+  const seen = new Set();
+  const out = [];
+  const minX = Math.floor(bbox.minLon / cellSize);
+  const maxX = Math.floor(bbox.maxLon / cellSize);
+  const minY = Math.floor(bbox.minLat / cellSize);
+  const maxY = Math.floor(bbox.maxLat / cellSize);
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      const bucket = cells.get(`${x}:${y}`);
+      if (!bucket?.length) continue;
+      for (const index of bucket) {
+        if (seen.has(index)) continue;
+        seen.add(index);
+        const segment = source[index];
+        if (segment?.bounds && boundsIntersects(segment.bounds, bbox)) out.push(segment);
+      }
+    }
+  }
+  return out;
+}
+
+function geoSegmentBounds(a, b, padDeg = 0.006) {
+  return {
+    minLon: Math.min(Number(a?.[0]), Number(b?.[0])) - padDeg,
+    maxLon: Math.max(Number(a?.[0]), Number(b?.[0])) + padDeg,
+    minLat: Math.min(Number(a?.[1]), Number(b?.[1])) - padDeg,
+    maxLat: Math.max(Number(a?.[1]), Number(b?.[1])) + padDeg
+  };
+}
+
+function geoSegmentAngleDegrees(a, b) {
+  const lonA = Number(a?.[0]);
+  const latA = Number(a?.[1]);
+  const lonB = Number(b?.[0]);
+  const latB = Number(b?.[1]);
+  if (![lonA, latA, lonB, latB].every(Number.isFinite)) return null;
+  const meanLat = ((latA + latB) / 2) * Math.PI / 180;
+  const dx = (lonB - lonA) * Math.cos(meanLat);
+  const dy = latB - latA;
+  if (dx === 0 && dy === 0) return null;
+  return Math.atan2(dy, dx) * 180 / Math.PI;
+}
+
+function geoAngleDeltaDegrees(a, b) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  let delta = Math.abs(a - b) % 180;
+  if (delta > 90) delta = 180 - delta;
+  return delta;
+}
+
+function nearestSpeedForRouteSegment(a, b, speedSegments) {
+  const lonA = Number(a?.[0]);
+  const latA = Number(a?.[1]);
+  const lonB = Number(b?.[0]);
+  const latB = Number(b?.[1]);
+  if (![lonA, latA, lonB, latB].every(Number.isFinite)) return null;
+  const segKm = haversine(latA, lonA, latB, lonB);
+  if (!Number.isFinite(segKm) || segKm <= 0) return null;
+
+  const midpoint = { lon: (lonA + lonB) / 2, lat: (latA + latB) / 2 };
+  const routeAngle = geoSegmentAngleDegrees(a, b);
+  const padDeg = Math.max(0.004, Math.min(0.018, segKm / 70));
+  const candidates = sncfSpeedSegmentsInBounds(speedSegments, geoSegmentBounds(a, b, padDeg));
+  let best = null;
+  for (const candidate of candidates) {
+    const projection = projectPointOnGeoPolyline(midpoint, candidate.coords);
+    if (!projection || !Number.isFinite(projection.distanceKm)) continue;
+    if (projection.distanceKm > 0.55) continue;
+    const ci = Math.max(1, Math.min(candidate.coords.length - 1, Number(projection.index || 0) + 1));
+    const candidateAngle = geoSegmentAngleDegrees(candidate.coords[ci - 1], candidate.coords[ci]);
+    const angleDelta = geoAngleDeltaDegrees(routeAngle, candidateAngle);
+    const score = projection.distanceKm + (angleDelta / 90) * 0.18;
+    if (!best || score < best.score) {
+      best = {
+        speedKmh: Math.round(Number(candidate.speedKmh)),
+        distanceKm: projection.distanceKm,
+        angleDelta,
+        score,
+        source: 'sncf-speed'
+      };
+    }
+  }
+  return best;
+}
+
+function routeSpeedProfileCacheKey(geometry) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (coords.length < 2) return '';
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  return `${coords.length}:${Number(first?.[0]).toFixed(5)},${Number(first?.[1]).toFixed(5)}:${Number(last?.[0]).toFixed(5)},${Number(last?.[1]).toFixed(5)}:${Math.round(polylineDistanceKm(coords) * 1000)}`;
+}
+
+function mergeRouteSpeedSegments(segments) {
+  const out = [];
+  for (const raw of segments || []) {
+    const fromKm = Number(raw?.fromKm);
+    const toKm = Number(raw?.toKm);
+    const speedKmh = Math.round(Number(raw?.speedKmh));
+    if (![fromKm, toKm, speedKmh].every(Number.isFinite) || toKm <= fromKm || speedKmh < 5) continue;
+    const source = raw.source || 'sncf-speed';
+    const previous = out[out.length - 1];
+    if (previous && previous.speedKmh === speedKmh && previous.source === source && Math.abs(previous.toKm - fromKm) < 0.015) {
+      previous.toKm = toKm;
+      previous.distanceKm = Math.max(0, previous.toKm - previous.fromKm);
+    } else {
+      out.push({ fromKm, toKm, distanceKm: Math.max(0, toKm - fromKm), speedKmh, source });
+    }
+  }
+  return out;
+}
+
+async function sncfSpeedProfileForGeometry(geometry) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (coords.length < 2) return { source: 'none', totalKm: 0, coverage: 0, segments: [] };
+  const key = routeSpeedProfileCacheKey(coords);
+  if (key && sncfRouteSpeedProfileCache.has(key)) return sncfRouteSpeedProfileCache.get(key);
+
+  const speedSegments = await loadSncfRailSpeedSegments();
+  const raw = [];
+  let atKm = 0;
+  let matchedKm = 0;
+  let matchedWeightedSpeed = 0;
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const distanceKm = haversine(Number(a?.[1]), Number(a?.[0]), Number(b?.[1]), Number(b?.[0]));
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0) continue;
+    const match = speedSegments.length ? nearestSpeedForRouteSegment(a, b, speedSegments) : null;
+    const speedKmh = Number(match?.speedKmh);
+    if (Number.isFinite(speedKmh) && speedKmh >= 5) {
+      matchedKm += distanceKm;
+      matchedWeightedSpeed += speedKmh * distanceKm;
+      raw.push({ fromKm: atKm, toKm: atKm + distanceKm, speedKmh, source: 'sncf-speed' });
+    } else {
+      raw.push({ fromKm: atKm, toKm: atKm + distanceKm, speedKmh: null, source: 'fallback' });
+    }
+    atKm += distanceKm;
+  }
+
+  const totalKm = Math.max(0, atKm);
+  const fallbackSpeed = matchedKm > 0
+    ? Math.round(matchedWeightedSpeed / matchedKm)
+    : SNCF_RFN_DEFAULT_SPEED_KMH;
+  const filled = raw.map(segment => {
+    const explicitSpeed = segment.speedKmh !== null && segment.speedKmh !== undefined && Number.isFinite(Number(segment.speedKmh));
+    return {
+      ...segment,
+      speedKmh: explicitSpeed ? Math.round(Number(segment.speedKmh)) : fallbackSpeed,
+      source: explicitSpeed ? segment.source : 'fallback'
+    };
+  });
+  const segments = mergeRouteSpeedSegments(filled);
+  const durationHours = segments.reduce((sum, segment) => sum + (Number(segment.distanceKm || 0) / Math.max(5, Number(segment.speedKmh || fallbackSpeed))), 0);
+  const averageSpeedKmh = durationHours > 0 ? totalKm / durationHours : fallbackSpeed;
+  const speeds = segments.map(segment => Number(segment.speedKmh)).filter(Number.isFinite);
+  const profile = {
+    source: matchedKm > 0 ? SNCF_RFN_SPEED_DATASET : 'fallback',
+    totalKm: Math.round(totalKm * 1000) / 1000,
+    coverage: totalKm > 0 ? Math.round((matchedKm / totalKm) * 1000) / 1000 : 0,
+    averageSpeedKmh: Math.round(averageSpeedKmh),
+    minSpeedKmh: speeds.length ? Math.min(...speeds) : fallbackSpeed,
+    maxSpeedKmh: speeds.length ? Math.max(...speeds) : fallbackSpeed,
+    segments
+  };
+  if (key) {
+    sncfRouteSpeedProfileCache.set(key, profile);
+    while (sncfRouteSpeedProfileCache.size > SNCF_ROUTE_GEOMETRY_CACHE_MAX) {
+      sncfRouteSpeedProfileCache.delete(sncfRouteSpeedProfileCache.keys().next().value);
+    }
+  }
+  return profile;
 }
 
 function sncfRailLinesInBounds(lines, bbox) {

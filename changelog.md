@@ -1,3 +1,13 @@
+## Version v69.1.0 — animation des trains par vitesse RFN
+
+- incrément de version : badge interface `v69.1.0`, version serveur/client `v69.1.0`, package `69.1.0` et schéma serveur `151` ;
+- serveur : ajout d’un cache local `data/sncf-rfn-speed-cache.json` alimenté par le dataset SNCF Open Data `vitesse-maximale-nominale-sur-ligne` ;
+- serveur : les endpoints `/api/sncf/route-geometry` et `/api/sncf/route-geometry-sequence` renvoient maintenant un `speedProfile` découpé par tronçons kilométriques ;
+- carte : l’animation des trains n’avance plus uniformément sur la ligne, elle accélère ou ralentit selon la vitesse maximale du tronçon RFN courant ;
+- carte : la vitesse visuelle est plafonnée par la vitesse effective du matériel roulant et son état de maintenance ;
+- client : ajout d’un cache de profils de vitesse associé aux géométries RFN et persistant avec le cache local de tracés ;
+- cache client RFN incrémenté en `sncf-geometry-v16`.
+
 ## Version v69.0.0 — refonte stricte des tracés RFN
 
 - incrément de version : badge interface `v69.0.0`, version serveur/client `v69.0.0`, package `69.0.0` et schéma serveur `150` ;

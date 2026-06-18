@@ -328,16 +328,17 @@ function drawAllLines(ctx, lite = false) {
       )) continue;
 
       const visualLine = visualLineWithEffectiveFrequency(line);
+      const visualRoute = { ...route, speedProfile: route.speedProfile || null };
       const speeds = trains.map(train => {
         const model = app.state.balance.trains[train.modelId];
-        return model ? trainVisualAverageSpeedKmH(train, model, visualLine) : 0;
+        return model ? trainVisualAverageSpeedKmH(train, model, visualLine, visualRoute) : 0;
       }).filter(speed => speed > 0);
       const averageSpeed = speeds.length ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 70;
 
       trains.forEach((train, index) => {
         const model = app.state.balance.trains[train.modelId];
         if (!model) return;
-        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed }, model, own, train, index, trains.length);
+        drawTrainSprite(ctx, route.points, player.color, { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed }, model, own, train, index, trains.length, visualRoute);
       });
     }
   };
@@ -504,58 +505,136 @@ function drawRailLine(ctx, points, color, own, electrified, lite = false, highli
   ctx.restore();
 }
 
-function trainVisualAverageSpeedKmH(train, model, line) {
+const TRAIN_VISUAL_SECONDS_PER_TRAVEL_HOUR = 18;
+
+function trainVisualConditionMultiplier(train) {
+  const condition = Math.max(0.35, Math.min(1, Number(train?.condition ?? 0.9)));
+  return 0.76 + condition * 0.24;
+}
+
+function trainVisualEffectiveMaxSpeedKmH(train, model) {
   const profile = train ? trainRuntimeProfile(train, model) : {};
   const maxSpeed = Number(profile.speed || model?.speed || 90);
-  const condition = Math.max(0.35, Math.min(1, Number(train?.condition ?? 0.9)));
+  return Math.max(18, maxSpeed * trainVisualConditionMultiplier(train));
+}
+
+function trainVisualAverageSpeedKmH(train, model, line, route = null) {
+  const speedProfile = route?.speedProfile || line?.speedProfile || null;
+  const maxSpeed = trainVisualEffectiveMaxSpeedKmH(train, model);
+  if (speedProfile?.segments?.length) {
+    let distanceKm = 0;
+    let durationHours = 0;
+    for (const segment of speedProfile.segments) {
+      const segmentDistance = Math.max(0, Number(segment.distanceKm || (Number(segment.toKm) - Number(segment.fromKm)) || 0));
+      const trackSpeed = Math.max(5, Number(segment.speedKmh || speedProfile.averageSpeedKmh || 100));
+      const effectiveSpeed = Math.max(8, Math.min(maxSpeed, trackSpeed));
+      distanceKm += segmentDistance;
+      durationHours += segmentDistance / effectiveSpeed;
+    }
+    if (distanceKm > 0 && durationHours > 0) return Math.max(18, distanceKm / durationHours);
+  }
+
+  const profile = train ? trainRuntimeProfile(train, model) : {};
+  const legacyMaxSpeed = Number(profile.speed || model?.speed || 90);
   const stopCount = Math.max(2, lineStopsOf(line).length);
   const stopPenalty = Math.max(0.58, 1 - Math.max(0, stopCount - 2) * 0.045);
   const servicePenalty = line?.service === 'freight' ? 0.62 : line?.service === 'mixed' ? 0.68 : 0.74;
-  const conditionPenalty = 0.72 + condition * 0.28;
-  return Math.max(18, maxSpeed * servicePenalty * stopPenalty * conditionPenalty);
+  return Math.max(18, legacyMaxSpeed * servicePenalty * stopPenalty * trainVisualConditionMultiplier(train));
 }
 
-function trainVisualOneWaySeconds(line, train, model) {
-  const distanceKm = Math.max(1, Number(lineDistance(line) || 1));
+function trainVisualOneWaySeconds(line, train, model, route = null) {
+  const distanceKm = Math.max(1, Number(route?.speedProfile?.totalKm || route?.distance || lineDistance(line) || 1));
+  const speedProfile = route?.speedProfile || line?.speedProfile || null;
+  if (speedProfile?.segments?.length) {
+    const maxSpeed = trainVisualEffectiveMaxSpeedKmH(train, model);
+    const durationHours = speedProfile.segments.reduce((sum, segment) => {
+      const segmentDistance = Math.max(0, Number(segment.distanceKm || (Number(segment.toKm) - Number(segment.fromKm)) || 0));
+      const trackSpeed = Math.max(5, Number(segment.speedKmh || speedProfile.averageSpeedKmh || 100));
+      return sum + segmentDistance / Math.max(8, Math.min(maxSpeed, trackSpeed));
+    }, 0);
+    if (durationHours > 0) return Math.max(5.5, Math.min(85, durationHours * TRAIN_VISUAL_SECONDS_PER_TRAVEL_HOUR));
+  }
   const averageSpeed = Number(line?.visualAverageSpeed || 0) > 0
     ? Number(line.visualAverageSpeed)
-    : trainVisualAverageSpeedKmH(train, model, line);
+    : trainVisualAverageSpeedKmH(train, model, line, route);
   const travelHours = distanceKm / Math.max(1, averageSpeed);
-  const secondsPerTravelHour = 18;
-  return Math.max(5.5, Math.min(55, travelHours * secondsPerTravelHour));
+  return Math.max(5.5, Math.min(55, travelHours * TRAIN_VISUAL_SECONDS_PER_TRAVEL_HOUR));
 }
 
 function trainVisualInstanceCount(line) {
   return Math.max(1, Math.round(Number(line?.slotUsage?.used || line?.trainCount || 1)));
 }
 
-function trainVisualPhase(line, train, model, instanceIndex = 0, instanceCount = 1) {
-  const oneWaySeconds = trainVisualOneWaySeconds(line, train, model);
-  const roundTripMs = oneWaySeconds * 2 * 1000;
+function speedProfileSegmentAtKm(speedProfile, km) {
+  const segments = speedProfile?.segments || [];
+  if (!segments.length) return null;
+  const value = Number(km) || 0;
+  for (const segment of segments) {
+    if (value >= Number(segment.fromKm || 0) && value <= Number(segment.toKm || 0)) return segment;
+  }
+  return value < Number(segments[0].fromKm || 0) ? segments[0] : segments[segments.length - 1];
+}
+
+function trainVisualSpeedAtKm(line, train, model, route, km) {
+  const speedProfile = route?.speedProfile || line?.speedProfile || null;
+  const maxSpeed = trainVisualEffectiveMaxSpeedKmH(train, model);
+  if (speedProfile?.segments?.length) {
+    const segment = speedProfileSegmentAtKm(speedProfile, km);
+    const trackSpeed = Math.max(5, Number(segment?.speedKmh || speedProfile.averageSpeedKmh || 100));
+    return Math.max(8, Math.min(maxSpeed, trackSpeed));
+  }
+  return trainVisualAverageSpeedKmH(train, model, line, route);
+}
+
+function trainVisualRouteDistanceKm(line, route) {
+  const value = Number(route?.speedProfile?.totalKm || route?.distance || lineDistance(line) || 1);
+  return Math.max(1, Number.isFinite(value) ? value : 1);
+}
+
+function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanceCount = 1) {
+  const totalKm = trainVisualRouteDistanceKm(line, route);
   const key = `${line.id}:${train?.id || 'train'}:${instanceIndex}`;
   const now = performance.now();
   const motion = app.map.trainMotion || (app.map.trainMotion = {});
   let entry = motion[key];
-  if (!entry) {
+  if (!entry || Math.abs(Number(entry.totalKm || 0) - totalKm) > Math.max(1, totalKm * 0.02)) {
     const seed = (hashCode(`${line.id}:${train?.id || ''}`) % 10000) / 10000;
     const offset = instanceCount > 1 ? instanceIndex / instanceCount : 0;
-    entry = motion[key] = { phase: (seed + offset) % 2, lastAt: now };
+    const phase = (seed + offset) % 1;
+    entry = motion[key] = {
+      positionKm: totalKm * phase,
+      direction: seed < 0.5 ? 1 : -1,
+      totalKm,
+      lastAt: now
+    };
   } else {
-    const elapsed = Math.max(0, Math.min(250, now - Number(entry.lastAt || now)));
-    const phaseDelta = elapsed * 2 / Math.max(1000, roundTripMs);
-    entry.phase = (Number(entry.phase || 0) + phaseDelta) % 2;
+    const elapsedSeconds = Math.max(0, Math.min(0.25, (now - Number(entry.lastAt || now)) / 1000));
+    let speedKmh = trainVisualSpeedAtKm(line, train, model, route, entry.positionKm);
+    let deltaKm = speedKmh * elapsedSeconds / TRAIN_VISUAL_SECONDS_PER_TRAVEL_HOUR;
+    entry.positionKm += deltaKm * (Number(entry.direction || 1) >= 0 ? 1 : -1);
+    if (entry.positionKm > totalKm) {
+      entry.positionKm = Math.max(0, totalKm - (entry.positionKm - totalKm));
+      entry.direction = -1;
+    } else if (entry.positionKm < 0) {
+      entry.positionKm = Math.min(totalKm, -entry.positionKm);
+      entry.direction = 1;
+    }
     entry.lastAt = now;
   }
-  return entry.phase;
+  const speedKmh = trainVisualSpeedAtKm(line, train, model, route, entry.positionKm);
+  return {
+    progress: Math.max(0.001, Math.min(0.999, entry.positionKm / totalKm)),
+    reverse: Number(entry.direction || 1) < 0,
+    speedKmh
+  };
 }
 
-function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1) {
-  const phase = trainVisualPhase(line, train, model, instanceIndex, instanceCount);
-  const reverse = phase > 1;
-  const progress = reverse ? 2 - phase : phase;
-  const t = Math.max(0.001, Math.min(0.999, progress));
+function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1, route = null) {
+  const motion = trainVisualMotion(line, train, model, route, instanceIndex, instanceCount);
+  const reverse = motion.reverse;
+  const t = Math.max(0.001, Math.min(0.999, motion.progress));
   const pose = pointAndAngleAlongPolyline(points, t);
-  const speed = Number(line?.visualAverageSpeed || trainVisualAverageSpeedKmH(train, model, line) || 0);
+  const speed = Number(motion.speedKmh || line?.visualAverageSpeed || trainVisualAverageSpeedKmH(train, model, line, route) || 0);
   const normalizedSpeed = clamp((speed - 35) / 165, 0, 1);
   const trainCount = Math.max(1, instanceCount);
   const densityShrink = clamp(1 - Math.max(0, trainCount - 1) * 0.025, 0.78, 1);
@@ -623,9 +702,9 @@ function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex
   ctx.restore();
 }
 
-function drawTrainSprite(ctx, points, color, line, model, own, train = null, instanceIndex = 0, instanceCount = 1) {
+function drawTrainSprite(ctx, points, color, line, model, own, train = null, instanceIndex = 0, instanceCount = 1, route = null) {
   if (!points?.length) return;
-  drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex, Math.max(1, instanceCount));
+  drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex, Math.max(1, instanceCount), route);
 }
 
 function drawPixelTrainBody(ctx, color, model) {

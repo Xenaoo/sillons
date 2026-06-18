@@ -48,18 +48,23 @@ async function handleApi(req, res, url) {
     const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
     const startedAt = Date.now();
     const geometry = await sncfRouteGeometryForStationsFast(from, to, { profile });
+    const speedProfile = await sncfSpeedProfileForGeometry(geometry || []);
+    const speedCacheMaxAge = speedProfile?.source === SNCF_RFN_SPEED_DATASET ? 31536000 : 3600;
     sendCachedJson(res, 200, {
       ok: true,
       from,
       to,
       profile,
       geometry,
+      speedProfile,
       distance: Math.round(polylineDistanceKm(geometry || [])),
       pointCount: Array.isArray(geometry) ? geometry.length : 0,
       source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'none',
+      speedSource: speedProfile?.source || 'none',
       durationMs: Date.now() - startedAt,
-      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION
-    }, 31536000);
+      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION,
+      speedCacheVersion: SNCF_RFN_SPEED_CACHE_VERSION
+    }, speedCacheMaxAge);
     return;
   }
 
@@ -72,18 +77,23 @@ async function handleApi(req, res, url) {
     const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
     const startedAt = Date.now();
     const route = await sncfRouteGeometryForStopSequenceFast(stops, { profile });
+    const speedProfile = await sncfSpeedProfileForGeometry(route.geometry || []);
+    const speedCacheMaxAge = speedProfile?.source === SNCF_RFN_SPEED_DATASET ? 31536000 : 3600;
     sendCachedJson(res, 200, {
       ok: true,
       stops: route.ids || stops,
       profile,
       geometry: route.geometry || [],
+      speedProfile,
       distance: Math.round(polylineDistanceKm(route.geometry || [])),
       pointCount: Array.isArray(route.geometry) ? route.geometry.length : 0,
       chunks: route.chunks || [],
       source: route.geometry?.length ? 'sncf-formes-des-lignes-du-rfn-sequence' : 'none',
+      speedSource: speedProfile?.source || 'none',
       durationMs: Date.now() - startedAt,
-      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION
-    }, 31536000);
+      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION,
+      speedCacheVersion: SNCF_RFN_SPEED_CACHE_VERSION
+    }, speedCacheMaxAge);
     return;
   }
 
