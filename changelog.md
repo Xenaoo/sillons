@@ -1,3 +1,12 @@
+## Version v68.1.0 — corrections réactives des tracés hors RFN et anti-lignes droites
+
+- incrément de version : badge interface `v68.1.0`, version serveur/client `v68.1.0`, package `68.1.0` et schéma serveur `149` ;
+- RFN : ajout d’un contrôle réactif après calcul : lorsqu’un itinéraire calculé fait un détour nettement plus long qu’un chemin direct cohérent, le rendu peut utiliser un raccourci visuel hors RFN ;
+- RFN : ajout d’une correction locale des boucles : les petits détours où deux points proches sont reliés par une grande boucle sont remplacés par un raccord court ;
+- RFN : ajout d’une réparation des longues sections trop pauvres en points pour éviter les segments visuels “tout droit” sur des lignes comme `St-Martin-d’Étampes → St-Quentin-en-Yvelines` ;
+- gameplay : la validation serveur stricte des lignes conserve un cache séparé `:strict` afin de ne pas confondre les géométries visuelles hors RFN avec les distances de validation ;
+- cache serveur RFN incrémenté en `rfn-route-v15` et cache client en `sncf-geometry-v14`.
+
 ## Version v68.0.0 — refonte technique du découpage du code
 
 - incrément de version : badge interface `v68.0.0`, version serveur/client `v68.0.0`, package `68.0.0` et schéma serveur `148` ;

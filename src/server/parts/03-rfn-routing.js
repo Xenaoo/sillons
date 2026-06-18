@@ -13,12 +13,17 @@ function normalizeRailRouteProfile(profile) {
   return 'default';
 }
 
-function sncfRouteCacheKey(a, b, profile = 'default') {
-  return `${normalizeRailRouteProfile(profile)}::${currentStationId(a)}::${currentStationId(b)}`;
+function sncfRouteCacheProfileKey(profile = 'default', options = {}) {
+  const base = normalizeRailRouteProfile(profile);
+  return options.allowSynthetic === false ? `${base}:strict` : base;
 }
 
-function sncfRouteSequenceCacheKey(ids, profile = 'default') {
-  return `${normalizeRailRouteProfile(profile)}::${(ids || []).map(currentStationId).filter(Boolean).join('>')}`;
+function sncfRouteCacheKey(a, b, profile = 'default', options = {}) {
+  return `${sncfRouteCacheProfileKey(profile, options)}::${currentStationId(a)}::${currentStationId(b)}`;
+}
+
+function sncfRouteSequenceCacheKey(ids, profile = 'default', options = {}) {
+  return `${sncfRouteCacheProfileKey(profile, options)}::${(ids || []).map(currentStationId).filter(Boolean).join('>')}`;
 }
 
 function ensureSncfPersistentRouteCacheLoaded() {
@@ -201,7 +206,7 @@ async function runSncfRouteWorkerTask(task) {
 
 async function sncfRouteGeometryForStationsFast(fromKey, toKey, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
-  const cacheKey = sncfRouteCacheKey(fromKey, toKey, profile);
+  const cacheKey = sncfRouteCacheKey(fromKey, toKey, profile, options);
   ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometryResultCache.has(cacheKey)) return sncfRouteGeometryResultCache.get(cacheKey);
   const workerResult = await runSncfRouteWorkerTask({ kind: 'pair', from: fromKey, to: toKey, profile, options });
@@ -215,7 +220,7 @@ async function sncfRouteGeometryForStopSequenceFast(stops, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, geometry: [], chunks: [] };
-  const cacheKey = sncfRouteSequenceCacheKey(ids, profile);
+  const cacheKey = sncfRouteSequenceCacheKey(ids, profile, options);
   ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometrySequenceResultCache.has(cacheKey)) return sncfRouteGeometrySequenceResultCache.get(cacheKey);
   const workerResult = await runSncfRouteWorkerTask({ kind: 'sequence', stops: ids, profile, options });
@@ -916,9 +921,9 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
   const toKey = currentStationId(toId);
   const disableAutoWaypoint = options.disableAutoWaypoint === true;
   ensureSncfPersistentRouteCacheLoaded();
-  const key = sncfRouteCacheKey(fromKey, toKey, profile);
+  const key = sncfRouteCacheKey(fromKey, toKey, profile, options);
   if (!disableAutoWaypoint && sncfRouteGeometryResultCache.has(key)) return sncfRouteGeometryResultCache.get(key);
-  const reverseKey = sncfRouteCacheKey(toKey, fromKey, profile);
+  const reverseKey = sncfRouteCacheKey(toKey, fromKey, profile, options);
   if (!disableAutoWaypoint && sncfRouteGeometryResultCache.has(reverseKey)) {
     const reversed = [...sncfRouteGeometryResultCache.get(reverseKey)].reverse();
     return rememberSncfRouteGeometry(key, reversed);
@@ -967,7 +972,8 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
     }
     if (!Array.isArray(geometry) || geometry.length < 2) return [];
     const improved = disableAutoWaypoint ? geometry : await improveSncfRouteGeometryWithCorridorWaypoint(fromKey, toKey, geometry, profile, directKm);
-    return disableAutoWaypoint ? improved : rememberSncfRouteGeometry(key, improved);
+    const normalized = normalizeRouteGeometryReactive([fromKey, toKey], improved, { profile, allowSynthetic: options.allowSynthetic !== false });
+    return disableAutoWaypoint ? normalized.geometry : rememberSncfRouteGeometry(key, normalized.geometry);
   } catch (error) {
     console.warn('Géométrie SNCF RFN indisponible:', error.message);
     return [];
@@ -1218,6 +1224,239 @@ function mergeGeoCoordinateSequences(sequences) {
 }
 
 
+
+function stationGeoRoutePoint(stationId) {
+  const station = stationById(stationId);
+  const point = stationRoutePoint(station) || stationRawPoint(station);
+  if (!point) return null;
+  const lon = Number(point.lon);
+  const lat = Number(point.lat);
+  return Number.isFinite(lon) && Number.isFinite(lat) ? { lon, lat } : null;
+}
+
+function geoPolylineGapMetrics(coords) {
+  const geometry = Array.isArray(coords) ? coords : [];
+  let maxGapKm = 0;
+  let gapsOverOneKm = 0;
+  let gapsOverTwoKm = 0;
+  for (let i = 1; i < geometry.length; i += 1) {
+    const a = geometry[i - 1];
+    const b = geometry[i];
+    if (!Array.isArray(a) || !Array.isArray(b)) continue;
+    const gap = haversine(Number(a[1]), Number(a[0]), Number(b[1]), Number(b[0]));
+    if (!Number.isFinite(gap)) continue;
+    maxGapKm = Math.max(maxGapKm, gap);
+    if (gap > 1) gapsOverOneKm += 1;
+    if (gap > 2) gapsOverTwoKm += 1;
+  }
+  return { maxGapKm, gapsOverOneKm, gapsOverTwoKm };
+}
+
+function makeGeoShortcutSegment(fromPoint, toPoint, options = {}) {
+  const a = Array.isArray(fromPoint) ? { lon: Number(fromPoint[0]), lat: Number(fromPoint[1]) } : fromPoint;
+  const b = Array.isArray(toPoint) ? { lon: Number(toPoint[0]), lat: Number(toPoint[1]) } : toPoint;
+  if (!a || !b || ![a.lon, a.lat, b.lon, b.lat].every(Number.isFinite)) return [];
+  const directKm = haversine(a.lat, a.lon, b.lat, b.lon);
+  if (!Number.isFinite(directKm) || directKm <= 0) return [[roundCoord(a.lon), roundCoord(a.lat)], [roundCoord(b.lon), roundCoord(b.lat)]];
+  const maxStepKm = Math.max(0.12, Math.min(2.5, Number(options.maxStepKm || 0.42)));
+  const steps = Math.max(1, Math.min(240, Math.ceil(directKm / maxStepKm)));
+  const curveKm = Math.max(0, Math.min(Number(options.curveKm || 0), directKm * 0.08, 1.2));
+  const meanLat = ((a.lat + b.lat) / 2) * Math.PI / 180;
+  const kmPerLon = 111.32 * (Math.cos(meanLat) || 1);
+  const kmPerLat = 110.57;
+  const dxKm = (b.lon - a.lon) * kmPerLon;
+  const dyKm = (b.lat - a.lat) * kmPerLat;
+  const len = Math.hypot(dxKm, dyKm) || 1;
+  const nx = -dyKm / len;
+  const ny = dxKm / len;
+  const out = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const envelope = Math.sin(Math.PI * t);
+    const lateral = curveKm * envelope;
+    const lon = a.lon + (b.lon - a.lon) * t + (nx * lateral) / kmPerLon;
+    const lat = a.lat + (b.lat - a.lat) * t + (ny * lateral) / kmPerLat;
+    out.push([roundCoord(lon), roundCoord(lat)]);
+  }
+  out[0] = [roundCoord(a.lon), roundCoord(a.lat)];
+  out[out.length - 1] = [roundCoord(b.lon), roundCoord(b.lat)];
+  return out;
+}
+
+function directShortcutGeometryForStopSequence(ids, options = {}) {
+  const list = Array.isArray(ids) ? ids.map(currentStationId).filter(Boolean) : [];
+  if (list.length < 2) return [];
+  const parts = [];
+  for (let i = 1; i < list.length; i += 1) {
+    const a = stationGeoRoutePoint(list[i - 1]);
+    const b = stationGeoRoutePoint(list[i]);
+    if (!a || !b) return [];
+    const segment = makeGeoShortcutSegment(a, b, {
+      maxStepKm: options.maxStepKm || 0.34,
+      curveKm: options.curveKm || 0
+    });
+    if (segment.length < 2) return [];
+    parts.push(segment);
+  }
+  return mergeGeoCoordinateSequences(parts);
+}
+
+function directStopSequenceDistanceKm(ids) {
+  const list = Array.isArray(ids) ? ids : [];
+  let total = 0;
+  for (let i = 1; i < list.length; i += 1) {
+    const a = stationGeoRoutePoint(list[i - 1]);
+    const b = stationGeoRoutePoint(list[i]);
+    if (!a || !b) return Infinity;
+    const distance = haversine(a.lat, a.lon, b.lat, b.lon);
+    if (!Number.isFinite(distance) || distance <= 0) return Infinity;
+    total += distance;
+  }
+  return total;
+}
+
+function routeShortcutTrigger(ids, geometry, options = {}) {
+  if (options.allowSynthetic === false) return null;
+  const coords = Array.isArray(geometry) ? geometry : [];
+  const list = Array.isArray(ids) ? ids.map(currentStationId).filter(Boolean) : [];
+  if (list.length < 2 || coords.length < 2) return null;
+  const routeKm = polylineDistanceKm(coords);
+  const directKm = directStopSequenceDistanceKm(list);
+  if (!Number.isFinite(routeKm) || !Number.isFinite(directKm) || directKm <= 0) return null;
+  const dense = rfnStopSequenceLikelyDense(list);
+  const ratioLimit = dense ? 1.18 : list.length > 2 ? 1.25 : 1.32;
+  const extraLimit = dense ? 2.2 : list.length > 2 ? 4.5 : 7.0;
+  if (routeKm > Math.max(directKm * ratioLimit, directKm + extraLimit)) {
+    return { reason: 'shorter-non-rfn', routeKm, directKm };
+  }
+  if (list.length === 2) {
+    const start = stationGeoRoutePoint(list[0]);
+    const end = stationGeoRoutePoint(list[1]);
+    if (start && end) {
+      const backtracking = routeBacktrackingMetrics(start, end, coords);
+      const corridor = routeCorridorMetrics(start, end, coords);
+      const corridorLimit = corridorDeviationLimitKm(directKm);
+      if (backtracking.reversals >= 3 && routeKm > Math.max(directKm * 1.12, directKm + 1.2)) {
+        return { reason: 'backtracking-shortcut', routeKm, directKm, reversals: backtracking.reversals };
+      }
+      if (corridor.maxDeviationKm > corridorLimit * 1.75 && routeKm > Math.max(directKm * 1.16, directKm + 1.8)) {
+        return { reason: 'corridor-shortcut', routeKm, directKm, deviationKm: corridor.maxDeviationKm };
+      }
+    }
+  }
+  return null;
+}
+
+function sparseRouteGapLimitKm(ids, profile = 'default') {
+  const list = Array.isArray(ids) ? ids : [];
+  const dense = rfnStopSequenceLikelyDense(list);
+  if (profile === 'highspeed') return dense ? 1.7 : 3.8;
+  if (dense) return 1.05;
+  if (list.length >= 4) return 1.55;
+  return 2.4;
+}
+
+
+function replaceLocalDetourShortcuts(geometry, options = {}) {
+  let coords = Array.isArray(geometry) ? geometry : [];
+  if (coords.length < 12 || options.allowSynthetic === false) return { geometry: coords, replacements: 0, savedKm: 0 };
+  const maxShortcutKm = Math.max(1.2, Math.min(8, Number(options.maxShortcutKm || 5.5)));
+  const minSavedKm = Math.max(0.55, Math.min(3.0, Number(options.minSavedKm || 1.05)));
+  let replacements = 0;
+  let savedKm = 0;
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    const prefix = [0];
+    for (let i = 1; i < coords.length; i += 1) {
+      prefix[i] = prefix[i - 1] + haversine(Number(coords[i - 1][1]), Number(coords[i - 1][0]), Number(coords[i][1]), Number(coords[i][0]));
+    }
+    let best = null;
+    for (let i = 0; i < coords.length - 5; i += 1) {
+      const maxJ = Math.min(coords.length - 1, i + 95);
+      for (let j = i + 4; j <= maxJ; j += 1) {
+        const alongKm = prefix[j] - prefix[i];
+        if (!Number.isFinite(alongKm) || alongKm <= minSavedKm) continue;
+        const directKm = haversine(Number(coords[i][1]), Number(coords[i][0]), Number(coords[j][1]), Number(coords[j][0]));
+        if (!Number.isFinite(directKm) || directKm <= 0.08 || directKm > maxShortcutKm) continue;
+        const saved = alongKm - directKm;
+        if (saved < minSavedKm) continue;
+        const ratio = alongKm / Math.max(0.08, directKm);
+        if (ratio < 1.72 && saved < 2.4) continue;
+        const score = saved * Math.min(3.5, ratio);
+        if (!best || score > best.score) best = { i, j, alongKm, directKm, saved, score };
+      }
+    }
+    if (!best) break;
+    const bridge = makeGeoShortcutSegment(coords[best.i], coords[best.j], { maxStepKm: 0.18, curveKm: 0 });
+    if (bridge.length < 2) break;
+    coords = [...coords.slice(0, best.i), ...bridge, ...coords.slice(best.j + 1)];
+    replacements += 1;
+    savedKm += best.saved;
+  }
+
+  return { geometry: coords, replacements, savedKm };
+}
+
+function repairSparseRouteGaps(ids, geometry, options = {}) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (coords.length < 2) return coords;
+  const maxGapKm = Number(options.maxGapKm || sparseRouteGapLimitKm(ids, options.profile));
+  if (!Number.isFinite(maxGapKm) || maxGapKm <= 0) return coords;
+  const out = [];
+  let repaired = 0;
+  for (let i = 1; i < coords.length; i += 1) {
+    const previous = coords[i - 1];
+    const current = coords[i];
+    if (!out.length) out.push(previous);
+    const gap = haversine(Number(previous[1]), Number(previous[0]), Number(current[1]), Number(current[0]));
+    if (Number.isFinite(gap) && gap > maxGapKm) {
+      const bridge = makeGeoShortcutSegment(previous, current, {
+        maxStepKm: Math.max(0.22, Math.min(0.65, maxGapKm / 2.2)),
+        curveKm: Math.min(0.18, gap * 0.025)
+      });
+      if (bridge.length >= 2) {
+        out.push(...bridge.slice(1));
+        repaired += 1;
+        continue;
+      }
+    }
+    out.push(current);
+  }
+  return repaired ? out : coords;
+}
+
+function normalizeRouteGeometryReactive(ids, geometry, options = {}) {
+  const list = Array.isArray(ids) ? ids.map(currentStationId).filter(Boolean) : [];
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (list.length < 2 || coords.length < 2) return { geometry: coords, synthetic: false, repairedGaps: 0, reason: '' };
+  const shortcut = routeShortcutTrigger(list, coords, options);
+  if (shortcut) {
+    const direct = directShortcutGeometryForStopSequence(list, {
+      maxStepKm: rfnStopSequenceLikelyDense(list) ? 0.24 : 0.36,
+      curveKm: 0
+    });
+    if (direct.length >= 2) {
+      return { geometry: direct, synthetic: true, repairedGaps: 0, reason: shortcut.reason, routeKm: shortcut.routeKm, directKm: shortcut.directKm };
+    }
+  }
+  const local = replaceLocalDetourShortcuts(coords, { ...options, maxShortcutKm: rfnStopSequenceLikelyDense(list) ? 4.2 : 6.5, minSavedKm: rfnStopSequenceLikelyDense(list) ? 0.65 : 1.05 });
+  const candidate = local.replacements ? local.geometry : coords;
+  const before = geoPolylineGapMetrics(candidate);
+  const repaired = repairSparseRouteGaps(list, candidate, options);
+  const after = repaired === candidate ? before : geoPolylineGapMetrics(repaired);
+  const repairedGaps = Math.max(0, before.gapsOverOneKm - after.gapsOverOneKm) + (repaired === candidate ? 0 : 1);
+  return {
+    geometry: repaired,
+    synthetic: false,
+    repairedGaps,
+    localShortcuts: local.replacements || 0,
+    reason: local.replacements ? 'local-shortcut' : (repaired === candidate ? '' : 'sparse-gap-repair'),
+    maxGapBeforeKm: before.maxGapKm,
+    maxGapAfterKm: after.maxGapKm,
+    savedKm: local.savedKm || 0
+  };
+}
+
 function stationDirectDistanceKm(a, b) {
   const stationA = stationById(a);
   const stationB = stationById(b);
@@ -1232,7 +1471,7 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, geometry: [], chunks: [] };
-  const cacheKey = sncfRouteSequenceCacheKey(ids, profile);
+  const cacheKey = sncfRouteSequenceCacheKey(ids, profile, options);
   ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometrySequenceResultCache.has(cacheKey)) return sncfRouteGeometrySequenceResultCache.get(cacheKey);
 
@@ -1255,15 +1494,17 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
       maxGlobalDistanceFactor: profile === 'highspeed' ? 3.6 : 3.0
     });
     if (directValidation.ok) {
+      const normalized = normalizeRouteGeometryReactive(ids, directGeometry, { profile, allowSynthetic: options.allowSynthetic !== false });
       return rememberSncfRouteGeometrySequence(cacheKey, {
         ids,
-        geometry: directGeometry,
+        geometry: normalized.geometry,
         chunks: [{
           fromIndex: 0,
           toIndex: ids.length - 1,
-          mode: 'global',
-          pointCount: directGeometry.length,
-          worstStopDistanceKm: round2(directValidation.worstDistance || 0)
+          mode: normalized.synthetic ? 'reactive-shortcut' : (normalized.repairedGaps ? 'global-repaired' : 'global'),
+          pointCount: normalized.geometry.length,
+          worstStopDistanceKm: round2(directValidation.worstDistance || 0),
+          note: normalized.reason || undefined
         }]
       });
     }
@@ -1352,7 +1593,20 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
   }
 
   const geometry = mergeGeoCoordinateSequences(geometries);
-  return rememberSncfRouteGeometrySequence(cacheKey, { ids, geometry, chunks });
+  const normalized = normalizeRouteGeometryReactive(ids, geometry, { profile, allowSynthetic: options.allowSynthetic !== false });
+  if (normalized.synthetic || normalized.repairedGaps || normalized.localShortcuts) {
+    chunks.push({
+      fromIndex: 0,
+      toIndex: ids.length - 1,
+      mode: normalized.synthetic ? 'reactive-shortcut' : (normalized.localShortcuts ? 'local-shortcut' : 'gap-repair'),
+      pointCount: normalized.geometry.length,
+      note: normalized.reason || undefined,
+      maxGapBeforeKm: normalized.maxGapBeforeKm ? round2(normalized.maxGapBeforeKm) : undefined,
+      maxGapAfterKm: normalized.maxGapAfterKm ? round2(normalized.maxGapAfterKm) : undefined,
+      savedKm: normalized.savedKm ? round2(normalized.savedKm) : undefined
+    });
+  }
+  return rememberSncfRouteGeometrySequence(cacheKey, { ids, geometry: normalized.geometry, chunks });
 }
 
 
@@ -1735,10 +1989,10 @@ async function realRailRouteBetweenStops(stops) {
   const pairs = [];
   for (let i = 1; i < ids.length; i += 1) pairs.push({ from: ids[i - 1], to: ids[i] });
   const geometries = isMainThread && getSncfRouteWorkerPool()
-    ? await Promise.all(pairs.map(pair => sncfRouteGeometryForStationsFast(pair.from, pair.to)))
+    ? await Promise.all(pairs.map(pair => sncfRouteGeometryForStationsFast(pair.from, pair.to, { allowSynthetic: false })))
     : await (async () => {
         const out = [];
-        for (const pair of pairs) out.push(await sncfRouteGeometryForStations(pair.from, pair.to));
+        for (const pair of pairs) out.push(await sncfRouteGeometryForStations(pair.from, pair.to, { allowSynthetic: false }));
         return out;
       })();
 
