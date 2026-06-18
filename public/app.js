@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.0.0';
+const PROJECT_VERSION = 'v66.1.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -112,6 +112,7 @@ const app = {
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
   activeResearchTab: localStorage.getItem('sillons.researchTab') || 'traction',
   researchSearchQuery: localStorage.getItem('sillons.researchSearchQuery') || '',
+  researchQueueCollapsed: localStorage.getItem('sillons.researchQueueCollapsed') !== '0',
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
@@ -6301,6 +6302,20 @@ function renderResearchNodeGrid(group) {
   }).join('')}</div>`;
 }
 
+function isResearchQueueCollapsed() {
+  return app.researchQueueCollapsed !== false;
+}
+
+function setResearchQueueCollapsed(collapsed) {
+  app.researchQueueCollapsed = Boolean(collapsed);
+  localStorage.setItem('sillons.researchQueueCollapsed', app.researchQueueCollapsed ? '1' : '0');
+}
+
+function toggleResearchQueue() {
+  setResearchQueueCollapsed(!isResearchQueueCollapsed());
+  renderAll();
+}
+
 function renderResearchQueueCompletion(me) {
   const info = researchQueueCompletionInfo(me);
   if (!info) return '';
@@ -6327,29 +6342,36 @@ function renderResearchQueue(me) {
   const queue = me.researchQueue || [];
   if (!queue.length) return '';
   const workRate = Math.max(0.01, Number(researchWorkRateClient(me) || 1));
+  const collapsed = isResearchQueueCollapsed();
+  const buttonLabel = collapsed ? 'Déplier' : 'Réduire';
   return `
     <hr>
-    <div class="research-queue">
-      <div class="item-title">
-        <strong>File d’attente R&D</strong>
-        <span class="tag">${queue.length}/12</span>
-      </div>
-      <div class="research-queue-list">
-        ${queue.map((item, index) => {
-          const realDurationMs = Math.max(0, Number(item.durationMs || 0)) / workRate;
-          return `
-          <div class="research-queue-item" data-action="focus-research" data-id="${escapeAttr(item.nodeId)}">
-            <span class="queue-rank">${index + 1}</span>
-            <div>
-              <strong>${escapeHtml(item.title || item.nodeId)} niv. ${item.targetLevel}</strong>
-              <span>${formatResearchTime(realDurationMs)} à capacité actuelle · ${money(item.costMoney || 0)}</span>
+    <section class="research-queue ${collapsed ? 'collapsed' : ''}">
+      <button type="button" class="research-queue-heading" data-action="toggle-research-queue" aria-expanded="${collapsed ? 'false' : 'true'}" ${tooltipAttr(collapsed ? 'Déplier la file d’attente R&D.' : 'Rétracter la file d’attente R&D pour garder le bas du menu visible.')}>
+        <span class="research-era-title">
+          <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
+          <span>File d’attente R&D</span>
+        </span>
+        <span class="research-era-meta">${queue.length}/12 · ${buttonLabel}</span>
+      </button>
+      ${collapsed ? '' : `
+        <div class="research-queue-list">
+          ${queue.map((item, index) => {
+            const realDurationMs = Math.max(0, Number(item.durationMs || 0)) / workRate;
+            return `
+            <div class="research-queue-item" data-action="focus-research" data-id="${escapeAttr(item.nodeId)}">
+              <span class="queue-rank">${index + 1}</span>
+              <div>
+                <strong>${escapeHtml(item.title || item.nodeId)} niv. ${item.targetLevel}</strong>
+                <span>${formatResearchTime(realDurationMs)} à capacité actuelle · ${money(item.costMoney || 0)}</span>
+              </div>
+              <button class="danger research-cancel-btn" data-action="cancel-research" data-source="queue" data-index="${index}" data-id="${escapeAttr(item.nodeId)}" data-level="${Number(item.targetLevel || 1)}" ${tooltipAttr(`Retire cette recherche de la file et rembourse ${money(item.costMoney || 0)}. Toute recherche suivante qui en dépend serait aussi annulée et remboursée.`)}>Annuler</button>
             </div>
-            <button class="danger research-cancel-btn" data-action="cancel-research" data-source="queue" data-index="${index}" data-id="${escapeAttr(item.nodeId)}" data-level="${Number(item.targetLevel || 1)}" ${tooltipAttr(`Retire cette recherche de la file et rembourse ${money(item.costMoney || 0)}. Toute recherche suivante qui en dépend serait aussi annulée et remboursée.`)}>Annuler</button>
-          </div>
-        `;
-        }).join('')}
-      </div>
-    </div>
+          `;
+          }).join('')}
+        </div>
+      `}
+    </section>
   `;
 }
 
@@ -7044,6 +7066,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   }
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
   if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
+  if (action === 'toggle-research-queue') { toggleResearchQueue(); return; }
   if (action === 'submit-bug-report') {
     try {
       const title = $('#bugTitle')?.value || '';

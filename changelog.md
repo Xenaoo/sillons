@@ -1,11 +1,10 @@
-# v66.0.0
+## Version v66.1.0 — file R&D rétractable
 
-- Ajout d’un système de passage d’ère manuel dans le menu R&D.
-- Les prérequis technologie/trafic rendent désormais disponible un bouton “Lancer le passage à l’ère suivante” au lieu de débloquer automatiquement l’époque.
-- Le passage d’ère prend un temps réel long selon l’époque visée : 3h, 6h, 12h, 24h, 36h ou 48h.
-- La R&D est bloquée pendant toute la transition d’époque.
-- Le lancement d’une transition d’époque est refusé si une recherche est active ou si la file R&D contient encore des recherches.
-- Ajout de l’état `eraTransition` dans les sauvegardes et dans l’état public joueur.
+- incrément de version : badge interface `v66.1.0`, version serveur/client `v66.1.0`, package `66.1.0` et schéma serveur `131` ;
+- ajout d’un bouton de dépliage/réduction sur la file d’attente R&D ;
+- file d’attente R&D rétractée par défaut pour éviter que l’ajout d’une recherche fasse descendre la suite du menu ;
+- conservation de l’état ouvert/rétracté dans le navigateur du joueur ;
+- la file reste visible sous forme d’en-tête compact avec compteur `x/12` quand elle est rétractée.
 
 ## Version v65.5.0 — timer global de file R&D
 

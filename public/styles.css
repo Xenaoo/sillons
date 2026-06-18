@@ -1078,6 +1078,28 @@ button.research-prereq.missing:hover {
   display: grid;
   gap: 10px;
 }
+.research-queue-heading {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid rgba(216,174,88,.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(21, 32, 55, .92), rgba(7, 16, 31, .96));
+  color: #f5deb0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 22px rgba(0,0,0,.18);
+}
+.research-queue-heading:hover,
+.research-queue-heading:focus-visible {
+  border-color: rgba(239,200,117,.52);
+  box-shadow: 0 0 20px rgba(216,174,88,.18);
+}
+.research-queue.collapsed {
+  gap: 0;
+}
 .research-queue-list {
   display: grid;
   gap: 7px;
