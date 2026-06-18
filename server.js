@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.3.0';
-const STATE_SCHEMA_VERSION = 135;
+const PROJECT_VERSION = 'v66.3.1';
+const STATE_SCHEMA_VERSION = 136;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -1541,8 +1541,13 @@ async function sncfRouteGeometryForStopSequence(stops) {
 
   const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1]);
   const directValidation = routeGeometryMatchesStopSequence(ids, directGeometry, {
-    maxStationDistanceKm: 2.7,
-    maxTerminalDistanceKm: 4.0
+    // Seuil volontairement strict : une géométrie globale peut passer près d'une
+    // branche parallèle sans réellement desservir les gares intermédiaires.
+    // C'était visible autour d'Orangis-Bois-de-l'Épine : le tracé validé passait
+    // à plus de 2 km de certaines gares. Au-delà de ce seuil, on découpe donc
+    // en sous-parcours RFN plus courts et plus fiables.
+    maxStationDistanceKm: 1.2,
+    maxTerminalDistanceKm: 2.0
   });
   if (directValidation.ok) {
     return {
@@ -1563,8 +1568,8 @@ async function sncfRouteGeometryForStopSequence(stops) {
       if (!Array.isArray(geometry) || geometry.length < 2) continue;
       const slice = ids.slice(index, to + 1);
       const validation = routeGeometryMatchesStopSequence(slice, geometry, {
-        maxStationDistanceKm: to > index + 1 ? 2.9 : 3.5,
-        maxTerminalDistanceKm: 4.2
+        maxStationDistanceKm: to > index + 1 ? 1.2 : 2.0,
+        maxTerminalDistanceKm: 2.0
       });
       if (!validation.ok) continue;
       accepted = { to, geometry, mode: to > index + 1 ? 'subsequence' : 'segment' };

@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.3.0';
+const PROJECT_VERSION = 'v66.3.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v2';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v3';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 

@@ -1,11 +1,10 @@
-# v66.3.0 - Tracés RFN multi-arrêts plus fidèles
+## Version v66.3.1 — correction RFN des branches parallèles
 
-- Ajout d’un calcul serveur de géométrie RFN pour une suite complète d’arrêts.
-- Le rendu carte utilise désormais une géométrie globale validée contre les arrêts dans l’ordre quand elle respecte le parcours.
-- Ajout d’un découpage serveur en sous-parcours RFN longs quand le trajet complet départ → terminus ne respecte pas tous les arrêts.
-- Conservation du fallback segment par segment si aucune géométrie complète fiable n’est trouvée.
-- Invalidation du cache local de géométrie RFN afin d’éviter les anciens tracés simplifiés.
-- Correction ciblée des lignes type Étampes → Épinay-sur-Orge, qui étaient dégradées par l’assemblage de petits tronçons pauvres en points.
+- incrément de version : badge interface `v66.3.1`, version serveur/client `v66.3.1`, package `66.3.1` et schéma serveur `136` ;
+- rendu RFN : validation plus stricte des géométries globales pour éviter qu'un tracé soit accepté lorsqu'il passe simplement près d'une branche parallèle ;
+- carte : correction des lignes passant par `Orangis-Bois-de-l'Épine`, qui pouvaient utiliser une géométrie visuellement incohérente ;
+- RFN : conservation du bénéfice des sous-parcours longs détaillés, avec retour au découpage segmenté uniquement quand la géométrie globale ne dessert pas réellement les gares intermédiaires ;
+- cache navigateur des tracés RFN invalidé afin de ne pas réutiliser les géométries simplifiées ou incohérentes de la version précédente.
 
 ## Version v66.2.1 — désélection de ligne au clic carte
 
