@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.7.0';
+const PROJECT_VERSION = 'v65.7.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -3624,18 +3624,32 @@ function trainModelSearchLabelClient(model) {
   return `${model?.id || ''} ${model?.name || ''} ${model?.type || ''}`.toLowerCase();
 }
 
+function trainModelIdSearchLabelClient(model) {
+  return String(model?.id || '').toLowerCase();
+}
+
 function isMultipleUnitModelClient(model) {
+  if (!model) return false;
+  if (model.multipleUnit === true || model.compositionFamily === 'multiple_unit' || model.compositionSpec?.mode === 'multiple_unit') return true;
+  const id = trainModelIdSearchLabelClient(model);
+  if (/(^|_)(emu|railcar|trainset|unit)(_|$)/.test(id)) return true;
   const label = trainModelSearchLabelClient(model);
   return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
 }
 
 function isHighSpeedTrainsetModelClient(model) {
+  if (!model) return false;
+  if (Number(model.multipleUnitMax || 0) === 2) return true;
+  const id = trainModelIdSearchLabelClient(model);
+  if (/^(hsv_|tgv)/.test(id) || /(_tgv|_duplex|trainset)/.test(id)) return true;
   const label = trainModelSearchLabelClient(model);
   return /(tgv|grande vitesse|duplex)/.test(label);
 }
 
 function multipleUnitMaxUnitsForModelClient(model) {
   if (!isMultipleUnitModelClient(model)) return 1;
+  const explicit = Math.floor(Number(model?.multipleUnitMax || model?.compositionSpec?.powerUnits?.max || 0));
+  if (explicit >= 1) return clamp(explicit, 1, 3);
   return isHighSpeedTrainsetModelClient(model) ? 2 : 3;
 }
 
@@ -3684,6 +3698,7 @@ function buildClientCompositionSpec(model, preferredMode = null) {
 }
 
 function activeCompositionMode(train, model = app.state.balance.trains[train.modelId]) {
+  if (isMultipleUnitModelClient(model)) return 'multiple_unit';
   const requested = app.compositionEditorModes?.[train.id] || train?.composition?.mode || train?.compositionMode || train?.compositionSpec?.mode || compositionDefaultModeForModelClient(model);
   return buildClientCompositionSpec(model, requested).mode;
 }
@@ -6814,7 +6829,11 @@ if (action === 'save-train-composition') {
   if (!targetIds.length) return toast('Aucun train sélectionné.', 'error');
   const spec = trainCompositionSpec(train);
   const payload = { trainId, trainIds: targetIds, mode: spec.mode };
-  if (spec.mode === 'multiple_unit') payload.powerUnits = Number($('#compPowerUnitsValue')?.value || $('#compPowerUnits')?.value || 1);
+  if (spec.mode === 'multiple_unit') {
+    delete app.compositionEditorModes?.[trainId];
+    localStorage.setItem('sillons.compositionEditorModes', JSON.stringify(app.compositionEditorModes || {}));
+    payload.powerUnits = Number($('#compPowerUnitsValue')?.value || $('#compPowerUnits')?.value || 1);
+  }
   else if (spec.mode === 'freight_loco') {
     payload.freightCars = Number($('#compFreightCarsValue')?.value || $('#compFreightCars')?.value || 2);
     payload.freightVariant = document.querySelector('input[name="compFreightVariant"]:checked')?.value || '';
@@ -9447,6 +9466,7 @@ function lineCompositionService(line, train = null, model = null) {
   const candidateTrain = train || app.state?.me?.trains?.find(t => t.id === line?.trainId);
   const candidateModel = model || (candidateTrain ? app.state?.balance?.trains?.[candidateTrain.modelId] : null);
   const explicitMode = candidateTrain?.composition?.mode || candidateTrain?.compositionMode || candidateTrain?.compositionSpec?.mode;
+  if (explicitMode === 'multiple_unit' || isMultipleUnitModelClient(candidateModel)) return { key: 'passengers', label: 'Voyageur' };
   if (explicitMode === 'freight_loco') return { key: 'freight', label: 'Fret' };
   if (explicitMode === 'passenger_loco') return { key: 'passengers', label: 'Voyageur' };
   if (line?.service === 'freight') return { key: 'freight', label: 'Fret' };

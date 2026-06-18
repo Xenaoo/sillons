@@ -1,13 +1,11 @@
-## Version v65.7.0 — lisibilité du menu Vue
+## Version v65.7.1 — correction des unités multiples dans les compositions
 
-- incrément de version : badge interface `v65.7.0`, version serveur/client `v65.7.0`, package `65.7.0` et schéma serveur `128` ;
-- menu `Vue` : ajout d’un tooltip détaillé sur la vignette `Score`, avec les sources du score ligne par ligne : trésorerie, dette, réputation, voyageurs, fret, lignes actives et époque ;
-- menu `Vue` : ajout d’un tooltip détaillé sur la vignette `CO₂ cumulé`, avec les émissions actuelles par ligne active quand elles sont disponibles ;
-- serveur : ajout d’un détail d’émissions CO₂ par ligne dans les statistiques d’exploitation ;
-- section `Résultat d’exploitation` : toutes les données sont désormais présentées sous forme de vignettes harmonisées ;
-- section `Résultat d’exploitation` : code couleur vert pour les revenus/bénéfices et rouge pour les dépenses ;
-- section `Résultat d’exploitation` : ajout de tooltips expliquant les sources des revenus, coûts variables, charges fixes et postes de dépenses ;
-- menu `Vue` : retrait du bloc `Journal` en bas de page.
+- incrément de version : badge interface `v65.7.1`, version serveur/client `v65.7.1`, package `65.7.1` et schéma serveur `129` ;
+- correction du cas `Automotrice troisième rail` : elle est forcée comme rame en unité multiple voyageurs ;
+- les autorails, automotrices, rames, trainsets, unités batterie/hydrogène et maglev sont maintenant identifiés aussi par leur identifiant technique (`emu`, `railcar`, `trainset`, `unit`) et plus seulement par le libellé visible ;
+- côté serveur, les modèles en unité multiple sont normalisés avec `compositionFamily: multiple_unit`, `multipleUnit`, `passengerOnly`, fret forcé à `0` et limite UM cohérente ;
+- côté client, les anciens modes stockés en local (`voitures voyageurs` / `wagons fret`) ne peuvent plus reprendre la main sur une rame en unité multiple ;
+- sauvegarde d’une composition UM : remise à `0` forcée des voitures voyageurs et wagons fret, seul le nombre de rames reste modifiable.
 
 ## Version v65.5.0 — timer global de file R&D
 

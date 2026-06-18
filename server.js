@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.7.0';
-const STATE_SCHEMA_VERSION = 128;
+const PROJECT_VERSION = 'v65.7.1';
+const STATE_SCHEMA_VERSION = 129;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -3585,6 +3585,8 @@ function prepareTrainCompositionUpdate(player, train, payload) {
 
   if (spec.mode === 'multiple_unit') {
     updated.powerUnits = clamp(Math.round(Number(payload.powerUnits ?? current.powerUnits)), spec.powerUnits.min, spec.powerUnits.max);
+    updated.passengerCars = 0;
+    updated.freightCars = 0;
   } else if (spec.mode === 'passenger_loco') {
     updated.passengerCars = clamp(Math.round(Number(payload.passengerCars ?? current.passengerCars)), spec.passengerCars.min, spec.passengerCars.max);
     const variant = compositionVariantForMode('passenger_loco', payload.passengerVariant ?? current.passengerVariant);
@@ -5750,18 +5752,32 @@ function trainModelSearchLabel(model) {
   return `${model?.id || ''} ${model?.name || ''} ${model?.type || ''}`.toLowerCase();
 }
 
+function trainModelIdSearchLabel(model) {
+  return String(model?.id || '').toLowerCase();
+}
+
 function isMultipleUnitModel(model) {
+  if (!model) return false;
+  if (model.multipleUnit === true || model.compositionFamily === 'multiple_unit') return true;
+  const id = trainModelIdSearchLabel(model);
+  if (/(^|_)(emu|railcar|trainset|unit)(_|$)/.test(id)) return true;
   const label = trainModelSearchLabel(model);
   return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
 }
 
 function isHighSpeedTrainsetModel(model) {
+  if (!model) return false;
+  if (Number(model.multipleUnitMax || 0) === 2) return true;
+  const id = trainModelIdSearchLabel(model);
+  if (/^(hsv_|tgv)/.test(id) || /(_tgv|_duplex|trainset)/.test(id)) return true;
   const label = trainModelSearchLabel(model);
   return /(tgv|grande vitesse|duplex)/.test(label);
 }
 
 function multipleUnitMaxUnitsForModel(model) {
   if (!isMultipleUnitModel(model)) return 1;
+  const explicit = Math.floor(Number(model?.multipleUnitMax || 0));
+  if (explicit >= 1) return clamp(explicit, 1, 3);
   return isHighSpeedTrainsetModel(model) ? 2 : 3;
 }
 
@@ -5769,6 +5785,17 @@ function compositionDefaultModeForModel(model) {
   if (isMultipleUnitModel(model)) return 'multiple_unit';
   const passengerDominant = (model.capacity || 0) >= Math.max(80, (model.freight || 0) * 0.9);
   return passengerDominant && (model.capacity || 0) > 0 ? 'passenger_loco' : 'freight_loco';
+}
+
+function normalizeTrainModelCompositionFlags(trains) {
+  for (const model of Object.values(trains || {})) {
+    if (!model || !isMultipleUnitModel(model)) continue;
+    model.compositionFamily = 'multiple_unit';
+    model.multipleUnit = true;
+    model.passengerOnly = true;
+    model.freight = 0;
+    model.multipleUnitMax = multipleUnitMaxUnitsForModel(model);
+  }
 }
 
 function compositionAvailableModesForModel(model) {
@@ -5820,6 +5847,17 @@ function ensureTrainComposition(train, model) {
   const spec = compositionSpecForModel(model, base.mode);
   const passengerVariant = compositionVariantForMode('passenger_loco', base.passengerVariant)?.id || 'standard';
   const freightVariant = compositionVariantForMode('freight_loco', base.freightVariant)?.id || 'covered';
+  if (spec.mode === 'multiple_unit') {
+    train.composition = {
+      mode: 'multiple_unit',
+      passengerCars: 0,
+      freightCars: 0,
+      powerUnits: clamp(Math.round(Number(base.powerUnits ?? spec.powerUnits?.default ?? 1)), spec.powerUnits?.min ?? 1, spec.powerUnits?.max ?? 1),
+      passengerVariant,
+      freightVariant
+    };
+    return train.composition;
+  }
   train.composition = {
     mode: spec.mode,
     passengerCars: clamp(Math.round(Number(base.passengerCars ?? compositionSpecForModel(model, 'passenger_loco').passengerCars?.default ?? 0)), compositionSpecForModel(model, 'passenger_loco').passengerCars?.min ?? 0, compositionSpecForModel(model, 'passenger_loco').passengerCars?.max ?? 0),
@@ -7285,6 +7323,7 @@ function buildBalance() {
     refurbish: { id: 'refurbish', name: 'Rénovation complète', description: 'Très coûteux, mais remet presque à neuf.', baseCost: 70000, priceFactor: 0.13, restore: 0.9, target: 1, days: 10, requiresDepot: true, requiredTech: 'electric_standardized_maintenance' }
   };
 
+  normalizeTrainModelCompositionFlags(trains);
   for (const model of Object.values(trains)) {
     model.compositionSpec = compositionSpecForModel(model);
   }
