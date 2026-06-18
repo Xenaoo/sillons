@@ -1,11 +1,9 @@
-## Version v66.2.0 — sélection des lignes depuis la carte
+## Version v66.2.1 — désélection de ligne au clic carte
 
-- incrément de version : badge interface `v66.2.0`, version serveur/client `v66.2.0`, package `66.2.0` et schéma serveur `132` ;
-- carte : ajout d’une zone de clic sur les tracés de lignes actives ;
-- un clic sur une ligne possédée depuis la map applique le même comportement qu’un clic sur sa carte dans le menu `Lignes` : focus carte et filtrage temporaire de la ligne ;
-- les gares restent prioritaires au clic lorsqu’elles chevauchent une ligne ;
-- les lignes du joueur sont prioritaires sur les lignes des autres compagnies en cas de superposition ;
-- ajout d’un curseur `pointer` au survol d’une ligne cliquable.
+- incrément de version : badge interface `v66.2.1`, version serveur/client `v66.2.1`, package `66.2.1` et schéma serveur `133` ;
+- carte : un clic dans le vide désélectionne désormais la ligne précédemment sélectionnée ;
+- carte : un clic sur une gare désélectionne aussi la ligne active avant d’ouvrir la fiche de gare ;
+- conservation du comportement de clic direct sur une ligne : sélection, changement de ligne ou désélection si la ligne déjà focalisée est recliquée.
 
 ## Version v65.5.0 — timer global de file R&D
 

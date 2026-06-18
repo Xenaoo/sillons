@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.2.0';
+const PROJECT_VERSION = 'v66.2.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -1085,6 +1085,7 @@ async function onOsmClick(event) {
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
   const stationHit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
   if (stationHit) {
+    if (app.focusedLineId) clearFocusedLine();
     setSelectedStation(stationHit.id);
     const selected = station(stationHit.id);
     app.stationSearch.query = stationSearchLabel(selected);
@@ -1097,7 +1098,9 @@ async function onOsmClick(event) {
   const lineHit = hitLineAt(p);
   if (lineHit) {
     selectMapLine(lineHit);
+    return;
   }
+  if (app.focusedLineId) clearFocusedLine();
 }
 
 
