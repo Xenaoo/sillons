@@ -136,6 +136,128 @@ code { color: #bae6fd; }
 .stat-pill b { display: inline-block; margin-left: 4px; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 
+.notification-mount {
+  position: relative;
+  flex: 0 0 auto;
+}
+.notification-dropdown {
+  position: relative;
+}
+.notification-toggle {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 174, 88, 0.24);
+  background: linear-gradient(180deg, rgba(25, 35, 54, 0.94), rgba(9, 15, 27, 0.92));
+  color: #f5d89b;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 12px 28px rgba(0,0,0,.22);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+.notification-toggle:hover,
+.notification-dropdown.is-open .notification-toggle {
+  border-color: rgba(245, 216, 155, 0.56);
+  background: linear-gradient(180deg, rgba(48, 37, 15, 0.9), rgba(18, 24, 37, 0.94));
+}
+.notification-toggle__icon {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #101827;
+  background: linear-gradient(180deg, #f4d58a, #c58d35);
+  font-size: 9px;
+  box-shadow: 0 0 0 2px rgba(217,168,82,.15);
+}
+.notification-toggle__count {
+  min-width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(217, 168, 82, 0.18);
+  border: 1px solid rgba(217, 168, 82, 0.24);
+  color: #fff2c9;
+  font-size: 11px;
+}
+.notification-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 96px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid rgba(216,174,88,.30);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(12, 18, 31, 0.98), rgba(5, 10, 18, 0.98));
+  box-shadow: 0 28px 90px rgba(0,0,0,.50), inset 0 1px 0 rgba(255,255,255,.04);
+  overflow: hidden;
+}
+.notification-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgba(216,174,88,.16);
+  background: rgba(217,168,82,.08);
+}
+.notification-dropdown-head strong {
+  color: #f6e6c3;
+  font-size: 13px;
+}
+.notification-dropdown-head span,
+.notification-dropdown-foot {
+  color: #bda976;
+  font-size: 11px;
+}
+.notification-dropdown-list {
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+.notification-item {
+  border: 1px solid rgba(216,174,88,.14);
+  border-radius: 14px;
+  background: rgba(2,6,23,.28);
+  padding: 10px 11px;
+}
+.notification-item__meta {
+  color: #d9a852;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .35px;
+  margin-bottom: 5px;
+}
+.notification-item__text {
+  color: #e5dcc4;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.notification-empty {
+  padding: 18px 12px;
+  color: #bda976;
+  text-align: center;
+  font-size: 12px;
+}
+.notification-dropdown-foot {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(216,174,88,.14);
+  background: rgba(2,6,23,.20);
+  line-height: 1.35;
+}
+
 .layout {
   position: relative;
   z-index: 1;
@@ -7285,6 +7407,20 @@ dialog.modal--wide {
   }
   .brand span {
     display: none !important;
+  }
+  .notification-mount {
+    order: 3;
+    width: 100%;
+  }
+  .notification-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+  .notification-dropdown-panel {
+    left: 0;
+    right: auto;
+    width: calc(100vw - 20px);
+    max-height: min(430px, calc(100dvh - 92px));
   }
   .layout,
   .layout.map-visible,

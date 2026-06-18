@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.3.1';
-const STATE_SCHEMA_VERSION = 123;
+const PROJECT_VERSION = 'v65.4.0';
+const STATE_SCHEMA_VERSION = 124;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -1822,7 +1822,7 @@ function migratePlayer(player, fallbackId) {
   for (const stationId of Object.keys(p.stations)) normalizeStationAsset(p, stationId);
   p.energyStrategy = BALANCE.energyStrategies[p.energyStrategy] ? p.energyStrategy : 'spot';
   p.resources = normalizeResources(p.resources);
-  p.notifications = Array.isArray(p.notifications) ? p.notifications : [];
+  p.notifications = normalizeNotifications(p.notifications);
   p.reputation = Number.isFinite(Number(p.reputation)) ? Number(p.reputation) : 50;
   p.co2 = Number.isFinite(Number(p.co2)) ? Number(p.co2) : 0;
   p.region = cleanText(p.region || 'France', 40);
@@ -3333,7 +3333,7 @@ function publicPlayer(p) {
     energyStrategy: p.energyStrategy,
     resources: normalizeResources(p.resources),
     resourceFlow: computePlayerResourceFlow(p),
-    notifications: p.notifications.slice(-12).reverse()
+    notifications: normalizeNotifications(p.notifications).slice(-40).reverse()
   };
 }
 
@@ -3429,8 +3429,10 @@ function createPlayer(input) {
       marketShare: 0
     },
     notifications: [{
+      id: crypto.randomUUID(),
       day: state.day,
-      text: `Compagnie créée avec ${money(STARTING_CASH)}. Lance d’abord une recherche de traction, puis achète ton premier matériel roulant dans l’onglet Parc.`
+      text: `Compagnie créée avec ${money(STARTING_CASH)}. Lance d’abord une recherche de traction, puis achète ton premier matériel roulant dans l’onglet Parc.`,
+      createdAt: Date.now()
     }],
     createdAt: Date.now(),
     lastSeen: Date.now()
@@ -6884,8 +6886,33 @@ function canPay(player, amount) {
   return player.cash >= amount;
 }
 
+function normalizeNotifications(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(item => {
+      if (typeof item === 'string') {
+        const text = cleanText(item, 180);
+        return text ? { id: crypto.randomUUID(), day: 0, text, createdAt: Date.now() } : null;
+      }
+      if (!item || typeof item !== 'object') return null;
+      const text = cleanText(item.text || item.message || '', 220);
+      if (!text) return null;
+      const day = Number.isFinite(Number(item.day)) ? Math.floor(Number(item.day)) : 0;
+      const createdAt = Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : Date.now();
+      return {
+        id: cleanText(item.id || '', 80) || crypto.randomUUID(),
+        day,
+        text,
+        createdAt
+      };
+    })
+    .filter(Boolean)
+    .slice(-40);
+}
+
 function notify(player, text) {
-  player.notifications.push({ day: state.day, text });
+  player.notifications = normalizeNotifications(player.notifications);
+  player.notifications.push({ id: crypto.randomUUID(), day: state.day, text: cleanText(text, 220), createdAt: Date.now() });
   player.notifications = player.notifications.slice(-40);
 }
 

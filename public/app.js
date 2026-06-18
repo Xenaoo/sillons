@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.3.1';
+const PROJECT_VERSION = 'v65.4.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -173,6 +173,7 @@ const app = {
   serverClockOffset: 0,
   lastRenderKey: '',
   lastNotificationKey: '',
+  notificationsOpen: false,
   stationListCache: { source: null, signature: '', deduped: [] },
   stationSignatureCache: { source: null, signature: '' },
   selectedCompositionTrainId: '',
@@ -450,6 +451,22 @@ function bindStaticEvents() {
     if (!versionBadge) return;
     event.preventDefault();
     openChangelogModal();
+  });
+
+  document.addEventListener('click', event => {
+    const toggle = event.target.closest?.('#notificationToggleBtn');
+    const panel = event.target.closest?.('.notification-dropdown-panel');
+    if (toggle) {
+      event.preventDefault();
+      app.notificationsOpen = !app.notificationsOpen;
+      renderNotificationDropdown();
+      return;
+    }
+    if (panel) return;
+    if (app.notificationsOpen) {
+      app.notificationsOpen = false;
+      renderNotificationDropdown();
+    }
   });
 
   $('#logoPicker')?.addEventListener('click', event => {
@@ -1170,9 +1187,60 @@ function renderSetupLogoPicker() {
 function maybeNotify(me) {
   const first = me.notifications?.[0];
   if (!first) return;
-  const key = `${first.day}:${first.text}`;
+  const key = notificationKey(first);
   if (app.lastNotificationKey && app.lastNotificationKey !== key) toast(first.text, 'ok');
   app.lastNotificationKey = key;
+}
+
+function notificationKey(notification) {
+  return String(notification?.id || `${notification?.day ?? ''}:${notification?.text || ''}`);
+}
+
+function notificationDayLabel(notification) {
+  const day = Number(notification?.day);
+  if (Number.isFinite(day) && day > 0) return `Jour ${formatInt(day)}`;
+  return 'Notification';
+}
+
+function renderNotificationDropdown() {
+  const mount = $('#notificationMount');
+  if (!mount) return;
+  const me = app.state?.me;
+  if (!me) {
+    mount.innerHTML = '';
+    return;
+  }
+  const notifications = Array.isArray(me.notifications) ? me.notifications : [];
+  const count = notifications.length;
+  const hasItems = count > 0;
+  const open = !!app.notificationsOpen;
+  const items = notifications.map(notification => `
+    <article class="notification-item">
+      <div class="notification-item__meta">${escapeHtml(notificationDayLabel(notification))}</div>
+      <div class="notification-item__text">${escapeHtml(notification.text || 'Notification sans contenu.')}</div>
+    </article>
+  `).join('');
+  mount.innerHTML = `
+    <div class="notification-dropdown ${open ? 'is-open' : ''}">
+      <button id="notificationToggleBtn" class="notification-toggle" type="button" aria-expanded="${open ? 'true' : 'false'}" title="Ouvrir les notifications persistantes de ta compagnie.">
+        <span class="notification-toggle__icon" aria-hidden="true">◆</span>
+        <span class="notification-toggle__label">Notifications</span>
+        <span class="notification-toggle__count">${formatInt(count)}</span>
+      </button>
+      ${open ? `
+        <div class="notification-dropdown-panel" role="region" aria-label="Notifications persistantes">
+          <div class="notification-dropdown-head">
+            <strong>Notifications persistantes</strong>
+            <span>${formatInt(count)} affichée${count > 1 ? 's' : ''}</span>
+          </div>
+          <div class="notification-dropdown-list">
+            ${hasItems ? items : '<div class="notification-empty">Aucune notification enregistrée pour le moment.</div>'}
+          </div>
+          <p class="notification-dropdown-foot">Historique conservé dans la sauvegarde serveur. Les nouvelles notifications restent consultables ici après disparition du toast.</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 
@@ -1717,6 +1785,7 @@ function renderTopbar() {
   const mapToggleBtn = $('#mapToggleBtn');
   if (mapToggleBtn) mapToggleBtn.remove();
   const topStats = $('#topStats');
+  renderNotificationDropdown();
   if (!me) {
     topStats.innerHTML = `<span class="stat-pill">Serveur <b>connecté</b></span>`;
     return;
