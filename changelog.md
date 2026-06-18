@@ -1,10 +1,11 @@
-## Version v66.1.0 — file R&D rétractable
+## Version v66.2.0 — sélection des lignes depuis la carte
 
-- incrément de version : badge interface `v66.1.0`, version serveur/client `v66.1.0`, package `66.1.0` et schéma serveur `131` ;
-- ajout d’un bouton de dépliage/réduction sur la file d’attente R&D ;
-- file d’attente R&D rétractée par défaut pour éviter que l’ajout d’une recherche fasse descendre la suite du menu ;
-- conservation de l’état ouvert/rétracté dans le navigateur du joueur ;
-- la file reste visible sous forme d’en-tête compact avec compteur `x/12` quand elle est rétractée.
+- incrément de version : badge interface `v66.2.0`, version serveur/client `v66.2.0`, package `66.2.0` et schéma serveur `132` ;
+- carte : ajout d’une zone de clic sur les tracés de lignes actives ;
+- un clic sur une ligne possédée depuis la map applique le même comportement qu’un clic sur sa carte dans le menu `Lignes` : focus carte et filtrage temporaire de la ligne ;
+- les gares restent prioritaires au clic lorsqu’elles chevauchent une ligne ;
+- les lignes du joueur sont prioritaires sur les lignes des autres compagnies en cas de superposition ;
+- ajout d’un curseur `pointer` au survol d’une ligne cliquable.
 
 ## Version v65.5.0 — timer global de file R&D
 

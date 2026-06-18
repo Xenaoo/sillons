@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.1.0';
+const PROJECT_VERSION = 'v66.2.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -128,6 +128,7 @@ const app = {
   selectedCompositionTrainIds: loadJson('sillons.selectedCompositionTrainIds', []),
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
+  hoverLine: null,
   mapSprites: { trains: {}, stations: {} },
   map: {
     canvas: null,
@@ -140,6 +141,7 @@ const app = {
     width: 0,
     height: 0,
     stationHit: [],
+    lineHit: [],
     frame: null,
     navigating: false,
     needsRouteReproject: false,
@@ -958,6 +960,7 @@ function initOsmMap() {
   app.map.leaflet.on('mousemove', onOsmMouseMove);
   app.map.leaflet.on('mouseout', () => {
     app.hoverStation = null;
+    app.hoverLine = null;
     app.map.leaflet.getContainer().style.cursor = '';
   });
   app.map.leaflet.on('click', onOsmClick);
@@ -1070,23 +1073,30 @@ function disableStationPlacement() {
 function onOsmMouseMove(event) {
   if (app.map.navigating) return;
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
-  const hit = hitStationAt(p);
-  app.hoverStation = hit?.id || null;
+  const stationHit = hitStationAt(p);
+  const lineHit = stationHit ? null : hitLineAt(p);
+  app.hoverStation = stationHit?.id || null;
+  app.hoverLine = lineHit ? { playerId: lineHit.playerId, lineId: lineHit.lineId, own: !!lineHit.own } : null;
   const container = app.map.leaflet.getContainer();
-  container.style.cursor = hit ? 'pointer' : '';
+  container.style.cursor = stationHit || lineHit ? 'pointer' : '';
 }
 
 async function onOsmClick(event) {
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
-  const hit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
-  if (hit) {
-    setSelectedStation(hit.id);
-    const selected = station(hit.id);
+  const stationHit = hitStationAt(p) || nearestStationAt(p, 28) || nearestProjectedStationAt(p, 32);
+  if (stationHit) {
+    setSelectedStation(stationHit.id);
+    const selected = station(stationHit.id);
     app.stationSearch.query = stationSearchLabel(selected);
-    app.stationSearch.candidateId = hit.id;
+    app.stationSearch.candidateId = stationHit.id;
     app.activeTab = 'stations';
     localStorage.setItem('sillons.activeTab', app.activeTab);
     renderAll();
+    return;
+  }
+  const lineHit = hitLineAt(p);
+  if (lineHit) {
+    selectMapLine(lineHit);
   }
 }
 
@@ -7993,6 +8003,7 @@ function visualLineWithEffectiveFrequency(line) {
 }
 
 function drawAllLines(ctx, lite = false) {
+  if (!lite) app.map.lineHit = [];
   const players = app.state.players || [];
   const me = app.state.me || null;
   const maxZoom = mapMaxZoomReached();
@@ -8006,6 +8017,7 @@ function drawAllLines(ctx, lite = false) {
       if (focusedLineId && (!own || line.id !== focusedLineId)) continue;
       const route = getRouteForStops(lineStopsOf(line));
       if (!route.points.length) continue;
+      if (!lite) registerLineHitTarget(player, line, route.points, own);
 
       drawRailLine(ctx, route.points, player.color, own, line.electrified, lite, focusedLineId === line.id);
       if (lite) continue;
@@ -8048,6 +8060,64 @@ function drawAllLines(ctx, lite = false) {
     }
   }
   drawLinesForPlayer(me, true);
+}
+
+
+function registerLineHitTarget(player, line, points, own = false) {
+  if (!line?.id || !Array.isArray(points) || points.length < 2) return;
+  app.map.lineHit.push({
+    playerId: player?.id || '',
+    playerName: player?.name || '',
+    lineId: line.id,
+    lineName: linePublicName(line),
+    own: !!own,
+    points
+  });
+}
+
+function pointSegmentDistance(p, a, b) {
+  const ax = Number(a?.x);
+  const ay = Number(a?.y);
+  const bx = Number(b?.x);
+  const by = Number(b?.y);
+  if (![p.x, p.y, ax, ay, bx, by].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  const dx = bx - ax;
+  const dy = by - ay;
+  if (dx === 0 && dy === 0) return Math.hypot(p.x - ax, p.y - ay);
+  const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy));
+}
+
+function lineHitDistance(p, target) {
+  const points = target?.points || [];
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < points.length; i += 1) {
+    const distance = pointSegmentDistance(p, points[i - 1], points[i]);
+    if (distance < best) best = distance;
+  }
+  return best;
+}
+
+function hitLineAt(p, maxDistance = null) {
+  const zoom = app.map.leaflet?.getZoom?.() || 7;
+  const threshold = Number.isFinite(maxDistance) ? maxDistance : Math.max(9, Math.min(18, 21 - zoom));
+  return (app.map.lineHit || [])
+    .map((target, index) => ({ ...target, index, d: lineHitDistance(p, target) }))
+    .filter(target => target.d <= threshold)
+    .sort((a, b) => {
+      if (a.own !== b.own) return a.own ? -1 : 1;
+      if (a.d !== b.d) return a.d - b.d;
+      return b.index - a.index;
+    })[0] || null;
+}
+
+function selectMapLine(hit) {
+  if (!hit?.lineId) return;
+  if (!hit.own) {
+    toast(`Ligne de ${hit.playerName || 'autre joueur'} : ${hit.lineName || hit.lineId}.`, 'info');
+    return;
+  }
+  focusLineOnMap(hit.lineId, { fit: false, toggle: true });
 }
 
 function drawRailLine(ctx, points, color, own, electrified, lite = false, highlighted = false) {
@@ -8925,21 +8995,26 @@ function onMapWheel(event) {
 
 function onMapMove(event) {
   const p = pointer(event);
-  const hit = hitStationAt(p);
-  app.hoverStation = hit?.id || null;
-  app.map.canvas.style.cursor = hit ? 'pointer' : 'crosshair';
+  const stationHit = hitStationAt(p);
+  const lineHit = stationHit ? null : hitLineAt(p);
+  app.hoverStation = stationHit?.id || null;
+  app.hoverLine = lineHit ? { playerId: lineHit.playerId, lineId: lineHit.lineId, own: !!lineHit.own } : null;
+  app.map.canvas.style.cursor = stationHit || lineHit ? 'pointer' : 'crosshair';
 }
 
 function onMapClick(event) {
   if (app.map.drag.moved) { app.map.drag.moved = false; return; }
   const p = pointer(event);
-  const hit = hitStationAt(p) || nearestStationAt(p, 24);
-  if (hit) {
-    setSelectedStation(hit.id);
+  const stationHit = hitStationAt(p) || nearestStationAt(p, 24);
+  if (stationHit) {
+    setSelectedStation(stationHit.id);
     app.activeTab = 'stations';
     localStorage.setItem('sillons.activeTab', app.activeTab);
     renderAll();
+    return;
   }
+  const lineHit = hitLineAt(p);
+  if (lineHit) selectMapLine(lineHit);
 }
 
 function nearestStationAt(p, maxDistance = 20) {
