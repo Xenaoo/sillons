@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v67.0.0';
-const STATE_SCHEMA_VERSION = 144;
+const PROJECT_VERSION = 'v67.0.1';
+const STATE_SCHEMA_VERSION = 145;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -35,7 +35,7 @@ const SNCF_STATION_PAGE_SIZE = 100;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
 const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
-const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v9';
+const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v11';
 const SNCF_RFN_SPATIAL_CELL_DEG = 0.18;
 const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
 const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
@@ -1970,6 +1970,73 @@ function projectPointOnGeoPolyline(point, coords) {
   return best;
 }
 
+
+const RFN_NEAR_PASSENGER_STATION_TOLERANCE_KM = 0.28;
+const RFN_SUBURBAN_DENSE_STATION_TOLERANCE_KM = 0.45;
+const RFN_NEAR_PASSENGER_STATION_RADIUS_KM = 1.25;
+const RFN_SUBURBAN_DENSE_DEPARTMENTS = new Set(['75', '77', '78', '91', '92', '93', '94', '95', '69', '13', '31', '33', '44', '59', '67']);
+const rfnStationDensityCache = new Map();
+
+function rfnStationDensityMetrics(stationId) {
+  const id = currentStationId(stationId);
+  if (!id) return null;
+  if (rfnStationDensityCache.has(id)) return rfnStationDensityCache.get(id);
+  const station = stationById(id);
+  const point = stationRoutePoint(station) || stationRawPoint(station);
+  if (!station || !point) {
+    const empty = { nearestPassengerKm: Infinity, passengerWithin3Km: 0, passengerWithin5Km: 0, passengerWithin8Km: 0, denseDepartment: false };
+    rfnStationDensityCache.set(id, empty);
+    return empty;
+  }
+  let nearestPassengerKm = Infinity;
+  let passengerWithin3Km = 0;
+  let passengerWithin5Km = 0;
+  let passengerWithin8Km = 0;
+  for (const rawOther of Object.values(communeCache.byId || {})) {
+    const other = canonicalizeStationDisplay(rawOther);
+    const otherId = currentStationId(other?.id || '');
+    if (!otherId || otherId === id || !other?.hasPassengerStation) continue;
+    const otherPoint = stationRoutePoint(other) || stationRawPoint(other);
+    if (!otherPoint) continue;
+    const distance = haversine(point.lat, point.lon, otherPoint.lat, otherPoint.lon);
+    if (!Number.isFinite(distance)) continue;
+    nearestPassengerKm = Math.min(nearestPassengerKm, distance);
+    if (distance <= 3) passengerWithin3Km += 1;
+    if (distance <= 5) passengerWithin5Km += 1;
+    if (distance <= 8) passengerWithin8Km += 1;
+  }
+  const dep = String(station.codeDepartement || station.code || '').slice(0, 2);
+  const metrics = {
+    nearestPassengerKm,
+    passengerWithin3Km,
+    passengerWithin5Km,
+    passengerWithin8Km,
+    denseDepartment: RFN_SUBURBAN_DENSE_DEPARTMENTS.has(dep)
+  };
+  rfnStationDensityCache.set(id, metrics);
+  return metrics;
+}
+
+function rfnStationGeometryToleranceKm(stationId, baseAllowedKm) {
+  const base = Number(baseAllowedKm);
+  if (!Number.isFinite(base) || base <= 0) return baseAllowedKm;
+  const station = stationById(stationId);
+  if (!station?.hasPassengerStation) return base;
+  const metrics = rfnStationDensityMetrics(stationId);
+  if (!metrics) return base;
+  // En zone très dense, deux gares voyageurs peuvent être séparées par moins d'un
+  // kilomètre. Une tolérance large validait alors une branche parallèle voisine
+  // (cas Javel → St-Quentin via Bellevue/Sèvres au lieu de Meudon-Val-Fleury).
+  if (metrics.nearestPassengerKm <= RFN_NEAR_PASSENGER_STATION_RADIUS_KM) {
+    return Math.min(base, RFN_NEAR_PASSENGER_STATION_TOLERANCE_KM);
+  }
+  const suburbanDense = metrics.passengerWithin3Km >= 2
+    || metrics.passengerWithin5Km >= 4
+    || (metrics.denseDepartment && metrics.passengerWithin8Km >= 5);
+  if (suburbanDense) return Math.min(base, RFN_SUBURBAN_DENSE_STATION_TOLERANCE_KM);
+  return base;
+}
+
 function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
   const coords = Array.isArray(geometry) ? geometry : [];
   if (!Array.isArray(ids) || ids.length < 2 || coords.length < 2) return { ok: false, reason: 'empty' };
@@ -1992,10 +2059,22 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
     const point = stationRoutePoint(stop) || stationRawPoint(stop);
     const projection = projectPointOnGeoPolyline(point, coords);
     if (!projection) return { ok: false, reason: 'projection', stationId: ids[i] };
-    let allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
-    if (allowLargeTerminalOffset && (i === 0 || i === ids.length - 1)) allowed = Math.max(allowed, projection.distanceKm);
+    const isTerminal = i === 0 || i === ids.length - 1;
+    let allowed = isTerminal ? maxTerminalDistanceKm : maxStationDistanceKm;
+    const baseAllowed = allowed;
+    const denseAllowed = rfnStationGeometryToleranceKm(ids[i], allowed);
+    if (!(allowLargeTerminalOffset && isTerminal)) allowed = Math.min(allowed, denseAllowed);
+    if (allowLargeTerminalOffset && isTerminal) allowed = Math.max(allowed, projection.distanceKm);
     if (projection.distanceKm > allowed) {
-      return { ok: false, reason: 'too-far', stationId: ids[i], distanceKm: projection.distanceKm, allowed };
+      return {
+        ok: false,
+        reason: 'too-far',
+        stationId: ids[i],
+        distanceKm: projection.distanceKm,
+        allowed,
+        baseAllowed,
+        denseAllowed
+      };
     }
     if (i > 0 && projection.atKm + minProgressKm < previousAt) {
       return { ok: false, reason: 'order', stationId: ids[i], atKm: projection.atKm, previousAt };
