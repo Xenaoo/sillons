@@ -1,3 +1,14 @@
+## Version v69.0.0 — refonte stricte des tracés RFN
+
+- incrément de version : badge interface `v69.0.0`, version serveur/client `v69.0.0`, package `69.0.0` et schéma serveur `150` ;
+- RFN : désactivation des grands raccourcis visuels hors RFN qui remplaçaient certains itinéraires par des droites entre gares ou entre tronçons éloignés ;
+- RFN : suppression des corrections locales qui court-circuitaient des boucles par des segments synthétiques de plusieurs kilomètres ;
+- RFN : réduction forte de la distance autorisée entre une gare et son ancrage au graphe ferroviaire, afin d’éviter les départs/arrivées en ligne droite loin des voies ;
+- RFN : granularité des nœuds portée à 5 décimales pour mieux distinguer les branches parallèles en zone dense ;
+- RFN : conservation de géométries plus détaillées en cache, avec une simplification beaucoup moins agressive ;
+- RFN : les seules réparations conservées concernent désormais de micro-ruptures de données très courtes, sans fabriquer d’itinéraire fictif long ;
+- cache serveur RFN incrémenté en `rfn-route-v16` et cache client en `sncf-geometry-v15`.
+
 ## Version v68.1.0 — corrections réactives des tracés hors RFN et anti-lignes droites
 
 - incrément de version : badge interface `v68.1.0`, version serveur/client `v68.1.0`, package `68.1.0` et schéma serveur `149` ;

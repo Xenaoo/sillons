@@ -368,7 +368,7 @@ function decimateGeoPolyline(points, maxPoints) {
   return out;
 }
 
-function simplifyGeoPolyline(points, maxPoints = 900) {
+function simplifyGeoPolyline(points, maxPoints = 2600) {
   const clean = [];
   for (const point of points || []) {
     if (!Array.isArray(point) || point.length < 2) continue;
@@ -380,12 +380,12 @@ function simplifyGeoPolyline(points, maxPoints = 900) {
     clean.push([roundCoord(lon), roundCoord(lat)]);
   }
   if (clean.length <= maxPoints) return clean;
-  const working = clean.length > 6000 ? decimateGeoPolyline(clean, 3000) : clean;
-  let epsilon = 0.00003;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  const working = clean.length > 12000 ? decimateGeoPolyline(clean, 9000) : clean;
+  let epsilon = 0.000006;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
     const simplified = rdpGeoPolyline(working, epsilon);
     if (simplified.length <= maxPoints) return simplified;
-    epsilon *= 1.8;
+    epsilon *= 1.55;
   }
   return decimateGeoPolyline(working, maxPoints);
 }
@@ -522,7 +522,10 @@ function sncfRailLinesInBounds(lines, bbox) {
 }
 
 function rfnCoordKey(lon, lat) {
-  return `${Number(lon).toFixed(4)},${Number(lat).toFixed(4)}`;
+  // Granularité volontairement plus fine que l'ancienne clé à 4 décimales :
+  // elle évite de fusionner deux branches RFN voisines en zone dense, ce qui
+  // fabriquait parfois des segments droits entre voies parallèles.
+  return `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
 }
 
 function buildRfnGraphComponents(graph) {
@@ -1401,7 +1404,8 @@ function repairSparseRouteGaps(ids, geometry, options = {}) {
   const coords = Array.isArray(geometry) ? geometry : [];
   if (coords.length < 2) return coords;
   const maxGapKm = Number(options.maxGapKm || sparseRouteGapLimitKm(ids, options.profile));
-  if (!Number.isFinite(maxGapKm) || maxGapKm <= 0) return coords;
+  const maxRepairBridgeKm = Number(options.maxRepairBridgeKm ?? 0.35);
+  if (!Number.isFinite(maxGapKm) || maxGapKm <= 0 || !Number.isFinite(maxRepairBridgeKm) || maxRepairBridgeKm <= 0) return coords;
   const out = [];
   let repaired = 0;
   for (let i = 1; i < coords.length; i += 1) {
@@ -1409,10 +1413,10 @@ function repairSparseRouteGaps(ids, geometry, options = {}) {
     const current = coords[i];
     if (!out.length) out.push(previous);
     const gap = haversine(Number(previous[1]), Number(previous[0]), Number(current[1]), Number(current[0]));
-    if (Number.isFinite(gap) && gap > maxGapKm) {
+    if (Number.isFinite(gap) && gap > maxGapKm && gap <= maxRepairBridgeKm) {
       const bridge = makeGeoShortcutSegment(previous, current, {
-        maxStepKm: Math.max(0.22, Math.min(0.65, maxGapKm / 2.2)),
-        curveKm: Math.min(0.18, gap * 0.025)
+        maxStepKm: Math.max(0.08, Math.min(0.18, maxRepairBridgeKm / 3)),
+        curveKm: 0
       });
       if (bridge.length >= 2) {
         out.push(...bridge.slice(1));
@@ -1429,31 +1433,29 @@ function normalizeRouteGeometryReactive(ids, geometry, options = {}) {
   const list = Array.isArray(ids) ? ids.map(currentStationId).filter(Boolean) : [];
   const coords = Array.isArray(geometry) ? geometry : [];
   if (list.length < 2 || coords.length < 2) return { geometry: coords, synthetic: false, repairedGaps: 0, reason: '' };
-  const shortcut = routeShortcutTrigger(list, coords, options);
-  if (shortcut) {
-    const direct = directShortcutGeometryForStopSequence(list, {
-      maxStepKm: rfnStopSequenceLikelyDense(list) ? 0.24 : 0.36,
-      curveKm: 0
-    });
-    if (direct.length >= 2) {
-      return { geometry: direct, synthetic: true, repairedGaps: 0, reason: shortcut.reason, routeKm: shortcut.routeKm, directKm: shortcut.directKm };
-    }
-  }
-  const local = replaceLocalDetourShortcuts(coords, { ...options, maxShortcutKm: rfnStopSequenceLikelyDense(list) ? 4.2 : 6.5, minSavedKm: rfnStopSequenceLikelyDense(list) ? 0.65 : 1.05 });
-  const candidate = local.replacements ? local.geometry : coords;
-  const before = geoPolylineGapMetrics(candidate);
-  const repaired = repairSparseRouteGaps(list, candidate, options);
-  const after = repaired === candidate ? before : geoPolylineGapMetrics(repaired);
-  const repairedGaps = Math.max(0, before.gapsOverOneKm - after.gapsOverOneKm) + (repaired === candidate ? 0 : 1);
+
+  // v69 : le rendu ne doit plus masquer un graphe RFN incomplet par une grande
+  // droite entre deux gares ou par des raccourcis locaux décoratifs. On conserve
+  // donc le chemin calculé sur les formes RFN et on ne densifie que les micro-
+  // ruptures de données, typiques de deux tronçons SNCF coupés au même appareil
+  // de voie. Les ruptures plus longues restent visibles comme signal de donnée
+  // manquante, au lieu d'être transformées en faux itinéraire rectiligne.
+  const before = geoPolylineGapMetrics(coords);
+  const repaired = repairSparseRouteGaps(list, coords, {
+    ...options,
+    maxRepairBridgeKm: rfnStopSequenceLikelyDense(list) ? 0.28 : 0.42
+  });
+  const after = repaired === coords ? before : geoPolylineGapMetrics(repaired);
+  const repairedGaps = repaired === coords ? 0 : Math.max(1, before.gapsOverOneKm - after.gapsOverOneKm);
   return {
     geometry: repaired,
     synthetic: false,
     repairedGaps,
-    localShortcuts: local.replacements || 0,
-    reason: local.replacements ? 'local-shortcut' : (repaired === candidate ? '' : 'sparse-gap-repair'),
+    localShortcuts: 0,
+    reason: repaired === coords ? '' : 'micro-gap-repair',
     maxGapBeforeKm: before.maxGapKm,
     maxGapAfterKm: after.maxGapKm,
-    savedKm: local.savedKm || 0
+    savedKm: 0
   };
 }
 
@@ -1807,6 +1809,19 @@ function railRouteEdgeWeight(distanceKm, line, profile, context = {}) {
   return weight + railRouteCorridorPenalty(distance, context.coordA, context.coordB, context.start, context.end, context.directKm, profile);
 }
 
+function rfnTerminalAnchorLimitKm(directKm, profile = 'default') {
+  const direct = Number(directKm || 0);
+  if (!Number.isFinite(direct) || direct <= 0) return 1.2;
+  let limit;
+  if (direct <= 8) limit = 0.85;
+  else if (direct <= 35) limit = 1.25;
+  else if (direct <= 120) limit = 1.85;
+  else if (direct <= 320) limit = 2.6;
+  else limit = 3.4;
+  if (profile === 'highspeed') limit *= 1.25;
+  return limit;
+}
+
 function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
   const graph = new Map();
@@ -1835,9 +1850,9 @@ function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) 
   connectNearbyRfnComponents(graph, coordsByKey, directKm);
   if (options.stationJunctions !== false) connectStationRfnJunctions(graph, coordsByKey, start, end, directKm);
 
-  const maxGap = Math.min(14, Math.max(3.5, directKm * 0.18));
-  const startAnchors = nearestRfnNodeKeys(coordsByKey, start, { maxDistanceKm: maxGap, maxCount: 24 });
-  const endAnchors = nearestRfnNodeKeys(coordsByKey, end, { maxDistanceKm: maxGap, maxCount: 24 });
+  const terminalAnchorLimitKm = rfnTerminalAnchorLimitKm(directKm, profile);
+  const startAnchors = nearestRfnNodeKeys(coordsByKey, start, { maxDistanceKm: terminalAnchorLimitKm, maxCount: 18 });
+  const endAnchors = nearestRfnNodeKeys(coordsByKey, end, { maxDistanceKm: terminalAnchorLimitKm, maxCount: 18 });
   if (!startAnchors.length || !endAnchors.length) return [];
 
   const startKey = '__route_start__';
@@ -1848,12 +1863,14 @@ function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) 
   coordsByKey.set(endKey, [end.lon, end.lat]);
 
   for (const anchor of startAnchors) {
-    graph.get(startKey).push([anchor.key, anchor.distance]);
-    graph.get(anchor.key)?.push([startKey, anchor.distance]);
+    const weight = anchor.distance * 4.5 + 0.02;
+    graph.get(startKey).push([anchor.key, weight]);
+    graph.get(anchor.key)?.push([startKey, weight]);
   }
   for (const anchor of endAnchors) {
-    graph.get(endKey).push([anchor.key, anchor.distance]);
-    graph.get(anchor.key)?.push([endKey, anchor.distance]);
+    const weight = anchor.distance * 4.5 + 0.02;
+    graph.get(endKey).push([anchor.key, weight]);
+    graph.get(anchor.key)?.push([endKey, weight]);
   }
 
   // Ne pas borner artificiellement la recherche pour les longues liaisons.
