@@ -12,8 +12,17 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.7.1';
-const STATE_SCHEMA_VERSION = 129;
+const PROJECT_VERSION = 'v66.0.0';
+const STATE_SCHEMA_VERSION = 130;
+const HOUR_MS = 60 * 60 * 1000;
+const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
+  1: 3 * HOUR_MS,
+  2: 6 * HOUR_MS,
+  3: 12 * HOUR_MS,
+  4: 24 * HOUR_MS,
+  5: 36 * HOUR_MS,
+  6: 48 * HOUR_MS
+});
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -1811,6 +1820,7 @@ function migratePlayer(player, fallbackId) {
   p.techUnlocked = normalizeTechUnlocked(p.techUnlocked);
   p.researchProject = normalizeResearchProject(p.researchProject);
   p.researchQueue = normalizeResearchQueue(p.researchQueue);
+  p.eraTransition = normalizeEraTransition(p.eraTransition, p);
   p.maintenancePolicy = BALANCE.maintenancePolicies[p.maintenancePolicy] ? p.maintenancePolicy : 'standard';
   p.staff = { ...staffDefaults, ...(p.staff || {}) };
   p.tutorial = createTutorialState(p.tutorial);
@@ -1879,6 +1889,29 @@ function normalizeResearchQueue(raw) {
       queuedAt: Number(item.queuedAt || Date.now())
     };
   }).filter(Boolean).slice(0, 12);
+}
+
+function eraTransitionDurationMs(targetEpoch) {
+  const epoch = clamp(Math.floor(Number(targetEpoch || 0)), 1, BALANCE.epochs.length - 1);
+  return ERA_TRANSITION_DURATIONS_MS[epoch] || 48 * HOUR_MS;
+}
+
+function normalizeEraTransition(raw, player = null) {
+  if (!raw || typeof raw !== 'object') return null;
+  const currentEpoch = Math.floor(Number(player?.epoch ?? -1));
+  const targetEpoch = clamp(Math.floor(Number(raw.targetEpoch || 0)), 1, BALANCE.epochs.length - 1);
+  if (!BALANCE.epochs[targetEpoch]) return null;
+  if (currentEpoch >= 0 && targetEpoch <= currentEpoch) return null;
+  const durationMs = Math.max(1000, Math.floor(Number(raw.durationMs || eraTransitionDurationMs(targetEpoch))));
+  const remainingMs = clamp(Math.ceil(Number(raw.remainingMs ?? durationMs)), 0, durationMs);
+  if (remainingMs <= 0) return null;
+  return {
+    targetEpoch,
+    remainingMs,
+    durationMs,
+    startedAt: Number(raw.startedAt || Date.now()),
+    updatedAt: Number(raw.updatedAt || Date.now())
+  };
 }
 
 function createState() {
@@ -3322,6 +3355,7 @@ function publicPlayer(p) {
     techUnlocked: p.techUnlocked || {},
     researchProject: publicResearchProject(p),
     researchQueue: publicResearchQueue(p),
+    eraTransition: publicEraTransition(p),
     maintenancePolicy: p.maintenancePolicy || 'standard',
     score: Math.round(scorePlayer(p)),
     stats: p.stats,
@@ -3372,6 +3406,20 @@ function publicResearchQueue(player) {
   });
 }
 
+function publicEraTransition(player) {
+  player.eraTransition = normalizeEraTransition(player.eraTransition, player);
+  const transition = player.eraTransition;
+  if (!transition) return null;
+  const target = BALANCE.epochs[transition.targetEpoch];
+  return {
+    ...transition,
+    targetName: target?.name || `Époque ${transition.targetEpoch + 1}`,
+    progress: round2((1 - transition.remainingMs / Math.max(1, transition.durationMs)) * 100),
+    endAt: Date.now() + Math.max(0, transition.remainingMs),
+    workRate: 1
+  };
+}
+
 function createPlayer(input) {
   const id = crypto.randomUUID();
   const name = cleanText(input.name || `Compagnie ${Object.keys(state.players).length + 1}`, 28);
@@ -3400,6 +3448,7 @@ function createPlayer(input) {
     techUnlocked: {},
     researchProject: null,
     researchQueue: [],
+    eraTransition: null,
     maintenancePolicy: 'standard',
     reputation: 50,
     co2: 0,
@@ -3471,6 +3520,7 @@ async function applyAction(playerId, type, payload) {
     fireStaff: () => actionFireStaff(player, payload),
     research: () => actionResearch(player, payload),
     cancelResearch: () => actionCancelResearch(player, payload),
+    startEpochTransition: () => actionStartEpochTransition(player, payload),
     energyStrategy: () => actionEnergyStrategy(player, payload),
     buyResource: () => actionBuyResource(player, payload),
     setElectricityOrder: () => actionSetElectricityOrder(player, payload),
@@ -4317,6 +4367,11 @@ function actionSetMaintenancePolicy(player, payload) {
 }
 
 function actionResearch(player, payload) {
+  player.eraTransition = normalizeEraTransition(player.eraTransition, player);
+  if (player.eraTransition) {
+    const target = BALANCE.epochs[player.eraTransition.targetEpoch];
+    return fail('Transition d’époque en cours.', `Aucune recherche ne peut être lancée pendant le passage vers ${target?.name || 'l’époque suivante'}.`);
+  }
   const nodeId = String(payload.nodeId || '');
   const node = techNodeById(nodeId);
   if (!node) return fail('Recherche inconnue.');
@@ -4354,6 +4409,36 @@ function actionResearch(player, payload) {
   return ok('Projet R&D ajouté à la file.');
 }
 
+
+function epochRequirementsMet(player, targetEpoch = player.epoch + 1) {
+  const next = BALANCE.epochs[targetEpoch];
+  if (!next) return false;
+  const totalTech = Object.values(player.tech || {}).reduce((a, b) => a + Number(b || 0), 0);
+  const trafficTotal = epochTrafficTotal(player);
+  return totalTech >= Number(next.requiredTech || 0) && trafficTotal >= Number(next.requiredTraffic || 0);
+}
+
+function actionStartEpochTransition(player, payload) {
+  player.eraTransition = normalizeEraTransition(player.eraTransition, player);
+  if (player.eraTransition) return fail('Transition d’époque déjà en cours.', 'Attends la fin du passage d’ère avant d’en lancer un autre.');
+  player.researchProject = normalizeResearchProject(player.researchProject);
+  player.researchQueue = normalizeResearchQueue(player.researchQueue);
+  if (player.researchProject) return fail('Recherche en cours.', 'Termine ou annule la recherche active avant de lancer le passage à l’époque suivante.');
+  if (player.researchQueue.length) return fail('File R&D non vide.', 'Vide ou laisse terminer la file de recherche avant de lancer le passage à l’époque suivante.');
+  const targetEpoch = player.epoch + 1;
+  const next = BALANCE.epochs[targetEpoch];
+  if (!next) return fail('Aucune époque suivante.', 'Toutes les époques sont déjà débloquées.');
+  if (!epochRequirementsMet(player, targetEpoch)) {
+    const totalTech = Object.values(player.tech || {}).reduce((a, b) => a + Number(b || 0), 0);
+    const trafficTotal = epochTrafficTotal(player);
+    return fail('Prérequis d’époque incomplets.', `Requis : ${Math.round(totalTech)}/${next.requiredTech} technologie et ${Math.round(trafficTotal)}/${next.requiredTraffic} trafic cumulé.`);
+  }
+  const now = Date.now();
+  const durationMs = eraTransitionDurationMs(targetEpoch);
+  player.eraTransition = { targetEpoch, remainingMs: durationMs, durationMs, startedAt: now, updatedAt: now };
+  notify(player, `Passage d’époque lancé : ${next.name}. R&D indisponible jusqu’à la fin de la transition.`);
+  return ok(`Passage vers ${next.name} lancé.`);
+}
 
 function actionCancelResearch(player, payload) {
   const source = String(payload.source || payload.scope || '').toLowerCase();
@@ -4458,6 +4543,27 @@ function processTrainMaintenance(player) {
   }
 }
 
+
+function processEraTransition(player) {
+  const transition = normalizeEraTransition(player.eraTransition, player);
+  player.eraTransition = transition;
+  if (!transition) return false;
+  const now = Date.now();
+  const elapsedMs = Math.max(0, now - (transition.updatedAt || now));
+  transition.remainingMs = Math.max(0, transition.remainingMs - elapsedMs);
+  transition.updatedAt = now;
+  if (transition.remainingMs > 0) {
+    player.eraTransition = transition;
+    return true;
+  }
+  const target = BALANCE.epochs[transition.targetEpoch];
+  player.epoch = Math.max(player.epoch, transition.targetEpoch);
+  player.eraTransition = null;
+  notify(player, `Nouvelle époque atteinte : ${target?.name || 'époque suivante'}. Les recherches sont de nouveau disponibles.`);
+  state.news.push({ day: state.day, text: `${player.name} entre dans l’époque : ${target?.name || 'époque suivante'}.` });
+  return true;
+}
+
 function processResearchProject(player) {
   const project = normalizeResearchProject(player.researchProject);
   player.researchProject = project;
@@ -4506,6 +4612,8 @@ function startResearchProject(player, item) {
 }
 
 function startNextQueuedResearch(player) {
+  player.eraTransition = normalizeEraTransition(player.eraTransition, player);
+  if (player.eraTransition) return false;
   player.researchQueue = normalizeResearchQueue(player.researchQueue);
   while (!player.researchProject && player.researchQueue.length) {
     const next = player.researchQueue.shift();
@@ -4700,6 +4808,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   const dryRun = Boolean(options.dryRun);
   if (!dryRun) {
     processTrainMaintenance(player);
+    processEraTransition(player);
     processResearchProject(player);
   }
   let revenue = 0;
@@ -5734,18 +5843,9 @@ function epochTrafficTotal(player) {
   return Math.max(0, Math.round(Number(player.stats?.passengers || 0) + Number(player.stats?.freightTons || 0)));
 }
 function checkEpochUnlock(player) {
-  let unlocked = false;
-  while (true) {
-    const totalTech = Object.values(player.tech).reduce((a, b) => a + b, 0);
-    const next = BALANCE.epochs[player.epoch + 1];
-    if (!next) return unlocked;
-    const trafficTotal = epochTrafficTotal(player);
-    if (totalTech < next.requiredTech || trafficTotal < next.requiredTraffic) return unlocked;
-    player.epoch += 1;
-    unlocked = true;
-    notify(player, `Nouvelle époque débloquée : ${BALANCE.epochs[player.epoch].name}.`);
-    state.news.push({ day: state.day, text: `${player.name} entre dans l’époque : ${BALANCE.epochs[player.epoch].name}.` });
-  }
+  // Depuis v66.0.0, les prérequis ne débloquent plus l'époque automatiquement.
+  // Ils rendent seulement disponible le bouton de transition dans le menu R&D.
+  return epochRequirementsMet(player, player.epoch + 1);
 }
 
 function trainModelSearchLabel(model) {

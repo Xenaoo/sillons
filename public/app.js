@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.7.1';
+const PROJECT_VERSION = 'v66.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -5903,6 +5903,62 @@ function epochTrafficTotalClient(me = app.state?.me) {
   return Math.max(0, Math.round(Number(me?.stats?.passengers || 0) + Number(me?.stats?.freightTons || 0)));
 }
 
+function eraTransitionDurationMsClient(targetEpoch) {
+  const hour = 60 * 60 * 1000;
+  const durations = { 1: 3 * hour, 2: 6 * hour, 3: 12 * hour, 4: 24 * hour, 5: 36 * hour, 6: 48 * hour };
+  return durations[Math.max(1, Math.floor(Number(targetEpoch || 1)))] || 48 * hour;
+}
+
+function eraTransitionProgressPercent(transition) {
+  if (!transition) return 0;
+  return researchProgressPercentFromData(transition.endAt, transition.durationMs, 1);
+}
+
+function epochRequirementsMetClient(me, next, totalTech, trafficTotal) {
+  if (!me || !next) return false;
+  return Number(totalTech || 0) >= Number(next.requiredTech || 0) && Number(trafficTotal || 0) >= Number(next.requiredTraffic || 0);
+}
+
+function renderEraTransitionPanel(me, next, totalTech, trafficTotal) {
+  const transition = me?.eraTransition || null;
+  if (transition) {
+    const pct = eraTransitionProgressPercent(transition);
+    return `
+      <div class="era-transition-panel active">
+        <div class="item-title">
+          <strong>Passage d’époque en cours : ${escapeHtml(transition.targetName || next?.name || 'époque suivante')}</strong>
+          <span class="tag warn research-clock" data-research-timer data-end-at="${Math.round(transition.endAt || 0)}">${formatResearchTime(Math.max(0, Number(transition.endAt || 0) - serverNow()))}</span>
+        </div>
+        <div class="progress research-progress"><i data-research-progress data-research-key="era:${Number(transition.targetEpoch || 0)}:${Number(transition.startedAt || 0)}" data-end-at="${Math.round(transition.endAt || 0)}" data-duration-ms="${Math.round(transition.durationMs || 1)}" data-work-rate="1" data-last-progress="${round(pct)}" style="width:${round(pct)}%"></i></div>
+        <p class="small muted">La R&D est verrouillée pendant cette transition. Aucune recherche ne peut être lancée ou ajoutée à la file jusqu’à la fin du passage d’époque.</p>
+      </div>
+    `;
+  }
+  if (!next) return '';
+  const ready = epochRequirementsMetClient(me, next, totalTech, trafficTotal);
+  const blockedByResearch = Boolean(me?.researchProject) || Boolean((me?.researchQueue || []).length);
+  const durationMs = eraTransitionDurationMsClient((me?.epoch || 0) + 1);
+  let reason = '';
+  if (!ready) reason = 'Complète les prérequis de technologie et de trafic cumulé.';
+  else if (blockedByResearch) reason = 'Aucune recherche ne doit être active ou en attente pour lancer le passage d’époque.';
+  else reason = `Durée prévue : ${formatResearchTime(durationMs)}. Pendant ce temps, aucune recherche ne sera disponible.`;
+  return `
+    <div class="era-transition-panel ${ready ? 'ready' : ''}">
+      <div>
+        <strong>Passage à l’époque suivante</strong>
+        <p class="small muted">${escapeHtml(reason)}</p>
+      </div>
+      <button type="button" class="primary" data-action="start-epoch-transition" ${!ready || blockedByResearch ? 'disabled' : ''} ${tooltipAttr(`Lance le passage vers ${next.name}. Durée prévue : ${formatResearchTime(durationMs)}. Aucune recherche ne pourra être effectuée pendant cette période.`)}>
+        Lancer le passage à l’ère suivante
+      </button>
+    </div>
+  `;
+}
+
+function researchBlockedByEraTransition() {
+  return Boolean(app.state?.me?.eraTransition);
+}
+
 
 function allResearchEntriesClient() {
   const tree = app.state?.balance?.techTree || {};
@@ -5980,6 +6036,7 @@ function renderResearchSearchResult(entry) {
   const costMoney = complete ? 0 : researchCostMoneyClient(node, targetLevel);
   const durationMs = complete ? 0 : researchDurationClient(node, targetLevel);
   const affordable = app.state.me.cash >= costMoney;
+  const eraBlocked = researchBlockedByEraTransition();
   const unlocks = (node.unlocks || []).slice(0, 3);
   const improves = (node.improves || []).filter(effect => !String(effect || '').toLowerCase().startsWith('niveaux suivants')).slice(0, 3);
   const image = artForTechNode(node.id);
@@ -6004,7 +6061,7 @@ function renderResearchSearchResult(entry) {
       </div>
       <div class="research-search-actions">
         <button type="button" data-action="focus-research" data-id="${escapeAttr(node.id)}">Voir</button>
-        <button type="button" class="primary" data-action="research-node" data-id="${escapeAttr(node.id)}" ${complete || locked || !affordable ? 'disabled' : ''}>${complete ? 'Max' : app.state.me.researchProject ? 'Ajouter' : 'Lancer'}</button>
+        <button type="button" class="primary" data-action="research-node" data-id="${escapeAttr(node.id)}" ${complete || locked || !affordable || eraBlocked ? 'disabled' : ''}>${complete ? 'Max' : eraBlocked ? 'R&D bloquée' : app.state.me.researchProject ? 'Ajouter' : 'Lancer'}</button>
       </div>
     </article>
   `;
@@ -6065,6 +6122,7 @@ function renderResearch() {
   if (!tree[app.activeResearchTab]) app.activeResearchTab = tabs[0]?.id || 'traction';
   const active = tree[app.activeResearchTab] || tabs[0];
   const project = me.researchProject;
+  const eraTransition = me.eraTransition || null;
   return `
     ${renderSectionHero('R&D FERROVIAIRE', active?.label || 'Recherche', active?.description || 'Débloque concrètement de nouveaux matériels, process et infrastructures.', artForResearchGroup(active?.id), [me.eraName, `${round(researchWorkRateClient(me))}x capacité`, `${Object.keys(me.techUnlocked || {}).length} axes engagés`])}
 
@@ -6089,7 +6147,7 @@ function renderResearch() {
             <button class="danger research-cancel-btn" data-action="cancel-research" data-source="active" data-id="${escapeAttr(project.nodeId)}" data-level="${Number(project.targetLevel || 1)}" ${tooltipAttr(`Annule ${project.title || project.nodeId} et rembourse ${money(project.costMoney || 0)}. Les recherches en file qui dépendaient de ce projet seront aussi annulées et remboursées.`)}>Annuler</button>
           </div>
         </div>
-      ` : `<p class="small muted">Aucun projet actif. Lancer une recherche applique un coût initial, puis ajoute ${moneyPerHour(economyValue('researchLabBaseCost', 180))} aux dépenses/h jusqu’à la fin du projet.</p>`}
+      ` : eraTransition ? `<p class="small muted">R&D indisponible : passage d’époque en cours.</p>` : `<p class="small muted">Aucun projet actif. Lancer une recherche applique un coût initial, puis ajoute ${moneyPerHour(economyValue('researchLabBaseCost', 180))} aux dépenses/h jusqu’à la fin du projet.</p>`}
       ${renderResearchQueueCompletion(me)}
       ${renderResearchQueue(me)}
       <hr>
@@ -6114,6 +6172,7 @@ function renderResearch() {
             <div class="progress epoch-traffic-progress"><i data-epoch-traffic-progress style="width:${displayedTrafficProgress}%"></i></div>
           </div>
           <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Il n’y a plus de délai réel artificiel : la progression dépend de la technologie et d’un volume de trafic beaucoup plus élevé.</p>
+          ${renderEraTransitionPanel(me, next, totalTech, trafficTotal)}
         </div>
       ` : '<p class="muted">Toutes les époques sont débloquées.</p>'}
     </div>
@@ -6154,6 +6213,7 @@ function renderTechNode(node) {
   const costMoney = researchCostMoneyClient(node, targetLevel);
   const durationMs = researchDurationClient(node, targetLevel);
   const busy = Boolean(app.state.me.researchProject);
+  const eraBlocked = researchBlockedByEraTransition();
   const affordable = app.state.me.cash >= costMoney;
   const image = artForTechNode(node.id);
   const prereqs = researchPrereqsForLevelClient(node, targetLevel);
@@ -6191,8 +6251,8 @@ function renderTechNode(node) {
           </div>
         </div>
         <div class="actions">
-          <button class="primary" data-action="research-node" data-id="${node.id}" ${tooltipAttr(`Recherche : ${node.title}. Budget : ${money(costMoney)}. Durée estimée : ${formatResearchTime(durationMs)}. Débloque : ${(node.unlocks || []).join(', ') || 'aucune fonctionnalité immédiate'}. Améliore : ${(node.improves || []).join(', ') || 'niveau de branche.'}`)} ${complete || locked || !affordable ? 'disabled' : ''}>
-            ${complete ? 'Maximum' : busy ? `Ajouter à la file niv. ${targetLevel}` : affordable ? `Lancer niv. ${targetLevel}` : 'Budget insuffisant'}
+          <button class="primary" data-action="research-node" data-id="${node.id}" ${tooltipAttr(`Recherche : ${node.title}. Budget : ${money(costMoney)}. Durée estimée : ${formatResearchTime(durationMs)}. Débloque : ${(node.unlocks || []).join(', ') || 'aucune fonctionnalité immédiate'}. Améliore : ${(node.improves || []).join(', ') || 'niveau de branche.'}`)} ${complete || locked || !affordable || eraBlocked ? 'disabled' : ''}>
+            ${complete ? 'Maximum' : eraBlocked ? 'R&D bloquée par le passage d’époque' : busy ? `Ajouter à la file niv. ${targetLevel}` : affordable ? `Lancer niv. ${targetLevel}` : 'Budget insuffisant'}
           </button>
         </div>
       </div>
@@ -6977,6 +7037,11 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
   }
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
+  if (action === 'start-epoch-transition') {
+    const nextName = app.state?.balance?.epochs?.[(app.state?.me?.epoch || 0) + 1]?.name || 'l’époque suivante';
+    if (!(await gameConfirm('Lancer le passage d’époque', `Lancer le passage vers ${nextName} ? La R&D sera indisponible jusqu’à la fin et aucune recherche ne doit être en cours.`, { confirmLabel: 'Lancer' }))) return;
+    return doAction('startEpochTransition', {});
+  }
   if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
   if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
   if (action === 'submit-bug-report') {

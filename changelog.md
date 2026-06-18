@@ -1,11 +1,11 @@
-## Version v65.7.1 — correction des unités multiples dans les compositions
+# v66.0.0
 
-- incrément de version : badge interface `v65.7.1`, version serveur/client `v65.7.1`, package `65.7.1` et schéma serveur `129` ;
-- correction du cas `Automotrice troisième rail` : elle est forcée comme rame en unité multiple voyageurs ;
-- les autorails, automotrices, rames, trainsets, unités batterie/hydrogène et maglev sont maintenant identifiés aussi par leur identifiant technique (`emu`, `railcar`, `trainset`, `unit`) et plus seulement par le libellé visible ;
-- côté serveur, les modèles en unité multiple sont normalisés avec `compositionFamily: multiple_unit`, `multipleUnit`, `passengerOnly`, fret forcé à `0` et limite UM cohérente ;
-- côté client, les anciens modes stockés en local (`voitures voyageurs` / `wagons fret`) ne peuvent plus reprendre la main sur une rame en unité multiple ;
-- sauvegarde d’une composition UM : remise à `0` forcée des voitures voyageurs et wagons fret, seul le nombre de rames reste modifiable.
+- Ajout d’un système de passage d’ère manuel dans le menu R&D.
+- Les prérequis technologie/trafic rendent désormais disponible un bouton “Lancer le passage à l’ère suivante” au lieu de débloquer automatiquement l’époque.
+- Le passage d’ère prend un temps réel long selon l’époque visée : 3h, 6h, 12h, 24h, 36h ou 48h.
+- La R&D est bloquée pendant toute la transition d’époque.
+- Le lancement d’une transition d’époque est refusé si une recherche est active ou si la file R&D contient encore des recherches.
+- Ajout de l’état `eraTransition` dans les sauvegardes et dans l’état public joueur.
 
 ## Version v65.5.0 — timer global de file R&D
 

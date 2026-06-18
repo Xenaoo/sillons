@@ -1,5 +1,5 @@
 {
-  "version": 129,
+  "version": 130,
   "createdAt": 1781511648911,
   "now": 1781777001786,
   "day": 102382,
@@ -4294,7 +4294,8 @@
         "updatedAt": 1781727682325
       },
       "epochStartedAt": 1781640468412,
-      "notificationsReadAt": 0
+      "notificationsReadAt": 0,
+      "eraTransition": null
     },
     "2ab0580e-4fc2-477f-b1ab-b46649e5e590": {
       "id": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
@@ -5231,7 +5232,8 @@
         "updatedAt": 1781636154320
       },
       "epochStartedAt": 1781598832060,
-      "notificationsReadAt": 0
+      "notificationsReadAt": 0,
+      "eraTransition": null
     },
     "991c6e96-442d-46eb-bea3-8410dacb7d96": {
       "id": "991c6e96-442d-46eb-bea3-8410dacb7d96",
@@ -12796,7 +12798,8 @@
       "createdAt": 1781638544462,
       "lastSeen": 1781717291135,
       "epochStartedAt": 1781640468413,
-      "notificationsReadAt": 0
+      "notificationsReadAt": 0,
+      "eraTransition": null
     },
     "fc19a7db-39ea-40c5-bb5f-8411f1446f68": {
       "id": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
@@ -16029,7 +16032,8 @@
       "createdAt": 1781638594795,
       "lastSeen": 1781706310751,
       "epochStartedAt": 1781640468414,
-      "notificationsReadAt": 0
+      "notificationsReadAt": 0,
+      "eraTransition": null
     }
   }
 }
