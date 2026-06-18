@@ -1,28 +1,42 @@
 {
-  "version": 146,
+  "version": 147,
   "createdAt": 1781511648911,
-  "now": 1781797089827,
-  "day": 104722,
-  "eraYear": 10576,
+  "now": 1781797863524,
+  "day": 104797,
+  "eraYear": 10583,
   "tickSpeed": 2000,
   "market": {
-    "coal": 1.01,
+    "coal": 1.05,
     "diesel": 4.31,
-    "electricity": 0.26,
-    "hydrogen": 2.36,
-    "battery": 0.75,
-    "steel": 1.52,
-    "labor": 1.31,
-    "demand": 1.17,
-    "freight": 1.78
+    "electricity": 0.2,
+    "hydrogen": 2.57,
+    "battery": 0.76,
+    "steel": 1.47,
+    "labor": 1.2,
+    "demand": 1.18,
+    "freight": 1.84
   },
   "events": [
     {
-      "kind": "tourism",
-      "title": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques.",
-      "passenger": 1.18,
-      "freight": 0.98,
+      "kind": "expo",
+      "title": "Grand événement national : Hausse temporaire des déplacements longue distance.",
+      "passenger": 1.14,
+      "freight": 1.02,
+      "remaining": 2
+    },
+    {
+      "kind": "social",
+      "title": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées.",
+      "passenger": 0.97,
+      "freight": 0.97,
       "remaining": 3
+    },
+    {
+      "kind": "weather",
+      "title": "Météo difficile : La ponctualité devient plus fragile.",
+      "passenger": 0.94,
+      "freight": 0.92,
+      "remaining": 17
     }
   ],
   "news": [
@@ -227,12 +241,44 @@
       "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
     },
     {
-      "day": 104680,
+      "day": 104725,
+      "text": "Rebond industriel : Les contrats fret sont plus nombreux."
+    },
+    {
+      "day": 104729,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 104744,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
+    },
+    {
+      "day": 104750,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 104751,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 104761,
       "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
     },
     {
-      "day": 104707,
-      "text": "Vacances scolaires : Forte demande voyageurs sur les axes touristiques."
+      "day": 104778,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 104783,
+      "text": "Grand événement national : Hausse temporaire des déplacements longue distance."
+    },
+    {
+      "day": 104792,
+      "text": "Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées."
+    },
+    {
+      "day": 104797,
+      "text": "Météo difficile : La ponctualité devient plus fragile."
     }
   ],
   "bugReports": [],
@@ -425,7 +471,7 @@
       "color": "#ffff00",
       "logo": "steam_front",
       "region": "France",
-      "cash": 1030618086581.3738,
+      "cash": 1030877233101.5125,
       "debt": 0,
       "epoch": 3,
       "research": 1.22,
@@ -462,10 +508,10 @@
       "researchQueue": [],
       "maintenancePolicy": "intensive",
       "reputation": 100,
-      "co2": 63765443.408891626,
+      "co2": 63837562.40689165,
       "energyStrategy": "spot",
       "resources": {
-        "coal": 43565.44668461243,
+        "coal": 43555.90713461293,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -482,8 +528,8 @@
           "id": "9f71c64b-be14-42e2-a38d-a7e3bab58f9c",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.7560387447501187,
-          "age": 5457,
+          "condition": 0.752823749281371,
+          "age": 5532,
           "acquiredDay": 98899,
           "maintenance": {
             "active": false,
@@ -509,8 +555,8 @@
           "id": "6e874630-544c-4440-ba97-7b804e6a3a67",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5457,
+          "condition": 0.7509074980910493,
+          "age": 5532,
           "acquiredDay": 98900,
           "maintenance": {
             "active": false,
@@ -536,8 +582,8 @@
           "id": "14b991f3-967e-48d1-9cc9-e0eca7884a46",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5457,
+          "condition": 0.7509074980910493,
+          "age": 5532,
           "acquiredDay": 98900,
           "maintenance": {
             "active": false,
@@ -563,8 +609,8 @@
           "id": "7c9da60a-e381-4fb7-a57d-b574d1a5f5b9",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5430,
+          "condition": 0.7509074980910493,
+          "age": 5505,
           "acquiredDay": 98900,
           "maintenance": {
             "active": false,
@@ -590,8 +636,8 @@
           "id": "d319a0c1-fe84-4d6b-a15c-83b6cefc5fae",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5430,
+          "condition": 0.7509074980910493,
+          "age": 5505,
           "acquiredDay": 98901,
           "maintenance": {
             "active": false,
@@ -617,8 +663,8 @@
           "id": "b01c7060-6695-47c7-8f0e-4146180324f3",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5430,
+          "condition": 0.7509074980910493,
+          "age": 5505,
           "acquiredDay": 98901,
           "maintenance": {
             "active": false,
@@ -644,8 +690,8 @@
           "id": "4f7aabbf-fa9d-400f-897e-42ccde1caa8e",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5644,
+          "condition": 0.7509074980910493,
+          "age": 5719,
           "acquiredDay": 98901,
           "maintenance": {
             "active": false,
@@ -671,8 +717,8 @@
           "id": "474483d1-623d-4bd5-9a0c-08e8b763fac2",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5699,
+          "condition": 0.7509074980910493,
+          "age": 5774,
           "acquiredDay": 98902,
           "maintenance": {
             "active": false,
@@ -698,8 +744,8 @@
           "id": "0eb7ee71-9ee1-4641-8a04-a58c321e96ba",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5696,
+          "condition": 0.7509074980910493,
+          "age": 5771,
           "acquiredDay": 98902,
           "maintenance": {
             "active": false,
@@ -725,8 +771,8 @@
           "id": "6f34292d-fa75-4787-ba43-ae9146c4c595",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5670,
+          "condition": 0.7509074980910493,
+          "age": 5745,
           "acquiredDay": 98902,
           "maintenance": {
             "active": false,
@@ -752,8 +798,8 @@
           "id": "c6f3c34a-d3fc-4ba0-98bd-839d512ff666",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.7560387447501187,
-          "age": 5670,
+          "condition": 0.752823749281371,
+          "age": 5745,
           "acquiredDay": 98903,
           "maintenance": {
             "active": false,
@@ -779,8 +825,8 @@
           "id": "7dc299c8-2078-4968-a845-18ecce2bb9dd",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5430,
+          "condition": 0.7509074980910493,
+          "age": 5505,
           "acquiredDay": 98903,
           "maintenance": {
             "active": false,
@@ -806,8 +852,8 @@
           "id": "23507747-54d0-45cf-87ca-9a600ac15211",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5366,
+          "condition": 0.7509074980910493,
+          "age": 5441,
           "acquiredDay": 99296,
           "maintenance": {
             "active": false,
@@ -833,8 +879,8 @@
           "id": "5c581448-5419-4954-9324-bee43ee9cc87",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.754122493559797,
-          "age": 5366,
+          "condition": 0.7509074980910493,
+          "age": 5441,
           "acquiredDay": 99297,
           "maintenance": {
             "active": false,
@@ -860,8 +906,8 @@
           "id": "91e74b79-34ab-44fc-90f4-01d9007e6488",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99411,
           "maintenance": {
             "active": false,
@@ -887,8 +933,8 @@
           "id": "b8e0aa58-f32a-443a-9e7e-3eba20855b90",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99412,
           "maintenance": {
             "active": false,
@@ -914,8 +960,8 @@
           "id": "954944c0-3057-422c-8343-832fc02c5ba3",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99412,
           "maintenance": {
             "active": false,
@@ -941,8 +987,8 @@
           "id": "71ef3598-cbb8-4ad8-b1c2-1a86bdce34bd",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99414,
           "maintenance": {
             "active": false,
@@ -968,8 +1014,8 @@
           "id": "ef032663-b232-4286-903c-68f0f79ed09f",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99414,
           "maintenance": {
             "active": false,
@@ -995,8 +1041,8 @@
           "id": "f8aecd8d-e30a-44ea-8b64-afcb9fea0a00",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.8631917429998365,
-          "age": 3869,
+          "condition": 0.8612865604998332,
+          "age": 3944,
           "acquiredDay": 99415,
           "maintenance": {
             "active": false,
@@ -1022,8 +1068,8 @@
           "id": "3f09e5a7-3fd1-4294-81ed-0288902b3cf5",
           "modelId": "steam_241_articulated",
           "ownerId": "4c7dfa51-225a-487a-aa42-1b0776c4e1d5",
-          "condition": 0.7960086242347973,
-          "age": 3841,
+          "condition": 0.7927936287660496,
+          "age": 3916,
           "acquiredDay": 100862,
           "maintenance": {
             "active": false,
@@ -1984,9 +2030,9 @@
             "passengers": 2360,
             "freightTons": 0,
             "revenue": 794232,
-            "expenses": 54712,
-            "profit": 739519,
-            "punctuality": 60.96,
+            "expenses": 54713,
+            "profit": 739518,
+            "punctuality": 60.61,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -2033,8 +2079,8 @@
               }
             },
             "market": {
-              "passengerDemand": 1393921,
-              "freightDemand": 19577,
+              "passengerDemand": 1238388,
+              "freightDemand": 18796,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -2059,10 +2105,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 50,
-                  "speed": 48.33,
+                  "speed": 47.78,
                   "comfortOrCapacity": 76.33,
                   "reputation": 100,
-                  "condition": 81.79,
+                  "condition": 81.55,
                   "staff": 100,
                   "stations": 79.38,
                   "operations": 104.45
@@ -2133,17 +2179,17 @@
               "energyCost": 0,
               "resourceType": "coal",
               "resourceConsumptionPerHour": 56.58,
-              "maintenanceCost": 303,
+              "maintenanceCost": 304,
               "accessCost": 376,
               "passageRights": 376,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 376,
-              "variableExpenses": 51405,
-              "contribution": 742826,
+              "variableExpenses": 51406,
+              "contribution": 742825,
               "allocatedOverhead": 3307,
-              "netProfit": 739519,
+              "netProfit": 739518,
               "margin": 93.53,
-              "totalExpenses": 54712,
+              "totalExpenses": 54713,
               "netMargin": 93.11
             }
           },
@@ -2342,9 +2388,9 @@
             "passengers": 2549,
             "freightTons": 0,
             "revenue": 619748,
-            "expenses": 42217,
-            "profit": 577531,
-            "punctuality": 60.96,
+            "expenses": 42218,
+            "profit": 577530,
+            "punctuality": 60.61,
             "satisfaction": 91.16,
             "share": 100,
             "status": "ok",
@@ -2391,8 +2437,8 @@
               }
             },
             "market": {
-              "passengerDemand": 397701,
-              "freightDemand": 8383,
+              "passengerDemand": 353326,
+              "freightDemand": 8049,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -2417,10 +2463,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 50,
-                  "speed": 48.33,
+                  "speed": 47.78,
                   "comfortOrCapacity": 76.33,
                   "reputation": 100,
-                  "condition": 81.93,
+                  "condition": 81.69,
                   "staff": 100,
                   "stations": 85.74,
                   "operations": 104.45
@@ -2496,12 +2542,12 @@
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 39636,
-              "contribution": 580112,
+              "variableExpenses": 39637,
+              "contribution": 580111,
               "allocatedOverhead": 2581,
-              "netProfit": 577531,
+              "netProfit": 577530,
               "margin": 93.6,
-              "totalExpenses": 42217,
+              "totalExpenses": 42218,
               "netMargin": 93.19
             }
           },
@@ -2666,9 +2712,9 @@
             "passengers": 5054,
             "freightTons": 0,
             "revenue": 1323234,
-            "expenses": 89789,
-            "profit": 1233445,
-            "punctuality": 60.89,
+            "expenses": 89790,
+            "profit": 1233444,
+            "punctuality": 60.54,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -2707,8 +2753,8 @@
               }
             },
             "market": {
-              "passengerDemand": 2950304,
-              "freightDemand": 31397,
+              "passengerDemand": 2621110,
+              "freightDemand": 30145,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -2733,10 +2779,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 70.71,
-                  "speed": 48.33,
+                  "speed": 47.78,
                   "comfortOrCapacity": 76.33,
                   "reputation": 100,
-                  "condition": 81.79,
+                  "condition": 81.55,
                   "staff": 100,
                   "stations": 85,
                   "operations": 104.45
@@ -2799,17 +2845,17 @@
               "energyCost": 0,
               "resourceType": "coal",
               "resourceConsumptionPerHour": 85.53,
-              "maintenanceCost": 458,
+              "maintenanceCost": 460,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 84279,
-              "contribution": 1238955,
+              "variableExpenses": 84280,
+              "contribution": 1238954,
               "allocatedOverhead": 5510,
-              "netProfit": 1233445,
+              "netProfit": 1233444,
               "margin": 93.63,
-              "totalExpenses": 89789,
+              "totalExpenses": 89790,
               "netMargin": 93.21
             }
           },
@@ -3036,7 +3082,7 @@
             "revenue": 473721,
             "expenses": 31760,
             "profit": 441961,
-            "punctuality": 73.16,
+            "punctuality": 72.94,
             "satisfaction": 67.51,
             "share": 100,
             "status": "ok",
@@ -3075,8 +3121,8 @@
               }
             },
             "market": {
-              "passengerDemand": 29925,
-              "freightDemand": 2129,
+              "passengerDemand": 26586,
+              "freightDemand": 2044,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -3104,7 +3150,7 @@
                   "speed": 52.22,
                   "comfortOrCapacity": 76.33,
                   "reputation": 100,
-                  "condition": 89.87,
+                  "condition": 89.73,
                   "staff": 100,
                   "stations": 85,
                   "operations": 104.45
@@ -3264,9 +3310,9 @@
             "passengers": 2546,
             "freightTons": 0,
             "revenue": 476376,
-            "expenses": 32303,
+            "expenses": 32304,
             "profit": 444073,
-            "punctuality": 62.41,
+            "punctuality": 62.06,
             "satisfaction": 93.55,
             "share": 100,
             "status": "ok",
@@ -3313,8 +3359,8 @@
               }
             },
             "market": {
-              "passengerDemand": 858007,
-              "freightDemand": 14676,
+              "passengerDemand": 762271,
+              "freightDemand": 14091,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -3339,10 +3385,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 50,
-                  "speed": 48.33,
+                  "speed": 47.78,
                   "comfortOrCapacity": 76.33,
                   "reputation": 100,
-                  "condition": 81.79,
+                  "condition": 81.55,
                   "staff": 100,
                   "stations": 85.64,
                   "operations": 104.45
@@ -3418,12 +3464,12 @@
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 30319,
+              "variableExpenses": 30320,
               "contribution": 446057,
               "allocatedOverhead": 1984,
               "netProfit": 444073,
               "margin": 93.64,
-              "totalExpenses": 32303,
+              "totalExpenses": 32304,
               "netMargin": 93.22
             }
           },
@@ -3664,7 +3710,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87545509"
         },
         "GARE_87545483": {
           "level": 1,
@@ -3713,7 +3760,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87710921"
         },
         "GARE_87276139": {
           "level": 1,
@@ -3727,7 +3775,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87276147"
         },
         "GARE_87276097": {
           "level": 1,
@@ -3790,14 +3839,16 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393611"
         },
         "GARE_87393637": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393637"
         },
         "GARE_87547315": {
           "level": 1,
@@ -3937,7 +3988,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87546309"
         },
         "GARE_87546317": {
           "level": 1,
@@ -3979,14 +4031,16 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393645"
         },
         "GARE_87393652": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393652"
         },
         "GARE_87545160": {
           "level": 1,
@@ -4147,19 +4201,20 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87546002"
         }
       },
       "stats": {
-        "passengers": 1059175456,
+        "passengers": 1060492681,
         "freightTons": 0,
-        "revenue": 40740592211,
-        "expenses": 7482090652,
-        "profit": 33258505657,
+        "revenue": 41018547386,
+        "expenses": 7500899328,
+        "profit": 33517652176,
         "lastRevenue": 3706069,
-        "lastExpenses": 250780,
-        "lastProfit": 3455289,
-        "punctuality": 64.66,
+        "lastExpenses": 250784,
+        "lastProfit": 3455285,
+        "punctuality": 64.35,
         "satisfaction": 88.43,
         "marketShare": 5,
         "lastBreakdown": {
@@ -4170,7 +4225,7 @@
           "freightRevenue": 0,
           "dispatchRevenueBoost": 0,
           "energyCost": 0,
-          "trainMaintenanceCost": 1214,
+          "trainMaintenanceCost": 1217,
           "lineInfrastructureCost": 3318,
           "commercialOperatingCost": 230519,
           "commercialSalesCost": 98445,
@@ -4185,7 +4240,7 @@
           "debtCost": 0,
           "idleTrainCost": 0,
           "researchCost": 0,
-          "variableLineCost": 235426,
+          "variableLineCost": 235431,
           "sharedCosts": 15354
         }
       },
@@ -4415,7 +4470,7 @@
       "color": "#ff86cc",
       "logo": "semaphore",
       "region": "France",
-      "cash": 9056120836.903889,
+      "cash": 9052240788.786837,
       "debt": 468300080.45383334,
       "epoch": 0,
       "research": 1,
@@ -4434,10 +4489,10 @@
       "researchQueue": [],
       "maintenancePolicy": "standard",
       "reputation": 0,
-      "co2": 892734.8360007348,
+      "co2": 893393.1860007385,
       "energyStrategy": "green",
       "resources": {
-        "coal": 2481.9133814787515,
+        "coal": 2481.826298145405,
         "diesel": 0,
         "electricityOrder": 0
       },
@@ -4535,8 +4590,8 @@
           "id": "351dd93f-0921-404d-bea8-83b95c4c2a78",
           "modelId": "steam_030_mixte",
           "ownerId": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
-          "condition": 0.11249722222228005,
-          "age": 21733,
+          "condition": 0.10978888888894667,
+          "age": 21808,
           "acquiredDay": 55193,
           "maintenance": {
             "active": false,
@@ -4562,8 +4617,8 @@
           "id": "4bc9f305-8fce-4185-83ec-414ac5a1c58b",
           "modelId": "steam_030_mixte",
           "ownerId": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
-          "condition": 0.11254351851857632,
-          "age": 21732,
+          "condition": 0.10983518518524293,
+          "age": 21807,
           "acquiredDay": 55329,
           "maintenance": {
             "active": false,
@@ -4589,8 +4644,8 @@
           "id": "3048308e-ffa8-40d1-81a3-d9d8299987ad",
           "modelId": "steam_030_mixte",
           "ownerId": "2ab0580e-4fc2-477f-b1ab-b46649e5e590",
-          "condition": 0.11254351851857632,
-          "age": 21732,
+          "condition": 0.10983518518524293,
+          "age": 21807,
           "acquiredDay": 55331,
           "maintenance": {
             "active": false,
@@ -4676,8 +4731,8 @@
               }
             },
             "market": {
-              "passengerDemand": 1891,
-              "freightDemand": 1168,
+              "passengerDemand": 1680,
+              "freightDemand": 1122,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -4705,7 +4760,7 @@
                   "speed": 25,
                   "comfortOrCapacity": 59.19,
                   "reputation": 33.33,
-                  "condition": 34.26,
+                  "condition": 34.06,
                   "staff": 100,
                   "stations": 85,
                   "operations": 100
@@ -4849,8 +4904,8 @@
               }
             },
             "market": {
-              "passengerDemand": 1640,
-              "freightDemand": 926,
+              "passengerDemand": 1457,
+              "freightDemand": 889,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -4878,7 +4933,7 @@
                   "speed": 25,
                   "comfortOrCapacity": 59.19,
                   "reputation": 33.33,
-                  "condition": 34.27,
+                  "condition": 34.06,
                   "staff": 100,
                   "stations": 85,
                   "operations": 100
@@ -5022,8 +5077,8 @@
               }
             },
             "market": {
-              "passengerDemand": 1360,
-              "freightDemand": 719,
+              "passengerDemand": 1209,
+              "freightDemand": 690,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -5051,7 +5106,7 @@
                   "speed": 25,
                   "comfortOrCapacity": 59.19,
                   "reputation": 33.33,
-                  "condition": 34.27,
+                  "condition": 34.06,
                   "staff": 100,
                   "stations": 85,
                   "operations": 100
@@ -5140,7 +5195,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393488"
         },
         "GARE_87386680": {
           "level": 1,
@@ -5175,29 +5231,32 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87381137"
         },
         "GARE_87386409": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87386409"
         },
         "GARE_87393835": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393835"
         }
       },
       "stats": {
-        "passengers": 22841205,
+        "passengers": 22867980,
         "freightTons": 0,
-        "revenue": 186091274,
-        "expenses": 1554013470,
-        "profit": -1367924920,
+        "revenue": 186754049,
+        "expenses": 1558556295,
+        "profit": -1371804970,
         "lastRevenue": 8837,
         "lastExpenses": 60571,
         "lastProfit": -51734,
@@ -5232,21 +5291,6 @@
         }
       },
       "notifications": [
-        {
-          "id": "1cc9a93d-d099-491a-814f-cfe9aa718665",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 16% d’état.",
-          "createdAt": 1781787243613
-        },
-        {
-          "id": "55a89bd7-d2a6-45fe-b85b-af52c1c8c331",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 15% d’état.",
-          "createdAt": 1781787303631
-        },
-        {
-          "id": "9ccace23-35ef-4a4b-b2d5-a7513183baae",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 15% d’état.",
-          "createdAt": 1781787382407
-        },
         {
           "id": "0879550f-0d75-47cb-9b4d-d849bc91e335",
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 15% d’état.",
@@ -5431,6 +5475,21 @@
           "id": "6fbd9325-361a-42e4-812a-1154417d82da",
           "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 11% d’état.",
           "createdAt": 1781797045772
+        },
+        {
+          "id": "ff89f410-6237-444f-aa45-f5175963a1ef",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 11% d’état.",
+          "createdAt": 1781797729496
+        },
+        {
+          "id": "bb57c633-7ee7-4f05-a199-6b54bbbc9253",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 11% d’état.",
+          "createdAt": 1781797789518
+        },
+        {
+          "id": "dc2e23aa-0073-4ac3-bbcf-a48a2f33863f",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 030 mixte à 11% d’état.",
+          "createdAt": 1781797849528
         }
       ],
       "createdAt": 1781598832060,
@@ -5453,7 +5512,7 @@
       "color": "#008cb4",
       "logo": "star_track",
       "region": "France",
-      "cash": 436111013197.3338,
+      "cash": 437755360449.3843,
       "debt": 0,
       "epoch": 6,
       "research": 1.22,
@@ -5503,10 +5562,10 @@
       "researchQueue": [],
       "maintenancePolicy": "intensive",
       "reputation": 100,
-      "co2": 1052698122.8609084,
+      "co2": 1052756841.1763875,
       "energyStrategy": "green",
       "resources": {
-        "coal": 466530.16303039476,
+        "coal": 466528.26498039503,
         "diesel": 0,
         "electricityOrder": 50000
       },
@@ -5535,8 +5594,8 @@
           "id": "cc69e27f-68be-429a-8753-047fdfda8084",
           "modelId": "steam_040_freight",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.09408936541982876,
-          "age": 44407,
+          "condition": 0.09079865585660785,
+          "age": 44482,
           "acquiredDay": 60280,
           "maintenance": {
             "active": false,
@@ -5562,8 +5621,8 @@
           "id": "60446fc4-54de-423c-8f8c-6d1eca46a930",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42844795431357763,
-          "age": 39960,
+          "condition": 0.4264735285756434,
+          "age": 40035,
           "acquiredDay": 64651,
           "maintenance": {
             "active": false,
@@ -5589,8 +5648,8 @@
           "id": "1c325068-0bda-41f4-a731-9a94f1e73016",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39856,
+          "condition": 0.6104294501546921,
+          "age": 39931,
           "acquiredDay": 64652,
           "maintenance": {
             "active": false,
@@ -5616,8 +5675,8 @@
           "id": "392aad1c-3f2e-4fa9-b9a3-e0ac246e10ad",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 38982,
+          "condition": 0.4224791935143846,
+          "age": 39057,
           "acquiredDay": 64755,
           "maintenance": {
             "active": false,
@@ -5643,8 +5702,8 @@
           "id": "b2cf518d-057e-4fee-9206-47da116c3354",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.43135990196048224,
-          "age": 39488,
+          "condition": 0.429385476222548,
+          "age": 39563,
           "acquiredDay": 64959,
           "maintenance": {
             "active": false,
@@ -5670,8 +5729,8 @@
           "id": "06eaaf61-d15a-43f3-92f4-9057719c2269",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39549,
+          "condition": 0.6104294501546921,
+          "age": 39624,
           "acquiredDay": 64959,
           "maintenance": {
             "active": false,
@@ -5697,8 +5756,8 @@
           "id": "e42c7987-aaa0-4a8d-88c2-5611f2dcd34b",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.431129490654457,
-          "age": 39497,
+          "condition": 0.4291550649165228,
+          "age": 39572,
           "acquiredDay": 64960,
           "maintenance": {
             "active": false,
@@ -5724,8 +5783,8 @@
           "id": "623ae31a-f946-4e6a-b291-36467c84260b",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39549,
+          "condition": 0.6104294501546921,
+          "age": 39624,
           "acquiredDay": 64960,
           "maintenance": {
             "active": false,
@@ -5751,8 +5810,8 @@
           "id": "1441a5be-9d8e-4845-a0bc-fb7052f686a5",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39549,
+          "condition": 0.6104294501546921,
+          "age": 39624,
           "acquiredDay": 64961,
           "maintenance": {
             "active": false,
@@ -5778,8 +5837,8 @@
           "id": "29d37234-b393-45aa-ab19-f4ce3ba99a53",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65033,
           "maintenance": {
             "active": false,
@@ -5805,8 +5864,8 @@
           "id": "d0cc1ec3-ffd3-4939-8ad0-d7d186bb489b",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65033,
           "maintenance": {
             "active": false,
@@ -5832,8 +5891,8 @@
           "id": "a48b4dea-8c22-487d-b388-9d47e60c35b0",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65033,
           "maintenance": {
             "active": false,
@@ -5859,8 +5918,8 @@
           "id": "b53391bc-565b-4670-8966-aa2db6271b2d",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65033,
           "maintenance": {
             "active": false,
@@ -5886,8 +5945,8 @@
           "id": "320baa41-3bfa-400e-a010-91b5eb1fd8e9",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65034,
           "maintenance": {
             "active": false,
@@ -5913,8 +5972,8 @@
           "id": "3ec8199b-4087-47d5-82fc-d65bbadd3510",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65034,
           "maintenance": {
             "active": false,
@@ -5940,8 +5999,8 @@
           "id": "2d6e1f7c-9dbf-42e6-8dee-f4bc18ae823d",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39411,
+          "condition": 0.6104294501546921,
+          "age": 39486,
           "acquiredDay": 65034,
           "maintenance": {
             "active": false,
@@ -5967,8 +6026,8 @@
           "id": "9cea656f-c9fc-46f5-9b33-f2559f43f7b8",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6559381932889138,
-          "age": 30780,
+          "condition": 0.6539637675509837,
+          "age": 30855,
           "acquiredDay": 65034,
           "maintenance": {
             "active": false,
@@ -5994,8 +6053,8 @@
           "id": "61a61aa9-6511-4c70-baf3-931db5dfa6f4",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6559381932889138,
-          "age": 30780,
+          "condition": 0.6539637675509837,
+          "age": 30855,
           "acquiredDay": 65034,
           "maintenance": {
             "active": false,
@@ -6021,8 +6080,8 @@
           "id": "87deda64-3700-4bc6-80b0-0a2aa3a958c6",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.431129490654457,
-          "age": 39349,
+          "condition": 0.4291550649165228,
+          "age": 39424,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6048,8 +6107,8 @@
           "id": "f80e5055-5083-42bb-b338-a633573867b1",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6558889173412139,
-          "age": 30782,
+          "condition": 0.6539144916032839,
+          "age": 30857,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6075,8 +6134,8 @@
           "id": "748b4e44-efdf-4d16-ad9a-7666318e1ec0",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6536792937406322,
-          "age": 30868,
+          "condition": 0.6517048680027021,
+          "age": 30943,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6102,8 +6161,8 @@
           "id": "ad5b1995-8f9f-4ef8-a07b-e2bc06e2f695",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6534469558698573,
-          "age": 30697,
+          "condition": 0.6514725301319273,
+          "age": 30772,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6129,8 +6188,8 @@
           "id": "9df807a0-95bd-44fc-8d28-7b5deef41117",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6534469558698573,
-          "age": 30697,
+          "condition": 0.6514725301319273,
+          "age": 30772,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6156,8 +6215,8 @@
           "id": "f4e5e6e5-bda5-4d29-803c-588cc87f9286",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6117232334017698,
-          "age": 39219,
+          "condition": 0.6104294501546921,
+          "age": 39294,
           "acquiredDay": 65035,
           "maintenance": {
             "active": false,
@@ -6183,8 +6242,8 @@
           "id": "7db777c1-a6ab-4cb5-bc3b-0609420e5525",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6192822282241872,
-          "age": 38632,
+          "condition": 0.6181248208167806,
+          "age": 38707,
           "acquiredDay": 65836,
           "maintenance": {
             "active": false,
@@ -6210,8 +6269,8 @@
           "id": "26235785-b1e4-4d0c-9f33-5915aa8081f8",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5438676585255081,
-          "age": 38741,
+          "condition": 0.5422492767731057,
+          "age": 38816,
           "acquiredDay": 65836,
           "maintenance": {
             "active": false,
@@ -6237,8 +6296,8 @@
           "id": "28009b5a-1925-4548-b457-ff90ae01f7c5",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5438676585255081,
-          "age": 38741,
+          "condition": 0.5422492767731057,
+          "age": 38816,
           "acquiredDay": 65836,
           "maintenance": {
             "active": false,
@@ -6264,8 +6323,8 @@
           "id": "79e8e6f0-8c3a-46c0-8c15-4f6a477534dc",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5438676585255081,
-          "age": 38741,
+          "condition": 0.5422492767731057,
+          "age": 38816,
           "acquiredDay": 65837,
           "maintenance": {
             "active": false,
@@ -6291,8 +6350,8 @@
           "id": "7b6422a9-d14c-4822-8f6c-a2c6db4c7513",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5438676585255081,
-          "age": 38741,
+          "condition": 0.5422492767731057,
+          "age": 38816,
           "acquiredDay": 65837,
           "maintenance": {
             "active": false,
@@ -6318,8 +6377,8 @@
           "id": "98d73c29-ce96-460c-a2ea-cfa115952293",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5438676585255081,
-          "age": 38741,
+          "condition": 0.5422492767731057,
+          "age": 38816,
           "acquiredDay": 65837,
           "maintenance": {
             "active": false,
@@ -6345,8 +6404,8 @@
           "id": "20342a68-e4d9-40ff-a16a-b597ecff608e",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 38745,
+          "condition": 0.43415743623982933,
+          "age": 38820,
           "acquiredDay": 65837,
           "maintenance": {
             "active": false,
@@ -6372,8 +6431,8 @@
           "id": "ba9ce36f-bc7b-45d1-a6c2-0576f08d9ca3",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.658682112100688,
-          "age": 30244,
+          "condition": 0.6570637303482857,
+          "age": 30319,
           "acquiredDay": 65838,
           "maintenance": {
             "active": false,
@@ -6399,8 +6458,8 @@
           "id": "d51c7717-4517-4cc8-973b-18176bdce5be",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38698,
+          "condition": 0.5386475238997525,
+          "age": 38773,
           "acquiredDay": 65838,
           "maintenance": {
             "active": false,
@@ -6426,8 +6485,8 @@
           "id": "852ecded-ec65-4196-a3f6-f5c83b7297bf",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65838,
           "maintenance": {
             "active": false,
@@ -6453,8 +6512,8 @@
           "id": "fe9f972d-9f08-4157-8bdf-c5c48389fc31",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65838,
           "maintenance": {
             "active": false,
@@ -6480,8 +6539,8 @@
           "id": "eb8d9e75-5c13-4905-9cac-2dc1ec25d31e",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65838,
           "maintenance": {
             "active": false,
@@ -6507,8 +6566,8 @@
           "id": "ffef7099-fa02-4d7d-84ee-581c61b474c7",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65839,
           "maintenance": {
             "active": false,
@@ -6534,8 +6593,8 @@
           "id": "5f5cfef2-7b39-4a0d-a370-6b106105a244",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65839,
           "maintenance": {
             "active": false,
@@ -6561,8 +6620,8 @@
           "id": "9580aaf8-c2b2-43da-9e8d-5db407289911",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5402659056521548,
-          "age": 38743,
+          "condition": 0.5386475238997525,
+          "age": 38818,
           "acquiredDay": 65839,
           "maintenance": {
             "active": false,
@@ -6588,8 +6647,8 @@
           "id": "0c3a296d-f382-45b5-bd0d-0ef7c881c4b6",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5138144420098351,
-          "age": 38369,
+          "condition": 0.5121960602574327,
+          "age": 38444,
           "acquiredDay": 66068,
           "maintenance": {
             "active": false,
@@ -6615,8 +6674,8 @@
           "id": "f6c5bbdf-a0c7-4d12-8ab0-3dc412e0520a",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6965245191482158,
-          "age": 29819,
+          "condition": 0.6949061373958134,
+          "age": 29894,
           "acquiredDay": 66068,
           "maintenance": {
             "active": false,
@@ -6642,8 +6701,8 @@
           "id": "148cddca-f333-4cc8-bd68-ef009531270d",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5138144420098351,
-          "age": 38229,
+          "condition": 0.5121960602574327,
+          "age": 38304,
           "acquiredDay": 66068,
           "maintenance": {
             "active": false,
@@ -6669,8 +6728,8 @@
           "id": "ac9cd5dc-b7ca-4dc2-bfa7-a33ba2001851",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5138144420098351,
-          "age": 38184,
+          "condition": 0.5121960602574327,
+          "age": 38259,
           "acquiredDay": 66069,
           "maintenance": {
             "active": false,
@@ -6696,8 +6755,8 @@
           "id": "3214ea16-ec27-44a2-a19e-4c6ab701029a",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 38153,
+          "condition": 0.43415743623982933,
+          "age": 38228,
           "acquiredDay": 66069,
           "maintenance": {
             "active": false,
@@ -6723,8 +6782,8 @@
           "id": "0bbcb659-e253-4c21-9029-1fdf02f672ee",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.658682112100688,
-          "age": 29515,
+          "condition": 0.6570637303482857,
+          "age": 29590,
           "acquiredDay": 66069,
           "maintenance": {
             "active": false,
@@ -6750,8 +6809,8 @@
           "id": "333e6a90-ad53-4af7-a139-d136d8384130",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 25059,
+          "condition": 0.43415743623982933,
+          "age": 25134,
           "acquiredDay": 66069,
           "maintenance": {
             "active": false,
@@ -6777,8 +6836,8 @@
           "id": "f7fdf689-9910-4792-8160-878dfe941e13",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 24956,
+          "condition": 0.43415743623982933,
+          "age": 25031,
           "acquiredDay": 66069,
           "maintenance": {
             "active": false,
@@ -6804,8 +6863,8 @@
           "id": "81b2287e-1fc3-409a-9599-e213adc5ca46",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.658682112100688,
-          "age": 16394,
+          "condition": 0.6570637303482857,
+          "age": 16469,
           "acquiredDay": 66070,
           "maintenance": {
             "active": false,
@@ -6831,8 +6890,8 @@
           "id": "4e5872d7-2c81-4b86-8a1f-9d0ed137053e",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.46450291859983883,
-          "age": 23752,
+          "condition": 0.46288453684743647,
+          "age": 23827,
           "acquiredDay": 66070,
           "maintenance": {
             "active": false,
@@ -6858,8 +6917,8 @@
           "id": "972a83bf-2905-464d-b273-262bb059545f",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 24692,
+          "condition": 0.43415743623982933,
+          "age": 24767,
           "acquiredDay": 66070,
           "maintenance": {
             "active": false,
@@ -6885,8 +6944,8 @@
           "id": "f919691e-b80a-4031-885e-96679b424c73",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4645816489332638,
-          "age": 23423,
+          "condition": 0.46296326718086145,
+          "age": 23498,
           "acquiredDay": 66070,
           "maintenance": {
             "active": false,
@@ -6912,8 +6971,8 @@
           "id": "43e4b7e3-c8c2-41e4-8973-06cca89367a1",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4645816489332638,
-          "age": 23423,
+          "condition": 0.46296326718086145,
+          "age": 23498,
           "acquiredDay": 66070,
           "maintenance": {
             "active": false,
@@ -6939,8 +6998,8 @@
           "id": "bb32bff9-bed2-4697-a61a-e3905c719063",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4645816489332638,
-          "age": 23423,
+          "condition": 0.46296326718086145,
+          "age": 23498,
           "acquiredDay": 66071,
           "maintenance": {
             "active": false,
@@ -6966,8 +7025,8 @@
           "id": "dcebee63-f1c7-48a5-a702-79bd3b24d518",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4645816489332638,
-          "age": 23423,
+          "condition": 0.46296326718086145,
+          "age": 23498,
           "acquiredDay": 66071,
           "maintenance": {
             "active": false,
@@ -6993,8 +7052,8 @@
           "id": "3b6366a7-3351-4ce4-8753-0075396df22a",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.46450291859983883,
-          "age": 22922,
+          "condition": 0.46288453684743647,
+          "age": 22997,
           "acquiredDay": 66071,
           "maintenance": {
             "active": false,
@@ -7020,8 +7079,8 @@
           "id": "a141bd3e-0398-4c1f-b45f-ae4d3b3d53e2",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6155939622856937,
-          "age": 24058,
+          "condition": 0.6144365548782871,
+          "age": 24133,
           "acquiredDay": 66071,
           "maintenance": {
             "active": false,
@@ -7047,8 +7106,8 @@
           "id": "77071c2e-d4aa-43b8-885a-5a206770b7b4",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 24053,
+          "condition": 0.43415743623982933,
+          "age": 24128,
           "acquiredDay": 66071,
           "maintenance": {
             "active": false,
@@ -7074,8 +7133,8 @@
           "id": "773848e4-8753-442a-9202-4914ebc1ca88",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6155939622856937,
-          "age": 24058,
+          "condition": 0.6144365548782871,
+          "age": 24133,
           "acquiredDay": 66072,
           "maintenance": {
             "active": false,
@@ -7101,8 +7160,8 @@
           "id": "af85424b-4234-4efb-b0cb-1718f51744dc",
           "modelId": "electric_third_rail_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4357758179922317,
-          "age": 24053,
+          "condition": 0.43415743623982933,
+          "age": 24128,
           "acquiredDay": 66072,
           "maintenance": {
             "active": false,
@@ -7128,8 +7187,8 @@
           "id": "5bf12480-805b-4713-8f0a-f54a9b16a8c6",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6112572105841535,
-          "age": 24081,
+          "condition": 0.6099634273370758,
+          "age": 24156,
           "acquiredDay": 80370,
           "maintenance": {
             "active": false,
@@ -7155,8 +7214,8 @@
           "id": "2eba1d4d-e350-4f81-b307-ec0888283963",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 24053,
+          "condition": 0.4224791935143846,
+          "age": 24128,
           "acquiredDay": 80370,
           "maintenance": {
             "active": false,
@@ -7182,8 +7241,8 @@
           "id": "6f85326a-a4f0-411c-b562-7687c7e5d951",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6112572105841535,
-          "age": 24058,
+          "condition": 0.6099634273370758,
+          "age": 24133,
           "acquiredDay": 80371,
           "maintenance": {
             "active": false,
@@ -7209,8 +7268,8 @@
           "id": "3873e520-0f5b-4929-a7d5-fccef8b83c2e",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6112572105841535,
-          "age": 24058,
+          "condition": 0.6099634273370758,
+          "age": 24133,
           "acquiredDay": 80371,
           "maintenance": {
             "active": false,
@@ -7236,8 +7295,8 @@
           "id": "0450cd07-b9bb-4e19-aaba-5825fa43dd57",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6112572105841535,
-          "age": 24058,
+          "condition": 0.6099634273370758,
+          "age": 24133,
           "acquiredDay": 80371,
           "maintenance": {
             "active": false,
@@ -7263,8 +7322,8 @@
           "id": "297c2c1a-2ae9-4c89-80f9-e7923ffbc3c3",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 23439,
+          "condition": 0.4224791935143846,
+          "age": 23514,
           "acquiredDay": 81008,
           "maintenance": {
             "active": false,
@@ -7290,8 +7349,8 @@
           "id": "0df10129-8c5c-4845-a3e1-f267da424c29",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 23439,
+          "condition": 0.4224791935143846,
+          "age": 23514,
           "acquiredDay": 81009,
           "maintenance": {
             "active": false,
@@ -7317,8 +7376,8 @@
           "id": "adb6c78f-3221-4a97-84ee-6b831b149d33",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 23470,
+          "condition": 0.4224791935143846,
+          "age": 23545,
           "acquiredDay": 81009,
           "maintenance": {
             "active": false,
@@ -7344,8 +7403,8 @@
           "id": "49814efe-09a2-40c3-b1a4-81d3722b4ebe",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 23376,
+          "condition": 0.4224791935143846,
+          "age": 23451,
           "acquiredDay": 81010,
           "maintenance": {
             "active": false,
@@ -7371,8 +7430,8 @@
           "id": "9d716cc1-9051-4293-9174-e96310b3cc30",
           "modelId": "electric_pioneer_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.42445361925231884,
-          "age": 23376,
+          "condition": 0.4224791935143846,
+          "age": 23451,
           "acquiredDay": 81010,
           "maintenance": {
             "active": false,
@@ -7398,8 +7457,8 @@
           "id": "18826996-672f-4cc7-a448-964115b65ad7",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5309839332159428,
-          "age": 22041,
+          "condition": 0.5293385784343303,
+          "age": 22116,
           "acquiredDay": 81523,
           "maintenance": {
             "active": false,
@@ -7425,8 +7484,8 @@
           "id": "a7ae7a97-c51b-4632-b8e8-e23159513331",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5258733709783109,
-          "age": 22307,
+          "condition": 0.5242280161966983,
+          "age": 22382,
           "acquiredDay": 81524,
           "maintenance": {
             "active": false,
@@ -7452,8 +7511,8 @@
           "id": "e68a1f85-19cf-4861-a347-96f05cb657d1",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.47719324027515236,
-          "age": 18382,
+          "condition": 0.47521881453721815,
+          "age": 18457,
           "acquiredDay": 84979,
           "maintenance": {
             "active": false,
@@ -7479,8 +7538,8 @@
           "id": "253f1b9f-906b-4bb1-b8dd-1fbef88a5b53",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.47719324027515236,
-          "age": 18382,
+          "condition": 0.47521881453721815,
+          "age": 18457,
           "acquiredDay": 86225,
           "maintenance": {
             "active": false,
@@ -7506,8 +7565,8 @@
           "id": "c9d3d473-0c62-45f0-aa81-35fc073ea777",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.47709083525025225,
-          "age": 18386,
+          "condition": 0.47511640951231804,
+          "age": 18461,
           "acquiredDay": 86226,
           "maintenance": {
             "active": false,
@@ -7533,8 +7592,8 @@
           "id": "b5a5d663-c039-4bb1-9884-c703081e2cbf",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.47683482268800204,
-          "age": 18396,
+          "condition": 0.4748603969500678,
+          "age": 18471,
           "acquiredDay": 86226,
           "maintenance": {
             "active": false,
@@ -7560,8 +7619,8 @@
           "id": "d575291a-eb8e-432a-856d-2abc5d4c7141",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.47709083525025225,
-          "age": 18386,
+          "condition": 0.47511640951231804,
+          "age": 18461,
           "acquiredDay": 86226,
           "maintenance": {
             "active": false,
@@ -7587,8 +7646,8 @@
           "id": "30b8c0fd-9836-41f7-9df6-e0f5151d1b5f",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5053315119896064,
-          "age": 17309,
+          "condition": 0.5033570862516763,
+          "age": 17384,
           "acquiredDay": 86227,
           "maintenance": {
             "active": false,
@@ -7614,8 +7673,8 @@
           "id": "85b91ecc-198d-414a-9c99-e09f71a0f24a",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5053315119896064,
-          "age": 17309,
+          "condition": 0.5033570862516763,
+          "age": 17384,
           "acquiredDay": 86227,
           "maintenance": {
             "active": false,
@@ -7641,8 +7700,8 @@
           "id": "17d84d61-db44-444a-8504-328dd17f519f",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4764508038446266,
-          "age": 18411,
+          "condition": 0.4744763781066924,
+          "age": 18486,
           "acquiredDay": 86227,
           "maintenance": {
             "active": false,
@@ -7668,8 +7727,8 @@
           "id": "1610440d-f9f2-4a17-9e49-d0bcb380c6b8",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.4764508038446266,
-          "age": 18411,
+          "condition": 0.4744763781066924,
+          "age": 18486,
           "acquiredDay": 86228,
           "maintenance": {
             "active": false,
@@ -7695,8 +7754,8 @@
           "id": "1d26acd7-a184-456f-9976-2c47f0efe0fe",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5829434952223599,
-          "age": 17222,
+          "condition": 0.5812981404407473,
+          "age": 17297,
           "acquiredDay": 86372,
           "maintenance": {
             "active": false,
@@ -7722,8 +7781,8 @@
           "id": "db6652ea-373f-4566-8c87-f1892d515736",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5795811362897304,
-          "age": 17376,
+          "condition": 0.5779357815081179,
+          "age": 17451,
           "acquiredDay": 86372,
           "maintenance": {
             "active": false,
@@ -7749,8 +7808,8 @@
           "id": "83dc2ee6-62b1-44ca-b2e9-aaf37f7ad4be",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6280625745123191,
-          "age": 17769,
+          "condition": 0.6264172197307065,
+          "age": 17844,
           "acquiredDay": 86373,
           "maintenance": {
             "active": false,
@@ -7776,8 +7835,8 @@
           "id": "29da29b1-1902-4c78-9a7c-5d6d4aa86957",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5602649884480913,
-          "age": 18260,
+          "condition": 0.5586196336664787,
+          "age": 18335,
           "acquiredDay": 86373,
           "maintenance": {
             "active": false,
@@ -7803,8 +7862,8 @@
           "id": "1dc12a05-d6ba-4a95-b39a-b0edc1fd7cb1",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5602649884480913,
-          "age": 18260,
+          "condition": 0.5586196336664787,
+          "age": 18335,
           "acquiredDay": 86373,
           "maintenance": {
             "active": false,
@@ -7830,8 +7889,8 @@
           "id": "e65a3f0d-ecf9-4530-a7ad-fe200e18ac43",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6305625745123175,
-          "age": 17607,
+          "condition": 0.6289172197307049,
+          "age": 17682,
           "acquiredDay": 86983,
           "maintenance": {
             "active": false,
@@ -7857,8 +7916,8 @@
           "id": "5814bb9f-2a09-44a2-9dd1-1f21ae345798",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6305625745123175,
-          "age": 17607,
+          "condition": 0.6289172197307049,
+          "age": 17682,
           "acquiredDay": 86983,
           "maintenance": {
             "active": false,
@@ -7884,8 +7943,8 @@
           "id": "b15d0a79-8776-4561-979e-5c4b23295380",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86983,
           "maintenance": {
             "active": false,
@@ -7911,8 +7970,8 @@
           "id": "8f84b11e-27b9-44e7-b961-d04d29eb69b3",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86984,
           "maintenance": {
             "active": false,
@@ -7938,8 +7997,8 @@
           "id": "d7b4b89b-dea5-4d00-bde5-a15e9e058410",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86984,
           "maintenance": {
             "active": false,
@@ -7965,8 +8024,8 @@
           "id": "5717b655-892b-4f12-b0aa-53e6e8d31b36",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86984,
           "maintenance": {
             "active": false,
@@ -7992,8 +8051,8 @@
           "id": "aa6ee49a-4a56-4167-bb73-176ffb6cda1f",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86984,
           "maintenance": {
             "active": false,
@@ -8019,8 +8078,8 @@
           "id": "f95b02d8-f349-4bee-afb3-72d5ff96c59e",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.6300587696091378,
-          "age": 17630,
+          "condition": 0.6284134148275252,
+          "age": 17705,
           "acquiredDay": 86985,
           "maintenance": {
             "active": false,
@@ -8046,8 +8105,8 @@
           "id": "2e4ac57b-42e7-497c-afa6-b6e36dbd4b11",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.630105065905434,
-          "age": 17627,
+          "condition": 0.6284597111238215,
+          "age": 17702,
           "acquiredDay": 86985,
           "maintenance": {
             "active": false,
@@ -8073,8 +8132,8 @@
           "id": "c5644929-d4f2-4cd8-8cd1-b7d039a4ad2f",
           "modelId": "hsv_intercity_200",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.630105065905434,
-          "age": 17627,
+          "condition": 0.6284597111238215,
+          "age": 17702,
           "acquiredDay": 86985,
           "maintenance": {
             "active": false,
@@ -8100,8 +8159,8 @@
           "id": "cc02d5f6-b84d-4286-9b3a-d1e0eab08a99",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5108819230404471,
-          "age": 17088,
+          "condition": 0.508907497302517,
+          "age": 17163,
           "acquiredDay": 87484,
           "maintenance": {
             "active": false,
@@ -8127,8 +8186,8 @@
           "id": "d47e2d8f-18fb-41ef-8a9a-2e659284789a",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5266372396984164,
-          "age": 16487,
+          "condition": 0.5246628139604863,
+          "age": 16562,
           "acquiredDay": 87485,
           "maintenance": {
             "active": false,
@@ -8154,8 +8213,8 @@
           "id": "87b53de0-152d-4c49-836a-cc7e6f4a0016",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5290232858586414,
-          "age": 16396,
+          "condition": 0.5270488601207114,
+          "age": 16471,
           "acquiredDay": 87485,
           "maintenance": {
             "active": false,
@@ -8181,8 +8240,8 @@
           "id": "e22387a0-b869-4666-8c24-35a5e00758a8",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5290232858586414,
-          "age": 16396,
+          "condition": 0.5270488601207114,
+          "age": 16471,
           "acquiredDay": 87485,
           "maintenance": {
             "active": false,
@@ -8208,8 +8267,8 @@
           "id": "5382f654-4bb4-4461-9f79-bafa91022d33",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5290232858586414,
-          "age": 16396,
+          "condition": 0.5270488601207114,
+          "age": 16471,
           "acquiredDay": 87486,
           "maintenance": {
             "active": false,
@@ -8235,8 +8294,8 @@
           "id": "cdea1f46-b05c-46a4-bda2-baa60f440ed1",
           "modelId": "electric_dual_current_loco",
           "ownerId": "991c6e96-442d-46eb-bea3-8410dacb7d96",
-          "condition": 0.5290232858586414,
-          "age": 16396,
+          "condition": 0.5270488601207114,
+          "age": 16471,
           "acquiredDay": 87486,
           "maintenance": {
             "active": false,
@@ -8451,8 +8510,8 @@
             "passengers": 1956,
             "freightTons": 0,
             "revenue": 476703,
-            "expenses": 33546,
-            "profit": 443157,
+            "expenses": 33695,
+            "profit": 443008,
             "punctuality": 35,
             "satisfaction": 84.37,
             "share": 100,
@@ -8507,8 +8566,8 @@
               }
             },
             "market": {
-              "passengerDemand": 10776,
-              "freightDemand": 1178,
+              "passengerDemand": 9573,
+              "freightDemand": 1131,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -8536,7 +8595,7 @@
                   "speed": 25,
                   "comfortOrCapacity": 74.96,
                   "reputation": 100,
-                  "condition": 32.9,
+                  "condition": 32.66,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -8614,18 +8673,18 @@
               "energyCost": 0,
               "resourceType": "coal",
               "resourceConsumptionPerHour": 45.55,
-              "maintenanceCost": 512,
+              "maintenanceCost": 513,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 31177,
-              "contribution": 445526,
-              "allocatedOverhead": 2369,
-              "netProfit": 443157,
+              "variableExpenses": 31178,
+              "contribution": 445525,
+              "allocatedOverhead": 2517,
+              "netProfit": 443008,
               "margin": 93.46,
-              "totalExpenses": 33546,
-              "netMargin": 92.96
+              "totalExpenses": 33695,
+              "netMargin": 92.93
             }
           },
           "name": "Rambouillet → Châteaudun"
@@ -8700,9 +8759,9 @@
             "passengers": 2761,
             "freightTons": 0,
             "revenue": 1036120,
-            "expenses": 71646,
-            "profit": 964475,
-            "punctuality": 35.62,
+            "expenses": 71967,
+            "profit": 964153,
+            "punctuality": 35.43,
             "satisfaction": 88.57,
             "share": 100,
             "status": "ok",
@@ -8749,8 +8808,8 @@
               }
             },
             "market": {
-              "passengerDemand": 17285,
-              "freightDemand": 1682,
+              "passengerDemand": 15356,
+              "freightDemand": 1615,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -8778,7 +8837,7 @@
                   "speed": 43.89,
                   "comfortOrCapacity": 82.92,
                   "reputation": 100,
-                  "condition": 57.66,
+                  "condition": 57.52,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -8849,18 +8908,18 @@
               "energyCost": 0,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 17.65,
-              "maintenanceCost": 333,
+              "maintenanceCost": 334,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
               "variableExpenses": 66496,
-              "contribution": 969625,
-              "allocatedOverhead": 5150,
-              "netProfit": 964475,
+              "contribution": 969624,
+              "allocatedOverhead": 5471,
+              "netProfit": 964153,
               "margin": 93.58,
-              "totalExpenses": 71646,
-              "netMargin": 93.09
+              "totalExpenses": 71967,
+              "netMargin": 93.05
             }
           },
           "name": "St-Quentin-en-Yvelines → Châteaudun"
@@ -9054,12 +9113,12 @@
           "electrified": true,
           "createdDay": 62987,
           "stats": {
-            "passengers": 8910,
+            "passengers": 7865,
             "freightTons": 0,
-            "revenue": 2964410,
-            "expenses": 204459,
-            "profit": 2759950,
-            "punctuality": 43.64,
+            "revenue": 2616912,
+            "expenses": 181658,
+            "profit": 2435254,
+            "punctuality": 43.45,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -9098,8 +9157,8 @@
               }
             },
             "market": {
-              "passengerDemand": 12444,
-              "freightDemand": 1791,
+              "passengerDemand": 11056,
+              "freightDemand": 1720,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -9109,25 +9168,25 @@
               "passengerLeader": {
                 "companyName": "Déraille & Fils",
                 "lineCode": "Valence → Avignon-Centre",
-                "score": 2.62
+                "score": 2.59
               },
               "freightLeader": null,
-              "passengerScore": 2.62,
+              "passengerScore": 2.59,
               "freightScore": null,
-              "passengerDemandCapture": 71.6,
+              "passengerDemandCapture": 71.14,
               "freightDemandCapture": null
             },
             "attractiveness": {
               "passenger": {
                 "market": "passengers",
-                "score": 2.62,
+                "score": 2.59,
                 "factors": {
                   "price": 24,
                   "frequency": 108.01,
-                  "speed": 40,
+                  "speed": 39.44,
                   "comfortOrCapacity": 92.59,
                   "reputation": 100,
-                  "condition": 74.52,
+                  "condition": 74.37,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -9146,7 +9205,7 @@
             "capacity": {
               "passengers": 14444,
               "freightTons": 1896,
-              "passengerLoad": 61.69,
+              "passengerLoad": 54.45,
               "freightLoad": 0,
               "crewFactor": 100,
               "stationFactor": 140,
@@ -9178,30 +9237,30 @@
             "finance": {
               "ticketPrice": 19,
               "farePerKm": 0.15,
-              "ticketRevenue": 2948818,
-              "ancillaryRevenue": 15592,
+              "ticketRevenue": 2603148,
+              "ancillaryRevenue": 13765,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 1536,
-              "commercialOperatingCost": 186409,
-              "commercialSalesCost": 79607,
-              "commercialControlCost": 44995,
-              "commercialAdministrationCost": 61807,
+              "commercialOperatingCost": 164520,
+              "commercialSalesCost": 70259,
+              "commercialControlCost": 39712,
+              "commercialAdministrationCost": 54549,
               "energyCost": 2,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 137.65,
-              "maintenanceCost": 1778,
+              "maintenanceCost": 1782,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 189725,
-              "contribution": 2774684,
-              "allocatedOverhead": 14734,
-              "netProfit": 2759950,
-              "margin": 93.6,
-              "totalExpenses": 204459,
-              "netMargin": 93.1
+              "variableExpenses": 167839,
+              "contribution": 2449073,
+              "allocatedOverhead": 13819,
+              "netProfit": 2435254,
+              "margin": 93.59,
+              "totalExpenses": 181658,
+              "netMargin": 93.06
             }
           },
           "name": "Valence → Avignon-Centre",
@@ -9254,11 +9313,11 @@
           "electrified": true,
           "createdDay": 64923,
           "stats": {
-            "passengers": 11150,
+            "passengers": 9906,
             "freightTons": 0,
-            "revenue": 4289195,
-            "expenses": 297811,
-            "profit": 3991383,
+            "revenue": 3810608,
+            "expenses": 266475,
+            "profit": 3544133,
             "punctuality": 35,
             "satisfaction": 100,
             "share": 100,
@@ -9298,8 +9357,8 @@
               }
             },
             "market": {
-              "passengerDemand": 19707,
-              "freightDemand": 3728,
+              "passengerDemand": 17508,
+              "freightDemand": 3579,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -9327,7 +9386,7 @@
                   "speed": 42.22,
                   "comfortOrCapacity": 90.3,
                   "reputation": 100,
-                  "condition": 57.37,
+                  "condition": 57.22,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -9346,7 +9405,7 @@
             "capacity": {
               "passengers": 15580,
               "freightTons": 1464,
-              "passengerLoad": 71.57,
+              "passengerLoad": 63.58,
               "freightLoad": 0,
               "crewFactor": 100,
               "stationFactor": 140,
@@ -9378,30 +9437,30 @@
             "finance": {
               "ticketPrice": 21,
               "farePerKm": 0.08,
-              "ticketRevenue": 4269682,
-              "ancillaryRevenue": 19512,
+              "ticketRevenue": 3793273,
+              "ancillaryRevenue": 17335,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 3084,
-              "commercialOperatingCost": 269832,
-              "commercialSalesCost": 115233,
-              "commercialControlCost": 65132,
-              "commercialAdministrationCost": 89467,
-              "energyCost": 3,
+              "commercialOperatingCost": 239688,
+              "commercialSalesCost": 102360,
+              "commercialControlCost": 57856,
+              "commercialAdministrationCost": 79472,
+              "energyCost": 2,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 203.86,
-              "maintenanceCost": 3574,
+              "maintenanceCost": 3579,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 276492,
-              "contribution": 4012702,
-              "allocatedOverhead": 21319,
-              "netProfit": 3991383,
-              "margin": 93.55,
-              "totalExpenses": 297811,
-              "netMargin": 93.06
+              "variableExpenses": 246353,
+              "contribution": 3564255,
+              "allocatedOverhead": 20122,
+              "netProfit": 3544133,
+              "margin": 93.54,
+              "totalExpenses": 266475,
+              "netMargin": 93.01
             }
           },
           "name": "Brest → Rennes",
@@ -9444,9 +9503,9 @@
             "passengers": 3030,
             "freightTons": 0,
             "revenue": 1589774,
-            "expenses": 111741,
-            "profit": 1478033,
-            "punctuality": 40.73,
+            "expenses": 112235,
+            "profit": 1477539,
+            "punctuality": 40.54,
             "satisfaction": 99.3,
             "share": 100,
             "status": "ok",
@@ -9485,8 +9544,8 @@
               }
             },
             "market": {
-              "passengerDemand": 38214,
-              "freightDemand": 6926,
+              "passengerDemand": 33950,
+              "freightDemand": 6649,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -9514,7 +9573,7 @@
                   "speed": 42.78,
                   "comfortOrCapacity": 89.99,
                   "reputation": 100,
-                  "condition": 63.99,
+                  "condition": 63.87,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -9574,21 +9633,21 @@
               "commercialSalesCost": 42615,
               "commercialControlCost": 24087,
               "commercialAdministrationCost": 33086,
-              "energyCost": 1,
+              "energyCost": 0,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 40.88,
-              "maintenanceCost": 693,
+              "maintenanceCost": 694,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 103839,
-              "contribution": 1485935,
-              "allocatedOverhead": 7902,
-              "netProfit": 1478033,
+              "variableExpenses": 103840,
+              "contribution": 1485934,
+              "allocatedOverhead": 8395,
+              "netProfit": 1477539,
               "margin": 93.47,
-              "totalExpenses": 111741,
-              "netMargin": 92.97
+              "totalExpenses": 112235,
+              "netMargin": 92.94
             }
           },
           "name": "Le Havre → Hellemmes"
@@ -9654,9 +9713,9 @@
             "passengers": 780,
             "freightTons": 0,
             "revenue": 409249,
-            "expenses": 30112,
-            "profit": 379136,
-            "punctuality": 44.07,
+            "expenses": 30240,
+            "profit": 379009,
+            "punctuality": 43.9,
             "satisfaction": 91.78,
             "share": 100,
             "status": "ok",
@@ -9703,8 +9762,8 @@
               }
             },
             "market": {
-              "passengerDemand": 41437,
-              "freightDemand": 4156,
+              "passengerDemand": 36813,
+              "freightDemand": 3990,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -9732,7 +9791,7 @@
                   "speed": 42.78,
                   "comfortOrCapacity": 87.03,
                   "reputation": 100,
-                  "condition": 63.99,
+                  "condition": 63.87,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -9803,18 +9862,18 @@
               "energyCost": 0,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 5.84,
-              "maintenanceCost": 105,
+              "maintenanceCost": 106,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 28078,
+              "variableExpenses": 28079,
               "contribution": 381170,
-              "allocatedOverhead": 2034,
-              "netProfit": 379136,
+              "allocatedOverhead": 2161,
+              "netProfit": 379009,
               "margin": 93.14,
-              "totalExpenses": 30112,
-              "netMargin": 92.64
+              "totalExpenses": 30240,
+              "netMargin": 92.61
             }
           },
           "name": "Hellemmes → Paris-Est"
@@ -9845,9 +9904,9 @@
             "passengers": 780,
             "freightTons": 0,
             "revenue": 409249,
-            "expenses": 30318,
-            "profit": 378931,
-            "punctuality": 44.07,
+            "expenses": 30445,
+            "profit": 378804,
+            "punctuality": 43.9,
             "satisfaction": 93.85,
             "share": 100,
             "status": "ok",
@@ -9886,8 +9945,8 @@
               }
             },
             "market": {
-              "passengerDemand": 32317,
-              "freightDemand": 5715,
+              "passengerDemand": 28711,
+              "freightDemand": 5487,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -9915,7 +9974,7 @@
                   "speed": 42.78,
                   "comfortOrCapacity": 87.03,
                   "reputation": 100,
-                  "condition": 63.99,
+                  "condition": 63.87,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -9985,11 +10044,11 @@
               "stationAccessCost": 0,
               "variableExpenses": 28284,
               "contribution": 380965,
-              "allocatedOverhead": 2034,
-              "netProfit": 378931,
+              "allocatedOverhead": 2161,
+              "netProfit": 378804,
               "margin": 93.09,
-              "totalExpenses": 30318,
-              "netMargin": 92.59
+              "totalExpenses": 30445,
+              "netMargin": 92.56
             }
           },
           "name": "La Rochelle-Ville → Tours"
@@ -10020,9 +10079,9 @@
             "passengers": 780,
             "freightTons": 0,
             "revenue": 321845,
-            "expenses": 24416,
-            "profit": 297429,
-            "punctuality": 36.19,
+            "expenses": 24515,
+            "profit": 297330,
+            "punctuality": 36.03,
             "satisfaction": 95.7,
             "share": 100,
             "status": "ok",
@@ -10061,8 +10120,8 @@
               }
             },
             "market": {
-              "passengerDemand": 48585,
-              "freightDemand": 5767,
+              "passengerDemand": 43164,
+              "freightDemand": 5537,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -10087,10 +10146,10 @@
                 "factors": {
                   "price": 21.43,
                   "frequency": 28.87,
-                  "speed": 40,
+                  "speed": 39.44,
                   "comfortOrCapacity": 87.03,
                   "reputation": 100,
-                  "condition": 58.21,
+                  "condition": 58.09,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -10160,11 +10219,11 @@
               "stationAccessCost": 0,
               "variableExpenses": 22816,
               "contribution": 299029,
-              "allocatedOverhead": 1600,
-              "netProfit": 297429,
+              "allocatedOverhead": 1699,
+              "netProfit": 297330,
               "margin": 92.91,
-              "totalExpenses": 24416,
-              "netMargin": 92.41
+              "totalExpenses": 24515,
+              "netMargin": 92.38
             }
           },
           "name": "Tours → Paris-St-Lazare"
@@ -10234,9 +10293,9 @@
             "passengers": 780,
             "freightTons": 0,
             "revenue": 409249,
-            "expenses": 31579,
-            "profit": 377670,
-            "punctuality": 36.19,
+            "expenses": 31706,
+            "profit": 377542,
+            "punctuality": 36.03,
             "satisfaction": 97.89,
             "share": 100,
             "status": "ok",
@@ -10283,8 +10342,8 @@
               }
             },
             "market": {
-              "passengerDemand": 49792,
-              "freightDemand": 10051,
+              "passengerDemand": 44237,
+              "freightDemand": 9650,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -10309,10 +10368,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 28.87,
-                  "speed": 40,
+                  "speed": 39.44,
                   "comfortOrCapacity": 87.03,
                   "reputation": 100,
-                  "condition": 58.21,
+                  "condition": 58.09,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -10389,12 +10448,12 @@
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
               "variableExpenses": 29545,
-              "contribution": 379704,
-              "allocatedOverhead": 2034,
-              "netProfit": 377670,
+              "contribution": 379703,
+              "allocatedOverhead": 2161,
+              "netProfit": 377542,
               "margin": 92.78,
-              "totalExpenses": 31579,
-              "netMargin": 92.28
+              "totalExpenses": 31706,
+              "netMargin": 92.25
             }
           },
           "name": "Marseille-Blancarde → Chambéry-Challes-les-Eaux"
@@ -10426,9 +10485,9 @@
             "passengers": 780,
             "freightTons": 0,
             "revenue": 409249,
-            "expenses": 31400,
-            "profit": 377848,
-            "punctuality": 36.19,
+            "expenses": 31528,
+            "profit": 377721,
+            "punctuality": 36.03,
             "satisfaction": 97.69,
             "share": 100,
             "status": "ok",
@@ -10467,8 +10526,8 @@
               }
             },
             "market": {
-              "passengerDemand": 34025,
-              "freightDemand": 9197,
+              "passengerDemand": 30228,
+              "freightDemand": 8830,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -10493,10 +10552,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 28.87,
-                  "speed": 40,
+                  "speed": 39.44,
                   "comfortOrCapacity": 87.03,
                   "reputation": 100,
-                  "condition": 58.21,
+                  "condition": 58.09,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -10564,13 +10623,13 @@
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 29366,
+              "variableExpenses": 29367,
               "contribution": 379882,
-              "allocatedOverhead": 2034,
-              "netProfit": 377848,
+              "allocatedOverhead": 2161,
+              "netProfit": 377721,
               "margin": 92.82,
-              "totalExpenses": 31400,
-              "netMargin": 92.33
+              "totalExpenses": 31528,
+              "netMargin": 92.3
             }
           },
           "name": "Gap → Bourg-en-Bresse"
@@ -10678,9 +10737,9 @@
             "passengers": 4290,
             "freightTons": 0,
             "revenue": 2250869,
-            "expenses": 157215,
-            "profit": 2093653,
-            "punctuality": 35.42,
+            "expenses": 157914,
+            "profit": 2092954,
+            "punctuality": 35.26,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -10719,8 +10778,8 @@
               }
             },
             "market": {
-              "passengerDemand": 115670,
-              "freightDemand": 17426,
+              "passengerDemand": 102764,
+              "freightDemand": 16732,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -10745,10 +10804,10 @@
                 "factors": {
                   "price": 0,
                   "frequency": 57.74,
-                  "speed": 40,
+                  "speed": 39.44,
                   "comfortOrCapacity": 90.38,
                   "reputation": 100,
-                  "condition": 58.21,
+                  "condition": 58.09,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -10811,18 +10870,18 @@
               "energyCost": 1,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 54.76,
-              "maintenanceCost": 989,
+              "maintenanceCost": 991,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 146027,
-              "contribution": 2104841,
-              "allocatedOverhead": 11188,
-              "netProfit": 2093653,
+              "variableExpenses": 146028,
+              "contribution": 2104840,
+              "allocatedOverhead": 11886,
+              "netProfit": 2092954,
               "margin": 93.51,
-              "totalExpenses": 157215,
-              "netMargin": 93.02
+              "totalExpenses": 157914,
+              "netMargin": 92.98
             }
           },
           "name": "Alès → Fréjus"
@@ -10866,12 +10925,12 @@
           "electrified": true,
           "createdDay": 80640,
           "stats": {
-            "passengers": 4145,
+            "passengers": 3682,
             "freightTons": 0,
-            "revenue": 549119,
-            "expenses": 37756,
-            "profit": 511362,
-            "punctuality": 39.99,
+            "revenue": 487848,
+            "expenses": 33740,
+            "profit": 454109,
+            "punctuality": 39.85,
             "satisfaction": 89.04,
             "share": 100,
             "status": "ok",
@@ -10918,8 +10977,8 @@
               }
             },
             "market": {
-              "passengerDemand": 18194,
-              "freightDemand": 1120,
+              "passengerDemand": 16164,
+              "freightDemand": 1076,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -10947,7 +11006,7 @@
                   "speed": 47.22,
                   "comfortOrCapacity": 84.76,
                   "reputation": 100,
-                  "condition": 71.24,
+                  "condition": 71.14,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -10966,7 +11025,7 @@
             "capacity": {
               "passengers": 19956,
               "freightTons": 2592,
-              "passengerLoad": 20.77,
+              "passengerLoad": 18.45,
               "freightLoad": 0,
               "crewFactor": 100,
               "stationFactor": 140,
@@ -11006,30 +11065,30 @@
             "finance": {
               "ticketPrice": 7,
               "farePerKm": 0.3,
-              "ticketRevenue": 541865,
-              "ancillaryRevenue": 7253,
+              "ticketRevenue": 481404,
+              "ancillaryRevenue": 6444,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 285,
-              "commercialOperatingCost": 34306,
-              "commercialSalesCost": 14650,
-              "commercialControlCost": 8281,
-              "commercialAdministrationCost": 11375,
+              "commercialOperatingCost": 30442,
+              "commercialSalesCost": 13000,
+              "commercialControlCost": 7348,
+              "commercialAdministrationCost": 10093,
               "energyCost": 0,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 27.5,
-              "maintenanceCost": 436,
+              "maintenanceCost": 437,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 35027,
-              "contribution": 514091,
-              "allocatedOverhead": 2729,
-              "netProfit": 511362,
-              "margin": 93.62,
-              "totalExpenses": 37756,
-              "netMargin": 93.12
+              "variableExpenses": 31164,
+              "contribution": 456685,
+              "allocatedOverhead": 2576,
+              "netProfit": 454109,
+              "margin": 93.61,
+              "totalExpenses": 33740,
+              "netMargin": 93.08
             }
           },
           "name": "St-Quentin-en-Yvelines → Paris Montparnasse",
@@ -11073,10 +11132,10 @@
           "createdDay": 81251,
           "stats": {
             "passengers": 2760,
-            "freightTons": 5562,
-            "revenue": 1420581,
-            "expenses": 109942,
-            "profit": 1310640,
+            "freightTons": 5340,
+            "revenue": 1393208,
+            "expenses": 108261,
+            "profit": 1284947,
             "punctuality": 35,
             "satisfaction": 100,
             "share": 100,
@@ -11116,8 +11175,8 @@
               }
             },
             "market": {
-              "passengerDemand": 32881,
-              "freightDemand": 5806,
+              "passengerDemand": 29212,
+              "freightDemand": 5574,
               "passengerShare": 100,
               "freightShare": 100,
               "passengerRank": 1,
@@ -11149,7 +11208,7 @@
                   "speed": 34.44,
                   "comfortOrCapacity": 88.66,
                   "reputation": 100,
-                  "condition": 57.37,
+                  "condition": 57.22,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -11164,7 +11223,7 @@
                   "speed": 34.44,
                   "comfortOrCapacity": 98.8,
                   "reputation": 100,
-                  "condition": 57.37,
+                  "condition": 57.22,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -11183,7 +11242,7 @@
               "passengers": 2760,
               "freightTons": 6590,
               "passengerLoad": 100,
-              "freightLoad": 84.4,
+              "freightLoad": 81.03,
               "crewFactor": 100,
               "stationFactor": 140,
               "capacityFactor": 100,
@@ -11216,28 +11275,28 @@
               "farePerKm": 0.05,
               "ticketRevenue": 729149,
               "ancillaryRevenue": 4830,
-              "freightRevenue": 686602,
+              "freightRevenue": 659230,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 3555,
-              "commercialOperatingCost": 95617,
-              "commercialSalesCost": 40834,
-              "commercialControlCost": 23080,
-              "commercialAdministrationCost": 31703,
+              "commercialOperatingCost": 93636,
+              "commercialSalesCost": 39988,
+              "commercialControlCost": 22602,
+              "commercialAdministrationCost": 31046,
               "energyCost": 3,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 222.9,
-              "maintenanceCost": 3705,
+              "maintenanceCost": 3711,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 102881,
-              "contribution": 1317701,
-              "allocatedOverhead": 7061,
-              "netProfit": 1310640,
+              "variableExpenses": 100904,
+              "contribution": 1292304,
+              "allocatedOverhead": 7357,
+              "netProfit": 1284947,
               "margin": 92.76,
-              "totalExpenses": 109942,
-              "netMargin": 92.26
+              "totalExpenses": 108261,
+              "netMargin": 92.23
             }
           },
           "name": "Strasbourg-Ville → Reims"
@@ -11309,9 +11368,9 @@
             "passengers": 1125,
             "freightTons": 0,
             "revenue": 401168,
-            "expenses": 31926,
-            "profit": 369242,
-            "punctuality": 42.76,
+            "expenses": 32050,
+            "profit": 369118,
+            "punctuality": 42.56,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -11358,8 +11417,8 @@
               }
             },
             "market": {
-              "passengerDemand": 71588,
-              "freightDemand": 13058,
+              "passengerDemand": 63601,
+              "freightDemand": 12538,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -11387,7 +11446,7 @@
                   "speed": 85,
                   "comfortOrCapacity": 90.9,
                   "reputation": 100,
-                  "condition": 63.77,
+                  "condition": 63.62,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -11465,11 +11524,11 @@
               "stationAccessCost": 0,
               "variableExpenses": 29932,
               "contribution": 371236,
-              "allocatedOverhead": 1994,
-              "netProfit": 369242,
+              "allocatedOverhead": 2118,
+              "netProfit": 369118,
               "margin": 92.54,
-              "totalExpenses": 31926,
-              "netMargin": 92.04
+              "totalExpenses": 32050,
+              "netMargin": 92.01
             }
           },
           "maxSegment": 162,
@@ -11529,9 +11588,9 @@
             "passengers": 1120,
             "freightTons": 0,
             "revenue": 354846,
-            "expenses": 27971,
-            "profit": 326876,
-            "punctuality": 40.71,
+            "expenses": 28081,
+            "profit": 326765,
+            "punctuality": 40.56,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -11570,8 +11629,8 @@
               }
             },
             "market": {
-              "passengerDemand": 51150,
-              "freightDemand": 7996,
+              "passengerDemand": 45443,
+              "freightDemand": 7677,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -11599,7 +11658,7 @@
                   "speed": 89.44,
                   "comfortOrCapacity": 98.09,
                   "reputation": 100,
-                  "condition": 64.88,
+                  "condition": 64.76,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -11668,12 +11727,12 @@
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
               "variableExpenses": 26207,
-              "contribution": 328640,
-              "allocatedOverhead": 1764,
-              "netProfit": 326876,
+              "contribution": 328639,
+              "allocatedOverhead": 1874,
+              "netProfit": 326765,
               "margin": 92.61,
-              "totalExpenses": 27971,
-              "netMargin": 92.12
+              "totalExpenses": 28081,
+              "netMargin": 92.09
             }
           },
           "maxSegment": 145,
@@ -11721,9 +11780,9 @@
             "passengers": 967,
             "freightTons": 0,
             "revenue": 305821,
-            "expenses": 23188,
-            "profit": 282633,
-            "punctuality": 45.91,
+            "expenses": 23283,
+            "profit": 282538,
+            "punctuality": 45.75,
             "satisfaction": 89.55,
             "share": 100,
             "status": "ok",
@@ -11762,8 +11821,8 @@
               }
             },
             "market": {
-              "passengerDemand": 28028,
-              "freightDemand": 2889,
+              "passengerDemand": 24901,
+              "freightDemand": 2774,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -11791,7 +11850,7 @@
                   "speed": 93.89,
                   "comfortOrCapacity": 98.09,
                   "reputation": 100,
-                  "condition": 68.86,
+                  "condition": 68.74,
                   "staff": 104.5,
                   "stations": 86.38,
                   "operations": 100
@@ -11861,11 +11920,11 @@
               "stationAccessCost": 103,
               "variableExpenses": 21668,
               "contribution": 284153,
-              "allocatedOverhead": 1520,
-              "netProfit": 282633,
+              "allocatedOverhead": 1615,
+              "netProfit": 282538,
               "margin": 92.91,
-              "totalExpenses": 23188,
-              "netMargin": 92.42
+              "totalExpenses": 23283,
+              "netMargin": 92.39
             }
           },
           "maxSegment": 193,
@@ -11911,9 +11970,9 @@
             "passengers": 5532,
             "freightTons": 0,
             "revenue": 1967606,
-            "expenses": 136731,
-            "profit": 1830875,
-            "punctuality": 56.84,
+            "expenses": 137343,
+            "profit": 1830264,
+            "punctuality": 56.63,
             "satisfaction": 82.33,
             "share": 100,
             "status": "ok",
@@ -11952,8 +12011,8 @@
               }
             },
             "market": {
-              "passengerDemand": 35294,
-              "freightDemand": 2379,
+              "passengerDemand": 31356,
+              "freightDemand": 2284,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -11981,7 +12040,7 @@
                   "speed": 48.89,
                   "comfortOrCapacity": 84.02,
                   "reputation": 100,
-                  "condition": 74.35,
+                  "condition": 74.2,
                   "staff": 104.5,
                   "stations": 82.58,
                   "operations": 100
@@ -12044,18 +12103,18 @@
               "energyCost": 1,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 42.52,
-              "maintenanceCost": 666,
+              "maintenanceCost": 667,
               "accessCost": 1223,
               "passageRights": 1223,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 1223,
-              "variableExpenses": 126951,
-              "contribution": 1840655,
-              "allocatedOverhead": 9780,
-              "netProfit": 1830875,
+              "variableExpenses": 126953,
+              "contribution": 1840654,
+              "allocatedOverhead": 10390,
+              "netProfit": 1830264,
               "margin": 93.55,
-              "totalExpenses": 136731,
-              "netMargin": 93.05
+              "totalExpenses": 137343,
+              "netMargin": 93.02
             }
           },
           "maxSegment": 65,
@@ -12109,12 +12168,12 @@
           "electrified": true,
           "createdDay": 88284,
           "stats": {
-            "passengers": 13670,
+            "passengers": 12198,
             "freightTons": 0,
-            "revenue": 4791270,
-            "expenses": 329032,
-            "profit": 4462239,
-            "punctuality": 36.19,
+            "revenue": 4275306,
+            "expenses": 295295,
+            "profit": 3980010,
+            "punctuality": 36.01,
             "satisfaction": 100,
             "share": 100,
             "status": "ok",
@@ -12153,8 +12212,8 @@
               }
             },
             "market": {
-              "passengerDemand": 19465,
-              "freightDemand": 2261,
+              "passengerDemand": 17293,
+              "freightDemand": 2170,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -12164,25 +12223,25 @@
               "passengerLeader": {
                 "companyName": "Déraille & Fils",
                 "lineCode": "Narbonne → Toulouse-Matabiau",
-                "score": 2.56
+                "score": 2.55
               },
               "freightLeader": null,
-              "passengerScore": 2.56,
+              "passengerScore": 2.55,
               "freightScore": null,
-              "passengerDemandCapture": 70.69,
+              "passengerDemandCapture": 70.54,
               "freightDemandCapture": null
             },
             "attractiveness": {
               "passenger": {
                 "market": "passengers",
-                "score": 2.56,
+                "score": 2.55,
                 "factors": {
                   "price": 32.14,
                   "frequency": 108.01,
                   "speed": 41.11,
                   "comfortOrCapacity": 90.76,
                   "reputation": 100,
-                  "condition": 60.34,
+                  "condition": 60.22,
                   "staff": 104.5,
                   "stations": 124,
                   "operations": 100
@@ -12201,7 +12260,7 @@
             "capacity": {
               "passengers": 13670,
               "freightTons": 3744,
-              "passengerLoad": 100,
+              "passengerLoad": 89.23,
               "freightLoad": 0,
               "crewFactor": 100,
               "stationFactor": 140,
@@ -12233,30 +12292,30 @@
             "finance": {
               "ticketPrice": 19,
               "farePerKm": 0.13,
-              "ticketRevenue": 4767348,
-              "ancillaryRevenue": 23923,
+              "ticketRevenue": 4253959,
+              "ancillaryRevenue": 21346,
               "freightRevenue": 0,
               "dispatchRevenueBoost": 0,
               "lineInfrastructureCost": 1870,
-              "commercialOperatingCost": 301475,
-              "commercialSalesCost": 128747,
-              "commercialControlCost": 72770,
-              "commercialAdministrationCost": 99959,
-              "energyCost": 2,
+              "commercialOperatingCost": 268975,
+              "commercialSalesCost": 114867,
+              "commercialControlCost": 64925,
+              "commercialAdministrationCost": 89183,
+              "energyCost": 1,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 110.88,
-              "maintenanceCost": 1871,
+              "maintenanceCost": 1873,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 305218,
-              "contribution": 4486053,
-              "allocatedOverhead": 23814,
-              "netProfit": 4462239,
-              "margin": 93.63,
-              "totalExpenses": 329032,
-              "netMargin": 93.13
+              "variableExpenses": 272719,
+              "contribution": 4002586,
+              "allocatedOverhead": 22576,
+              "netProfit": 3980010,
+              "margin": 93.62,
+              "totalExpenses": 295295,
+              "netMargin": 93.09
             }
           },
           "maxSegment": 151,
@@ -12276,7 +12335,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87582775"
         },
         "GARE_87753509": {
           "level": 5,
@@ -12290,7 +12350,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87546291"
         },
         "GARE_87394007": {
           "level": 5,
@@ -12332,126 +12393,144 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87113209"
         },
         "GARE_87113696": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87113696"
         },
         "GARE_87116111": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87116111"
         },
         "GARE_87382374": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87382374"
         },
         "GARE_87381129": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87381129"
         },
         "GARE_87114389": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87114389"
         },
         "GARE_87382002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87382002"
         },
         "GARE_87382218": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87382218"
         },
         "GARE_87386011": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87386011"
         },
         "GARE_87382119": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 1,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87382119"
         },
         "GARE_87271403": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87271403"
         },
         "GARE_87271478": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87271478"
         },
         "GARE_87271411": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87271411"
         },
         "GARE_87271445": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87271445"
         },
         "GARE_87271338": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87271338"
         },
         "GARE_87113217": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87113217"
         },
         "GARE_87113407": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87113407"
         },
         "GARE_87113779": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87113779"
         },
         "GARE_87471003": {
           "level": 5,
@@ -12465,7 +12544,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87497461"
         },
         "GARE_87474007": {
           "level": 5,
@@ -12521,14 +12601,16 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87726190"
         },
         "GARE_87751404": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87751404"
         },
         "GARE_87113001": {
           "level": 5,
@@ -12549,14 +12631,16 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87317263"
         },
         "GARE_87317586": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87317586"
         },
         "GARE_87415018": {
           "level": 5,
@@ -12577,7 +12661,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87281006"
         },
         "GARE_87342014": {
           "level": 5,
@@ -12598,35 +12683,40 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87592006"
         },
         "GARE_87594002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87594002"
         },
         "GARE_87611244": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87611244"
         },
         "GARE_87673004": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87673004"
         },
         "GARE_87784009": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87784009"
         },
         "GARE_87781104": {
           "level": 5,
@@ -12640,21 +12730,24 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87773200"
         },
         "GARE_87781005": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87781005"
         },
         "GARE_87773002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87773002"
         },
         "GARE_87753657": {
           "level": 5,
@@ -12703,14 +12796,16 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87734004"
         },
         "GARE_87576207": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87576207"
         },
         "GARE_87571000": {
           "level": 5,
@@ -12752,7 +12847,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87597005"
         },
         "GARE_87192039": {
           "level": 5,
@@ -12787,28 +12883,32 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87713008"
         },
         "GARE_87118000": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87118000"
         },
         "GARE_87141002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87141002"
         },
         "GARE_87725002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87725002"
         },
         "GARE_87757500": {
           "level": 5,
@@ -12822,28 +12922,32 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87757625"
         },
         "GARE_87756007": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87756007"
         },
         "GARE_87756320": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87756320"
         },
         "GARE_87615286": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87615286"
         },
         "GARE_87171009": {
           "level": 5,
@@ -12857,7 +12961,8 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87478404"
         },
         "GARE_87396002": {
           "level": 5,
@@ -12878,28 +12983,32 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87686667"
         },
         "GARE_87393108": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87393108"
         },
         "GARE_87781278": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87781278"
         },
         "GARE_87688887": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87688887"
         },
         "GARE_87611004": {
           "level": 5,
@@ -12924,31 +13033,31 @@
         }
       },
       "stats": {
-        "passengers": 24146617710,
-        "freightTons": 133830119,
-        "revenue": 703197981541,
-        "expenses": 263722327761,
-        "profit": 439475653936,
-        "lastRevenue": 24555078,
-        "lastExpenses": 1720789,
-        "lastProfit": 22834289,
-        "punctuality": 39.38,
-        "satisfaction": 96.54,
+        "passengers": 24151288632,
+        "freightTons": 134276144,
+        "revenue": 704966841153,
+        "expenses": 263846840128,
+        "profit": 441120001188,
+        "lastRevenue": 23123504,
+        "lastExpenses": 1630432,
+        "lastProfit": 21493073,
+        "punctuality": 39.34,
+        "satisfaction": 96.38,
         "marketShare": 18,
         "lastBreakdown": {
-          "lineRevenue": 24356324,
-          "stationRevenue": 198378,
-          "ticketRevenue": 23561258,
-          "ancillaryRevenue": 108464,
-          "freightRevenue": 686602,
+          "lineRevenue": 22925632,
+          "stationRevenue": 197496,
+          "ticketRevenue": 22165329,
+          "ancillaryRevenue": 101074,
+          "freightRevenue": 659230,
           "dispatchRevenueBoost": 0,
-          "energyCost": 13,
-          "trainMaintenanceCost": 16260,
+          "energyCost": 10,
+          "trainMaintenanceCost": 16285,
           "lineInfrastructureCost": 47438,
-          "commercialOperatingCost": 1534693,
-          "commercialSalesCost": 655398,
-          "commercialControlCost": 370443,
-          "commercialAdministrationCost": 508851,
+          "commercialOperatingCost": 1444315,
+          "commercialSalesCost": 616801,
+          "commercialControlCost": 348628,
+          "commercialAdministrationCost": 478883,
           "accessCost": 1326,
           "infrastructurePassageCost": 0,
           "stationAccessCost": 1326,
@@ -12958,26 +13067,11 @@
           "debtCost": 0,
           "idleTrainCost": 0,
           "researchCost": 0,
-          "variableLineCost": 1599731,
+          "variableLineCost": 1509373,
           "sharedCosts": 121058
         }
       },
       "notifications": [
-        {
-          "id": "24cf4422-463b-47e9-ab85-48965f7ecd08",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 15% d’état.",
-          "createdAt": 1781787243622
-        },
-        {
-          "id": "e202980b-236b-4fb5-afba-9d84224984cc",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 15% d’état.",
-          "createdAt": 1781787303640
-        },
-        {
-          "id": "2507831b-4005-418e-9fac-8c4f4e1a49af",
-          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 14% d’état.",
-          "createdAt": 1781787382418
-        },
         {
           "id": "38f6d232-c5ca-47f0-b470-8e7e27385a72",
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 14% d’état.",
@@ -13162,6 +13256,21 @@
           "id": "2b789190-b993-4e29-80b6-3f54338592de",
           "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 10% d’état.",
           "createdAt": 1781797045780
+        },
+        {
+          "id": "5bb40150-d040-48d3-a186-bc72fe66af0a",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 9% d’état.",
+          "createdAt": 1781797729503
+        },
+        {
+          "id": "04f8c6dc-95b5-498d-a3e6-9712931415ea",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 9% d’état.",
+          "createdAt": 1781797789524
+        },
+        {
+          "id": "588cdc44-f36e-41a6-9f3f-21c579fa20dc",
+          "text": "Maintenance urgente recommandée : Locomotive vapeur 040 marchandises à 9% d’état.",
+          "createdAt": 1781797849534
         }
       ],
       "createdAt": 1781638544462,
@@ -13176,7 +13285,7 @@
       "color": "#00ff04",
       "logo": "lantern_wings",
       "region": "France",
-      "cash": 34184190130.62563,
+      "cash": 34323355783.364357,
       "debt": 555656321.2144043,
       "epoch": 5,
       "research": 1.22,
@@ -13218,7 +13327,7 @@
       "researchQueue": [],
       "maintenancePolicy": "standard",
       "reputation": 100,
-      "co2": 274446779.3304452,
+      "co2": 274450218.08486813,
       "energyStrategy": "spot",
       "resources": {
         "coal": 113407.65869776056,
@@ -13250,8 +13359,8 @@
           "id": "275246b2-89b1-4b6a-a0aa-31306195700a",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65767,
           "maintenance": {
             "active": false,
@@ -13277,8 +13386,8 @@
           "id": "7b792c08-710e-4281-be62-718902d65b34",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65769,
           "maintenance": {
             "active": false,
@@ -13304,8 +13413,8 @@
           "id": "2e6a6491-9290-4c9c-a5e4-4e0e66bfe70f",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65769,
           "maintenance": {
             "active": false,
@@ -13331,8 +13440,8 @@
           "id": "6935f097-5ac8-4dbc-8cd8-d866986c01e8",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65770,
           "maintenance": {
             "active": false,
@@ -13358,8 +13467,8 @@
           "id": "12bb16aa-e4fb-4ca7-9ed9-3ac058546aa3",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65770,
           "maintenance": {
             "active": false,
@@ -13385,8 +13494,8 @@
           "id": "b017cd89-7f46-4ca2-bd92-47c7d8140634",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65770,
           "maintenance": {
             "active": false,
@@ -13412,8 +13521,8 @@
           "id": "fb7e4263-2b12-4259-a472-e7f8016c8a75",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65770,
           "maintenance": {
             "active": false,
@@ -13439,8 +13548,8 @@
           "id": "2a690192-221f-468f-926b-c1a7e3896b01",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65771,
           "maintenance": {
             "active": false,
@@ -13466,8 +13575,8 @@
           "id": "c5341c53-ad03-4b4d-91da-6bea5d7f661a",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65771,
           "maintenance": {
             "active": false,
@@ -13493,8 +13602,8 @@
           "id": "af20e77d-8530-4e83-8bfe-bd1bacf885bb",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65771,
           "maintenance": {
             "active": false,
@@ -13520,8 +13629,8 @@
           "id": "7056d474-89fe-411f-a805-389fd721e55a",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65772,
           "maintenance": {
             "active": false,
@@ -13547,8 +13656,8 @@
           "id": "ec718c62-587e-4ac4-a20b-2cf980f40c96",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65772,
           "maintenance": {
             "active": false,
@@ -13574,8 +13683,8 @@
           "id": "81dbb407-ad1c-42a1-a35c-a668e02c8510",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65772,
           "maintenance": {
             "active": false,
@@ -13601,8 +13710,8 @@
           "id": "bbaced3c-1f9b-4cdf-866e-22b8103f1c81",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65772,
           "maintenance": {
             "active": false,
@@ -13628,8 +13737,8 @@
           "id": "79a83c2e-ff59-496f-8821-538eb5302f56",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65773,
           "maintenance": {
             "active": false,
@@ -13655,8 +13764,8 @@
           "id": "e5fcc780-e6da-4e09-af22-a11b6ddbfc49",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65773,
           "maintenance": {
             "active": false,
@@ -13682,8 +13791,8 @@
           "id": "de4a4fd4-9b87-44c5-ae2e-ee7bdbe4b35f",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65773,
           "maintenance": {
             "active": false,
@@ -13709,8 +13818,8 @@
           "id": "0c327f91-ffae-4336-968d-17fa132adf38",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65773,
           "maintenance": {
             "active": false,
@@ -13736,8 +13845,8 @@
           "id": "c82e6569-8109-41fa-b78a-a744df9cf571",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65774,
           "maintenance": {
             "active": false,
@@ -13763,8 +13872,8 @@
           "id": "2ad548a3-86fe-48b3-a866-283679055a4a",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65774,
           "maintenance": {
             "active": false,
@@ -13790,8 +13899,8 @@
           "id": "aee322fb-4586-4f48-90fc-68848650a602",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65774,
           "maintenance": {
             "active": false,
@@ -13817,8 +13926,8 @@
           "id": "c5491b92-a6ef-42dd-ac02-510bc6468d05",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65774,
           "maintenance": {
             "active": false,
@@ -13844,8 +13953,8 @@
           "id": "2e5d54df-6e44-49e7-994e-c5393864f713",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65775,
           "maintenance": {
             "active": false,
@@ -13871,8 +13980,8 @@
           "id": "1174b4d1-79da-4fba-a69c-aa394ba314f7",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65775,
           "maintenance": {
             "active": false,
@@ -13898,8 +14007,8 @@
           "id": "188bb1c0-8b7b-472b-9851-6dd92239c8a6",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65775,
           "maintenance": {
             "active": false,
@@ -13925,8 +14034,8 @@
           "id": "ceaf25b2-6253-428f-9545-1ce431f5c3a6",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65776,
           "maintenance": {
             "active": false,
@@ -13952,8 +14061,8 @@
           "id": "7fccbc82-74af-4501-92c7-034dec0d2dab",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65776,
           "maintenance": {
             "active": false,
@@ -13979,8 +14088,8 @@
           "id": "aadbba9c-1a9e-4efe-880e-3510ed69bee4",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37359,
+          "condition": 0.579566647729699,
+          "age": 37434,
           "acquiredDay": 65776,
           "maintenance": {
             "active": false,
@@ -14006,8 +14115,8 @@
           "id": "8a36d326-8f50-406c-a068-44bb7038adf8",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.5813190994781398,
-          "age": 37493,
+          "condition": 0.579566647729699,
+          "age": 37568,
           "acquiredDay": 65776,
           "maintenance": {
             "active": false,
@@ -14033,8 +14142,8 @@
           "id": "64437df9-85d9-44b2-ac69-6a89c15ea6f0",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.40101633228675615,
-          "age": 15542,
+          "condition": 0.39783005638050745,
+          "age": 15617,
           "acquiredDay": 89170,
           "maintenance": {
             "active": false,
@@ -14060,8 +14169,8 @@
           "id": "679dc907-b9ee-4d88-8fb2-0fe20fade787",
           "modelId": "electric_dc_regional_emu",
           "ownerId": "fc19a7db-39ea-40c5-bb5f-8411f1446f68",
-          "condition": 0.4100200402173361,
-          "age": 15322,
+          "condition": 0.4068428420202218,
+          "age": 15397,
           "acquiredDay": 89395,
           "maintenance": {
             "active": false,
@@ -14955,9 +15064,9 @@
             "passengers": 9945,
             "freightTons": 0,
             "revenue": 1716706,
-            "expenses": 179775,
-            "profit": 1536931,
-            "punctuality": 43.59,
+            "expenses": 179776,
+            "profit": 1536930,
+            "punctuality": 43.41,
             "satisfaction": 100,
             "share": 100,
             "status": "sillon-limited",
@@ -14996,8 +15105,8 @@
               }
             },
             "market": {
-              "passengerDemand": 1370174,
-              "freightDemand": 20894,
+              "passengerDemand": 1217291,
+              "freightDemand": 20061,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -15007,25 +15116,25 @@
               "passengerLeader": {
                 "companyName": "Badge Rail",
                 "lineCode": "Creil → Melun",
-                "score": 7.7
+                "score": 7.68
               },
               "freightLeader": null,
-              "passengerScore": 3.5,
+              "passengerScore": 3.49,
               "freightScore": null,
-              "passengerDemandCapture": 84.41,
+              "passengerDemandCapture": 84.27,
               "freightDemandCapture": null
             },
             "attractiveness": {
               "passenger": {
                 "market": "passengers",
-                "score": 3.5,
+                "score": 3.49,
                 "factors": {
                   "price": 50,
                   "frequency": 70.71,
                   "speed": 70.56,
                   "comfortOrCapacity": 94.4,
                   "reputation": 100,
-                  "condition": 68.99,
+                  "condition": 68.86,
                   "staff": 104.5,
                   "stations": 85,
                   "operations": 102
@@ -15088,17 +15197,17 @@
               "energyCost": 1,
               "resourceType": "electricity",
               "resourceConsumptionPerHour": 67.94,
-              "maintenanceCost": 641,
+              "maintenanceCost": 642,
               "accessCost": 0,
               "passageRights": 0,
               "infrastructurePassageCost": 0,
               "stationAccessCost": 0,
-              "variableExpenses": 109647,
-              "contribution": 1607059,
+              "variableExpenses": 109648,
+              "contribution": 1607058,
               "allocatedOverhead": 70128,
-              "netProfit": 1536931,
+              "netProfit": 1536930,
               "margin": 93.61,
-              "totalExpenses": 179775,
+              "totalExpenses": 179776,
               "netMargin": 89.53
             }
           },
@@ -15338,8 +15447,8 @@
               }
             },
             "market": {
-              "passengerDemand": 168729,
-              "freightDemand": 5300,
+              "passengerDemand": 149902,
+              "freightDemand": 5089,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -15349,25 +15458,25 @@
               "passengerLeader": {
                 "companyName": "Badge Rail",
                 "lineCode": "Villeneuve-St-Georges → Malesherbes",
-                "score": 0.72
+                "score": 0.71
               },
               "freightLeader": null,
-              "passengerScore": 0.72,
+              "passengerScore": 0.71,
               "freightScore": null,
-              "passengerDemandCapture": 38.61,
+              "passengerDemandCapture": 38.4,
               "freightDemandCapture": null
             },
             "attractiveness": {
               "passenger": {
                 "market": "passengers",
-                "score": 0.72,
+                "score": 0.71,
                 "factors": {
                   "price": 28.57,
                   "frequency": 28.87,
                   "speed": 60,
                   "comfortOrCapacity": 95.14,
                   "reputation": 100,
-                  "condition": 55.63,
+                  "condition": 55.4,
                   "staff": 104.5,
                   "stations": 79.32,
                   "operations": 102
@@ -15608,8 +15717,8 @@
               }
             },
             "market": {
-              "passengerDemand": 156153,
-              "freightDemand": 5470,
+              "passengerDemand": 138730,
+              "freightDemand": 5252,
               "passengerShare": 100,
               "freightShare": null,
               "passengerRank": 1,
@@ -15637,7 +15746,7 @@
                   "speed": 60.56,
                   "comfortOrCapacity": 95.14,
                   "reputation": 100,
-                  "condition": 56.3,
+                  "condition": 56.07,
                   "staff": 104.5,
                   "stations": 79.43,
                   "operations": 102
@@ -15796,14 +15905,16 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87682252"
         },
         "GARE_87682302": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87682302"
         },
         "GARE_87681379": {
           "level": 1,
@@ -15852,14 +15963,16 @@
           "depot": false,
           "commerce": 4,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87723197"
         },
         "GARE_87686006": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true
+          "electrified": true,
+          "id": "GARE_87686006"
         },
         "GARE_87271015": {
           "level": 1,
@@ -15936,14 +16049,16 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87683003"
         },
         "GARE_87683573": {
           "level": 5,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87683573"
         },
         "GARE_87271007": {
           "level": 5,
@@ -15957,7 +16072,8 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false
+          "electrified": false,
+          "id": "GARE_87276865"
         },
         "GARE_87681155": {
           "level": 1,
@@ -16255,15 +16371,15 @@
         }
       },
       "stats": {
-        "passengers": 4130815596,
+        "passengers": 4131716271,
         "freightTons": 2272834,
-        "revenue": 121314688465,
-        "expenses": 84911979433,
-        "profit": 36402711739,
+        "revenue": 121470039790,
+        "expenses": 84928165073,
+        "profit": 36541877390,
         "lastRevenue": 2071351,
-        "lastExpenses": 215808,
+        "lastExpenses": 215809,
         "lastProfit": 1855542,
-        "punctuality": 42.11,
+        "punctuality": 41.96,
         "satisfaction": 99.29,
         "marketShare": 3,
         "lastBreakdown": {
@@ -16274,7 +16390,7 @@
           "freightRevenue": 0,
           "dispatchRevenueBoost": 0,
           "energyCost": 1,
-          "trainMaintenanceCost": 717,
+          "trainMaintenanceCost": 718,
           "lineInfrastructureCost": 2465,
           "commercialOperatingCost": 128434,
           "commercialSalesCost": 54849,
@@ -16289,7 +16405,7 @@
           "debtCost": 66679,
           "idleTrainCost": 99,
           "researchCost": 0,
-          "variableLineCost": 131846,
+          "variableLineCost": 131847,
           "sharedCosts": 83962
         }
       },

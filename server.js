@@ -5,6 +5,8 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
+const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -12,8 +14,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v67.1.0';
-const STATE_SCHEMA_VERSION = 146;
+const PROJECT_VERSION = 'v67.2.0';
+const STATE_SCHEMA_VERSION = 147;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -35,7 +37,7 @@ const SNCF_STATION_PAGE_SIZE = 100;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
 const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
-const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v12';
+const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v13';
 const SNCF_RFN_SPATIAL_CELL_DEG = 0.18;
 const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
 const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
@@ -71,7 +73,10 @@ const BUG_REPORT_MAX_IMAGES = 3;
 const BUG_REPORT_MAX_IMAGE_CHARS = 950_000;
 const BUG_REPORT_MAX_STORED = 120;
 const COMPOSITION_REFUND_RATE = 0.78;
-const SNCF_ROUTE_GEOMETRY_CACHE_MAX = 1800;
+const SNCF_ROUTE_GEOMETRY_CACHE_MAX = 6000;
+const SNCF_ROUTE_WORKER_POOL_SIZE = Math.max(1, Math.min(Number(process.env.SILLONS_RFN_WORKERS || 3), Math.max(1, (os.cpus?.().length || 2) - 1), 4));
+const SNCF_ROUTE_WORKER_TIMEOUT_MS = 120000;
+const SNCF_ROUTE_PREWARM_DELAY_MS = 3500;
 // Les passages d'époque sont ralentis par le trafic cumulé requis, sans délai temporel artificiel.
 const STARTER_PLAYER_ID = '4c7dfa51-225a-487a-aa42-1b0776c4e1d5';
 // Plafond global du billet : volontairement haut pour laisser le joueur arbitrer
@@ -413,42 +418,46 @@ async function waitForCommuneCache(maxMs = 3500) {
   }
 }
 
-setInterval(() => {
-  simulateTick();
-  tickCount += 1;
-  if (tickCount % SAVE_EVERY_TICKS === 0) saveState();
-}, TICK_MS);
-
-process.on('SIGINT', () => {
-  saveState();
-  process.exit(0);
-});
-
 function warmSncfRailShapeLinesCache() {
   loadSncfRailShapeLines()
     .then(lines => console.log(`Cache RFN SNCF prêt : ${lines.length} géométrie(s).`))
     .catch(error => console.warn('Préchargement RFN SNCF différé :', error.message));
 }
 
-setTimeout(warmSncfRailShapeLinesCache, 0);
+if (isMainThread) {
+  setInterval(() => {
+    simulateTick();
+    tickCount += 1;
+    if (tickCount % SAVE_EVERY_TICKS === 0) saveState();
+  }, TICK_MS);
 
-const server = http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (url.pathname.startsWith('/api/')) {
-      await handleApi(req, res, url);
-      return;
+  process.on('SIGINT', () => {
+    saveState();
+    process.exit(0);
+  });
+
+  setTimeout(warmSncfRailShapeLinesCache, 0);
+  setTimeout(prewarmExistingLineRouteGeometryCache, SNCF_ROUTE_PREWARM_DELAY_MS);
+
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      if (url.pathname.startsWith('/api/')) {
+        await handleApi(req, res, url);
+        return;
+      }
+      serveStatic(req, res, url);
+    } catch (error) {
+      sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
     }
-    serveStatic(req, res, url);
-  } catch (error) {
-    sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
-  }
-});
+  });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
-  refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
-});
+  server.listen(PORT, HOST, () => {
+    console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
+    console.log(`Workers RFN actifs : ${SNCF_ROUTE_WORKER_POOL_SIZE} thread(s).`);
+    refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
+  });
+}
 
 async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
@@ -497,8 +506,9 @@ async function handleApi(req, res, url) {
     const from = url.searchParams.get('from') || '';
     const to = url.searchParams.get('to') || '';
     const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
-    const geometry = await sncfRouteGeometryForStations(from, to, { profile });
-    sendJson(res, 200, {
+    const startedAt = Date.now();
+    const geometry = await sncfRouteGeometryForStationsFast(from, to, { profile });
+    sendCachedJson(res, 200, {
       ok: true,
       from,
       to,
@@ -506,8 +516,10 @@ async function handleApi(req, res, url) {
       geometry,
       distance: Math.round(polylineDistanceKm(geometry || [])),
       pointCount: Array.isArray(geometry) ? geometry.length : 0,
-      source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'none'
-    });
+      source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'none',
+      durationMs: Date.now() - startedAt,
+      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION
+    }, 31536000);
     return;
   }
 
@@ -518,8 +530,9 @@ async function handleApi(req, res, url) {
       .map(value => value.trim())
       .filter(Boolean);
     const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
-    const route = await sncfRouteGeometryForStopSequence(stops, { profile });
-    sendJson(res, 200, {
+    const startedAt = Date.now();
+    const route = await sncfRouteGeometryForStopSequenceFast(stops, { profile });
+    sendCachedJson(res, 200, {
       ok: true,
       stops: route.ids || stops,
       profile,
@@ -527,8 +540,10 @@ async function handleApi(req, res, url) {
       distance: Math.round(polylineDistanceKm(route.geometry || [])),
       pointCount: Array.isArray(route.geometry) ? route.geometry.length : 0,
       chunks: route.chunks || [],
-      source: route.geometry?.length ? 'sncf-formes-des-lignes-du-rfn-sequence' : 'none'
-    });
+      source: route.geometry?.length ? 'sncf-formes-des-lignes-du-rfn-sequence' : 'none',
+      durationMs: Date.now() - startedAt,
+      cacheVersion: SNCF_RFN_ROUTE_CACHE_VERSION
+    }, 31536000);
     return;
   }
 
@@ -649,6 +664,14 @@ function httpError(statusCode, message) {
 
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(payload));
+}
+
+function sendCachedJson(res, status, payload, maxAgeSeconds = 604800) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': `public, max-age=${Math.max(0, Math.round(maxAgeSeconds))}, immutable`
+  });
   res.end(JSON.stringify(payload));
 }
 
@@ -1224,6 +1247,7 @@ function ensureSncfPersistentRouteCacheLoaded() {
 }
 
 function scheduleSncfPersistentRouteCacheSave() {
+  if (!isMainThread) return;
   if (sncfPersistentRouteCacheSaveTimer) return;
   sncfPersistentRouteCacheSaveTimer = setTimeout(() => {
     sncfPersistentRouteCacheSaveTimer = null;
@@ -1269,6 +1293,212 @@ function rememberSncfRouteGeometry(key, geometry) {
   }
   scheduleSncfPersistentRouteCacheSave();
   return sncfRouteGeometryResultCache.get(key);
+}
+
+class SncfRouteWorkerPool {
+  constructor(size = 1) {
+    this.size = Math.max(1, Math.round(size || 1));
+    this.workers = [];
+    this.queue = [];
+    this.nextId = 1;
+    for (let i = 0; i < this.size; i += 1) this.workers.push(this.createWorker(i));
+  }
+
+  createWorker(index) {
+    const worker = new Worker(__filename, {
+      workerData: { role: 'rfn-route-worker', index },
+      env: { ...process.env, SILLONS_RFN_WORKERS: '0' }
+    });
+    const slot = { worker, busy: false, current: null, index };
+    worker.on('message', message => this.handleMessage(slot, message));
+    worker.on('error', error => this.handleFailure(slot, error));
+    worker.on('exit', code => {
+      if (slot.current) this.handleFailure(slot, new Error(`Worker RFN interrompu (${code}).`));
+      const pos = this.workers.indexOf(slot);
+      if (pos >= 0 && isMainThread) this.workers[pos] = this.createWorker(index);
+      this.pump();
+    });
+    return slot;
+  }
+
+  handleMessage(slot, message = {}) {
+    const current = slot.current;
+    if (!current || message.id !== current.id) return;
+    clearTimeout(current.timer);
+    slot.busy = false;
+    slot.current = null;
+    if (message.ok) current.resolve(message.result);
+    else current.reject(new Error(message.error || 'Calcul RFN worker échoué.'));
+    this.pump();
+  }
+
+  handleFailure(slot, error) {
+    const current = slot.current;
+    if (current) {
+      clearTimeout(current.timer);
+      current.reject(error);
+    }
+    slot.busy = false;
+    slot.current = null;
+    try { slot.worker.terminate(); } catch {}
+    this.pump();
+  }
+
+  run(task) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ id: this.nextId++, task, resolve, reject, timer: null });
+      this.pump();
+    });
+  }
+
+  pump() {
+    for (const slot of this.workers) {
+      if (slot.busy) continue;
+      const job = this.queue.shift();
+      if (!job) return;
+      slot.busy = true;
+      slot.current = job;
+      job.timer = setTimeout(() => {
+        this.handleFailure(slot, new Error('Timeout calcul RFN worker.'));
+      }, SNCF_ROUTE_WORKER_TIMEOUT_MS);
+      if (typeof job.timer.unref === 'function') job.timer.unref();
+      slot.worker.postMessage({ id: job.id, task: job.task });
+    }
+  }
+}
+
+let sncfRouteWorkerPool = null;
+let sncfRouteWorkerFailureLogged = false;
+
+function getSncfRouteWorkerPool() {
+  if (!isMainThread || SNCF_ROUTE_WORKER_POOL_SIZE <= 0) return null;
+  if (!sncfRouteWorkerPool) sncfRouteWorkerPool = new SncfRouteWorkerPool(SNCF_ROUTE_WORKER_POOL_SIZE);
+  return sncfRouteWorkerPool;
+}
+
+async function runSncfRouteWorkerTask(task) {
+  const pool = getSncfRouteWorkerPool();
+  if (!pool) return null;
+  try {
+    return await pool.run(task);
+  } catch (error) {
+    if (!sncfRouteWorkerFailureLogged) {
+      sncfRouteWorkerFailureLogged = true;
+      console.warn('Workers RFN indisponibles, fallback mono-thread :', error.message);
+    }
+    return null;
+  }
+}
+
+async function sncfRouteGeometryForStationsFast(fromKey, toKey, options = {}) {
+  const profile = normalizeRailRouteProfile(options.profile || 'default');
+  const cacheKey = sncfRouteCacheKey(fromKey, toKey, profile);
+  ensureSncfPersistentRouteCacheLoaded();
+  if (sncfRouteGeometryResultCache.has(cacheKey)) return sncfRouteGeometryResultCache.get(cacheKey);
+  const workerResult = await runSncfRouteWorkerTask({ kind: 'pair', from: fromKey, to: toKey, profile, options });
+  if (Array.isArray(workerResult?.geometry) && workerResult.geometry.length >= 2) {
+    return rememberSncfRouteGeometry(cacheKey, workerResult.geometry);
+  }
+  return sncfRouteGeometryForStations(fromKey, toKey, options);
+}
+
+async function sncfRouteGeometryForStopSequenceFast(stops, options = {}) {
+  const profile = normalizeRailRouteProfile(options.profile || 'default');
+  const ids = sanitizeStopsPayload(stops, null, null);
+  if (ids.length < 2) return { ids, geometry: [], chunks: [] };
+  const cacheKey = sncfRouteSequenceCacheKey(ids, profile);
+  ensureSncfPersistentRouteCacheLoaded();
+  if (sncfRouteGeometrySequenceResultCache.has(cacheKey)) return sncfRouteGeometrySequenceResultCache.get(cacheKey);
+  const workerResult = await runSncfRouteWorkerTask({ kind: 'sequence', stops: ids, profile, options });
+  if (Array.isArray(workerResult?.geometry) && workerResult.geometry.length >= 2) {
+    return rememberSncfRouteGeometrySequence(cacheKey, {
+      ids: Array.isArray(workerResult.ids) ? workerResult.ids : ids,
+      geometry: workerResult.geometry,
+      chunks: Array.isArray(workerResult.chunks) ? workerResult.chunks : []
+    });
+  }
+  return sncfRouteGeometryForStopSequence(ids, options);
+}
+
+async function handleSncfRouteWorkerMessage(message = {}) {
+  const { id, task = {} } = message;
+  const started = Date.now();
+  try {
+    let result = null;
+    const profile = normalizeRailRouteProfile(task.profile || 'default');
+    if (task.kind === 'sequence') {
+      const route = await sncfRouteGeometryForStopSequence(task.stops || [], { ...(task.options || {}), profile });
+      result = {
+        ids: route.ids || task.stops || [],
+        geometry: route.geometry || [],
+        chunks: route.chunks || [],
+        durationMs: Date.now() - started
+      };
+    } else if (task.kind === 'pair') {
+      const geometry = await sncfRouteGeometryForStations(task.from, task.to, { ...(task.options || {}), profile });
+      result = { geometry: geometry || [], durationMs: Date.now() - started };
+    } else {
+      throw new Error('Type de tâche RFN inconnu.');
+    }
+    parentPort.postMessage({ id, ok: true, result });
+  } catch (error) {
+    parentPort.postMessage({ id, ok: false, error: error.message || String(error) });
+  }
+}
+
+if (!isMainThread && workerData?.role === 'rfn-route-worker' && parentPort) {
+  parentPort.on('message', message => handleSncfRouteWorkerMessage(message));
+}
+
+function collectExistingLineRouteCacheJobs() {
+  const jobs = [];
+  const seen = new Set();
+  for (const player of Object.values(state.players || {})) {
+    for (const line of player?.lines || []) {
+      const ids = lineStops(line);
+      if (ids.length < 2) continue;
+      const profile = routeProfileForLine(player, line);
+      const key = sncfRouteSequenceCacheKey(ids, profile);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      jobs.push({ key, ids, profile, lineId: line.id, playerId: player.id, name: line.name || ids.join(' → ') });
+    }
+  }
+  return jobs;
+}
+
+async function prewarmExistingLineRouteGeometryCache() {
+  if (!isMainThread) return;
+  const allJobs = collectExistingLineRouteCacheJobs();
+  ensureSncfPersistentRouteCacheLoaded();
+  const jobs = allJobs.filter(job => !sncfRouteGeometrySequenceResultCache.has(job.key));
+  if (!allJobs.length) return;
+  if (!jobs.length) {
+    console.log(`Cache RFN lignes prêt : ${allJobs.length}/${allJobs.length} tracé(s) déjà en cache.`);
+    return;
+  }
+  const started = Date.now();
+  let done = 0;
+  let failed = 0;
+  console.log(`Pré-calcul RFN lignes : ${jobs.length}/${allJobs.length} tracé(s) à générer avec ${SNCF_ROUTE_WORKER_POOL_SIZE} worker(s).`);
+  const concurrency = Math.max(1, SNCF_ROUTE_WORKER_POOL_SIZE);
+  let cursor = 0;
+  async function next() {
+    while (cursor < jobs.length) {
+      const job = jobs[cursor++];
+      try {
+        const route = await sncfRouteGeometryForStopSequenceFast(job.ids, { profile: job.profile });
+        if (Array.isArray(route?.geometry) && route.geometry.length >= 2) done += 1;
+        else failed += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn(`Pré-calcul RFN échoué (${job.name}) :`, error.message);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, next));
+  scheduleSncfPersistentRouteCacheSave();
+  console.log(`Pré-calcul RFN lignes terminé : ${done} ok, ${failed} échec(s), ${(Date.now() - started) / 1000}s.`);
 }
 
 function geoPointDistanceToSegment(point, a, b) {
@@ -2693,13 +2923,22 @@ async function realRailRouteBetweenStops(stops) {
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, distance: 0, maxSegment: 0, segments: [], missing: null };
 
+  const pairs = [];
+  for (let i = 1; i < ids.length; i += 1) pairs.push({ from: ids[i - 1], to: ids[i] });
+  const geometries = isMainThread && getSncfRouteWorkerPool()
+    ? await Promise.all(pairs.map(pair => sncfRouteGeometryForStationsFast(pair.from, pair.to)))
+    : await (async () => {
+        const out = [];
+        for (const pair of pairs) out.push(await sncfRouteGeometryForStations(pair.from, pair.to));
+        return out;
+      })();
+
   const segments = [];
   let distance = 0;
   let maxSegment = 0;
-  for (let i = 1; i < ids.length; i += 1) {
-    const from = ids[i - 1];
-    const to = ids[i];
-    const geometry = await sncfRouteGeometryForStations(from, to);
+  for (let i = 0; i < pairs.length; i += 1) {
+    const { from, to } = pairs[i];
+    const geometry = geometries[i];
     const segmentDistance = polylineDistanceKm(geometry || []);
     if (!Array.isArray(geometry) || geometry.length < 2 || !Number.isFinite(segmentDistance) || segmentDistance <= 0) {
       return {
@@ -6984,6 +7223,23 @@ function isMultipleUnitModel(model) {
   if (/(^|_)(emu|railcar|trainset|unit)(_|$)/.test(id)) return true;
   const label = trainModelSearchLabel(model);
   return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
+}
+
+function isHighSpeedTrainsetModel(model) {
+  if (!model) return false;
+  const label = trainModelSearchLabel(model);
+  return /(tgv|grande vitesse|duplex)/.test(label);
+}
+
+function routeProfileForModel(model) {
+  if (!model) return 'default';
+  return isHighSpeedTrainsetModel(model) ? 'highspeed' : 'classic';
+}
+
+function routeProfileForLine(player, line) {
+  const trains = lineAssignedTrains(player, line) || [];
+  if (!trains.length) return 'default';
+  return trains.some(train => routeProfileForModel(BALANCE.trains[train?.modelId]) === 'highspeed') ? 'highspeed' : 'classic';
 }
 
 function isHighSpeedTrainsetModel(model) {

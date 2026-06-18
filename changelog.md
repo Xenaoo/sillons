@@ -1,12 +1,15 @@
-## Version v67.1.0 — optimisation du calcul RFN
+## Version v67.2.0 — calcul RFN parallèle et caches persistants renforcés
 
-- incrément de version : badge interface `v67.1.0`, version serveur/client `v67.1.0`, package `67.1.0` et schéma serveur `146` ;
-- RFN : ajout d’un préfiltrage corridor avant construction du graphe, pour éviter d’embarquer tous les tronçons d’une grande boîte géographique dense ;
-- RFN : les suites d’arrêts ne tentent plus systématiquement un énorme tracé global quand plusieurs arrêts sont imposés ; elles sont découpées plus tôt en sous-parcours contrôlés ;
-- performance : les calculs multi-arrêts désactivent les corrections automatiques de waypoint sur chaque petit segment, source principale des temps très longs ;
-- robustesse : le fallback complet RFN est désormais réservé aux cas raisonnables afin d’éviter les recherches longues sur des graphes trop larges ;
-- cache serveur RFN incrémenté en `rfn-route-v12` ;
-- cache navigateur RFN incrémenté en `sncf-geometry-v11`.
+- incrément de version : badge interface `v67.2.0`, version serveur/client `v67.2.0`, package `67.2.0` et schéma serveur `147` ;
+- RFN : ajout d’un pool de workers Node.js pour exécuter les calculs de tracés en parallèle hors du thread serveur principal ;
+- RFN : les endpoints `/api/sncf/route-geometry` et `/api/sncf/route-geometry-sequence` utilisent les workers quand le résultat n’est pas déjà présent en cache ;
+- RFN : la validation serveur des lignes calcule les segments en parallèle lorsque plusieurs arrêts sont présents ;
+- RFN : préchauffage automatique, en arrière-plan, des tracés des lignes existantes au démarrage du serveur ;
+- cache serveur : conservation des géométries calculées dans `data/sncf-rfn-route-cache.json` tant que la version du moteur RFN ne change pas ;
+- cache serveur : capacité portée à 6000 entrées pour conserver davantage de lignes et suites d’arrêts ;
+- cache client : capacité portée à 3500 entrées et durée de conservation portée à 180 jours ;
+- cache client : les requêtes RFN redeviennent cacheables côté navigateur grâce à l’URL versionnée par moteur ;
+- RFN : cache serveur incrémenté en `rfn-route-v13` et cache client en `sncf-geometry-v12`, car le moteur de calcul est modifié.
 
 ## Version v67.0.0 — moteur RFN accéléré et routage plus fiable
 
