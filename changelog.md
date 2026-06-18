@@ -1,3 +1,13 @@
+## Version v69.1.1 — correction temps réel des pastilles trains
+
+- incrément de version : badge interface `v69.1.1`, version serveur/client `v69.1.1`, package `69.1.1` et schéma serveur `152` ;
+- correction de l'animation carte : suppression de la compression visuelle qui faisait correspondre 1 heure de trajet à 18 secondes écran ;
+- les pastilles utilisent désormais un planning temps réel en secondes murales, calculé depuis la vitesse maximale de chaque tronçon RFN et la vitesse maximale du matériel ;
+- ajout d'un arrêt de 60 secondes dans chaque gare desservie, y compris pour les terminus ;
+- les trains restent physiquement immobiles pendant les arrêts et reprennent ensuite sur le tronçon suivant ;
+- les trains d'une même ligne sont espacés sur un cycle aller-retour réel au lieu de boucler rapidement sur un pourcentage uniforme ;
+- cache client RFN incrémenté en `sncf-geometry-v17` pour forcer la récupération des profils vitesse associés aux tracés.
+
 ## Version v69.1.0 — animation des trains par vitesse RFN
 
 - incrément de version : badge interface `v69.1.0`, version serveur/client `v69.1.0`, package `69.1.0` et schéma serveur `151` ;

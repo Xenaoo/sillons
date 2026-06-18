@@ -285,6 +285,7 @@ function invalidateMapProjection(reason = 'projection') {
   app.map.needsRouteReproject = false;
   app.map.stationDrawCache = { key: '', items: [] };
   app.map.visibleStationCache = { key: '', stations: [] };
+  app.map.trainMotionPlans = new Map();
 }
 
 function markMapProjectionDirty() {
