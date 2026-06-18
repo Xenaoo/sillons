@@ -1,3 +1,13 @@
+## Version v65.3.0 — refonte des rames et unités multiples
+
+- incrément de version : badge interface `v65.3.0`, version serveur/client `v65.3.0`, package `65.3.0` et schéma serveur `122` ;
+- les autorails, automotrices, rames voyageurs, TGV, rames hydrogène, batterie et maglev sont désormais traités comme du matériel à unité multiple voyageurs ;
+- capacité voyageurs explicite par rame dans le catalogue du matériel roulant ;
+- les rames en unité multiple sont exclusivement voyageurs : fret forcé à `0` et incompatibilité avec les lignes fret ou mixtes ;
+- les rames ne reçoivent plus de voitures ou wagons : l’atelier permet uniquement d’ajouter des rames complètes en unité multiple ;
+- coût d’ajout d’une rame en composition aligné sur le prix du matériel de base ;
+- limite d’unité multiple : 2 rames pour le matériel grande vitesse/TGV, 3 rames pour les autres automotrices, autorails et rames.
+
 ## Version v65.2.1 — correction définitive Paris Montparnasse
 
 - incrément de version : badge interface `v65.2.1`, version serveur/client `v65.2.1`, package `65.2.1` et schéma serveur `121` ;

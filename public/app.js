@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.2.1';
+const PROJECT_VERSION = 'v65.3.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -3359,10 +3359,27 @@ function trainRuntimeProfile(train, model = app.state.balance.trains[train.model
   };
 }
 
+function trainModelSearchLabelClient(model) {
+  return `${model?.id || ''} ${model?.name || ''} ${model?.type || ''}`.toLowerCase();
+}
+
+function isMultipleUnitModelClient(model) {
+  const label = trainModelSearchLabelClient(model);
+  return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
+}
+
+function isHighSpeedTrainsetModelClient(model) {
+  const label = trainModelSearchLabelClient(model);
+  return /(tgv|grande vitesse|duplex)/.test(label);
+}
+
+function multipleUnitMaxUnitsForModelClient(model) {
+  if (!isMultipleUnitModelClient(model)) return 1;
+  return isHighSpeedTrainsetModelClient(model) ? 2 : 3;
+}
+
 function compositionDefaultModeForModelClient(model) {
-  const label = `${model?.name || ''} ${model?.type || ''}`.toLowerCase();
-  const isMultipleUnit = /(autorail|rame|tgv|duplex|régio|ter|hydrogène|batterie|train de nuit|maglev|grande vitesse)/.test(label);
-  if (isMultipleUnit) return 'multiple_unit';
+  if (isMultipleUnitModelClient(model)) return 'multiple_unit';
   const passengerDominant = (model?.capacity || 0) >= Math.max(80, (model?.freight || 0) * 0.9);
   return passengerDominant && (model?.capacity || 0) > 0 ? 'passenger_loco' : 'freight_loco';
 }
@@ -3370,12 +3387,16 @@ function compositionDefaultModeForModelClient(model) {
 function buildClientCompositionSpec(model, preferredMode = null) {
   const defaultMode = compositionDefaultModeForModelClient(model);
   if (defaultMode === 'multiple_unit') {
-    const defaultUnits = clamp(Math.round((model?.capacity || 180) / 220), 1, 5);
+    const maxUnits = multipleUnitMaxUnitsForModelClient(model);
     return {
       mode: 'multiple_unit',
       availableModes: ['multiple_unit'],
-      powerUnits: { min: 1, max: Math.max(defaultUnits + 2, 4), default: defaultUnits },
-      label: 'Engins moteurs',
+      powerUnits: { min: 1, max: maxUnits, default: 1 },
+      label: 'Rames en unité multiple',
+      unitLabel: 'rame',
+      passengerOnly: true,
+      unitCapacity: Math.max(0, Math.round(Number(model?.capacity || 0))),
+      unitCost: Math.max(0, Math.round(Number(model?.price || 0))),
       variants: []
     };
   }
@@ -3455,9 +3476,7 @@ function compositionVariantByIdClient(mode, id) {
 function compositionUnitCostClient(model, mode, variantId = '') {
   const modelPrice = Math.max(50000, Number(model?.price || 0));
   if (mode === 'multiple_unit') {
-    const spec = buildClientCompositionSpec(model, 'multiple_unit');
-    const defaultUnits = Math.max(1, Number(spec.powerUnits?.default || 1));
-    return Math.max(85000, Math.round(modelPrice * 0.58 / defaultUnits));
+    return Math.round(modelPrice);
   }
   if (mode === 'freight_loco') {
     const spec = buildClientCompositionSpec(model, 'freight_loco');
@@ -3524,8 +3543,8 @@ function renderCompositionCostSummary(train) {
   const condition = Math.round(clamp(Number(train.condition || 0), 0, 1) * 100);
   return `
     <div class="composition-cost-summary" id="compositionCostSummary">
-      <span>Valeur voitures/wagons actuelle : <b>${money(value)}</b></span>
-      <span class="small muted">Tout ajout est facturé. Tout retrait est remboursé à 78% de sa valeur, corrigé par l’usure du train (${condition}%).</span>
+      <span>Valeur composition actuelle : <b>${money(value)}</b></span>
+      <span class="small muted">Tout ajout est facturé. Pour les rames en unité multiple, chaque rame ajoutée coûte le prix du matériel de base. Tout retrait est remboursé à 78% de sa valeur, corrigé par l’usure du train (${condition}%).</span>
     </div>`;
 }
 
@@ -3538,9 +3557,11 @@ function trainResaleEstimateClient(train, model = app.state.balance.trains[train
     : defaultMode === 'freight_loco'
       ? { mode: defaultMode, freightCars: defaultSpec.freightCars.default, freightVariant: 'covered' }
       : { mode: defaultMode, passengerCars: defaultSpec.passengerCars.default, passengerVariant: 'standard' };
-  const defaultCompositionValue = compositionAssetValueClient(model, defaultComposition, defaultMode);
-  const baseTractionValue = Math.max(Math.round(Number(model.price || 0) * 0.42), Math.round(Number(model.price || 0) - defaultCompositionValue));
   const currentCompositionValue = compositionAssetValueClient(model, train.composition || defaultComposition, train.composition?.mode || defaultMode);
+  const defaultCompositionValue = compositionAssetValueClient(model, defaultComposition, defaultMode);
+  const baseTractionValue = defaultMode === 'multiple_unit'
+    ? 0
+    : Math.max(Math.round(Number(model.price || 0) * 0.42), Math.round(Number(model.price || 0) - defaultCompositionValue));
   const capitalValue = Math.max(0, baseTractionValue + currentCompositionValue);
   return Math.max(5000, Math.round(capitalValue * (0.45 - Math.min(0.3, Number(train.age || 0) / 1000)) * clamp(Number(train.condition || 0), 0, 1)));
 }
@@ -3670,10 +3691,10 @@ function computeOperatingProfileDetailed(train, model = app.state.balance.trains
 
   const beforeComposition = { ...profile };
   if (spec.mode === 'multiple_unit') {
-    const defaultUnits = spec.powerUnits.default;
-    const ratio = Number(c.powerUnits || defaultUnits) / Math.max(1, defaultUnits);
+    const unitCount = clamp(Math.round(Number(c.powerUnits || spec.powerUnits.default || 1)), spec.powerUnits.min, spec.powerUnits.max);
+    const ratio = unitCount;
     profile.capacity = Math.max(0, Math.round(profile.capacity * ratio));
-    profile.freight = Math.max(0, Math.round(profile.freight * ratio));
+    profile.freight = 0;
     profile.speed = Math.max(35, Math.round(profile.speed * (1 - Math.max(0, ratio - 1) * 0.015)));
     profile.energy = round(profile.energy * ratio * (0.95 + ratio * 0.05));
     profile.maintenance = round(profile.maintenance * ratio * (0.92 + ratio * 0.08));
@@ -3738,7 +3759,10 @@ function deriveCompositionSummary(train) {
   const c = train?.composition || {};
   const spec = trainCompositionSpec(train);
   const variant = selectedCompositionVariant(train);
-  if (spec.mode === 'multiple_unit') return `${c.powerUnits || spec.powerUnits?.default || 1} engin(s) moteur(s)`;
+  if (spec.mode === 'multiple_unit') {
+    const count = c.powerUnits || spec.powerUnits?.default || 1;
+    return `${count} rame${count > 1 ? 's' : ''} en UM`;
+  }
   if (spec.mode === 'freight_loco') return `${c.freightCars || spec.freightCars?.default || 0} wagon(s) · ${variant?.shortLabel || 'Fret'}`;
   return `${c.passengerCars || spec.passengerCars?.default || 0} voiture(s) · ${variant?.shortLabel || 'Voyageurs'}`;
 }
@@ -4122,7 +4146,7 @@ function renderCompositionMarginalImpact(train, model, spec, profile) {
 
   if (spec.mode === 'multiple_unit') {
     key = 'powerUnits';
-    label = '+1 engin moteur';
+    label = '+1 rame en UM';
     current = Number(train.composition?.powerUnits || spec.powerUnits?.default || 1);
     max = Number(spec.powerUnits?.max || current);
   } else if (spec.mode === 'freight_loco') {
@@ -4193,8 +4217,8 @@ function renderCompositionEditor(train) {
     quantityControl = `
       <div class="composition-control-box">
         <div class="composition-control-head">
-          <strong>Nombre d'engins moteurs</strong>
-          <span class="small muted">Ajuste la longueur de rame.</span>
+          <strong>Nombre de rames en unité multiple</strong>
+          <span class="small muted">Ajoute une rame complète : coût identique au matériel de base, voyageurs uniquement.</span>
         </div>
         <div class="composition-control-row wide">
           <input id="compPowerUnits" type="range" min="${spec.powerUnits.min}" max="${spec.powerUnits.max}" value="${composition.powerUnits || spec.powerUnits.default}">
@@ -4250,7 +4274,7 @@ function renderCompositionEditor(train) {
           <div>
             <strong>${escapeHtml(model.name)}</strong>
             <p class="small muted">${escapeHtml(deriveCompositionSummary(train))}</p>
-            <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'Rame multiple' : spec.mode === 'freight_loco' ? 'Locomotive + wagons' : 'Locomotive + voitures'}</p>
+            <p class="small muted">Mode : ${spec.mode === 'multiple_unit' ? 'Unité multiple voyageurs' : spec.mode === 'freight_loco' ? 'Locomotive + wagons' : 'Locomotive + voitures'}</p>
             ${variant ? `<p class="small muted">Variante active : <b>${escapeHtml(variant.name)}</b>${variant.cargoType ? ` · ${escapeHtml(variant.cargoType)}` : ''}</p>` : ''}
           </div>
         </div>
@@ -4811,6 +4835,9 @@ function renderTrainCatalogItem(model, buyable) {
   const effectiveRange = effective.range;
   const unitPrice = trainPurchaseUnitPriceClient(model);
   const powerKw = estimateTrainPowerKw(model);
+  const multipleUnit = isMultipleUnitModelClient(model);
+  const muSpec = multipleUnit ? buildClientCompositionSpec(model, 'multiple_unit') : null;
+  const muUnitCountLabel = muSpec ? `UM 1 à ${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}` : '';
   return `
     <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
       ${renderTrainArt(model)}
@@ -4820,10 +4847,13 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="tag ${buyable ? 'good' : 'warn'}">${buyable ? money(unitPrice) : 'À débloquer'}</span>
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
+        ${multipleUnit ? `<p class="small muted train-mu-note"><b>Voyageurs uniquement</b> · capacité par rame ${formatInt(model.capacity)} voy. · ${escapeHtml(muUnitCountLabel)} · aucune voiture ou wagon ajoutable</p>` : ''}
         <div class="train-stat-grid">
           ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '', `${effective.speed} km/h`, effective.speed / 420)}
           ${renderTrainStat('Portée', `${formatInt(model.range)} km`, (model.range || 0) / 1400, effectiveRange >= 900 ? 'good' : '', `${formatInt(effectiveRange)} km`, effectiveRange / 1400)}
           ${renderTrainStat('Puissance', `${formatInt(powerKw)} kW`, powerKw / 20000, powerKw >= 8000 ? 'good' : '')}
+          ${multipleUnit ? renderTrainStat('Capacité rame', `${formatInt(model.capacity)} voy.`, Math.min(1, (model.capacity || 0) / 1100), model.capacity >= 650 ? 'good' : '') : ''}
+          ${multipleUnit ? renderTrainStat('UM max', `${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}`, muSpec.powerUnits.max / 3, muSpec.powerUnits.max >= 3 ? 'good' : '') : ''}
           ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, effective.reliability >= 0.92 ? 'good' : '', `${Math.round(effective.reliability * 100)}%`, effective.reliability)}
           ${renderTrainStat('Confort', `${Math.round(model.comfort * 100)}%`, model.comfort, model.comfort >= 0.8 ? 'good' : '')}
           ${renderTrainStat('Maint./h', maintenanceHourlyRange(model), 1 - Math.min(1, model.maintenance / 1.3), model.maintenance <= 0.45 ? 'good' : 'warn')}

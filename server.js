@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v65.2.1';
-const STATE_SCHEMA_VERSION = 121;
+const PROJECT_VERSION = 'v65.3.0';
+const STATE_SCHEMA_VERSION = 122;
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
@@ -5725,10 +5725,27 @@ function checkEpochUnlock(player) {
   }
 }
 
+function trainModelSearchLabel(model) {
+  return `${model?.id || ''} ${model?.name || ''} ${model?.type || ''}`.toLowerCase();
+}
+
+function isMultipleUnitModel(model) {
+  const label = trainModelSearchLabel(model);
+  return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
+}
+
+function isHighSpeedTrainsetModel(model) {
+  const label = trainModelSearchLabel(model);
+  return /(tgv|grande vitesse|duplex)/.test(label);
+}
+
+function multipleUnitMaxUnitsForModel(model) {
+  if (!isMultipleUnitModel(model)) return 1;
+  return isHighSpeedTrainsetModel(model) ? 2 : 3;
+}
+
 function compositionDefaultModeForModel(model) {
-  const label = `${model?.name || ''} ${model?.type || ''}`.toLowerCase();
-  const isMultipleUnit = /(autorail|rame|tgv|duplex|régio|ter|hydrogène|batterie|train de nuit|maglev|grande vitesse)/.test(label);
-  if (isMultipleUnit) return 'multiple_unit';
+  if (isMultipleUnitModel(model)) return 'multiple_unit';
   const passengerDominant = (model.capacity || 0) >= Math.max(80, (model.freight || 0) * 0.9);
   return passengerDominant && (model.capacity || 0) > 0 ? 'passenger_loco' : 'freight_loco';
 }
@@ -5742,12 +5759,16 @@ function compositionAvailableModesForModel(model) {
 function compositionSpecForModel(model, preferredMode = null) {
   const defaultMode = compositionDefaultModeForModel(model);
   if (defaultMode === 'multiple_unit') {
-    const defaultUnits = clamp(Math.round((model.capacity || 180) / 220), 1, 5);
+    const maxUnits = multipleUnitMaxUnitsForModel(model);
     return {
       mode: 'multiple_unit',
       availableModes: ['multiple_unit'],
-      powerUnits: { min: 1, max: Math.max(defaultUnits + 2, 4), default: defaultUnits },
-      label: 'Engins moteurs',
+      powerUnits: { min: 1, max: maxUnits, default: 1 },
+      label: 'Rames en unité multiple',
+      unitLabel: 'rame',
+      passengerOnly: true,
+      unitCapacity: Math.max(0, Math.round(Number(model?.capacity || 0))),
+      unitCost: Math.max(0, Math.round(Number(model?.price || 0))),
       variants: []
     };
   }
@@ -5827,10 +5848,7 @@ function compositionVariantAssetMultiplier(variant) {
 function compositionUnitCost(model, mode, variantId = '') {
   const modelPrice = Math.max(50000, Number(model?.price || 0));
   if (mode === 'multiple_unit') {
-    const spec = compositionSpecForModel(model, 'multiple_unit');
-    const defaultUnits = Math.max(1, Number(spec.powerUnits?.default || 1));
-    const pool = modelPrice * 0.58;
-    return Math.max(85000, Math.round(pool / defaultUnits));
+    return Math.round(modelPrice);
   }
   if (mode === 'freight_loco') {
     const spec = compositionSpecForModel(model, 'freight_loco');
@@ -5876,11 +5894,14 @@ function compositionChangeEconomy(model, beforeComposition, afterComposition, tr
 
 function trainCapitalValue(model, train) {
   const defaultMode = compositionDefaultModeForModel(model);
+  const composition = ensureTrainComposition(train, model);
+  const currentCompositionValue = compositionAssetValue(model, composition, composition.mode);
+  if (defaultMode === 'multiple_unit') {
+    return Math.max(0, currentCompositionValue);
+  }
   const defaultComposition = defaultCompositionForModel(model, defaultMode);
   const defaultCompositionValue = compositionAssetValue(model, defaultComposition, defaultMode);
   const baseTractionValue = Math.max(Math.round(Number(model?.price || 0) * 0.42), Math.round(Number(model?.price || 0) - defaultCompositionValue));
-  const composition = ensureTrainComposition(train, model);
-  const currentCompositionValue = compositionAssetValue(model, composition, composition.mode);
   return Math.max(0, baseTractionValue + currentCompositionValue);
 }
 
@@ -6000,17 +6021,17 @@ function getTrainOperatingProfile(train, model, player = null) {
   const spec = compositionSpecForModel(sourceModel, composition.mode);
   const profile = { ...sourceModel, compositionMode: spec.mode, compositionSpec: spec, composition, freightRevenueMultiplier: 1, co2Multiplier: sourceModel.co2Multiplier || 1 };
   if (spec.mode === 'multiple_unit') {
-    const defaultUnits = spec.powerUnits.default;
-    const ratio = composition.powerUnits / Math.max(1, defaultUnits);
+    const unitCount = clamp(Math.round(Number(composition.powerUnits || spec.powerUnits.default || 1)), spec.powerUnits.min, spec.powerUnits.max);
+    const ratio = unitCount;
     profile.capacity = Math.max(0, Math.round(sourceModel.capacity * ratio));
-    profile.freight = Math.max(0, Math.round((sourceModel.freight || 0) * ratio));
+    profile.freight = 0;
     profile.speed = Math.max(35, Math.round(sourceModel.speed * (1 - Math.max(0, ratio - 1) * 0.015)));
     profile.energy = round2(sourceModel.energy * ratio * (0.95 + ratio * 0.05));
     profile.maintenance = round2(sourceModel.maintenance * ratio * (0.92 + ratio * 0.08));
     profile.reliability = clamp(sourceModel.reliability - Math.max(0, ratio - 1) * 0.015, 0.45, 0.995);
     profile.comfort = clamp(sourceModel.comfort - Math.max(0, ratio - 1) * 0.01, 0.08, 1);
     profile.variant = null;
-    profile.compositionSummary = `${composition.powerUnits} engin(s) moteur(s)`;
+    profile.compositionSummary = `${unitCount} rame${unitCount > 1 ? 's' : ''} en UM`;
     return applyTrainConditionToProfile(profile, train);
   }
   if (spec.mode === 'passenger_loco') {
@@ -7148,40 +7169,40 @@ function buildBalance() {
     steam_241_articulated: { id: 'steam_241_articulated', name: 'Locomotive vapeur articulée 241', unlockEpoch: 0, type: 'Vapeur lourde articulée', speed: 90, capacity: 420, freight: 520, energyType: 'coal', energy: 17.0, maintenance: 1.02, price: 390000, reliability: 0.82, comfort: 0.5, range: 150, description: 'Matériel vapeur lourd de fin d’ère, puissant mais coûteux à entretenir.', requiredTech: 'steam_articulated_locomotives', requiredTechLevel: 8 },
 
     diesel_shunter_030: { id: 'diesel_shunter_030', name: 'Locotracteur diesel de manœuvre', unlockEpoch: 1, type: 'Diesel manœuvre', speed: 70, capacity: 40, freight: 420, energyType: 'diesel', energy: 6.0, maintenance: 0.43, price: 310000, reliability: 0.83, comfort: 0.24, range: 125, description: 'Engin simple et fiable pour manœuvres, embranchements et fret court.', requiredTech: 'diesel_shunters', requiredTechLevel: 1 },
-    diesel_light_railcar: { id: 'diesel_light_railcar', name: 'Autorail diesel léger', unlockEpoch: 1, type: 'Autorail diesel', speed: 110, capacity: 160, freight: 0, energyType: 'diesel', energy: 4.8, maintenance: 0.4, price: 420000, reliability: 0.86, comfort: 0.56, range: 150, description: 'Matériel économique pour lignes secondaires non électrifiées.', requiredTech: 'diesel_light_railcars', requiredTechLevel: 3 },
-    diesel_mechanical_regional: { id: 'diesel_mechanical_regional', name: 'Automotrice diesel mécanique', unlockEpoch: 1, type: 'Diesel régional', speed: 125, capacity: 230, freight: 20, energyType: 'diesel', energy: 5.4, maintenance: 0.44, price: 650000, reliability: 0.87, comfort: 0.62, range: 175, description: 'Rame régionale diesel plus capacitaire, efficace hors caténaire.', requiredTech: 'diesel_mechanical', requiredTechLevel: 4 },
+    diesel_light_railcar: { id: 'diesel_light_railcar', name: 'Autorail diesel léger', unlockEpoch: 1, type: 'Autorail diesel', speed: 110, capacity: 540, freight: 0, energyType: 'diesel', energy: 4.8, maintenance: 0.4, price: 420000, reliability: 0.86, comfort: 0.56, range: 150, description: 'Matériel économique pour lignes secondaires non électrifiées.', requiredTech: 'diesel_light_railcars', requiredTechLevel: 3 },
+    diesel_mechanical_regional: { id: 'diesel_mechanical_regional', name: 'Automotrice diesel mécanique', unlockEpoch: 1, type: 'Diesel régional', speed: 125, capacity: 620, freight: 0, energyType: 'diesel', energy: 5.4, maintenance: 0.44, price: 650000, reliability: 0.87, comfort: 0.62, range: 175, description: 'Rame régionale diesel plus capacitaire, efficace hors caténaire.', requiredTech: 'diesel_mechanical', requiredTechLevel: 4 },
     diesel_hydraulic_express: { id: 'diesel_hydraulic_express', name: 'Locomotive diesel hydraulique voyageurs', unlockEpoch: 1, type: 'Diesel voyageurs', speed: 150, capacity: 430, freight: 120, energyType: 'diesel', energy: 7.2, maintenance: 0.56, price: 1150000, reliability: 0.88, comfort: 0.66, range: 210, description: 'Locomotive diesel rapide pour relations voyageurs sans électrification.', requiredTech: 'diesel_passenger_locomotives', requiredTechLevel: 6 },
     diesel_electric_freight: { id: 'diesel_electric_freight', name: 'Locomotive diesel-électrique fret', unlockEpoch: 1, type: 'Diesel-électrique fret', speed: 110, capacity: 0, freight: 950, energyType: 'diesel', energy: 8.8, maintenance: 0.58, price: 1450000, reliability: 0.9, comfort: 0.2, range: 250, description: 'Fret lourd non électrifié, performant sur longues distances.', requiredTech: 'diesel_freight_locomotives', requiredTechLevel: 8 },
 
     electric_pioneer_loco: { id: 'electric_pioneer_loco', name: 'Locomotive électrique pionnière', unlockEpoch: 2, type: 'Électrique pionnière', speed: 115, capacity: 260, freight: 180, energyType: 'electricity', energy: 6.4, maintenance: 0.55, price: 520000, reliability: 0.84, comfort: 0.5, range: 250, description: 'Premier matériel électrique polyvalent pour lignes équipées.', requiredTech: 'electric_first_trains', requiredTechLevel: 1 },
-    electric_third_rail_emu: { id: 'electric_third_rail_emu', name: 'Automotrice troisième rail', unlockEpoch: 2, type: 'Électrique urbain', speed: 100, capacity: 520, freight: 0, energyType: 'electricity', energy: 5.2, maintenance: 0.42, price: 980000, reliability: 0.88, comfort: 0.56, range: 280, description: 'Rame dense pour dessertes urbaines et périurbaines électrifiées.', requiredTech: 'electric_third_rail', requiredTechLevel: 3 },
-    electric_dc_regional_emu: { id: 'electric_dc_regional_emu', name: 'Automotrice courant continu régionale', unlockEpoch: 2, type: 'Électrique régionale', speed: 160, capacity: 430, freight: 0, energyType: 'electricity', energy: 5.6, maintenance: 0.38, price: 1250000, reliability: 0.91, comfort: 0.68, range: 320, description: 'Rame régionale performante sur réseau électrifié continu.', requiredTech: 'electric_dc_catenary', requiredTechLevel: 4 },
+    electric_third_rail_emu: { id: 'electric_third_rail_emu', name: 'Automotrice troisième rail', unlockEpoch: 2, type: 'Électrique urbain', speed: 100, capacity: 780, freight: 0, energyType: 'electricity', energy: 5.2, maintenance: 0.42, price: 980000, reliability: 0.88, comfort: 0.56, range: 280, description: 'Rame dense pour dessertes urbaines et périurbaines électrifiées.', requiredTech: 'electric_third_rail', requiredTechLevel: 3 },
+    electric_dc_regional_emu: { id: 'electric_dc_regional_emu', name: 'Automotrice courant continu régionale', unlockEpoch: 2, type: 'Électrique régionale', speed: 160, capacity: 650, freight: 0, energyType: 'electricity', energy: 5.6, maintenance: 0.38, price: 1250000, reliability: 0.91, comfort: 0.68, range: 320, description: 'Rame régionale performante sur réseau électrifié continu.', requiredTech: 'electric_dc_catenary', requiredTechLevel: 4 },
     electric_dual_current_loco: { id: 'electric_dual_current_loco', name: 'Locomotive bicourant multiservice', unlockEpoch: 2, type: 'Électrique bicourant', speed: 200, capacity: 520, freight: 520, energyType: 'electricity', energy: 8.2, maintenance: 0.64, price: 4200000, reliability: 0.92, comfort: 0.7, range: 360, description: 'Locomotive voyageurs/fret capable de passer entre réseaux électriques.', requiredTech: 'electric_dual_current_trains', requiredTechLevel: 6 },
     electric_heavy_freight: { id: 'electric_heavy_freight', name: 'Locomotive électrique fret lourd', unlockEpoch: 2, type: 'Fret électrique', speed: 140, capacity: 0, freight: 1450, energyType: 'electricity', energy: 9.5, maintenance: 0.62, price: 5100000, reliability: 0.93, comfort: 0.22, range: 400, description: 'Fret lourd électrifié avec très bonne fiabilité et coût énergétique bas.', requiredTech: 'electric_locomotives', requiredTechLevel: 8 },
 
     hsv_intercity_200: { id: 'hsv_intercity_200', name: 'Train rapide Intercités 200', unlockEpoch: 3, type: 'Train rapide', speed: 200, capacity: 560, freight: 60, energyType: 'electricity', energy: 7.2, maintenance: 0.5, price: 1800000, reliability: 0.9, comfort: 0.72, range: 350, description: 'Matériel de transition vers la grande vitesse, adapté aux grands axes classiques.', requiredTech: 'hsv_first_fast_trains', requiredTechLevel: 1 },
-    hsv_trainset_pioneer: { id: 'hsv_trainset_pioneer', name: 'Rame grande vitesse première génération', unlockEpoch: 3, type: 'Grande vitesse', speed: 300, capacity: 690, freight: 0, energyType: 'electricity', energy: 13.5, maintenance: 1.1, price: 14500000, reliability: 0.93, comfort: 0.82, range: 450, description: 'Première rame très rapide, chère mais structurante pour les grands axes.', requiredTech: 'hsv_trainsets', requiredTechLevel: 3 },
-    hsv_duplex_capacity: { id: 'hsv_duplex_capacity', name: 'Rame grande vitesse Duplex', unlockEpoch: 3, type: 'Grande vitesse haute capacité', speed: 320, capacity: 1030, freight: 0, energyType: 'electricity', energy: 15.2, maintenance: 1.25, price: 23000000, reliability: 0.94, comfort: 0.86, range: 550, description: 'Grande vitesse à très forte capacité pour axes saturés.', requiredTech: 'hsv_trainsets', requiredTechLevel: 5 },
-    hsv_distributed_trainset: { id: 'hsv_distributed_trainset', name: 'Rame grande vitesse à traction répartie', unlockEpoch: 3, type: 'Grande vitesse avancée', speed: 330, capacity: 820, freight: 0, energyType: 'electricity', energy: 13.8, maintenance: 1.05, price: 26000000, reliability: 0.95, comfort: 0.87, range: 625, description: 'Rame de grande vitesse plus efficace grâce à la traction répartie.', requiredTech: 'hsv_distributed_traction', requiredTechLevel: 6 },
-    hsv_premium_long_distance: { id: 'hsv_premium_long_distance', name: 'Rame grande distance premium', unlockEpoch: 3, type: 'Grande vitesse premium', speed: 320, capacity: 620, freight: 0, energyType: 'electricity', energy: 14.6, maintenance: 1.18, price: 28500000, reliability: 0.95, comfort: 0.94, range: 700, description: 'Matériel très confortable pour relations longues distances à forte marge.', requiredTech: 'hsv_premium_long_distance', requiredTechLevel: 8 },
+    hsv_trainset_pioneer: { id: 'hsv_trainset_pioneer', name: 'Rame grande vitesse première génération', unlockEpoch: 3, type: 'Grande vitesse', speed: 300, capacity: 760, freight: 0, energyType: 'electricity', energy: 13.5, maintenance: 1.1, price: 14500000, reliability: 0.93, comfort: 0.82, range: 450, description: 'Première rame très rapide, chère mais structurante pour les grands axes.', requiredTech: 'hsv_trainsets', requiredTechLevel: 3 },
+    hsv_duplex_capacity: { id: 'hsv_duplex_capacity', name: 'Rame grande vitesse Duplex', unlockEpoch: 3, type: 'Grande vitesse haute capacité', speed: 320, capacity: 1040, freight: 0, energyType: 'electricity', energy: 15.2, maintenance: 1.25, price: 23000000, reliability: 0.94, comfort: 0.86, range: 550, description: 'Grande vitesse à très forte capacité pour axes saturés.', requiredTech: 'hsv_trainsets', requiredTechLevel: 5 },
+    hsv_distributed_trainset: { id: 'hsv_distributed_trainset', name: 'Rame grande vitesse à traction répartie', unlockEpoch: 3, type: 'Grande vitesse avancée', speed: 330, capacity: 850, freight: 0, energyType: 'electricity', energy: 13.8, maintenance: 1.05, price: 26000000, reliability: 0.95, comfort: 0.87, range: 625, description: 'Rame de grande vitesse plus efficace grâce à la traction répartie.', requiredTech: 'hsv_distributed_traction', requiredTechLevel: 6 },
+    hsv_premium_long_distance: { id: 'hsv_premium_long_distance', name: 'Rame grande distance premium', unlockEpoch: 3, type: 'Grande vitesse premium', speed: 320, capacity: 690, freight: 0, energyType: 'electricity', energy: 14.6, maintenance: 1.18, price: 28500000, reliability: 0.95, comfort: 0.94, range: 700, description: 'Matériel très confortable pour relations longues distances à forte marge.', requiredTech: 'hsv_premium_long_distance', requiredTechLevel: 8 },
 
-    hydrogen_regional_unit: { id: 'hydrogen_regional_unit', name: 'Rame hydrogène régionale', unlockEpoch: 4, type: 'Hydrogène régional', speed: 140, capacity: 300, freight: 0, energyType: 'hydrogen', energy: 4.2, maintenance: 0.36, price: 6200000, reliability: 0.9, comfort: 0.76, range: 250, description: 'Rame propre pour lignes non électrifiées à autonomie correcte.', requiredTech: 'hydrogen_regional_trains', requiredTechLevel: 1 },
-    hydrogen_fuel_cell_unit: { id: 'hydrogen_fuel_cell_unit', name: 'Rame hydrogène à pile combustible', unlockEpoch: 4, type: 'Hydrogène optimisé', speed: 150, capacity: 330, freight: 20, energyType: 'hydrogen', energy: 3.9, maintenance: 0.34, price: 7400000, reliability: 0.92, comfort: 0.78, range: 310, description: 'Chaîne hydrogène plus efficace et plus fiable pour dessertes régionales.', requiredTech: 'hydrogen_fuel_cell', requiredTechLevel: 3 },
-    hydrogen_rural_unit: { id: 'hydrogen_rural_unit', name: 'Rame hydrogène lignes rurales', unlockEpoch: 4, type: 'Hydrogène rural', speed: 130, capacity: 220, freight: 30, energyType: 'hydrogen', energy: 3.4, maintenance: 0.3, price: 5600000, reliability: 0.91, comfort: 0.72, range: 350, description: 'Matériel sobre pour lignes peu denses et longues antennes rurales.', requiredTech: 'hydrogen_rural_lines', requiredTechLevel: 4 },
-    hydrogen_long_range_unit: { id: 'hydrogen_long_range_unit', name: 'Rame hydrogène longue distance', unlockEpoch: 4, type: 'Hydrogène longue distance', speed: 170, capacity: 420, freight: 40, energyType: 'hydrogen', energy: 4.6, maintenance: 0.42, price: 9800000, reliability: 0.92, comfort: 0.82, range: 425, description: 'Autonomie élevée pour itinéraires non électrifiés de grande longueur.', requiredTech: 'hydrogen_long_distance_tanks', requiredTechLevel: 6 },
-    hydrogen_next_gen_unit: { id: 'hydrogen_next_gen_unit', name: 'Rame hydrogène nouvelle génération', unlockEpoch: 4, type: 'Hydrogène avancé', speed: 180, capacity: 480, freight: 60, energyType: 'hydrogen', energy: 3.7, maintenance: 0.36, price: 13200000, reliability: 0.94, comfort: 0.84, range: 500, description: 'Hydrogène late game : propre, fiable et adapté aux longues relations régionales.', requiredTech: 'hydrogen_next_generation', requiredTechLevel: 8 },
+    hydrogen_regional_unit: { id: 'hydrogen_regional_unit', name: 'Rame hydrogène régionale', unlockEpoch: 4, type: 'Hydrogène régional', speed: 140, capacity: 580, freight: 0, energyType: 'hydrogen', energy: 4.2, maintenance: 0.36, price: 6200000, reliability: 0.9, comfort: 0.76, range: 250, description: 'Rame propre pour lignes non électrifiées à autonomie correcte.', requiredTech: 'hydrogen_regional_trains', requiredTechLevel: 1 },
+    hydrogen_fuel_cell_unit: { id: 'hydrogen_fuel_cell_unit', name: 'Rame hydrogène à pile combustible', unlockEpoch: 4, type: 'Hydrogène optimisé', speed: 150, capacity: 600, freight: 0, energyType: 'hydrogen', energy: 3.9, maintenance: 0.34, price: 7400000, reliability: 0.92, comfort: 0.78, range: 310, description: 'Chaîne hydrogène plus efficace et plus fiable pour dessertes régionales.', requiredTech: 'hydrogen_fuel_cell', requiredTechLevel: 3 },
+    hydrogen_rural_unit: { id: 'hydrogen_rural_unit', name: 'Rame hydrogène lignes rurales', unlockEpoch: 4, type: 'Hydrogène rural', speed: 130, capacity: 540, freight: 0, energyType: 'hydrogen', energy: 3.4, maintenance: 0.3, price: 5600000, reliability: 0.91, comfort: 0.72, range: 350, description: 'Matériel sobre pour lignes peu denses et longues antennes rurales.', requiredTech: 'hydrogen_rural_lines', requiredTechLevel: 4 },
+    hydrogen_long_range_unit: { id: 'hydrogen_long_range_unit', name: 'Rame hydrogène longue distance', unlockEpoch: 4, type: 'Hydrogène longue distance', speed: 170, capacity: 650, freight: 0, energyType: 'hydrogen', energy: 4.6, maintenance: 0.42, price: 9800000, reliability: 0.92, comfort: 0.82, range: 425, description: 'Autonomie élevée pour itinéraires non électrifiés de grande longueur.', requiredTech: 'hydrogen_long_distance_tanks', requiredTechLevel: 6 },
+    hydrogen_next_gen_unit: { id: 'hydrogen_next_gen_unit', name: 'Rame hydrogène nouvelle génération', unlockEpoch: 4, type: 'Hydrogène avancé', speed: 180, capacity: 720, freight: 0, energyType: 'hydrogen', energy: 3.7, maintenance: 0.36, price: 13200000, reliability: 0.94, comfort: 0.84, range: 500, description: 'Hydrogène late game : propre, fiable et adapté aux longues relations régionales.', requiredTech: 'hydrogen_next_generation', requiredTechLevel: 8 },
 
-    battery_suburban_unit: { id: 'battery_suburban_unit', name: 'Rame batterie périurbaine', unlockEpoch: 5, type: 'Batterie périurbaine', speed: 140, capacity: 380, freight: 0, energyType: 'battery', energy: 3.7, maintenance: 0.24, price: 5400000, reliability: 0.95, comfort: 0.82, range: 150, description: 'Rame à batterie pour courtes antennes non électrifiées autour des pôles urbains.', requiredTech: 'battery_suburban_trains', requiredTechLevel: 1 },
-    battery_regional_unit: { id: 'battery_regional_unit', name: 'Rame batterie régionale', unlockEpoch: 5, type: 'Batterie régionale', speed: 160, capacity: 420, freight: 0, energyType: 'battery', energy: 3.9, maintenance: 0.25, price: 6900000, reliability: 0.95, comfort: 0.84, range: 220, description: 'Rame régionale à batterie pour lignes partiellement électrifiées.', requiredTech: 'battery_regional_trains', requiredTechLevel: 3 },
-    battery_fast_charge_unit: { id: 'battery_fast_charge_unit', name: 'Rame batterie recharge rapide', unlockEpoch: 5, type: 'Batterie recharge rapide', speed: 160, capacity: 460, freight: 0, energyType: 'battery', energy: 3.6, maintenance: 0.26, price: 7600000, reliability: 0.94, comfort: 0.84, range: 280, description: 'Exploite les gares équipées pour réduire les temps de recharge.', requiredTech: 'battery_fast_station_charging', requiredTechLevel: 4 },
-    battery_modular_unit: { id: 'battery_modular_unit', name: 'Rame batterie modulaire', unlockEpoch: 5, type: 'Batterie modulaire', speed: 165, capacity: 500, freight: 80, energyType: 'battery', energy: 3.8, maintenance: 0.23, price: 8600000, reliability: 0.96, comfort: 0.86, range: 340, description: 'Architecture modulaire, plus fiable et plus simple à adapter au service.', requiredTech: 'battery_modular', requiredTechLevel: 6 },
-    battery_high_density_unit: { id: 'battery_high_density_unit', name: 'Rame batterie haute densité', unlockEpoch: 5, type: 'Batterie haute densité', speed: 180, capacity: 560, freight: 100, energyType: 'battery', energy: 3.5, maintenance: 0.24, price: 11800000, reliability: 0.96, comfort: 0.88, range: 400, description: 'Batterie avancée à forte autonomie, adaptée aux services régionaux ambitieux.', requiredTech: 'battery_high_density', requiredTechLevel: 8 },
+    battery_suburban_unit: { id: 'battery_suburban_unit', name: 'Rame batterie périurbaine', unlockEpoch: 5, type: 'Batterie périurbaine', speed: 140, capacity: 680, freight: 0, energyType: 'battery', energy: 3.7, maintenance: 0.24, price: 5400000, reliability: 0.95, comfort: 0.82, range: 150, description: 'Rame à batterie pour courtes antennes non électrifiées autour des pôles urbains.', requiredTech: 'battery_suburban_trains', requiredTechLevel: 1 },
+    battery_regional_unit: { id: 'battery_regional_unit', name: 'Rame batterie régionale', unlockEpoch: 5, type: 'Batterie régionale', speed: 160, capacity: 650, freight: 0, energyType: 'battery', energy: 3.9, maintenance: 0.25, price: 6900000, reliability: 0.95, comfort: 0.84, range: 220, description: 'Rame régionale à batterie pour lignes partiellement électrifiées.', requiredTech: 'battery_regional_trains', requiredTechLevel: 3 },
+    battery_fast_charge_unit: { id: 'battery_fast_charge_unit', name: 'Rame batterie recharge rapide', unlockEpoch: 5, type: 'Batterie recharge rapide', speed: 160, capacity: 700, freight: 0, energyType: 'battery', energy: 3.6, maintenance: 0.26, price: 7600000, reliability: 0.94, comfort: 0.84, range: 280, description: 'Exploite les gares équipées pour réduire les temps de recharge.', requiredTech: 'battery_fast_station_charging', requiredTechLevel: 4 },
+    battery_modular_unit: { id: 'battery_modular_unit', name: 'Rame batterie modulaire', unlockEpoch: 5, type: 'Batterie modulaire', speed: 165, capacity: 760, freight: 0, energyType: 'battery', energy: 3.8, maintenance: 0.23, price: 8600000, reliability: 0.96, comfort: 0.86, range: 340, description: 'Architecture modulaire, plus fiable et plus simple à adapter au service.', requiredTech: 'battery_modular', requiredTechLevel: 6 },
+    battery_high_density_unit: { id: 'battery_high_density_unit', name: 'Rame batterie haute densité', unlockEpoch: 5, type: 'Batterie haute densité', speed: 180, capacity: 820, freight: 0, energyType: 'battery', energy: 3.5, maintenance: 0.24, price: 11800000, reliability: 0.96, comfort: 0.88, range: 400, description: 'Batterie avancée à forte autonomie, adaptée aux services régionaux ambitieux.', requiredTech: 'battery_high_density', requiredTechLevel: 8 },
 
-    maglev_shuttle_pioneer: { id: 'maglev_shuttle_pioneer', name: 'Navette maglev pionnière', unlockEpoch: 6, type: 'Maglev pionnier', speed: 360, capacity: 420, freight: 0, energyType: 'electricity', energy: 10.5, maintenance: 0.88, price: 32000000, reliability: 0.9, comfort: 0.86, range: 650, description: 'Première navette à sustentation magnétique, très coûteuse mais très rapide.', requiredTech: 'maglev_levitation', requiredTechLevel: 1 },
-    maglev_guided_regional: { id: 'maglev_guided_regional', name: 'Rame maglev guidée', unlockEpoch: 6, type: 'Maglev guidé', speed: 420, capacity: 520, freight: 0, energyType: 'electricity', energy: 10.8, maintenance: 0.82, price: 39000000, reliability: 0.93, comfort: 0.88, range: 850, description: 'Maglev plus fiable grâce au guidage magnétique maîtrisé.', requiredTech: 'maglev_guidance', requiredTechLevel: 3 },
-    maglev_linear_express: { id: 'maglev_linear_express', name: 'Maglev express linéaire', unlockEpoch: 6, type: 'Maglev express', speed: 500, capacity: 600, freight: 0, energyType: 'electricity', energy: 11.5, maintenance: 0.9, price: 52000000, reliability: 0.94, comfort: 0.9, range: 1050, description: 'Propulsion linéaire pour liaisons express à très haute vitesse.', requiredTech: 'maglev_linear_propulsion', requiredTechLevel: 4 },
-    maglev_metropolitan_express: { id: 'maglev_metropolitan_express', name: 'Maglev express métropolitain', unlockEpoch: 6, type: 'Maglev métropolitain', speed: 520, capacity: 760, freight: 0, energyType: 'electricity', energy: 12.4, maintenance: 0.92, price: 68000000, reliability: 0.95, comfort: 0.91, range: 1250, description: 'Très forte capacité pour liaisons express entre métropoles.', requiredTech: 'maglev_metro_express_links', requiredTechLevel: 6 },
-    maglev_next_gen_unit: { id: 'maglev_next_gen_unit', name: 'Maglev nouvelle génération', unlockEpoch: 6, type: 'Maglev nouvelle génération', speed: 600, capacity: 820, freight: 60, energyType: 'electricity', energy: 10.9, maintenance: 0.78, price: 92000000, reliability: 0.97, comfort: 0.95, range: 1500, description: 'Matériel ultime de très late game : vitesse extrême, confort et fiabilité.', requiredTech: 'maglev_next_generation', requiredTechLevel: 8 }
+    maglev_shuttle_pioneer: { id: 'maglev_shuttle_pioneer', name: 'Navette maglev pionnière', unlockEpoch: 6, type: 'Maglev pionnier', speed: 360, capacity: 620, freight: 0, energyType: 'electricity', energy: 10.5, maintenance: 0.88, price: 32000000, reliability: 0.9, comfort: 0.86, range: 650, description: 'Première navette à sustentation magnétique, très coûteuse mais très rapide.', requiredTech: 'maglev_levitation', requiredTechLevel: 1 },
+    maglev_guided_regional: { id: 'maglev_guided_regional', name: 'Rame maglev guidée', unlockEpoch: 6, type: 'Maglev guidé', speed: 420, capacity: 700, freight: 0, energyType: 'electricity', energy: 10.8, maintenance: 0.82, price: 39000000, reliability: 0.93, comfort: 0.88, range: 850, description: 'Maglev plus fiable grâce au guidage magnétique maîtrisé.', requiredTech: 'maglev_guidance', requiredTechLevel: 3 },
+    maglev_linear_express: { id: 'maglev_linear_express', name: 'Maglev express linéaire', unlockEpoch: 6, type: 'Maglev express', speed: 500, capacity: 760, freight: 0, energyType: 'electricity', energy: 11.5, maintenance: 0.9, price: 52000000, reliability: 0.94, comfort: 0.9, range: 1050, description: 'Propulsion linéaire pour liaisons express à très haute vitesse.', requiredTech: 'maglev_linear_propulsion', requiredTechLevel: 4 },
+    maglev_metropolitan_express: { id: 'maglev_metropolitan_express', name: 'Maglev express métropolitain', unlockEpoch: 6, type: 'Maglev métropolitain', speed: 520, capacity: 900, freight: 0, energyType: 'electricity', energy: 12.4, maintenance: 0.92, price: 68000000, reliability: 0.95, comfort: 0.91, range: 1250, description: 'Très forte capacité pour liaisons express entre métropoles.', requiredTech: 'maglev_metro_express_links', requiredTechLevel: 6 },
+    maglev_next_gen_unit: { id: 'maglev_next_gen_unit', name: 'Maglev nouvelle génération', unlockEpoch: 6, type: 'Maglev nouvelle génération', speed: 600, capacity: 980, freight: 0, energyType: 'electricity', energy: 10.9, maintenance: 0.78, price: 92000000, reliability: 0.97, comfort: 0.95, range: 1500, description: 'Matériel ultime de très late game : vitesse extrême, confort et fiabilité.', requiredTech: 'maglev_next_generation', requiredTechLevel: 8 }
   };
   const staff = {
     drivers: { label: 'Conducteur', salary: 4300, hireCost: 9000 },
