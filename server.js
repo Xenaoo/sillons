@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.7.0';
-const STATE_SCHEMA_VERSION = 141;
+const PROJECT_VERSION = 'v66.8.0';
+const STATE_SCHEMA_VERSION = 142;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -1167,6 +1167,7 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
 let sncfRailLinesCache = null;
 let sncfRailLinesLoadedAt = 0;
 const sncfRouteGeometryResultCache = new Map();
+const sncfRouteGeometrySequenceResultCache = new Map();
 
 function normalizeRailRouteProfile(profile) {
   const value = String(profile || '').trim().toLowerCase();
@@ -1176,6 +1177,25 @@ function normalizeRailRouteProfile(profile) {
 
 function sncfRouteCacheKey(a, b, profile = 'default') {
   return `${normalizeRailRouteProfile(profile)}::${currentStationId(a)}::${currentStationId(b)}`;
+}
+
+function sncfRouteSequenceCacheKey(ids, profile = 'default') {
+  return `${normalizeRailRouteProfile(profile)}::${(ids || []).map(currentStationId).filter(Boolean).join('>')}`;
+}
+
+function rememberSncfRouteGeometrySequence(key, route) {
+  if (sncfRouteGeometrySequenceResultCache.has(key)) sncfRouteGeometrySequenceResultCache.delete(key);
+  const normalized = {
+    ids: Array.isArray(route?.ids) ? route.ids : [],
+    geometry: simplifyGeoPolyline(Array.isArray(route?.geometry) ? route.geometry : []),
+    chunks: Array.isArray(route?.chunks) ? route.chunks : []
+  };
+  sncfRouteGeometrySequenceResultCache.set(key, normalized);
+  while (sncfRouteGeometrySequenceResultCache.size > SNCF_ROUTE_GEOMETRY_CACHE_MAX) {
+    const oldest = sncfRouteGeometrySequenceResultCache.keys().next().value;
+    sncfRouteGeometrySequenceResultCache.delete(oldest);
+  }
+  return normalized;
 }
 
 function rememberSncfRouteGeometry(key, geometry) {
@@ -1545,9 +1565,13 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
   const totalKm = polylineDistanceKm(coords);
   if (!Number.isFinite(totalKm) || totalKm <= 0) return { ok: false, reason: 'distance' };
 
-  const maxStationDistanceKm = Number(options.maxStationDistanceKm || 2.9);
-  const maxTerminalDistanceKm = Number(options.maxTerminalDistanceKm || 4.2);
-  const minProgressKm = Number(options.minProgressKm || 0.04);
+  const maxStationDistanceKm = Number(options.maxStationDistanceKm ?? 1.0);
+  const maxTerminalDistanceKm = Number(options.maxTerminalDistanceKm ?? 1.7);
+  const minProgressKm = Number(options.minProgressKm ?? 0.04);
+  const maxLegFactor = Number(options.maxLegFactor ?? 3.0);
+  const maxLegExtraKm = Number(options.maxLegExtraKm ?? 18);
+  const maxGlobalDistanceFactor = Number(options.maxGlobalDistanceFactor ?? 3.2);
+  const allowLargeTerminalOffset = options.allowLargeTerminalOffset === true;
   let previousAt = -Infinity;
   let worstDistance = 0;
   const projections = [];
@@ -1557,7 +1581,8 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
     const point = stationRoutePoint(stop) || stationRawPoint(stop);
     const projection = projectPointOnGeoPolyline(point, coords);
     if (!projection) return { ok: false, reason: 'projection', stationId: ids[i] };
-    const allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
+    let allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
+    if (allowLargeTerminalOffset && (i === 0 || i === ids.length - 1)) allowed = Math.max(allowed, projection.distanceKm);
     if (projection.distanceKm > allowed) {
       return { ok: false, reason: 'too-far', stationId: ids[i], distanceKm: projection.distanceKm, allowed };
     }
@@ -1569,7 +1594,48 @@ function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
     projections.push({ id: ids[i], atKm: projection.atKm, distanceKm: projection.distanceKm });
   }
 
+  const startStation = stationById(ids[0]);
+  const endStation = stationById(ids[ids.length - 1]);
+  const startPoint = stationRoutePoint(startStation) || stationRawPoint(startStation);
+  const endPoint = stationRoutePoint(endStation) || stationRawPoint(endStation);
+  const directTotalKm = startPoint && endPoint ? haversine(startPoint.lat, startPoint.lon, endPoint.lat, endPoint.lon) : 0;
+  if (directTotalKm > 0 && totalKm > Math.max(35, directTotalKm * maxGlobalDistanceFactor)) {
+    return { ok: false, reason: 'global-detour', totalKm, directKm: directTotalKm };
+  }
+
+  for (let i = 1; i < projections.length; i += 1) {
+    const fromStation = stationById(ids[i - 1]);
+    const toStation = stationById(ids[i]);
+    const fromPoint = stationRoutePoint(fromStation) || stationRawPoint(fromStation);
+    const toPoint = stationRoutePoint(toStation) || stationRawPoint(toStation);
+    if (!fromPoint || !toPoint) continue;
+    const directKm = haversine(fromPoint.lat, fromPoint.lon, toPoint.lat, toPoint.lon);
+    const alongKm = Math.max(0, projections[i].atKm - projections[i - 1].atKm);
+    if (Number.isFinite(directKm) && directKm > 0.4 && Number.isFinite(alongKm)) {
+      const allowedAlong = Math.max(directKm + maxLegExtraKm, directKm * maxLegFactor);
+      if (alongKm > allowedAlong) {
+        return {
+          ok: false,
+          reason: 'leg-detour',
+          from: ids[i - 1],
+          to: ids[i],
+          alongKm,
+          directKm,
+          allowedKm: allowedAlong
+        };
+      }
+    }
+  }
+
   return { ok: true, totalKm, worstDistance, projections };
+}
+
+function routeGeometryValidationScore(validation, stopsCovered = 2) {
+  if (!validation?.ok) return Infinity;
+  const distance = Number(validation.totalKm || 0);
+  const worst = Number(validation.worstDistance || 0);
+  const coverageBonus = Math.max(0, Number(stopsCovered || 0) - 2) * 1.8;
+  return distance + worst * 18 - coverageBonus;
 }
 
 function mergeGeoCoordinateSequences(sequences) {
@@ -1593,23 +1659,32 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
   const profile = normalizeRailRouteProfile(options.profile || 'default');
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, geometry: [], chunks: [] };
+  const cacheKey = sncfRouteSequenceCacheKey(ids, profile);
+  if (sncfRouteGeometrySequenceResultCache.has(cacheKey)) return sncfRouteGeometrySequenceResultCache.get(cacheKey);
 
   const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1], { profile });
   const directValidation = routeGeometryMatchesStopSequence(ids, directGeometry, {
-    // Seuil volontairement strict : une géométrie globale peut passer près d'une
-    // branche parallèle sans réellement desservir les gares intermédiaires.
-    // C'était visible autour d'Orangis-Bois-de-l'Épine : le tracé validé passait
-    // à plus de 2 km de certaines gares. Au-delà de ce seuil, on découpe donc
-    // en sous-parcours RFN plus courts et plus fiables.
-    maxStationDistanceKm: 1.2,
-    maxTerminalDistanceKm: 2.0
+    // Un tracé global est accepté uniquement s’il colle réellement à chaque gare
+    // de la suite. Les branches parallèles ou voies voisines qui passent seulement
+    // "à proximité" sont refusées puis recalculées en sous-parcours.
+    maxStationDistanceKm: 0.75,
+    maxTerminalDistanceKm: 1.35,
+    maxLegFactor: 2.75,
+    maxLegExtraKm: 14,
+    maxGlobalDistanceFactor: profile === 'highspeed' ? 3.6 : 3.0
   });
   if (directValidation.ok) {
-    return {
+    return rememberSncfRouteGeometrySequence(cacheKey, {
       ids,
       geometry: directGeometry,
-      chunks: [{ fromIndex: 0, toIndex: ids.length - 1, mode: 'global' }]
-    };
+      chunks: [{
+        fromIndex: 0,
+        toIndex: ids.length - 1,
+        mode: 'global',
+        pointCount: directGeometry.length,
+        worstStopDistanceKm: round2(directValidation.worstDistance || 0)
+      }]
+    });
   }
 
   const chunks = [];
@@ -1618,23 +1693,63 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
   while (index < ids.length - 1) {
     let accepted = null;
     const maxTo = Math.min(ids.length - 1, index + 14);
-    for (let to = maxTo; to > index; to -= 1) {
+
+    // On évalue plusieurs longueurs de sous-parcours et on garde le meilleur
+    // compromis fidélité/continuité, au lieu de prendre systématiquement le plus
+    // long tronçon admissible. Cela évite les globaux visuellement incohérents
+    // tout en conservant des géométries plus détaillées que le segment par segment.
+    const candidateTargets = [];
+    for (const offset of [14, 11, 8, 6, 4, 3, 2, 1]) {
+      const to = Math.min(maxTo, index + offset);
+      if (to > index && !candidateTargets.includes(to)) candidateTargets.push(to);
+    }
+
+    let bestCandidate = null;
+    for (const to of candidateTargets.sort((a, b) => b - a)) {
       const geometry = await sncfRouteGeometryForStations(ids[index], ids[to], { profile });
       if (!Array.isArray(geometry) || geometry.length < 2) continue;
       const slice = ids.slice(index, to + 1);
       const validation = routeGeometryMatchesStopSequence(slice, geometry, {
-        maxStationDistanceKm: to > index + 1 ? 1.2 : 2.0,
-        maxTerminalDistanceKm: 2.0
+        maxStationDistanceKm: to > index + 1 ? 0.75 : 1.15,
+        maxTerminalDistanceKm: to > index + 1 ? 1.35 : 1.7,
+        maxLegFactor: to > index + 1 ? 2.85 : 3.6,
+        maxLegExtraKm: to > index + 1 ? 14 : 22,
+        maxGlobalDistanceFactor: profile === 'highspeed' ? 3.8 : 3.25
       });
       if (!validation.ok) continue;
-      accepted = { to, geometry, mode: to > index + 1 ? 'subsequence' : 'segment' };
-      break;
+      const candidate = {
+        to,
+        geometry,
+        validation,
+        mode: to > index + 1 ? 'subsequence' : 'segment',
+        score: routeGeometryValidationScore(validation, slice.length)
+      };
+      if (!bestCandidate || candidate.score < bestCandidate.score - 24 || (Math.abs(candidate.score - bestCandidate.score) <= 24 && candidate.to > bestCandidate.to)) {
+        bestCandidate = candidate;
+      }
+      // Si un long sous-parcours est propre, inutile de tester tous les plus courts.
+      if (to > index + 3 && validation.worstDistance <= 0.35) break;
     }
+
+    if (bestCandidate) accepted = bestCandidate;
 
     if (!accepted) {
       const geometry = await sncfRouteGeometryForStations(ids[index], ids[index + 1], { profile });
-      if (!Array.isArray(geometry) || geometry.length < 2) return { ids, geometry: [], chunks: [] };
-      accepted = { to: index + 1, geometry, mode: 'segment-fallback' };
+      if (!Array.isArray(geometry) || geometry.length < 2) return rememberSncfRouteGeometrySequence(cacheKey, { ids, geometry: [], chunks: [] });
+      const validation = routeGeometryMatchesStopSequence(ids.slice(index, index + 2), geometry, {
+        maxStationDistanceKm: 1.5,
+        maxTerminalDistanceKm: 2.2,
+        maxLegFactor: 4.2,
+        maxLegExtraKm: 30,
+        allowLargeTerminalOffset: true
+      });
+      accepted = {
+        to: index + 1,
+        geometry,
+        validation,
+        mode: validation.ok ? 'segment-fallback' : 'segment-forced',
+        score: validation.ok ? routeGeometryValidationScore(validation, 2) : Infinity
+      };
     }
 
     geometries.push(accepted.geometry);
@@ -1644,13 +1759,14 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
       from: ids[index],
       to: ids[accepted.to],
       mode: accepted.mode,
-      pointCount: accepted.geometry.length
+      pointCount: accepted.geometry.length,
+      worstStopDistanceKm: round2(accepted.validation?.worstDistance || 0)
     });
     index = accepted.to;
   }
 
   const geometry = mergeGeoCoordinateSequences(geometries);
-  return { ids, geometry, chunks };
+  return rememberSncfRouteGeometrySequence(cacheKey, { ids, geometry, chunks });
 }
 
 
@@ -1796,7 +1912,8 @@ function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) 
   // nœuds dans la boîte de calcul ; l’ancien plafond fixe à 60 000 visites arrêtait
   // Dijkstra avant d’atteindre le terminus, puis la création de ligne échouait.
   const maxVisited = Math.max(60000, graph.size);
-  const ids = dijkstraWeightedGraph(graph, startKey, endKey, maxVisited);
+  const heuristicScale = profile === 'highspeed' ? 0.32 : 0.98;
+  const ids = dijkstraWeightedGraph(graph, startKey, endKey, maxVisited, coordsByKey, heuristicScale);
   if (ids.length < 2) return [];
   const path = ids
     .filter(id => id !== startKey && id !== endKey)
@@ -1828,11 +1945,20 @@ function pointToCoordDistance(point, coord) {
   return haversine(point.lat, point.lon, coord[1], coord[0]);
 }
 
-function dijkstraWeightedGraph(graph, startKey, endKey, maxVisited = 5000) {
+function dijkstraWeightedGraph(graph, startKey, endKey, maxVisited = 5000, coordsByKey = null, heuristicScale = 0) {
   const dist = new Map([[startKey, 0]]);
   const prev = new Map();
   const visited = new Set();
   const heap = [[0, startKey]];
+
+  const endCoord = coordsByKey?.get(endKey);
+  function heuristic(key) {
+    if (!coordsByKey || !endCoord || !Number.isFinite(heuristicScale) || heuristicScale <= 0) return 0;
+    const coord = coordsByKey.get(key);
+    if (!coord) return 0;
+    const distance = haversine(coord[1], coord[0], endCoord[1], endCoord[0]);
+    return Number.isFinite(distance) ? distance * heuristicScale : 0;
+  }
 
   function push(item) {
     heap.push(item);
@@ -1870,19 +1996,22 @@ function dijkstraWeightedGraph(graph, startKey, endKey, maxVisited = 5000) {
   while (heap.length && visited.size < Math.min(maxVisited, graph.size)) {
     const currentEntry = pop();
     if (!currentEntry) break;
-    const [best, current] = currentEntry;
+    const [, current] = currentEntry;
     if (visited.has(current)) continue;
+    const best = dist.get(current);
     if (!Number.isFinite(best)) break;
     visited.add(current);
     if (current === endKey) break;
 
     for (const [next, weight] of graph.get(current) || []) {
       if (visited.has(next)) continue;
-      const alt = best + weight;
+      const edgeWeight = Number(weight);
+      if (!Number.isFinite(edgeWeight) || edgeWeight <= 0) continue;
+      const alt = best + edgeWeight;
       if (alt < (dist.get(next) ?? Infinity)) {
         dist.set(next, alt);
         prev.set(next, current);
-        push([alt, next]);
+        push([alt + heuristic(next), next]);
       }
     }
   }

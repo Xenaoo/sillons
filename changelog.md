@@ -1,3 +1,10 @@
+## v66.8.0 - 2026-06-18
+
+- Affine le calcul RFN des tracés de lignes avec une validation plus stricte des gares intermédiaires.
+- Ajoute une sélection de sous-parcours RFN par score de fidélité pour éviter les branches parallèles visuellement incohérentes.
+- Accélère la recherche d’itinéraire RFN avec une heuristique de type A* conservant la priorité à la fidélité.
+- Ajoute un cache serveur dédié aux géométries RFN de suites d’arrêts et invalide le cache navigateur des anciens tracés.
+
 ## Version v66.7.0 — prévisualisation de ligne et profils RFN LGV/classique
 
 - incrément de version : badge interface `v66.7.0`, version serveur/client `v66.7.0`, package `66.7.0` et schéma serveur `141` ;
