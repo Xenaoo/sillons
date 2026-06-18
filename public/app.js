@@ -3609,6 +3609,9 @@ function renderLineItem(line) {
 
       <div class="line-card-modern-stats">
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
+        <div><span>Temps</span><b>${formatTravelMinutes(line.durationMinutes)}</b></div>
+        <div><span>Vitesse moy.</span><b>${line.averageSpeedKmh ? `${formatInt(line.averageSpeedKmh)} km/h` : '-'}</b></div>
+        <div><span>RFN</span><b>${Number(line.highSpeedShare || 0) > 0.35 ? `LGV ${formatInt(Number(line.highSpeedShare || 0) * 100)}%` : 'Classique'}</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
         <div><span>Trains affectés</span><b>${assignedTrains.length}</b></div>
         ${renderLineSillonMini(line)}
@@ -10984,6 +10987,15 @@ function toast(message, type = 'ok') {
 
 function formatInt(value) {
   return Math.round(Number(value || 0)).toLocaleString('fr-FR');
+}
+
+function formatTravelMinutes(value) {
+  const minutes = Math.max(0, Math.round(Number(value || 0)));
+  if (minutes <= 0) return '-';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m} min`;
+  return `${h} h ${String(m).padStart(2, '0')}`;
 }
 
 function money(value) {
