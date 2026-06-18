@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.6.0';
-const STATE_SCHEMA_VERSION = 140;
+const PROJECT_VERSION = 'v66.7.0';
+const STATE_SCHEMA_VERSION = 141;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -493,11 +493,13 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/sncf/route-geometry') {
     const from = url.searchParams.get('from') || '';
     const to = url.searchParams.get('to') || '';
-    const geometry = await sncfRouteGeometryForStations(from, to);
+    const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
+    const geometry = await sncfRouteGeometryForStations(from, to, { profile });
     sendJson(res, 200, {
       ok: true,
       from,
       to,
+      profile,
       geometry,
       distance: Math.round(polylineDistanceKm(geometry || [])),
       pointCount: Array.isArray(geometry) ? geometry.length : 0,
@@ -512,10 +514,12 @@ async function handleApi(req, res, url) {
       .split(/[>,|;,]+/)
       .map(value => value.trim())
       .filter(Boolean);
-    const route = await sncfRouteGeometryForStopSequence(stops);
+    const profile = normalizeRailRouteProfile(url.searchParams.get('profile') || 'default');
+    const route = await sncfRouteGeometryForStopSequence(stops, { profile });
     sendJson(res, 200, {
       ok: true,
       stops: route.ids || stops,
+      profile,
       geometry: route.geometry || [],
       distance: Math.round(polylineDistanceKm(route.geometry || [])),
       pointCount: Array.isArray(route.geometry) ? route.geometry.length : 0,
@@ -1164,8 +1168,14 @@ let sncfRailLinesCache = null;
 let sncfRailLinesLoadedAt = 0;
 const sncfRouteGeometryResultCache = new Map();
 
-function sncfRouteCacheKey(a, b) {
-  return `${currentStationId(a)}::${currentStationId(b)}`;
+function normalizeRailRouteProfile(profile) {
+  const value = String(profile || '').trim().toLowerCase();
+  if (['highspeed', 'classic'].includes(value)) return value;
+  return 'default';
+}
+
+function sncfRouteCacheKey(a, b, profile = 'default') {
+  return `${normalizeRailRouteProfile(profile)}::${currentStationId(a)}::${currentStationId(b)}`;
 }
 
 function rememberSncfRouteGeometry(key, geometry) {
@@ -1297,7 +1307,12 @@ function extractGeoJsonRailLines(geojson) {
       const clean = coords
         .map(pair => [Number(pair[0]), Number(pair[1])])
         .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && isInFranceBounds(lat, lon));
-      if (clean.length >= 2 && !rejected) lines.push({ coords: clean, status });
+      if (clean.length >= 2 && !rejected) lines.push({
+        coords: clean,
+        status,
+        codeLigne: String(properties.code_ligne || properties.codeLigne || properties.code || properties.CODE_LIGNE || properties.mnemo_ligne || '').trim(),
+        libelle: String(properties.libelle || properties.Libelle || properties.nom || properties.nom_ligne || '').trim()
+      });
     }
   }
   return lines;
@@ -1429,12 +1444,13 @@ function connectNearbyRfnComponents(graph, coordsByKey, directKm) {
   return added;
 }
 
-async function sncfRouteGeometryForStations(fromId, toId) {
+async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
+  const profile = normalizeRailRouteProfile(options.profile || 'default');
   const fromKey = currentStationId(fromId);
   const toKey = currentStationId(toId);
-  const key = sncfRouteCacheKey(fromKey, toKey);
+  const key = sncfRouteCacheKey(fromKey, toKey, profile);
   if (sncfRouteGeometryResultCache.has(key)) return sncfRouteGeometryResultCache.get(key);
-  const reverseKey = sncfRouteCacheKey(toKey, fromKey);
+  const reverseKey = sncfRouteCacheKey(toKey, fromKey, profile);
   if (sncfRouteGeometryResultCache.has(reverseKey)) {
     const reversed = [...sncfRouteGeometryResultCache.get(reverseKey)].reverse();
     return rememberSncfRouteGeometry(key, reversed);
@@ -1470,7 +1486,7 @@ async function sncfRouteGeometryForStations(fromId, toId) {
       const tighter = lines.filter(line => boundsIntersects(line.bounds, tightBox));
       if (tighter.length >= 1) relevant.splice(0, relevant.length, ...tighter);
     }
-    const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm);
+    const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm, { profile });
     return geometry?.length ? rememberSncfRouteGeometry(key, geometry) : [];
   } catch (error) {
     console.warn('Géométrie SNCF RFN indisponible:', error.message);
@@ -1573,11 +1589,12 @@ function mergeGeoCoordinateSequences(sequences) {
   return out;
 }
 
-async function sncfRouteGeometryForStopSequence(stops) {
+async function sncfRouteGeometryForStopSequence(stops, options = {}) {
+  const profile = normalizeRailRouteProfile(options.profile || 'default');
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, geometry: [], chunks: [] };
 
-  const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1]);
+  const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1], { profile });
   const directValidation = routeGeometryMatchesStopSequence(ids, directGeometry, {
     // Seuil volontairement strict : une géométrie globale peut passer près d'une
     // branche parallèle sans réellement desservir les gares intermédiaires.
@@ -1602,7 +1619,7 @@ async function sncfRouteGeometryForStopSequence(stops) {
     let accepted = null;
     const maxTo = Math.min(ids.length - 1, index + 14);
     for (let to = maxTo; to > index; to -= 1) {
-      const geometry = await sncfRouteGeometryForStations(ids[index], ids[to]);
+      const geometry = await sncfRouteGeometryForStations(ids[index], ids[to], { profile });
       if (!Array.isArray(geometry) || geometry.length < 2) continue;
       const slice = ids.slice(index, to + 1);
       const validation = routeGeometryMatchesStopSequence(slice, geometry, {
@@ -1615,7 +1632,7 @@ async function sncfRouteGeometryForStopSequence(stops) {
     }
 
     if (!accepted) {
-      const geometry = await sncfRouteGeometryForStations(ids[index], ids[index + 1]);
+      const geometry = await sncfRouteGeometryForStations(ids[index], ids[index + 1], { profile });
       if (!Array.isArray(geometry) || geometry.length < 2) return { ids, geometry: [], chunks: [] };
       accepted = { to: index + 1, geometry, mode: 'segment-fallback' };
     }
@@ -1636,7 +1653,98 @@ async function sncfRouteGeometryForStopSequence(stops) {
   return { ids, geometry, chunks };
 }
 
-function buildPathFromRailShapeLines(lines, start, end, directKm) {
+
+const HIGH_SPEED_RAIL_LINE_CODES = new Set([
+  // Principales lignes LGV SNCF. Utilisé si le cache RFN contient un code ligne.
+  '005000', '226000', '431000', '752000', '834000', '836000', '837000', '834300'
+]);
+
+const HIGH_SPEED_RAIL_CORRIDORS = [
+  { id: 'lgv-est', radiusKm: 11, anchors: [[2.62, 48.88], [3.99, 49.21], [5.27, 48.98], [6.17, 48.95], [7.73, 48.58]] },
+  { id: 'lgv-nord', radiusKm: 12, anchors: [[2.45, 49.02], [2.83, 49.45], [3.05, 49.88], [3.07, 50.34], [3.08, 50.64]] },
+  { id: 'lgv-atlantique-ouest', radiusKm: 13, anchors: [[2.27, 48.73], [1.84, 48.54], [0.19, 47.99], [-1.68, 48.10]] },
+  { id: 'lgv-atlantique-sud-ouest', radiusKm: 13, anchors: [[2.27, 48.73], [1.84, 48.54], [0.70, 47.39], [0.34, 46.58], [-0.58, 44.84]] },
+  { id: 'lgv-sud-est', radiusKm: 13, anchors: [[2.37, 48.64], [3.17, 47.89], [4.46, 46.80], [4.86, 45.76]] },
+  { id: 'lgv-mediterranee', radiusKm: 14, anchors: [[4.86, 45.76], [4.89, 44.93], [4.80, 43.95], [4.79, 43.45], [5.38, 43.30]] },
+  { id: 'lgv-rhone-alpes', radiusKm: 13, anchors: [[4.86, 45.76], [5.10, 45.55], [5.18, 45.35], [4.89, 44.93]] },
+  { id: 'lgv-rhin-rhone', radiusKm: 13, anchors: [[5.04, 47.32], [5.80, 47.47], [6.45, 47.58], [7.25, 47.74]] },
+  { id: 'contournement-nimes-montpellier', radiusKm: 10, anchors: [[4.36, 43.80], [4.70, 43.70], [3.88, 43.58]] }
+];
+
+function geoPointToSegmentDistanceKm(point, a, b) {
+  if (!Array.isArray(point) || !Array.isArray(a) || !Array.isArray(b)) return Infinity;
+  const lon = Number(point[0]);
+  const lat = Number(point[1]);
+  const lonA = Number(a[0]);
+  const latA = Number(a[1]);
+  const lonB = Number(b[0]);
+  const latB = Number(b[1]);
+  if (![lon, lat, lonA, latA, lonB, latB].every(Number.isFinite)) return Infinity;
+  const meanLat = ((lat + latA + latB) / 3) * Math.PI / 180;
+  const kmPerLon = 111.32 * (Math.cos(meanLat) || 1);
+  const kmPerLat = 110.57;
+  const px = lon * kmPerLon;
+  const py = lat * kmPerLat;
+  const ax = lonA * kmPerLon;
+  const ay = latA * kmPerLat;
+  const bx = lonB * kmPerLon;
+  const by = latB * kmPerLat;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq > 0 ? clamp(((px - ax) * dx + (py - ay) * dy) / lenSq, 0, 1) : 0;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+function distanceToHighSpeedCorridorKm(coord, corridor) {
+  const anchors = corridor?.anchors || [];
+  let best = Infinity;
+  for (let i = 1; i < anchors.length; i += 1) {
+    best = Math.min(best, geoPointToSegmentDistanceKm(coord, anchors[i - 1], anchors[i]));
+  }
+  return best;
+}
+
+function isLikelyHighSpeedRailShapeLine(line) {
+  if (!line || typeof line !== 'object') return false;
+  if (line.highSpeed === true || line.routeClass === 'highspeed') return true;
+  const rawCode = String(line.codeLigne || line.code_ligne || line.lineCode || line.code || '').trim();
+  if (rawCode && HIGH_SPEED_RAIL_LINE_CODES.has(rawCode.padStart(6, '0'))) return true;
+  const coords = Array.isArray(line.coords) ? line.coords : [];
+  if (coords.length < 2) return false;
+  const samples = [];
+  const sampleCount = Math.min(7, Math.max(3, coords.length));
+  for (let i = 0; i < sampleCount; i += 1) {
+    const index = Math.round((coords.length - 1) * (i / Math.max(1, sampleCount - 1)));
+    const coord = coords[index];
+    if (Array.isArray(coord) && coord.length >= 2) samples.push(coord);
+  }
+  if (!samples.length) return false;
+  let bestHits = 0;
+  let bestAverage = Infinity;
+  for (const corridor of HIGH_SPEED_RAIL_CORRIDORS) {
+    const distances = samples.map(coord => distanceToHighSpeedCorridorKm(coord, corridor));
+    const hits = distances.filter(distance => distance <= corridor.radiusKm).length;
+    const average = distances.reduce((sum, distance) => sum + distance, 0) / distances.length;
+    if (hits > bestHits || (hits === bestHits && average < bestAverage)) {
+      bestHits = hits;
+      bestAverage = average;
+    }
+  }
+  return bestHits >= Math.ceil(samples.length * 0.72) && bestAverage <= 9.5;
+}
+
+function railRouteEdgeWeight(distanceKm, line, profile) {
+  const distance = Number(distanceKm);
+  if (!Number.isFinite(distance) || distance <= 0) return distanceKm;
+  const highSpeed = isLikelyHighSpeedRailShapeLine(line);
+  if (profile === 'highspeed') return highSpeed ? distance * 0.34 : distance;
+  if (profile === 'classic') return highSpeed ? distance * 8.5 : distance;
+  return distance;
+}
+
+function buildPathFromRailShapeLines(lines, start, end, directKm, options = {}) {
+  const profile = normalizeRailRouteProfile(options.profile || 'default');
   const graph = new Map();
   const coordsByKey = new Map();
   function addNode(lon, lat) {
@@ -1653,7 +1761,8 @@ function buildPathFromRailShapeLines(lines, start, end, directKm) {
       const a = addNode(lonA, latA);
       const b = addNode(lonB, latB);
       if (a === b) continue;
-      const weight = haversine(latA, lonA, latB, lonB);
+      const distanceKm = haversine(latA, lonA, latB, lonB);
+      const weight = railRouteEdgeWeight(distanceKm, line, profile);
       graph.get(a).push([b, weight]);
       graph.get(b).push([a, weight]);
     }

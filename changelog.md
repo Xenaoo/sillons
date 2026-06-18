@@ -1,3 +1,12 @@
+## Version v66.7.0 — prévisualisation de ligne et profils RFN LGV/classique
+
+- incrément de version : badge interface `v66.7.0`, version serveur/client `v66.7.0`, package `66.7.0` et schéma serveur `141` ;
+- création de ligne : ajout d’un tracé provisoire en surbrillance directement sur la carte ;
+- le tracé provisoire se met à jour en temps réel quand le départ, le terminus ou les arrêts intermédiaires changent ;
+- rendu RFN : ajout d’un profil de routage `highspeed` pour les TGV/rames grande vitesse et d’un profil `classic` pour le matériel classique ;
+- les lignes TGV privilégient les corridors LGV quand ils existent, tandis que les matériels classiques évitent ces corridors pour garder un tracé cohérent ;
+- cache navigateur RFN invalidé pour éviter la réutilisation d’anciennes géométries non typées.
+
 ## Version v66.6.0 — compositions filtrées et achat catalogue corrigé
 
 - incrément de version : badge interface `v66.6.0`, version serveur/client `v66.6.0`, package `66.6.0` et schéma serveur `140` ;

@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.6.0';
+const PROJECT_VERSION = 'v66.7.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v4';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v6';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -3163,9 +3163,10 @@ function lineDistanceCalculatorData(draft = app.lineDraft) {
   const from = draft?.from;
   const to = draft?.to;
   if (!from || !to || from === to) return null;
-  const direct = getRouteForStops([from, to]);
+  const profile = routeProfileForDraftClient(draft);
+  const direct = getRouteForStops([from, to], { profile });
   const preparedStops = buildLineDraftStops();
-  const prepared = preparedStops.length >= 2 ? getRouteForStops(preparedStops) : direct;
+  const prepared = preparedStops.length >= 2 ? getRouteForStops(preparedStops, { profile }) : direct;
   return {
     from,
     to,
@@ -3733,6 +3734,35 @@ function isHighSpeedTrainsetModelClient(model) {
   if (/^(hsv_|tgv)/.test(id) || /(_tgv|_duplex|trainset)/.test(id)) return true;
   const label = trainModelSearchLabelClient(model);
   return /(tgv|grande vitesse|duplex)/.test(label);
+}
+
+
+function normalizeRouteProfileClient(profile) {
+  const value = String(profile || '').trim().toLowerCase();
+  if (['highspeed', 'classic'].includes(value)) return value;
+  return 'default';
+}
+
+function routeProfileForModelClient(model) {
+  if (!model) return 'default';
+  return isHighSpeedTrainsetModelClient(model) ? 'highspeed' : 'classic';
+}
+
+function routeProfileForTrainClient(train) {
+  const model = train ? app.state?.balance?.trains?.[train.modelId] : null;
+  return routeProfileForModelClient(model);
+}
+
+function routeProfileForLineClient(line, player = app.state?.me) {
+  const trains = lineAssignedTrainsClient(line, player || app.state?.me || {}) || [];
+  if (!trains.length) return 'default';
+  return trains.some(train => routeProfileForTrainClient(train) === 'highspeed') ? 'highspeed' : 'classic';
+}
+
+function routeProfileForDraftClient(draft = app.lineDraft || {}) {
+  const trainId = $('#lineTrain')?.value || draft.trainId || '';
+  const train = app.state?.me?.trains?.find(t => t.id === trainId) || null;
+  return routeProfileForTrainClient(train);
 }
 
 function multipleUnitMaxUnitsForModelClient(model) {
@@ -8224,7 +8254,8 @@ function drawAllLines(ctx, lite = false) {
     for (const line of player.lines || []) {
       if (!line.active) continue;
       if (focusedLineId && (!own || line.id !== focusedLineId)) continue;
-      const route = getRouteForStops(lineStopsOf(line));
+      const routeProfile = routeProfileForLineClient(line, player);
+      const route = getRouteForStops(lineStopsOf(line), { profile: routeProfile });
       if (!route.points.length) continue;
       if (!lite) registerLineHitTarget(player, line, route.points, own);
 
@@ -8269,6 +8300,62 @@ function drawAllLines(ctx, lite = false) {
     }
   }
   drawLinesForPlayer(me, true);
+  drawLineDraftPreview(ctx, lite);
+}
+
+function drawLineDraftPreview(ctx, lite = false) {
+  if (app.activeTab !== 'lines' || app.activeLinesSubtab !== 'create') return;
+  const stops = buildLineDraftStops();
+  if (!Array.isArray(stops) || stops.length < 2) return;
+  const profile = routeProfileForDraftClient();
+  const route = getRouteForStops(stops, { profile });
+  let points = Array.isArray(route.points) && route.points.length >= 2 ? route.points : [];
+  if (!points.length) {
+    points = stops.map(pointFromStationId).filter(Boolean);
+  }
+  if (points.length < 2) return;
+  drawDraftRailLine(ctx, points, lite, route.pending);
+  if (!lite) drawDraftStopMarkers(ctx, stops);
+}
+
+function drawDraftRailLine(ctx, points, lite = false, pending = false) {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = pending ? 0.66 : 0.95;
+  ctx.setLineDash([14, 9]);
+  ctx.strokeStyle = 'rgba(4, 8, 16, 0.92)';
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+  ctx.strokeStyle = pending ? 'rgba(251, 191, 36, 0.72)' : '#facc15';
+  ctx.lineWidth = 5.2;
+  ctx.shadowColor = 'rgba(250, 204, 21, 0.72)';
+  ctx.shadowBlur = lite ? 0 : 18;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDraftStopMarkers(ctx, stops) {
+  ctx.save();
+  ctx.font = '11px "Trebuchet MS", system-ui';
+  stops.forEach((id, index) => {
+    const point = pointFromStationId(id);
+    if (!point) return;
+    ctx.fillStyle = 'rgba(4, 8, 16, 0.95)';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, index === 0 || index === stops.length - 1 ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
 
@@ -9372,8 +9459,8 @@ function distance(a, b) {
 }
 
 
-function routeGeometryKey(a, b) {
-  return `${a}->${b}`;
+function routeGeometryKey(a, b, profile = 'default') {
+  return `${normalizeRouteProfileClient(profile)}::${a}->${b}`;
 }
 
 function routeGeometryStationPoint(id) {
@@ -9422,29 +9509,29 @@ function geometryWithRequestedEndpoints(geometry, requestedA, requestedB, aliasA
   return coords;
 }
 
-function geometryForRoute(a, b) {
-  const direct = cachedRailGeometryForRoute(a, b);
+function geometryForRoute(a, b, profile = 'default') {
+  const direct = cachedRailGeometryForRoute(a, b, profile);
   if (direct) return direct;
   const alias = routeGeometryAliasPair(a, b);
   if (alias.a !== a || alias.b !== b) {
     if (alias.a === alias.b) return geometryWithRequestedEndpoints([], a, b, alias.a, alias.b);
-    const aliasGeometry = cachedRailGeometryForRoute(alias.a, alias.b);
+    const aliasGeometry = cachedRailGeometryForRoute(alias.a, alias.b, profile);
     if (aliasGeometry) return geometryWithRequestedEndpoints(aliasGeometry, a, b, alias.a, alias.b);
-    const aliasKey = routeGeometryKey(alias.a, alias.b);
-    if (!routeGeometryMarkedMissing(aliasKey) && !routeGeometryMarkedMissing(routeGeometryKey(alias.b, alias.a))) {
-      ensureRailwayRouteGeometry(alias.a, alias.b);
+    const aliasKey = routeGeometryKey(alias.a, alias.b, profile);
+    if (!routeGeometryMarkedMissing(aliasKey) && !routeGeometryMarkedMissing(routeGeometryKey(alias.b, alias.a, profile))) {
+      ensureRailwayRouteGeometry(alias.a, alias.b, profile);
     }
     return null;
   }
-  const key = routeGeometryKey(a, b);
-  if (!routeGeometryMarkedMissing(key) && !routeGeometryMarkedMissing(routeGeometryKey(b, a))) ensureRailwayRouteGeometry(a, b);
+  const key = routeGeometryKey(a, b, profile);
+  if (!routeGeometryMarkedMissing(key) && !routeGeometryMarkedMissing(routeGeometryKey(b, a, profile))) ensureRailwayRouteGeometry(a, b, profile);
   return null;
 }
 
-function cachedRailGeometryForRoute(a, b) {
-  const direct = getCacheEntry(app.osmRouteCache, routeGeometryKey(a, b));
+function cachedRailGeometryForRoute(a, b, profile = 'default') {
+  const direct = getCacheEntry(app.osmRouteCache, routeGeometryKey(a, b, profile));
   if (direct) return direct;
-  const reverse = getCacheEntry(app.osmRouteCache, routeGeometryKey(b, a));
+  const reverse = getCacheEntry(app.osmRouteCache, routeGeometryKey(b, a, profile));
   if (reverse) return [...reverse].reverse();
   return null;
 }
@@ -9463,9 +9550,9 @@ function markRouteGeometryMissing(key) {
   app.osmRouteMissing.set(key, Date.now());
 }
 
-async function ensureRailwayRouteGeometry(a, b) {
-  const key = routeGeometryKey(a, b);
-  if (app.osmRoutePending.has(key) || routeGeometryMarkedMissing(key) || routeGeometryMarkedMissing(routeGeometryKey(b, a))) return;
+async function ensureRailwayRouteGeometry(a, b, profile = 'default') {
+  const key = routeGeometryKey(a, b, profile);
+  if (app.osmRoutePending.has(key) || routeGeometryMarkedMissing(key) || routeGeometryMarkedMissing(routeGeometryKey(b, a, profile))) return;
   if (app.osmRoutePending.size >= 3) return;
   const sa = station(a), sb = station(b);
   if (!sa || !sb) return;
@@ -9482,11 +9569,11 @@ async function ensureRailwayRouteGeometry(a, b) {
     // Priorité stricte au RFN serveur : il utilise le dataset SNCF officiel et peut
     // reconstruire un chemin via les gares intermédiaires même si elles ne sont pas
     // des arrêts commerciaux de la ligne créée par le joueur.
-    const sncf = await fetchSncfRouteGeometry(a, b);
+    const sncf = await fetchSncfRouteGeometry(a, b, profile);
     if (sncf?.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, sncf, OSM_ROUTE_CACHE_MAX_ENTRIES);
       app.osmRouteMissing.delete(key);
-      app.osmRouteMissing.delete(routeGeometryKey(b, a));
+      app.osmRouteMissing.delete(routeGeometryKey(b, a, profile));
       foundGeometry = true;
       app.routeCache.clear();
       invalidateMapProjection('sncf-rail-geometry-loaded');
@@ -9505,9 +9592,10 @@ async function ensureRailwayRouteGeometry(a, b) {
   }
 }
 
-async function fetchSncfRouteGeometry(a, b) {
+async function fetchSncfRouteGeometry(a, b, profile = 'default') {
   try {
-    const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
+    const routeProfile = normalizeRouteProfileClient(profile);
+    const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}&profile=${encodeURIComponent(routeProfile)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
       cache: 'force-cache',
       headers: authHeaders()
     });
@@ -9522,11 +9610,12 @@ async function fetchSncfRouteGeometry(a, b) {
   }
 }
 
-async function fetchSncfRouteGeometryForStopSequence(ids) {
+async function fetchSncfRouteGeometryForStopSequence(ids, profile = 'default') {
   try {
     const cleanIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
     if (cleanIds.length < 2) return [];
-    const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
+    const routeProfile = normalizeRouteProfileClient(profile);
+    const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}&profile=${encodeURIComponent(routeProfile)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
       cache: 'force-cache',
       headers: authHeaders()
     });
@@ -9634,11 +9723,12 @@ function polylineGeoDistance(coords) {
   return total;
 }
 
-function getRoute(a, b) {
-  const key = `${a}::${b}`;
+function getRoute(a, b, options = {}) {
+  const profile = normalizeRouteProfileClient(options.profile || 'default');
+  const key = `${profile}::${a}::${b}`;
   const cached = getCacheEntry(app.routeCache, key);
   if (cached) return cached;
-  const reverseKey = `${b}::${a}`;
+  const reverseKey = `${profile}::${b}::${a}`;
   const reverse = getCacheEntry(app.routeCache, reverseKey);
   if (reverse) {
     const route = {
@@ -9649,9 +9739,9 @@ function getRoute(a, b) {
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
 
-  const geometry = geometryForRoute(a, b);
+  const geometry = geometryForRoute(a, b, profile);
   if (!geometry?.length) {
-    const route = { ids: [a, b].filter(Boolean), distance: 0, maxSegment: 0, points: [], pending: !routeGeometryMarkedMissing(routeGeometryKey(a, b)) };
+    const route = { ids: [a, b].filter(Boolean), distance: 0, maxSegment: 0, points: [], pending: !routeGeometryMarkedMissing(routeGeometryKey(a, b, profile)) };
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
 
@@ -10021,48 +10111,48 @@ function removeDraftWaypoint(index) {
   renderAll();
 }
 
-function geometryKeyForStops(ids) {
-  return `stops::${ids.join('>')}`;
+function geometryKeyForStops(ids, profile = 'default') {
+  return `stops::${normalizeRouteProfileClient(profile)}::${ids.join('>')}`;
 }
 
-function geometryForStopSequence(ids) {
-  const key = geometryKeyForStops(ids);
+function geometryForStopSequence(ids, profile = 'default') {
+  const key = geometryKeyForStops(ids, profile);
   const direct = getCacheEntry(app.osmRouteCache, key);
   if (direct) return direct;
-  ensureOsmRouteGeometryForStops(ids);
+  ensureOsmRouteGeometryForStops(ids, profile);
   return null;
 }
 
-async function ensureOsmRouteGeometryForStops(ids) {
+async function ensureOsmRouteGeometryForStops(ids, profile = 'default') {
   if (!app.map.leaflet || !Array.isArray(ids) || ids.length < 2) return;
-  const key = geometryKeyForStops(ids);
+  const key = geometryKeyForStops(ids, profile);
   if (app.osmRoutePending.has(key) || app.osmRoutePending.size >= 3) return;
   const stations = ids.map(id => station(id)).filter(Boolean);
   if (stations.length !== ids.length) return;
   app.osmRoutePending.add(key);
   try {
-    const sequenceGeometry = await fetchSncfRouteGeometryForStopSequence(ids);
+    const sequenceGeometry = await fetchSncfRouteGeometryForStopSequence(ids, profile);
     if (sequenceGeometry?.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, sequenceGeometry, OSM_ROUTE_CACHE_MAX_ENTRIES);
-      app.routeCache.delete(`multi::${ids.join('::')}`);
+      app.routeCache.delete(`multi::${normalizeRouteProfileClient(profile)}::${ids.join('::')}`);
       invalidateMapProjection('sncf-sequence-geometry-loaded');
       if (app.activeTab === 'lines') updateLinePreview('sncf-sequence-geometry-loaded');
       return;
     }
 
     for (let i = 1; i < ids.length; i++) {
-      await ensureRailwayRouteGeometry(ids[i - 1], ids[i]);
+      await ensureRailwayRouteGeometry(ids[i - 1], ids[i], profile);
     }
     const coords = [];
     for (let i = 1; i < ids.length; i++) {
-      const segment = cachedRailGeometryForRoute(ids[i - 1], ids[i]);
+      const segment = cachedRailGeometryForRoute(ids[i - 1], ids[i], profile);
       if (!segment?.length) return;
       if (!coords.length) coords.push(...segment);
       else coords.push(...segment.slice(1));
     }
     if (coords.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
-      app.routeCache.delete(`multi::${ids.join('::')}`);
+      app.routeCache.delete(`multi::${normalizeRouteProfileClient(profile)}::${ids.join('::')}`);
       invalidateMapProjection('sncf-segment-geometry-loaded');
     }
   } catch (error) {
@@ -10246,9 +10336,10 @@ function routeHasVisualBacktrack(points) {
   return reversals >= 4;
 }
 
-function getRouteForStops(stops) {
+function getRouteForStops(stops, options = {}) {
+  const profile = normalizeRouteProfileClient(options.profile || 'default');
   const ids = Array.isArray(stops) ? stops.filter(Boolean) : lineStopsOf(stops);
-  const key = `multi::${ids.join('::')}`;
+  const key = `multi::${profile}::${ids.join('::')}`;
   const cached = getCacheEntry(app.routeCache, key);
   if (cached) return cached;
   if (ids.length < 2) {
@@ -10256,7 +10347,7 @@ function getRouteForStops(stops) {
     return rememberCacheEntry(app.routeCache, key, single, ROUTE_CACHE_MAX_ENTRIES);
   }
 
-  const sequenceGeometry = geometryForStopSequence(ids);
+  const sequenceGeometry = geometryForStopSequence(ids, profile);
   if (sequenceGeometry?.length >= 2) {
     const sequencePoints = sequenceGeometry
       .map(([lon, lat]) => project(lon, lat))
@@ -10279,7 +10370,7 @@ function getRouteForStops(stops) {
   let points = [];
 
   for (let i = 1; i < ids.length; i++) {
-    const segment = getRoute(ids[i - 1], ids[i]);
+    const segment = getRoute(ids[i - 1], ids[i], { profile });
     if (!segment.distance || !segment.points?.length) {
       const route = { ids, distance: 0, maxSegment: 0, points: [], pending: Boolean(segment.pending) };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
@@ -10369,7 +10460,7 @@ function stopsFromLineDraft(draft = app.lineDraft || {}) {
 
 function draftTicketDistance(draft = app.lineDraft || {}) {
   const stops = stopsFromLineDraft(draft);
-  return stops.length >= 2 ? getRouteForStops(stops).distance || 0 : 0;
+  return stops.length >= 2 ? getRouteForStops(stops, { profile: routeProfileForDraftClient(draft) }).distance || 0 : 0;
 }
 
 function lineTicketPrice(line) {
@@ -10842,7 +10933,7 @@ function updateLinePreview(sourceId = '') {
     return;
   }
 
-  const route = getRouteForStops(stops);
+  const route = getRouteForStops(stops, { profile: routeProfileForDraftClient() });
   if (!route.distance) {
     box.className = 'line-preview bad small';
     box.textContent = route.pending
@@ -10873,6 +10964,7 @@ function updateLinePreview(sourceId = '') {
   box.className = `line-preview ${ok ? 'good' : 'bad'} small`;
   box.textContent = base + detail;
   if (button) button.disabled = !ok;
+  drawMap();
 }
 
 function effectiveTrainRangeClient(train, model) {
