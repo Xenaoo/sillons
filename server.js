@@ -400,6 +400,10 @@ async function ensureCommuneCacheReady(force = false) {
 
 function communeCacheUsable(cache = communeCache) {
   if (cache?.status === 'stale-cache') return false;
+  return communeCacheHasPlayableStations(cache);
+}
+
+function communeCacheHasPlayableStations(cache = communeCache) {
   const byId = cache?.byId || {};
   const count = Object.keys(byId).length;
   if (count < COMMUNE_CACHE_MIN_READY_COUNT) return false;
@@ -407,6 +411,7 @@ function communeCacheUsable(cache = communeCache) {
 }
 
 async function waitForCommuneCache(maxMs = 3500) {
+  if (communeCacheHasPlayableStations(communeCache)) return;
   try {
     await Promise.race([
       ensureCommuneCacheReady(false),
@@ -432,6 +437,14 @@ function warmSncfRailShapeLinesCache() {
   loadSncfRailShapeLines()
     .then(lines => console.log(`Cache RFN SNCF prêt : ${lines.length} géométrie(s).`))
     .catch(error => console.warn('Préchargement RFN SNCF différé :', error.message));
+}
+
+function warmPublicWorldCache() {
+  try {
+    if (communeCacheHasPlayableStations(communeCache)) publicWorld();
+  } catch (error) {
+    console.warn('Prechargement monde public differe :', error.message);
+  }
 }
 
 setTimeout(warmSncfRailShapeLinesCache, 0);
@@ -3223,20 +3236,16 @@ function deduplicatePublicStations(stations, existingStations = []) {
 
 
 function publicWorld() {
-  const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
   const communeCount = Object.keys(communeCache.byId || {}).length;
-  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}`;
+  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCache.error || ''}`;
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
-  const baseStations = [];
-  const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement), baseStations);
-  const stations = deduplicatePublicStations([...baseStations, ...communeStations]);
+  const communeStations = Object.values(communeCache.byId || {}).map(stationRailPlacement).filter(Boolean);
+  const stations = communeStations.map(publicStationPayload);
   const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
     stations,
-    stationIndex,
-    communeStations,
     communesStatus: {
       status: communeCache.status,
       count: communeStations.length,
@@ -3252,8 +3261,40 @@ function publicWorld() {
     railPlacement: railPlacementStats(stations),
     regions: [...new Set(WORLD.regions)].sort()
   };
+  Object.defineProperty(world, 'stationIndex', { value: stationIndex, enumerable: false, configurable: true });
+  Object.defineProperty(world, 'communeStations', { value: communeStations, enumerable: false, configurable: true });
   publicWorldCache = { key: cacheKey, value: world };
   return world;
+}
+
+function publicStationPayload(station) {
+  if (!station || typeof station !== 'object') return station;
+  const out = {
+    id: station.id,
+    code: station.code,
+    name: station.name,
+    lat: roundCoord(Number(station.lat)),
+    lon: roundCoord(Number(station.lon)),
+    population: Math.round(Number(station.population || 0)),
+    region: station.region,
+    codesPostaux: Array.isArray(station.codesPostaux) ? station.codesPostaux.slice(0, 2) : [],
+    codeDepartement: station.codeDepartement || '',
+    baseDemand: Math.round(Number(station.baseDemand || 0)),
+    freight: Math.round(Number(station.freight || 0)),
+    tourism: Math.round(Number(station.tourism || 0)),
+    railLat: Number.isFinite(Number(station.railLat)) ? roundCoord(Number(station.railLat)) : undefined,
+    railLon: Number.isFinite(Number(station.railLon)) ? roundCoord(Number(station.railLon)) : undefined,
+    hasPassengerStation: Boolean(station.hasPassengerStation),
+    hasFreightStation: Boolean(station.hasFreightStation)
+  };
+  for (const key of ['annualPassengers', 'passengerTrafficYear', 'purchaseCost']) {
+    if (Number.isFinite(Number(station[key])) && Number(station[key]) > 0) out[key] = Math.round(Number(station[key]));
+  }
+  for (const key of ['stationKind', 'stationUic']) {
+    if (station[key]) out[key] = station[key];
+  }
+  if (station.majorTerminal) out.majorTerminal = true;
+  return out;
 }
 
 function sanitizeStateStationReferencesForPublicWorld() {
