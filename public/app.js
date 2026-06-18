@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.8.1';
+const PROJECT_VERSION = 'v67.0.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v8';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v9';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -9596,7 +9596,7 @@ async function fetchSncfRouteGeometry(a, b, profile = 'default') {
   try {
     const routeProfile = normalizeRouteProfileClient(profile);
     const response = await fetch(`/api/sncf/route-geometry?from=${encodeURIComponent(a)}&to=${encodeURIComponent(b)}&profile=${encodeURIComponent(routeProfile)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
-      cache: 'force-cache',
+      cache: 'no-store',
       headers: authHeaders()
     });
     if (!response.ok) return [];
@@ -9616,7 +9616,7 @@ async function fetchSncfRouteGeometryForStopSequence(ids, profile = 'default') {
     if (cleanIds.length < 2) return [];
     const routeProfile = normalizeRouteProfileClient(profile);
     const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}&profile=${encodeURIComponent(routeProfile)}&rv=${encodeURIComponent(PERSISTED_OSM_ROUTE_CACHE_VERSION)}`, {
-      cache: 'force-cache',
+      cache: 'no-store',
       headers: authHeaders()
     });
     if (!response.ok) return [];

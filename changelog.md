@@ -1,11 +1,12 @@
-## Version v66.8.1 — affinage RFN anti-boucle urbaine
+## Version v67.0.0 — moteur RFN accéléré et routage plus fiable
 
-- incrément de version : badge interface `v66.8.1`, version serveur/client `v66.8.1`, package `66.8.1` et schéma serveur `143` ;
-- RFN : ajout d’une pénalité progressive de corridor pour éviter qu’un itinéraire court parte sur une boucle ferroviaire trop éloignée de l’axe naturel départ → arrivée ;
-- RFN : ajout de raccords virtuels courts autour des gares/jonctions pour mieux relier les branches SNCF proches dans les grands nœuds urbains ;
-- RFN : ajout d’une tentative de passage par une gare-corridor intermédiaire quand le tracé direct validé reste visuellement trop détourné ;
-- correction : les itinéraires lyonnais comme `Collonges-Fontaines → Vénissieux` évitent désormais le détour visuel par Vaise/Perrache quand un axe plus cohérent par Part-Dieu existe ;
-- cache navigateur RFN invalidé en `sncf-geometry-v8`.
+- incrément de version : badge interface `v67.0.0`, version serveur/client `v67.0.0`, package `67.0.0` et schéma serveur `144` ;
+- RFN : ajout d’un cache disque serveur `sncf-rfn-route-cache.json` pour conserver les géométries calculées entre deux redémarrages/déploiements ;
+- RFN : ajout d’un index spatial des géométries SNCF afin de sélectionner plus vite les tronçons utiles au calcul d’itinéraire ;
+- RFN : amélioration du score de choix d’itinéraire avec pénalisation des détours, régressions et quasi demi-tours ;
+- RFN : les grands nœuds ferroviaires peuvent maintenant servir de points de passage stratégiques quand ils donnent un corridor plus cohérent ;
+- correction Lyon : les itinéraires nord-sud proches de `Lyon-Part-Dieu` sont réévalués via ce corridor afin d’éviter les boucles visuelles par `Vaise` / `Perrache` quand elles ne sont pas pertinentes ;
+- client : cache navigateur RFN invalidé en `sncf-geometry-v9` et requêtes RFN forcées en `no-store` pour éviter de réutiliser une ancienne géométrie incohérente.
 
 ## Version v66.7.0 — prévisualisation de ligne et profils RFN LGV/classique
 

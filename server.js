@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.8.1';
-const STATE_SCHEMA_VERSION = 143;
+const PROJECT_VERSION = 'v67.0.0';
+const STATE_SCHEMA_VERSION = 144;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -34,6 +34,9 @@ const SNCF_STATION_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2
 const SNCF_STATION_PAGE_SIZE = 100;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
+const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
+const SNCF_RFN_ROUTE_CACHE_VERSION = 'rfn-route-v9';
+const SNCF_RFN_SPATIAL_CELL_DEG = 0.18;
 const POPULATION_TABULAR_RESOURCE_ID = 'be303501-5c46-48a1-87b4-3d198423ff49';
 const POPULATION_TABULAR_API_URL = `https://tabular-api.data.gouv.fr/api/resources/${POPULATION_TABULAR_RESOURCE_ID}/data/`;
 const POPULATION_TABULAR_PAGE_SIZE = 200;
@@ -1166,6 +1169,9 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
 
 let sncfRailLinesCache = null;
 let sncfRailLinesLoadedAt = 0;
+let sncfRailLineSpatialIndex = null;
+let sncfPersistentRouteCacheLoaded = false;
+let sncfPersistentRouteCacheSaveTimer = null;
 const sncfRouteGeometryResultCache = new Map();
 const sncfRouteGeometrySequenceResultCache = new Map();
 
@@ -1183,7 +1189,61 @@ function sncfRouteSequenceCacheKey(ids, profile = 'default') {
   return `${normalizeRailRouteProfile(profile)}::${(ids || []).map(currentStationId).filter(Boolean).join('>')}`;
 }
 
+function ensureSncfPersistentRouteCacheLoaded() {
+  if (sncfPersistentRouteCacheLoaded) return;
+  sncfPersistentRouteCacheLoaded = true;
+  try {
+    if (!fs.existsSync(SNCF_RFN_ROUTE_CACHE_FILE)) return;
+    const parsed = JSON.parse(fs.readFileSync(SNCF_RFN_ROUTE_CACHE_FILE, 'utf8'));
+    if (parsed?.version !== SNCF_RFN_ROUTE_CACHE_VERSION) return;
+    const routes = Array.isArray(parsed.routes) ? parsed.routes : [];
+    const sequences = Array.isArray(parsed.sequences) ? parsed.sequences : [];
+    for (const entry of routes) {
+      const key = Array.isArray(entry) ? entry[0] : entry?.key;
+      const geometry = Array.isArray(entry) ? entry[1] : entry?.geometry;
+      if (typeof key === 'string' && Array.isArray(geometry) && geometry.length >= 2) {
+        sncfRouteGeometryResultCache.set(key, simplifyGeoPolyline(geometry));
+      }
+      if (sncfRouteGeometryResultCache.size >= SNCF_ROUTE_GEOMETRY_CACHE_MAX) break;
+    }
+    for (const entry of sequences) {
+      const key = Array.isArray(entry) ? entry[0] : entry?.key;
+      const route = Array.isArray(entry) ? entry[1] : entry?.route;
+      if (typeof key === 'string' && route && Array.isArray(route.geometry) && route.geometry.length >= 2) {
+        sncfRouteGeometrySequenceResultCache.set(key, {
+          ids: Array.isArray(route.ids) ? route.ids : [],
+          geometry: simplifyGeoPolyline(route.geometry),
+          chunks: Array.isArray(route.chunks) ? route.chunks : []
+        });
+      }
+      if (sncfRouteGeometrySequenceResultCache.size >= SNCF_ROUTE_GEOMETRY_CACHE_MAX) break;
+    }
+  } catch (error) {
+    console.warn('Cache itinéraires RFN illisible:', error.message);
+  }
+}
+
+function scheduleSncfPersistentRouteCacheSave() {
+  if (sncfPersistentRouteCacheSaveTimer) return;
+  sncfPersistentRouteCacheSaveTimer = setTimeout(() => {
+    sncfPersistentRouteCacheSaveTimer = null;
+    try {
+      const payload = {
+        version: SNCF_RFN_ROUTE_CACHE_VERSION,
+        savedAt: Date.now(),
+        routes: [...sncfRouteGeometryResultCache.entries()].slice(-SNCF_ROUTE_GEOMETRY_CACHE_MAX),
+        sequences: [...sncfRouteGeometrySequenceResultCache.entries()].slice(-SNCF_ROUTE_GEOMETRY_CACHE_MAX)
+      };
+      fs.writeFileSync(SNCF_RFN_ROUTE_CACHE_FILE, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Cache itinéraires RFN non écrit:', error.message);
+    }
+  }, 900);
+  if (typeof sncfPersistentRouteCacheSaveTimer.unref === 'function') sncfPersistentRouteCacheSaveTimer.unref();
+}
+
 function rememberSncfRouteGeometrySequence(key, route) {
+  ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometrySequenceResultCache.has(key)) sncfRouteGeometrySequenceResultCache.delete(key);
   const normalized = {
     ids: Array.isArray(route?.ids) ? route.ids : [],
@@ -1195,16 +1255,19 @@ function rememberSncfRouteGeometrySequence(key, route) {
     const oldest = sncfRouteGeometrySequenceResultCache.keys().next().value;
     sncfRouteGeometrySequenceResultCache.delete(oldest);
   }
+  scheduleSncfPersistentRouteCacheSave();
   return normalized;
 }
 
 function rememberSncfRouteGeometry(key, geometry) {
+  ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometryResultCache.has(key)) sncfRouteGeometryResultCache.delete(key);
   sncfRouteGeometryResultCache.set(key, simplifyGeoPolyline(Array.isArray(geometry) ? geometry : []));
   while (sncfRouteGeometryResultCache.size > SNCF_ROUTE_GEOMETRY_CACHE_MAX) {
     const oldest = sncfRouteGeometryResultCache.keys().next().value;
     sncfRouteGeometryResultCache.delete(oldest);
   }
+  scheduleSncfPersistentRouteCacheSave();
   return sncfRouteGeometryResultCache.get(key);
 }
 
@@ -1292,6 +1355,7 @@ async function loadSncfRailShapeLines() {
         sncfRailLinesCache = parsed.lines
           .filter(line => Array.isArray(line?.coords) && line.coords.length >= 2)
           .map(line => ({ ...line, bounds: line.bounds || geoLineBounds(line.coords) }));
+        sncfRailLineSpatialIndex = buildSncfRailLineSpatialIndex(sncfRailLinesCache);
         sncfRailLinesLoadedAt = Number(parsed.updatedAt || Date.now());
         return sncfRailLinesCache;
       }
@@ -1306,6 +1370,7 @@ async function loadSncfRailShapeLines() {
     .map(line => ({ ...line, bounds: geoLineBounds(line.coords) }));
   if (!lines.length) throw new Error('Aucune géométrie RFN exploitable.');
   sncfRailLinesCache = lines;
+  sncfRailLineSpatialIndex = buildSncfRailLineSpatialIndex(sncfRailLinesCache);
   sncfRailLinesLoadedAt = Date.now();
   try {
     fs.writeFileSync(SNCF_RFN_CACHE_FILE, JSON.stringify({ updatedAt: sncfRailLinesLoadedAt, source: 'formes-des-lignes-du-rfn', lines }, null, 0));
@@ -1362,6 +1427,54 @@ function geoLineBounds(coords) {
 
 function boundsIntersects(a, b) {
   return a.minLon <= b.maxLon && a.maxLon >= b.minLon && a.minLat <= b.maxLat && a.maxLat >= b.minLat;
+}
+
+function buildSncfRailLineSpatialIndex(lines) {
+  const cells = new Map();
+  const cellSize = SNCF_RFN_SPATIAL_CELL_DEG;
+  const cellKey = (ix, iy) => `${ix}:${iy}`;
+  for (let index = 0; index < (lines || []).length; index += 1) {
+    const bounds = lines[index]?.bounds;
+    if (!bounds) continue;
+    const minX = Math.floor(bounds.minLon / cellSize);
+    const maxX = Math.floor(bounds.maxLon / cellSize);
+    const minY = Math.floor(bounds.minLat / cellSize);
+    const maxY = Math.floor(bounds.maxLat / cellSize);
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) {
+        const key = cellKey(x, y);
+        const bucket = cells.get(key) || [];
+        bucket.push(index);
+        cells.set(key, bucket);
+      }
+    }
+  }
+  return { cellSize, cells };
+}
+
+function sncfRailLinesInBounds(lines, bbox) {
+  const source = Array.isArray(lines) ? lines : [];
+  if (!bbox || !sncfRailLineSpatialIndex?.cells?.size) return source.filter(line => boundsIntersects(line.bounds, bbox));
+  const { cellSize, cells } = sncfRailLineSpatialIndex;
+  const seen = new Set();
+  const out = [];
+  const minX = Math.floor(bbox.minLon / cellSize);
+  const maxX = Math.floor(bbox.maxLon / cellSize);
+  const minY = Math.floor(bbox.minLat / cellSize);
+  const maxY = Math.floor(bbox.maxLat / cellSize);
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      const bucket = cells.get(`${x}:${y}`);
+      if (!bucket?.length) continue;
+      for (const index of bucket) {
+        if (seen.has(index)) continue;
+        seen.add(index);
+        const line = source[index];
+        if (line?.bounds && boundsIntersects(line.bounds, bbox)) out.push(line);
+      }
+    }
+  }
+  return out;
 }
 
 function rfnCoordKey(lon, lat) {
@@ -1595,11 +1708,38 @@ function corridorDeviationLimitKm(directKm) {
   return Math.max(10, direct * 0.10);
 }
 
+function routeBacktrackingMetrics(start, end, geometry) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (!start || !end || coords.length < 2) return { regression: 0, reversals: 0 };
+  let previous = null;
+  let regression = 0;
+  let reversals = 0;
+  for (const coord of coords) {
+    const progress = routeProgressOnSegment(coord, start, end);
+    if (!Number.isFinite(progress)) continue;
+    if (previous !== null) {
+      const delta = progress - previous;
+      if (delta < -0.018) {
+        regression += Math.abs(delta);
+        reversals += 1;
+      }
+    }
+    previous = progress;
+  }
+  return { regression, reversals };
+}
+
 function routeCorridorScore(start, end, geometry) {
   const metrics = routeCorridorMetrics(start, end, geometry);
   const distance = polylineDistanceKm(geometry || []);
   if (!Number.isFinite(distance) || distance <= 0) return Infinity;
-  return distance + metrics.averageDeviationKm * 5 + metrics.p95DeviationKm * 3 + metrics.maxDeviationKm * 2;
+  const backtracking = routeBacktrackingMetrics(start, end, geometry);
+  return distance
+    + metrics.averageDeviationKm * 5
+    + metrics.p95DeviationKm * 3
+    + metrics.maxDeviationKm * 2
+    + backtracking.regression * distance * 18
+    + backtracking.reversals * 1.4;
 }
 
 function corridorWaypointCandidates(fromKey, toKey, start, end, directKm) {
@@ -1624,7 +1764,59 @@ function corridorWaypointCandidates(fromKey, toKey, start, end, directKm) {
     const importance = (station.hasPassengerStation ? 1.5 : 0) + Math.min(3, Number(station.baseDemand || station.population || 0) / 90000);
     candidates.push({ id, station, point, progress, deviation, importance, score: deviation + Math.abs(progress - 0.5) * 1.2 - importance * 0.25 });
   }
-  return candidates.sort((a, b) => a.score - b.score).slice(0, 5);
+  return candidates.sort((a, b) => a.score - b.score).slice(0, 8);
+}
+
+const RFN_STRATEGIC_CORRIDOR_STATION_IDS = Object.freeze([
+  // Grands nœuds utiles pour départager les corridors urbains quand le RFN
+  // contient plusieurs branches parallèles très proches.
+  'GARE_87723197', // Lyon-Part-Dieu
+  'GARE_87722025', // Lyon-Perrache
+  'GARE_87686006', // Paris-Gare-de-Lyon
+  'GARE_87271031', // Paris-Nord
+  'GARE_87113001', // Paris-Est
+  'GARE_87391003', // Paris-Montparnasse principal selon sources SNCF
+  'GARE_87751008', // Marseille-St-Charles
+  'GARE_87286005', // Lille-Flandres
+  'GARE_87212027', // Lille-Europe
+  'GARE_87481002', // Bordeaux-St-Jean
+  'GARE_87484006', // Toulouse-Matabiau
+  'GARE_87471003', // Nantes
+  'GARE_87471300', // Rennes
+  'GARE_87223263', // Strasbourg-Ville
+  'GARE_87611004'  // Nice-Ville
+]);
+
+function strategicCorridorWaypointCandidates(fromKey, toKey, start, end, directKm) {
+  const direct = Number(directKm || 0);
+  if (!Number.isFinite(direct) || direct <= 0 || direct > 180) return [];
+  const exclude = new Set([currentStationId(fromKey), currentStationId(toKey)]);
+  const corridorWidth = direct <= 35 ? Math.max(3.6, direct * 0.24) : Math.max(6.0, direct * 0.14);
+  const out = [];
+  for (const id of RFN_STRATEGIC_CORRIDOR_STATION_IDS) {
+    if (exclude.has(id)) continue;
+    const station = stationById(id);
+    const point = stationRoutePoint(station) || stationRawPoint(station);
+    if (!point) continue;
+    const progress = routeProgressOnSegment(point, start, end);
+    if (!Number.isFinite(progress) || progress < 0.07 || progress > 0.93) continue;
+    const deviation = routeCorridorDistanceKm([point.lon, point.lat], start, end);
+    if (!Number.isFinite(deviation) || deviation > corridorWidth) continue;
+    const fromDistance = haversine(start.lat, start.lon, point.lat, point.lon);
+    const toDistance = haversine(point.lat, point.lon, end.lat, end.lon);
+    if (fromDistance < Math.max(1.2, direct * 0.04) || toDistance < Math.max(1.2, direct * 0.04)) continue;
+    out.push({ id, station, point, progress, deviation, strategic: true, score: deviation + Math.abs(progress - 0.5) * 0.7 - 2.4 });
+  }
+  return out.sort((a, b) => a.score - b.score).slice(0, 4);
+}
+
+function mergeRouteWaypointCandidates(base, extra) {
+  const byId = new Map();
+  for (const candidate of [...(extra || []), ...(base || [])]) {
+    if (!candidate?.id || byId.has(candidate.id)) continue;
+    byId.set(candidate.id, candidate);
+  }
+  return [...byId.values()].sort((a, b) => a.score - b.score).slice(0, 10);
 }
 
 async function improveSncfRouteGeometryWithCorridorWaypoint(fromKey, toKey, geometry, profile, directKm) {
@@ -1635,26 +1827,44 @@ async function improveSncfRouteGeometryWithCorridorWaypoint(fromKey, toKey, geom
   const start = stationRoutePoint(fromStation) || stationRawPoint(fromStation);
   const end = stationRoutePoint(toStation) || stationRawPoint(toStation);
   if (!start || !end) return coords;
-  if (Number(directKm || 0) > 65) return coords;
+  if (Number(directKm || 0) > 180) return coords;
+
   const limit = corridorDeviationLimitKm(directKm);
   const currentMetrics = routeCorridorMetrics(start, end, coords);
-  if (currentMetrics.p95DeviationKm <= limit && currentMetrics.maxDeviationKm <= limit * 1.8) return coords;
-
   const currentDistance = polylineDistanceKm(coords);
   const currentScore = routeCorridorScore(start, end, coords);
+  const currentBacktracking = routeBacktrackingMetrics(start, end, coords);
   let best = { geometry: coords, score: currentScore, metrics: currentMetrics, distance: currentDistance, waypoint: null };
-  for (const candidate of corridorWaypointCandidates(fromKey, toKey, start, end, directKm)) {
-    const first = await sncfRouteGeometryForStations(fromKey, candidate.id, { profile, disableAutoWaypoint: true, disableStationJunctions: true });
-    const second = await sncfRouteGeometryForStations(candidate.id, toKey, { profile, disableAutoWaypoint: true, disableStationJunctions: true });
+
+  const genericCandidates = (currentMetrics.p95DeviationKm > limit * 0.72 || currentBacktracking.reversals > 0)
+    ? corridorWaypointCandidates(fromKey, toKey, start, end, directKm)
+    : [];
+  const strategicCandidates = strategicCorridorWaypointCandidates(fromKey, toKey, start, end, directKm);
+  const candidates = mergeRouteWaypointCandidates(genericCandidates, strategicCandidates);
+  if (!candidates.length) return coords;
+
+  for (const candidate of candidates) {
+    // On garde les raccords de gare/jonction actifs ici. Les désactiver empêchait
+    // justement certains corridors urbains réels d’être retrouvés, notamment à Lyon.
+    const first = await sncfRouteGeometryForStations(fromKey, candidate.id, { profile, disableAutoWaypoint: true });
+    const second = await sncfRouteGeometryForStations(candidate.id, toKey, { profile, disableAutoWaypoint: true });
     if (!Array.isArray(first) || first.length < 2 || !Array.isArray(second) || second.length < 2) continue;
     const merged = mergeGeoCoordinateSequences([first, second]);
     const distance = polylineDistanceKm(merged);
     if (!Number.isFinite(distance) || distance <= 0) continue;
-    if (distance > Math.max(currentDistance * 1.42, directKm + 24)) continue;
+    const maxAllowed = candidate.strategic
+      ? Math.max(currentDistance * 1.55, Number(directKm || 0) + 32)
+      : Math.max(currentDistance * 1.42, Number(directKm || 0) + 24);
+    if (distance > maxAllowed) continue;
     const metrics = routeCorridorMetrics(start, end, merged);
     const score = routeCorridorScore(start, end, merged);
-    const materiallyBetter = metrics.p95DeviationKm < best.metrics.p95DeviationKm * 0.72 || metrics.maxDeviationKm < best.metrics.maxDeviationKm * 0.72;
-    if (materiallyBetter && score < best.score - 1.5) {
+    const substantiallyCleaner = metrics.p95DeviationKm < best.metrics.p95DeviationKm * 0.82
+      || metrics.maxDeviationKm < best.metrics.maxDeviationKm * 0.82
+      || score < best.score - Math.max(1.2, Number(directKm || 0) * 0.04);
+    const strategicTieBreak = candidate.strategic && score <= best.score + Math.max(2.2, Number(directKm || 0) * 0.08)
+      && metrics.p95DeviationKm <= best.metrics.p95DeviationKm * 1.05
+      && distance <= Math.max(best.distance * 1.18, Number(directKm || 0) + 18);
+    if ((substantiallyCleaner || strategicTieBreak) && score < best.score + 3.5) {
       best = { geometry: merged, score, metrics, distance, waypoint: candidate.id };
     }
   }
@@ -1666,6 +1876,7 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
   const fromKey = currentStationId(fromId);
   const toKey = currentStationId(toId);
   const disableAutoWaypoint = options.disableAutoWaypoint === true;
+  ensureSncfPersistentRouteCacheLoaded();
   const key = sncfRouteCacheKey(fromKey, toKey, profile);
   if (!disableAutoWaypoint && sncfRouteGeometryResultCache.has(key)) return sncfRouteGeometryResultCache.get(key);
   const reverseKey = sncfRouteCacheKey(toKey, fromKey, profile);
@@ -1692,7 +1903,7 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
       minLon: Math.min(start.lon, end.lon) - pad,
       maxLon: Math.max(start.lon, end.lon) + pad
     };
-    const relevant = lines.filter(line => boundsIntersects(line.bounds, bbox));
+    const relevant = sncfRailLinesInBounds(lines, bbox);
     if (relevant.length > 850 && directKm < 180) {
       const tighterPad = Math.min(0.9, Math.max(0.08, directKm / 150));
       const tightBox = {
@@ -1701,7 +1912,7 @@ async function sncfRouteGeometryForStations(fromId, toId, options = {}) {
         minLon: Math.min(start.lon, end.lon) - tighterPad,
         maxLon: Math.max(start.lon, end.lon) + tighterPad
       };
-      const tighter = lines.filter(line => boundsIntersects(line.bounds, tightBox));
+      const tighter = sncfRailLinesInBounds(lines, tightBox);
       if (tighter.length >= 1) relevant.splice(0, relevant.length, ...tighter);
     }
     const geometry = buildPathFromRailShapeLines(relevant, start, end, directKm, { profile, stationJunctions: options.disableStationJunctions !== true });
@@ -1860,6 +2071,7 @@ async function sncfRouteGeometryForStopSequence(stops, options = {}) {
   const ids = sanitizeStopsPayload(stops, null, null);
   if (ids.length < 2) return { ids, geometry: [], chunks: [] };
   const cacheKey = sncfRouteSequenceCacheKey(ids, profile);
+  ensureSncfPersistentRouteCacheLoaded();
   if (sncfRouteGeometrySequenceResultCache.has(cacheKey)) return sncfRouteGeometrySequenceResultCache.get(cacheKey);
 
   const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1], { profile });
