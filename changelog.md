@@ -1,3 +1,11 @@
+## Version v65.2.0 — lisibilité R&D, stocks énergie et renommage Paris Montparnasse
+
+- incrément de version : badge interface `v65.2.0`, version serveur/client `v65.2.0`, package `65.2.0` et schéma serveur `120` ;
+- renommage de la gare `Paris-Vaugirard` en `Paris Montparnasse` dans le référentiel gares et dans les libellés persistés de la sauvegarde ;
+- menu Vue : ajout d’un tooltip sur `Capacité R&D` expliquant la vitesse de recherche et détaillant les sources de bonus ;
+- menu Énergie : ajout de l’heure prévisionnelle d’épuisement du stock pour chaque ressource, ou d’un statut de rupture/absence de rupture quand il n’y a pas de stock consommable ;
+- barre supérieure : les tooltips des ressources indiquent maintenant l’heure à laquelle le stock atteindra 0 au rythme actuel.
+
 ## Version v65.1.0 — bouton carte explicite pour les lignes des autres joueurs
 
 - incrément de version : badge interface `v65.1.0`, version serveur/client `v65.1.0`, package `65.1.0` et schéma serveur `119` ;

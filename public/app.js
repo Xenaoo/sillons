@@ -4,7 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v65.1.0';
+const PROJECT_VERSION = 'v65.2.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
@@ -2152,7 +2152,7 @@ function renderOverview() {
         ${metric('Lignes actives', activeLines)}
         ${metric('Trains', me.trains.length)}
         ${metric('Gares exploitées', Object.keys(me.stations).length)}
-        ${metric('Capacité R&D', `${round(researchWorkRateClient(me))}x`)}
+        ${metric('Capacité R&D', `${round(researchWorkRateClient(me))}x`, '', researchCapacityTooltipClient(me))}
       </div>
     </div>
 
@@ -2194,8 +2194,8 @@ function renderOverview() {
   `;
 }
 
-function metric(label, value, cls = '') {
-  return `<div class="metric"><span>${escapeHtml(label)}</span><b class="${cls}">${escapeHtml(String(value))}</b></div>`;
+function metric(label, value, cls = '', tip = '') {
+  return `<div class="metric" ${tooltipAttr(tip)}><span>${escapeHtml(label)}</span><b class="${cls}">${escapeHtml(String(value))}</b></div>`;
 }
 
 function renderFinanceSummary(me) {
@@ -2281,6 +2281,27 @@ function researchDurationClient(node, targetLevel) {
 
 function researchWorkRateClient(me = app.state?.me) {
   return me?.researchProject?.workRate || me?.research || 1;
+}
+
+function researchCapacityTooltipClient(me = app.state?.me) {
+  const reputation = Number(me?.reputation || 0);
+  const reputationBonus = Math.min(0.32, Math.max(0, reputation - 50) * 0.004);
+  const crewTrainingLevel = techLevel('crew_training');
+  const crewTrainingBonus = crewTrainingLevel * 0.025;
+  const centralizedControlLevel = techLevel('centralized_control');
+  const centralizedControlBonus = Math.min(0.22, centralizedControlLevel * 0.018);
+  const total = 1 + reputationBonus + crewTrainingBonus + centralizedControlBonus;
+  return [
+    'Capacité R&D : vitesse réelle de progression des recherches.',
+    `Valeur actuelle : ${round(researchWorkRateClient(me))}x. Une valeur de 1,20x signifie +20% de vitesse.`,
+    '---------------------------------------------',
+    'Sources des modificateurs :',
+    'Base laboratoire : 1,00x',
+    `Réputation (${Math.round(reputation)}/100) : +${round(reputationBonus)}x`,
+    `Formation équipages niv. ${crewTrainingLevel} : +${round(crewTrainingBonus)}x`,
+    `Commande centralisée niv. ${centralizedControlLevel} : +${round(centralizedControlBonus)}x`,
+    `Total calculé : ${round(total)}x`
+  ].join('\n');
 }
 
 function normalizeResearchPrereqItemClient(item) {
@@ -5703,6 +5724,57 @@ function renderResearchEffectChip(effect, node) {
 }
 
 
+function resourceDisplayLabel(type) {
+  return { coal: 'Charbon', diesel: 'Diesel', electricity: 'Électricité', hydrogen: 'Hydrogène', battery: 'Batterie' }[type] || type;
+}
+
+function resourceCurrentStockClient(type) {
+  const me = app.state?.me || {};
+  const flow = me.resourceFlow || {};
+  if (type === 'electricity') return Number(flow.production?.electricity ?? me.resources?.electricityOrder ?? 0);
+  return Number(flow.stocks?.[type] ?? me.resources?.[type] ?? 0);
+}
+
+function formatResourceZeroTimeClient(hoursFromNow) {
+  if (!Number.isFinite(hoursFromNow) || hoursFromNow < 0) return 'inconnue';
+  const target = new Date(Date.now() + hoursFromNow * 3600000);
+  const time = target.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const afterTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+  if (target.toDateString() === now.toDateString()) return `aujourd’hui à ${time}`;
+  if (target.toDateString() === tomorrow.toDateString()) return `demain à ${time}`;
+  if (target >= afterTomorrow) {
+    const date = target.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    return `le ${date} à ${time}`;
+  }
+  return time;
+}
+
+function resourceZeroInfoClient(type) {
+  const flow = app.state?.me?.resourceFlow || {};
+  const consumption = Number(flow.consumption?.[type] || 0);
+  if (type === 'electricity') {
+    const production = Number(flow.production?.electricity || app.state?.me?.resources?.electricityOrder || 0);
+    if (consumption <= 0) return { label: 'Aucune rupture prévue', detail: 'Aucune consommation électrique active.', cls: 'good-text' };
+    if (production <= 0) return { label: 'Maintenant', detail: 'Stock à 0 : maintenant. Aucune commande producteur ne couvre les trains électriques.', cls: 'bad-text' };
+    if (production < consumption) return { label: 'Maintenant', detail: `Stock à 0 : maintenant. Déficit de ${round(consumption - production)} MW/h.`, cls: 'bad-text' };
+    return { label: 'Aucune rupture prévue', detail: `La commande couvre la consommation actuelle avec une marge de ${round(production - consumption)} MW/h.`, cls: 'good-text' };
+  }
+  const stock = resourceCurrentStockClient(type);
+  if (consumption <= 0) {
+    return { label: stock > 0 ? 'Aucune rupture prévue' : 'Stock nul', detail: stock > 0 ? 'Aucune consommation active : le stock ne baisse pas.' : 'Stock déjà nul, mais aucune consommation active.', cls: stock > 0 ? 'good-text' : 'warn-text' };
+  }
+  if (stock <= 0) return { label: 'Maintenant', detail: 'Stock à 0 : maintenant.', cls: 'bad-text' };
+  const hours = stock / consumption;
+  const when = formatResourceZeroTimeClient(hours);
+  return { label: when, detail: `Stock à 0 : ${when} au rythme actuel (${round(consumption)} u/h).`, cls: hours <= 1 ? 'bad-text' : hours <= 6 ? 'warn-text' : 'good-text' };
+}
+
+function resourceZeroTooltipLine(type) {
+  return resourceZeroInfoClient(type).detail;
+}
+
 function resourcePurchaseCost(type, quantity) {
   const price = Number(app.state?.game?.market?.[type] || 1) * 100;
   return Math.round(Number(quantity || 0) * price);
@@ -5739,6 +5811,7 @@ function renderResourceCard(type, cfg) {
       <div class="card-grid">
         ${metric(type === 'electricity' ? 'Commande actuelle' : 'Stock actuel', `${round(stock)} ${unit}`)}
         ${metric('Consommation /h', `${round(consumption)} ${type === 'electricity' ? 'MW/h' : 'u/h'}`, consumption > 0 ? 'warn-text' : '')}
+        ${metric('Stock à 0', resourceZeroInfoClient(type).label, resourceZeroInfoClient(type).cls, resourceZeroTooltipLine(type))}
         ${metric('Solde /h', type === 'electricity' ? `${round((flow.production?.electricity || 0) - consumption)} MW/h` : `${round(stock)} u`, type === 'electricity' && (flow.production?.electricity || 0) < consumption ? 'bad-text' : 'good-text')}
       </div>
       ${renderResourceSourceList(type)}
@@ -5773,9 +5846,9 @@ function renderResources() {
       <h2>Vue d’ensemble</h2>
       <p class="muted small">Les trains vapeur et diesel consomment un stock acheté. Les trains électriques et batteries utilisent une commande producteur exprimée en MW/h. Si l’approvisionnement est insuffisant, les lignes concernées ne circulent pas.</p>
       <div class="card-grid">
-        ${metric('Charbon', resourceStockLabel('coal'))}
-        ${metric('Diesel', resourceStockLabel('diesel'))}
-        ${metric('Électricité', resourceStockLabel('electricity'))}
+        ${metric('Charbon', resourceStockLabel('coal'), '', resourceTopTooltip('coal'))}
+        ${metric('Diesel', resourceStockLabel('diesel'), '', resourceTopTooltip('diesel'))}
+        ${metric('Électricité', resourceStockLabel('electricity'), '', resourceTopTooltip('electricity'))}
         ${metric('Résultat /h', moneyPerHour(me.stats.lastProfit), me.stats.lastProfit >= 0 ? 'good-text' : 'bad-text')}
       </div>
     </div>
@@ -9802,6 +9875,7 @@ function resourceTopTooltip(type) {
   const lines = [
     label,
     stockLine,
+    resourceZeroTooltipLine(type),
     `Consommation totale : ${round(consumption)} ${unit}`,
     `Production totale : ${round(production)} ${unit}`,
     '---------------------------------------------',
