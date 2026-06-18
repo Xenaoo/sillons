@@ -1,9 +1,11 @@
-## Version v66.2.2 — hitbox des gares resserrée
+# v66.3.0 - Tracés RFN multi-arrêts plus fidèles
 
-- incrément de version : badge interface `v66.2.2`, version serveur/client `v66.2.2`, package `66.2.2` et schéma serveur `134` ;
-- réduction de la hitbox des marqueurs de gares sur la carte ;
-- suppression de la hitbox cliquable étendue sur les libellés de gares, désormais uniquement visuels ;
-- réduction des recherches de gare proche au clic pour que les lignes proches restent plus faciles à sélectionner.
+- Ajout d’un calcul serveur de géométrie RFN pour une suite complète d’arrêts.
+- Le rendu carte utilise désormais une géométrie globale validée contre les arrêts dans l’ordre quand elle respecte le parcours.
+- Ajout d’un découpage serveur en sous-parcours RFN longs quand le trajet complet départ → terminus ne respecte pas tous les arrêts.
+- Conservation du fallback segment par segment si aucune géométrie complète fiable n’est trouvée.
+- Invalidation du cache local de géométrie RFN afin d’éviter les anciens tracés simplifiés.
+- Correction ciblée des lignes type Étampes → Épinay-sur-Orge, qui étaient dégradées par l’assemblage de petits tronçons pauvres en points.
 
 ## Version v66.2.1 — désélection de ligne au clic carte
 

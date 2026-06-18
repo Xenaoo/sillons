@@ -4,11 +4,11 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v66.2.2';
+const PROJECT_VERSION = 'v66.3.0';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 500;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v1';
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v2';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 
@@ -9316,6 +9316,25 @@ async function fetchSncfRouteGeometry(a, b) {
   }
 }
 
+async function fetchSncfRouteGeometryForStopSequence(ids) {
+  try {
+    const cleanIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    if (cleanIds.length < 2) return [];
+    const response = await fetch(`/api/sncf/route-geometry-sequence?stops=${encodeURIComponent(cleanIds.join(','))}`, {
+      cache: 'force-cache',
+      headers: authHeaders()
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const coords = Array.isArray(data.geometry) ? data.geometry : [];
+    return coords
+      .map(pair => [Number(pair[0]), Number(pair[1])])
+      .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+  } catch {
+    return [];
+  }
+}
+
 function coordKey(lon, lat) {
   return `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
 }
@@ -9811,11 +9830,20 @@ function geometryForStopSequence(ids) {
 async function ensureOsmRouteGeometryForStops(ids) {
   if (!app.map.leaflet || !Array.isArray(ids) || ids.length < 2) return;
   const key = geometryKeyForStops(ids);
-  if (app.osmRoutePending.has(key)) return;
+  if (app.osmRoutePending.has(key) || app.osmRoutePending.size >= 3) return;
   const stations = ids.map(id => station(id)).filter(Boolean);
   if (stations.length !== ids.length) return;
   app.osmRoutePending.add(key);
   try {
+    const sequenceGeometry = await fetchSncfRouteGeometryForStopSequence(ids);
+    if (sequenceGeometry?.length >= 2) {
+      rememberCacheEntry(app.osmRouteCache, key, sequenceGeometry, OSM_ROUTE_CACHE_MAX_ENTRIES);
+      app.routeCache.delete(`multi::${ids.join('::')}`);
+      invalidateMapProjection('sncf-sequence-geometry-loaded');
+      if (app.activeTab === 'lines') updateLinePreview('sncf-sequence-geometry-loaded');
+      return;
+    }
+
     for (let i = 1; i < ids.length; i++) {
       await ensureRailwayRouteGeometry(ids[i - 1], ids[i]);
     }
@@ -9829,6 +9857,7 @@ async function ensureOsmRouteGeometryForStops(ids) {
     if (coords.length >= 2) {
       rememberCacheEntry(app.osmRouteCache, key, coords, OSM_ROUTE_CACHE_MAX_ENTRIES);
       app.routeCache.delete(`multi::${ids.join('::')}`);
+      invalidateMapProjection('sncf-segment-geometry-loaded');
     }
   } catch (error) {
     // Non bloquant : on garde l'itinéraire ferroviaire de secours.
@@ -10019,6 +10048,23 @@ function getRouteForStops(stops) {
   if (ids.length < 2) {
     const single = { ids, distance: 0, maxSegment: 0, points: [] };
     return rememberCacheEntry(app.routeCache, key, single, ROUTE_CACHE_MAX_ENTRIES);
+  }
+
+  const sequenceGeometry = geometryForStopSequence(ids);
+  if (sequenceGeometry?.length >= 2) {
+    const sequencePoints = sequenceGeometry
+      .map(([lon, lat]) => project(lon, lat))
+      .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (sequencePoints.length >= 2) {
+      const distance = Math.round(polylineGeoDistance(sequenceGeometry));
+      const route = {
+        ids,
+        distance,
+        maxSegment: distance,
+        points: cleanRoutePoints(sequencePoints)
+      };
+      return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
+    }
   }
 
   let mergedIds = [ids[0]];

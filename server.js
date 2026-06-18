@@ -12,8 +12,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v66.2.2';
-const STATE_SCHEMA_VERSION = 134;
+const PROJECT_VERSION = 'v66.3.0';
+const STATE_SCHEMA_VERSION = 135;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -502,6 +502,25 @@ async function handleApi(req, res, url) {
       distance: Math.round(polylineDistanceKm(geometry || [])),
       pointCount: Array.isArray(geometry) ? geometry.length : 0,
       source: geometry?.length ? 'sncf-formes-des-lignes-du-rfn' : 'none'
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/sncf/route-geometry-sequence') {
+    const rawStops = url.searchParams.get('stops') || '';
+    const stops = rawStops
+      .split(/[>,|;,]+/)
+      .map(value => value.trim())
+      .filter(Boolean);
+    const route = await sncfRouteGeometryForStopSequence(stops);
+    sendJson(res, 200, {
+      ok: true,
+      stops: route.ids || stops,
+      geometry: route.geometry || [],
+      distance: Math.round(polylineDistanceKm(route.geometry || [])),
+      pointCount: Array.isArray(route.geometry) ? route.geometry.length : 0,
+      chunks: route.chunks || [],
+      source: route.geometry?.length ? 'sncf-formes-des-lignes-du-rfn-sequence' : 'none'
     });
     return;
   }
@@ -1419,6 +1438,159 @@ async function sncfRouteGeometryForStations(fromId, toId) {
     console.warn('Géométrie SNCF RFN indisponible:', error.message);
     return [];
   }
+}
+
+function projectPointOnGeoPolyline(point, coords) {
+  if (!point || !Array.isArray(coords) || coords.length < 2) return null;
+  const pLat = Number(point.lat);
+  const pLon = Number(point.lon);
+  if (!Number.isFinite(pLat) || !Number.isFinite(pLon)) return null;
+  let cumulative = 0;
+  let best = null;
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const lonA = Number(a?.[0]);
+    const latA = Number(a?.[1]);
+    const lonB = Number(b?.[0]);
+    const latB = Number(b?.[1]);
+    if (![lonA, latA, lonB, latB].every(Number.isFinite)) continue;
+    const segKm = haversine(latA, lonA, latB, lonB);
+    if (!Number.isFinite(segKm) || segKm <= 0) continue;
+
+    const meanLat = ((latA + latB + pLat) / 3) * Math.PI / 180;
+    const kmPerLon = 111.32 * (Math.cos(meanLat) || 1);
+    const kmPerLat = 110.57;
+    const ax = lonA * kmPerLon;
+    const ay = latA * kmPerLat;
+    const bx = lonB * kmPerLon;
+    const by = latB * kmPerLat;
+    const px = pLon * kmPerLon;
+    const py = pLat * kmPerLat;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq > 0 ? clamp(((px - ax) * dx + (py - ay) * dy) / lenSq, 0, 1) : 0;
+    const lon = lonA + (lonB - lonA) * t;
+    const lat = latA + (latB - latA) * t;
+    const distance = haversine(pLat, pLon, lat, lon);
+    const atKm = cumulative + segKm * t;
+    if (!best || distance < best.distanceKm) {
+      best = { distanceKm: distance, atKm, index: i - 1, t, lon, lat };
+    }
+    cumulative += segKm;
+  }
+  if (!best) return null;
+  best.totalKm = cumulative;
+  return best;
+}
+
+function routeGeometryMatchesStopSequence(ids, geometry, options = {}) {
+  const coords = Array.isArray(geometry) ? geometry : [];
+  if (!Array.isArray(ids) || ids.length < 2 || coords.length < 2) return { ok: false, reason: 'empty' };
+  const totalKm = polylineDistanceKm(coords);
+  if (!Number.isFinite(totalKm) || totalKm <= 0) return { ok: false, reason: 'distance' };
+
+  const maxStationDistanceKm = Number(options.maxStationDistanceKm || 2.9);
+  const maxTerminalDistanceKm = Number(options.maxTerminalDistanceKm || 4.2);
+  const minProgressKm = Number(options.minProgressKm || 0.04);
+  let previousAt = -Infinity;
+  let worstDistance = 0;
+  const projections = [];
+
+  for (let i = 0; i < ids.length; i += 1) {
+    const stop = stationById(ids[i]);
+    const point = stationRoutePoint(stop) || stationRawPoint(stop);
+    const projection = projectPointOnGeoPolyline(point, coords);
+    if (!projection) return { ok: false, reason: 'projection', stationId: ids[i] };
+    const allowed = (i === 0 || i === ids.length - 1) ? maxTerminalDistanceKm : maxStationDistanceKm;
+    if (projection.distanceKm > allowed) {
+      return { ok: false, reason: 'too-far', stationId: ids[i], distanceKm: projection.distanceKm, allowed };
+    }
+    if (i > 0 && projection.atKm + minProgressKm < previousAt) {
+      return { ok: false, reason: 'order', stationId: ids[i], atKm: projection.atKm, previousAt };
+    }
+    previousAt = Math.max(previousAt, projection.atKm);
+    worstDistance = Math.max(worstDistance, projection.distanceKm);
+    projections.push({ id: ids[i], atKm: projection.atKm, distanceKm: projection.distanceKm });
+  }
+
+  return { ok: true, totalKm, worstDistance, projections };
+}
+
+function mergeGeoCoordinateSequences(sequences) {
+  const out = [];
+  for (const sequence of sequences || []) {
+    const coords = Array.isArray(sequence) ? sequence : [];
+    for (const coord of coords) {
+      if (!Array.isArray(coord) || coord.length < 2) continue;
+      const lon = Number(coord[0]);
+      const lat = Number(coord[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      const last = out[out.length - 1];
+      if (last && Math.abs(last[0] - lon) < 0.000001 && Math.abs(last[1] - lat) < 0.000001) continue;
+      out.push([roundCoord(lon), roundCoord(lat)]);
+    }
+  }
+  return out;
+}
+
+async function sncfRouteGeometryForStopSequence(stops) {
+  const ids = sanitizeStopsPayload(stops, null, null);
+  if (ids.length < 2) return { ids, geometry: [], chunks: [] };
+
+  const directGeometry = await sncfRouteGeometryForStations(ids[0], ids[ids.length - 1]);
+  const directValidation = routeGeometryMatchesStopSequence(ids, directGeometry, {
+    maxStationDistanceKm: 2.7,
+    maxTerminalDistanceKm: 4.0
+  });
+  if (directValidation.ok) {
+    return {
+      ids,
+      geometry: directGeometry,
+      chunks: [{ fromIndex: 0, toIndex: ids.length - 1, mode: 'global' }]
+    };
+  }
+
+  const chunks = [];
+  const geometries = [];
+  let index = 0;
+  while (index < ids.length - 1) {
+    let accepted = null;
+    const maxTo = Math.min(ids.length - 1, index + 14);
+    for (let to = maxTo; to > index; to -= 1) {
+      const geometry = await sncfRouteGeometryForStations(ids[index], ids[to]);
+      if (!Array.isArray(geometry) || geometry.length < 2) continue;
+      const slice = ids.slice(index, to + 1);
+      const validation = routeGeometryMatchesStopSequence(slice, geometry, {
+        maxStationDistanceKm: to > index + 1 ? 2.9 : 3.5,
+        maxTerminalDistanceKm: 4.2
+      });
+      if (!validation.ok) continue;
+      accepted = { to, geometry, mode: to > index + 1 ? 'subsequence' : 'segment' };
+      break;
+    }
+
+    if (!accepted) {
+      const geometry = await sncfRouteGeometryForStations(ids[index], ids[index + 1]);
+      if (!Array.isArray(geometry) || geometry.length < 2) return { ids, geometry: [], chunks: [] };
+      accepted = { to: index + 1, geometry, mode: 'segment-fallback' };
+    }
+
+    geometries.push(accepted.geometry);
+    chunks.push({
+      fromIndex: index,
+      toIndex: accepted.to,
+      from: ids[index],
+      to: ids[accepted.to],
+      mode: accepted.mode,
+      pointCount: accepted.geometry.length
+    });
+    index = accepted.to;
+  }
+
+  const geometry = mergeGeoCoordinateSequences(geometries);
+  return { ids, geometry, chunks };
 }
 
 function buildPathFromRailShapeLines(lines, start, end, directKm) {
