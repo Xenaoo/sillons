@@ -1,14 +1,12 @@
-# Changelog Sillons
+## Version v67.1.0 — optimisation du calcul RFN
 
-## Version v67.0.1
-
-- RFN : durcissement automatique de la tolérance de validation des gares en zone dense ;
-- gares voyageurs proches d’une autre gare voyageurs : tolérance maximale réduite à environ 280 m ;
-- zones suburbaines denses : tolérance maximale réduite à environ 450 m ;
-- les grands sous-parcours RFN qui ne respectent pas ces seuils sont rejetés puis découpés en tronçons plus courts ;
-- correction ciblée du cas Javel → St-Quentin-en-Yvelines, afin de forcer le passage par Meudon-Val-Fleury puis Chaville-Vélizy au lieu de valider la branche Bellevue/Sèvres ;
-- cache serveur RFN incrémenté en `rfn-route-v11` ;
-- cache client des tracés incrémenté en `sncf-geometry-v10`.
+- incrément de version : badge interface `v67.1.0`, version serveur/client `v67.1.0`, package `67.1.0` et schéma serveur `146` ;
+- RFN : ajout d’un préfiltrage corridor avant construction du graphe, pour éviter d’embarquer tous les tronçons d’une grande boîte géographique dense ;
+- RFN : les suites d’arrêts ne tentent plus systématiquement un énorme tracé global quand plusieurs arrêts sont imposés ; elles sont découpées plus tôt en sous-parcours contrôlés ;
+- performance : les calculs multi-arrêts désactivent les corrections automatiques de waypoint sur chaque petit segment, source principale des temps très longs ;
+- robustesse : le fallback complet RFN est désormais réservé aux cas raisonnables afin d’éviter les recherches longues sur des graphes trop larges ;
+- cache serveur RFN incrémenté en `rfn-route-v12` ;
+- cache navigateur RFN incrémenté en `sncf-geometry-v11`.
 
 ## Version v67.0.0 — moteur RFN accéléré et routage plus fiable
 
