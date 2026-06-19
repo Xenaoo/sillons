@@ -1,3 +1,14 @@
+# v69.1.10 — Correction réelle des pastilles trains pan/zoom
+
+- Suppression de la double logique canvas + overlay DOM pour les pastilles trains.
+- Les pastilles sont de nouveau dessinées dans le même canvas que les tracés, après toutes les lignes et les gares.
+- Suppression effective de la transformation CSS artificielle du canvas pendant les déplacements et zooms Leaflet.
+- Désactivation des animations de zoom Leaflet pour éviter les référentiels intermédiaires incompatibles avec le canvas.
+- Le canvas complet est redessiné avec la projection Leaflet courante pendant les déplacements/zooms.
+- Les plans de marche des trains ne sont plus vidés à chaque mouvement de carte, car ils ne dépendent plus de l’écran.
+- Suppression/masquage des anciens overlays `#sillonsTrainOverlay`, `#sillonsTrainLayer` et panes trains concurrents.
+- Schéma save : `161`.
+
 ## Version v69.1.9 — correction réelle des pastilles trains au pan/zoom
 
 - incrément de version : badge interface `v69.1.9`, version serveur/client `v69.1.9`, package `69.1.9` et schéma serveur `160` ;

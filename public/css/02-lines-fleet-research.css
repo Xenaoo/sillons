@@ -2919,3 +2919,18 @@ button.train-prereq-chip.missing:hover {
   0%, 100% { transform: scale(.82); }
   50% { transform: scale(1.12); }
 }
+
+/* ===== v69.1.10 : pastilles trains recollées au canvas commun ===== */
+#map,
+#map.map-pan-overlay {
+  transform: none !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
+#sillonsTrainOverlay,
+.sillons-train-overlay,
+.leaflet-sillonsTrainPane-pane,
+.sillons-train-pane {
+  display: none !important;
+}

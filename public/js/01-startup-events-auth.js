@@ -285,7 +285,6 @@ function invalidateMapProjection(reason = 'projection') {
   app.map.needsRouteReproject = false;
   app.map.stationDrawCache = { key: '', items: [] };
   app.map.visibleStationCache = { key: '', stations: [] };
-  app.map.trainMotionPlans = new Map();
 }
 
 function markMapProjectionDirty() {
@@ -382,6 +381,21 @@ function persistOsmRouteCache() {
   localStorage.removeItem(PERSISTED_OSM_ROUTE_CACHE_KEY);
 }
 
+function resetMapCanvasTransform() {
+  const overlay = app.map.panOverlay || {};
+  overlay.active = false;
+  overlay.finishing = false;
+  overlay.zooming = false;
+  overlay.raf = false;
+  overlay.transform = '';
+  if (app.map.canvas) {
+    app.map.canvas.style.transform = '';
+    app.map.canvas.style.transformOrigin = '';
+    app.map.canvas.style.willChange = '';
+    app.map.canvas.classList.remove('map-pan-overlay');
+  }
+}
+
 function cloneLeafletPoint(point) {
   if (!point) return null;
   return { x: Number(point.x || 0), y: Number(point.y || 0) };
@@ -403,30 +417,7 @@ function leafletNewPixelOrigin(center, zoom) {
 }
 
 function startPanOverlay(mode = 'pan') {
-  const map = app.map.leaflet;
-  const canvas = app.map.canvas;
-  if (!map || !canvas) return;
-  const overlay = app.map.panOverlay;
-  const isZoom = mode === 'zoom';
-
-  if (overlay.active) {
-    if (isZoom) overlay.zooming = true;
-    return;
-  }
-
-  overlay.active = true;
-  overlay.finishing = false;
-  overlay.zooming = isZoom;
-  overlay.baseZoom = map.getZoom();
-  overlay.basePixelOrigin = cloneLeafletPoint(map.getPixelOrigin?.());
-  overlay.anchorLatLng = map.getCenter();
-  overlay.anchorPoint = map.latLngToContainerPoint(overlay.anchorLatLng);
-  overlay.raf = false;
-  overlay.transform = canvas.style.transform || '';
-
-  canvas.classList.add('map-pan-overlay');
-  canvas.style.transformOrigin = '0 0';
-  canvas.style.willChange = 'transform';
+  resetMapCanvasTransform();
 }
 
 function setMapOverlayTransform(center, zoom) {
@@ -453,74 +444,18 @@ function setMapOverlayTransform(center, zoom) {
 }
 
 function updatePanOverlay() {
-  const overlay = app.map.panOverlay;
-  if (!overlay.active || overlay.raf || !app.map.leaflet || !app.map.canvas) return;
-  overlay.raf = true;
-  requestAnimationFrame(() => {
-    overlay.raf = false;
-    if (!overlay.active || !app.map.leaflet || !app.map.canvas) return;
-
-    // Pan pur : l'ancien système par point d'ancrage est plus fiable pendant
-    // le drag Leaflet, car le centre peut être lissé/interpolé entre deux ticks.
-    if (!overlay.zooming && overlay.anchorLatLng && overlay.anchorPoint) {
-      const current = app.map.leaflet.latLngToContainerPoint(overlay.anchorLatLng);
-      const dx = current.x - overlay.anchorPoint.x;
-      const dy = current.y - overlay.anchorPoint.y;
-      overlay.transform = `translate3d(${Math.round(dx * 1000) / 1000}px, ${Math.round(dy * 1000) / 1000}px, 0)`;
-      app.map.canvas.style.transform = overlay.transform;
-      return;
-    }
-
-    setMapOverlayTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
-  });
+  resetMapCanvasTransform();
 }
 
 function updateZoomOverlay(event) {
-  if (!app.map.leaflet || !app.map.canvas) return;
-  startPanOverlay('zoom');
-  const overlay = app.map.panOverlay;
-  overlay.zooming = true;
-  const center = event?.center || app.map.leaflet.getCenter();
-  const zoom = Number.isFinite(Number(event?.zoom)) ? Number(event.zoom) : app.map.leaflet.getZoom();
-  setMapOverlayTransform(center, zoom);
-  requestTrainMarkerLayerSync({ zoomFrame: { center, zoom }, immediate: true });
+  resetMapCanvasTransform();
+  markMapProjectionDirty();
+  requestMapRedraw({ lite: true });
 }
 
 function endPanOverlay() {
-  const overlay = app.map.panOverlay;
-  if (!app.map.canvas || overlay.finishing || !overlay.active) return;
-
-  // Le canvas est un bitmap indépendant placé au-dessus des tuiles Leaflet.
-  // Pendant un pan ou un zoom animé, Leaflet déplace/scalera ses propres panes via CSS.
-  // On conserve donc le bitmap courant et on lui applique exactement la même
-  // transformation géométrique jusqu'au redessin final.
-  overlay.active = false;
-  overlay.finishing = true;
-  overlay.zooming = false;
-  overlay.anchorLatLng = null;
-  overlay.anchorPoint = null;
-  overlay.basePixelOrigin = null;
-  overlay.baseZoom = null;
-  overlay.raf = false;
-  app.map.redrawAfterPan = true;
-
-  requestAnimationFrame(() => {
-    if (!app.map.canvas || app.map.panOverlay?.active) return;
-    const finishingOverlay = app.map.panOverlay;
-    finishingOverlay.finishing = false;
-    finishingOverlay.transform = '';
-
-    app.map.canvas.style.transform = '';
-    app.map.canvas.style.transformOrigin = '';
-    app.map.canvas.style.willChange = '';
-    app.map.canvas.classList.remove('map-pan-overlay');
-    app.map.redrawAfterPan = false;
-
-    // Nettoyage de la transform et redessin dans la même frame rAF : ni l'ancien
-    // bitmap non transformé, ni des pastilles recalculées avec une projection
-    // concurrente ne peuvent être peints entre deux états.
-    drawMap({ forcePanOverlayRedraw: true });
-  });
+  resetMapCanvasTransform();
+  requestMapRedraw({ lite: false });
 }
 
 function worldRouteSignature(state = app.state) {
@@ -659,73 +594,80 @@ function initOsmMap() {
     maxZoom: 13,
     zoomControl: false,
     attributionControl: true,
-    preferCanvas: true
+    preferCanvas: true,
+    zoomAnimation: false,
+    markerZoomAnimation: false,
+    fadeAnimation: false
   });
 
   addReliableFrenchTileLayer(app.map.leaflet);
-  ensureTrainMarkerLayer();
+  clearTrainMarkerLayer();
 
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
 
   app.map.leaflet.on('zoomstart', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    startPanOverlay('zoom');
+    resetMapCanvasTransform();
     resizeCanvas();
-    markMapProjectionDirty();
-    requestTrainMarkerLayerSync({ immediate: true });
+    invalidateMapProjection('zoom-start');
+    requestMapRedraw({ lite: true });
   });
-  app.map.leaflet.on('zoomanim', event => {
+  app.map.leaflet.on('zoomanim', () => {
+    // Les animations de zoom Leaflet sont désactivées pour cette carte canvas.
+    // Si un navigateur déclenche malgré tout l'événement, on force un redraw simple.
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    updateZoomOverlay(event);
+    resetMapCanvasTransform();
+    invalidateMapProjection('zoom-anim');
+    requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoom', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    // Pendant un zoom animé, `zoomanim` possède le couple center/zoom cible exact.
-    // Ne pas écraser cette transform par un calcul intermédiaire incomplet.
-    if (!app.map.panOverlay?.zooming) updatePanOverlay();
-    markMapProjectionDirty();
-    requestTrainMarkerLayerSync({ immediate: true });
+    resetMapCanvasTransform();
+    invalidateMapProjection('zoom');
+    requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoomend', () => {
     app.map.navigating = false;
     app.map.trainMarkerZoomFrame = null;
+    resetMapCanvasTransform();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('zoom-end');
-    requestTrainMarkerLayerSync({ immediate: true });
-    endPanOverlay();
+    requestMapRedraw({ lite: false });
   });
 
   app.map.leaflet.on('movestart', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    startPanOverlay(app.map.panOverlay?.zooming ? 'zoom' : 'pan');
-    requestTrainMarkerLayerSync({ immediate: true });
+    resetMapCanvasTransform();
+    markMapProjectionDirty();
+    requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('move', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    updatePanOverlay();
-    requestTrainMarkerLayerSync({ immediate: true });
+    resetMapCanvasTransform();
+    markMapProjectionDirty();
+    requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('moveend', () => {
     app.map.navigating = false;
+    resetMapCanvasTransform();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('move-end');
-    requestTrainMarkerLayerSync({ immediate: true });
-    if (!app.map.panOverlay?.zooming) endPanOverlay();
+    requestMapRedraw({ lite: false });
   });
   app.map.leaflet.on('resize', () => {
     app.map.navigating = false;
+    resetMapCanvasTransform();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('map-resize');
-    requestTrainMarkerLayerSync({ immediate: true });
-    if (!app.map.panOverlay?.zooming) endPanOverlay();
+    requestMapRedraw({ lite: false });
   });
   app.map.leaflet.on('mousemove', onOsmMouseMove);
   app.map.leaflet.on('mouseout', () => {
