@@ -290,11 +290,10 @@ function renderLineInsightPanels(line) {
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
           <span>Sillons actifs</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(lineSlotDemandClient(line))}</b>
-          ${lineSillonData ? `<span>Capacité RFN théorique</span><b>${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
-          ${lineSillonData ? `<span>Trafic RFN existant</span><b>${round(lineSillonData.backgroundUsed)} / ${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
-          ${lineSillonData ? `<span>Capacité joueurs</span><b>${round(lineSillonData.playerCapacity)}</b>` : ''}
-          ${lineSillonData ? `<span>Plafond de cette ligne</span><b>${round(lineSillonData.available)} / ${round(lineSillonData.playerCapacity)}</b>` : ''}
-          ${lineSillonData ? `<span>Restants affectables</span><b>${round(lineSillonData.remainingForLine)}</b>` : ''}
+          ${lineSillonData ? `<span>Capacité totale RFN</span><b>${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
+          ${lineSillonData ? `<span>Capacité joueurs</span><b>${round(lineSillonData.playerCapacity)} / ${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
+          ${lineSillonData ? `<span>Déjà utilisés joueurs</span><b>${round(lineSillonData.usedByPlayers)} / ${round(lineSillonData.playerCapacity)}</b>` : ''}
+          ${lineSillonData ? `<span>Disponibles pour cette ligne</span><b>${round(lineSillonData.remainingForLine)}</b>` : ''}
           <span>Composition</span><b>${escapeHtml(capacity.trainComposition || 'Standard')}</b>
         </div>
       </section>
@@ -405,28 +404,22 @@ function lineSillonDataClient(line) {
   const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
   if (!sillons) return null;
   const bottleneck = sillons.bottleneck || null;
-  const rawAvailable = Number(sillons.maxFrequency ?? bottleneck?.available ?? sillons.lineCapacity ?? lineSlotDemandClient(line));
-  const available = Math.max(0, Math.floor(Number.isFinite(rawAvailable) ? rawAvailable : 0));
-  const rawPlayerCapacity = Number(bottleneck?.playerCapacity ?? sillons.playerCapacity ?? sillons.lineCapacity ?? rawAvailable ?? lineSlotDemandClient(line));
-  const playerCapacity = Math.max(0, Math.floor(Number.isFinite(rawPlayerCapacity) ? rawPlayerCapacity : available));
-  const rawTheoreticalCapacity = Number(bottleneck?.theoreticalCapacity ?? sillons.theoreticalCapacity ?? playerCapacity);
-  const theoreticalCapacity = Math.max(0, Math.floor(Number.isFinite(rawTheoreticalCapacity) ? rawTheoreticalCapacity : playerCapacity));
-  const displayCapacity = theoreticalCapacity || playerCapacity || available;
+  const fallbackCapacity = Number(sillons.theoreticalCapacity ?? bottleneck?.theoreticalCapacity ?? sillons.lineCapacity ?? sillons.playerCapacity ?? sillons.maxFrequency ?? lineSlotDemandClient(line));
+  const theoreticalCapacity = Math.max(0, Math.floor(Number.isFinite(fallbackCapacity) ? fallbackCapacity : 0));
+  const playerCapacity = theoreticalCapacity;
+  const displayCapacity = theoreticalCapacity;
   const rawUsedByPlayer = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const usedByPlayer = Math.max(0, Math.floor(Number.isFinite(rawUsedByPlayer) ? rawUsedByPlayer : 0));
-  const rawBackgroundUsed = Number(bottleneck?.backgroundUsed ?? sillons.backgroundUsed ?? 0);
-  const backgroundUsed = Math.max(0, Math.floor(Number.isFinite(rawBackgroundUsed) ? rawBackgroundUsed : 0));
-  const rawUsedByOthers = Number(bottleneck?.usedByOthers ?? Math.max(0, playerCapacity - available));
+  const backgroundUsed = 0;
+  const fallbackAvailable = Number(sillons.maxFrequency ?? bottleneck?.available ?? playerCapacity);
+  const rawUsedByOthers = Number(bottleneck?.usedByOthers ?? Math.max(0, playerCapacity - fallbackAvailable));
   const usedByOthers = Math.max(0, Math.floor(Number.isFinite(rawUsedByOthers) ? rawUsedByOthers : 0));
-  const rawUsedByPlayers = Number(bottleneck?.usedByPlayers ?? sillons.usedByPlayers ?? (usedByOthers + usedByPlayer));
-  const usedByPlayers = Math.max(0, Math.floor(Number.isFinite(rawUsedByPlayers) ? rawUsedByPlayers : usedByOthers + usedByPlayer));
-  const rawTotalUsed = Number(bottleneck?.totalUsed ?? sillons.totalUsed ?? (backgroundUsed + usedByPlayers));
-  const totalUsed = Math.max(0, Math.floor(Number.isFinite(rawTotalUsed) ? rawTotalUsed : backgroundUsed + usedByPlayers));
-  const remainingForLine = Math.max(0, Math.floor(available - usedByPlayer));
+  const usedByPlayers = Math.max(0, usedByOthers + usedByPlayer);
+  const totalUsed = usedByPlayers;
+  const available = Math.max(0, Math.floor(playerCapacity - usedByOthers));
+  const remainingForLine = Math.max(0, Math.floor(playerCapacity - usedByOthers - usedByPlayer));
   const theoreticalRemaining = Math.max(0, Math.floor(theoreticalCapacity - totalUsed));
-  const utilizationPercent = Number.isFinite(Number(bottleneck?.utilizationPercent ?? sillons.utilizationPercent))
-    ? Number(bottleneck?.utilizationPercent ?? sillons.utilizationPercent)
-    : (theoreticalCapacity > 0 ? totalUsed / theoreticalCapacity * 100 : 0);
+  const utilizationPercent = theoreticalCapacity > 0 ? totalUsed / theoreticalCapacity * 100 : 0;
   return {
     sillons,
     bottleneck,
@@ -464,15 +457,11 @@ function lineSillonLabel(line) {
   const {
     sillons,
     bottleneck,
-    available,
     displayCapacity,
     theoreticalCapacity,
     playerCapacity,
-    backgroundUsed,
     usedByPlayer,
-    usedByOthers,
     usedByPlayers,
-    totalUsed,
     remainingForLine,
     theoreticalRemaining,
     utilizationPercent
@@ -480,21 +469,15 @@ function lineSillonLabel(line) {
   const from = bottleneck ? (bottleneck.fromName || bottleneck.from || 'N/A') : 'N/A';
   const to = bottleneck ? (bottleneck.toName || bottleneck.to || 'N/A') : 'N/A';
   const tags = Array.isArray(bottleneck?.tags) && bottleneck.tags.length ? `Profil : ${bottleneck.tags.join(', ')}` : '';
-  const playerCapacityLabel = playerCapacity > 0 && theoreticalCapacity > 0
-    ? `${round(playerCapacity)} sillon(s)/h = ${round(theoreticalCapacity)} - ${round(backgroundUsed)}`
-    : `${round(playerCapacity)} sillon(s)/h`;
   return [
     `Tronçon limitant : ${from} -> ${to}`,
-    `Capacité théorique RFN : ${round(theoreticalCapacity)} sillon(s)/h`,
-    `Trafic RFN existant estimé : ${round(backgroundUsed)} sillon(s)/h`,
-    `Capacité réellement ouverte aux joueurs : ${playerCapacityLabel}`,
-    `Plafond disponible pour cette ligne : ${round(available)} / ${round(playerCapacity)} sillon(s)/h`,
+    `Capacité totale RFN : ${round(theoreticalCapacity)} sillon(s)/h`,
+    `Capacité possédée par les joueurs : ${round(playerCapacity)} / ${round(theoreticalCapacity)} sillon(s)/h`,
     `Sillons utilisés par cette ligne : ${round(usedByPlayer)} / ${round(displayCapacity)} sillon(s)/h`,
-    `Sillons restants affectables à cette ligne : ${round(remainingForLine)} sillon(s)/h`,
-    `Occupation joueurs sur le tronçon : ${round(usedByPlayers)} / ${round(playerCapacity)} sillon(s)/h`,
-    `Occupation totale RFN estimée : ${round(totalUsed)} / ${round(theoreticalCapacity)} sillon(s)/h (${round(utilizationPercent)}%)`,
-    `Marge théorique RFN restante : ${round(theoreticalRemaining)} sillon(s)/h`,
     lineSillonOtherUsageLabel(bottleneck),
+    `Occupation joueurs sur le tronçon : ${round(usedByPlayers)} / ${round(playerCapacity)} sillon(s)/h (${round(utilizationPercent)}%)`,
+    `Sillons restants affectables à cette ligne : ${round(remainingForLine)} sillon(s)/h`,
+    `Marge RFN restante après joueurs : ${round(theoreticalRemaining)} sillon(s)/h`,
     tags,
     sillons.constrained ? 'Statut : ligne limitée par les sillons disponibles.' : ''
   ].filter(Boolean).join('\n');
@@ -503,20 +486,21 @@ function lineSillonLabel(line) {
 function renderLineSillonMini(line) {
   const data = lineSillonDataClient(line);
   if (!data) return '';
-  const { sillons, available, displayCapacity, usedByPlayer, remainingForLine } = data;
+  const { sillons, playerCapacity, displayCapacity, usedByPlayer, remainingForLine } = data;
   const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
-  const cls = sillons.constrained || requested > available ? 'warn-text' : 'good-text';
-  const remainingCls = remainingForLine > 0 ? 'good-text' : 'warn-text';
+  const cls = sillons.constrained || requested > playerCapacity ? 'warn-text' : 'good-text';
+  const badgeCls = remainingForLine > 0 ? 'good' : 'warn';
   const tip = lineSillonLabel(line);
-  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(displayCapacity)}</b><em class="line-sillon-remaining ${remainingCls}">${formatInt(remainingForLine)} restant${remainingForLine > 1 ? 's' : ''}</em></div>`;
+  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(remainingForLine)} sillons restants">${formatInt(remainingForLine)}</em><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(displayCapacity)}</b></div>`;
 }
 
 function renderLineSillonCollapsedSummary(line) {
   const data = lineSillonDataClient(line);
   if (!data) return '';
   const requested = Number(data.sillons.requestedFrequency ?? lineSlotDemandClient(line));
-  const cls = data.sillons.constrained || requested > data.available ? 'warn-text' : 'good-text';
-  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.displayCapacity)}</b><em class="line-sillon-remaining ${data.remainingForLine > 0 ? 'good-text' : 'warn-text'}">${formatInt(data.remainingForLine)} restant${data.remainingForLine > 1 ? 's' : ''}</em></span>`;
+  const cls = data.sillons.constrained || requested > data.playerCapacity ? 'warn-text' : 'good-text';
+  const badgeCls = data.remainingForLine > 0 ? 'good' : 'warn';
+  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(data.remainingForLine)} sillons restants">${formatInt(data.remainingForLine)}</em><b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.displayCapacity)}</b></span>`;
 }
 
 function renderLineItem(line) {

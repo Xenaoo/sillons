@@ -2946,3 +2946,38 @@ button.train-prereq-chip.missing:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ===== v69.3.0 : pastille de sillons restants dans la case Sillons ===== */
+.line-card-modern-stats .line-sillon-stat,
+.line-card-collapsed-summary .line-sillon-summary {
+  position: relative;
+  padding-right: 34px;
+}
+
+.line-sillon-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  color: #07111f;
+  background: rgba(92, 211, 142, .94);
+  border: 1px solid rgba(255, 255, 255, .42);
+  box-shadow: 0 0 10px rgba(92, 211, 142, .24);
+  pointer-events: none;
+}
+
+.line-sillon-badge.warn {
+  color: #241002;
+  background: rgba(239, 184, 96, .96);
+  box-shadow: 0 0 10px rgba(239, 184, 96, .2);
+}

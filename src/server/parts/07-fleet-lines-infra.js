@@ -640,8 +640,8 @@ function stationSillonDemandIndex(station) {
 
 function sillonCapacityModelPayload(input = {}) {
   const theoreticalCapacity = clamp(Math.round(Number(input.theoreticalCapacity || input.capacity || 0)), 2, 48);
-  const backgroundUsed = clamp(Math.round(Number(input.backgroundUsed || 0)), 0, Math.max(0, theoreticalCapacity - 2));
-  const playerCapacity = clamp(Math.round(Number(input.playerCapacity ?? (theoreticalCapacity - backgroundUsed))), 2, theoreticalCapacity);
+  const backgroundUsed = 0;
+  const playerCapacity = theoreticalCapacity;
   return {
     version: SILLON_CAPACITY_MODEL_VERSION,
     class: input.class || 'regional',
@@ -662,20 +662,18 @@ function segmentSpecificCapacityModel(segment, a, b) {
   const onParisOrleans = (SILLON_PARIS_ORLEANS_MAIN_IDS.has(idA) && SILLON_PARIS_ORLEANS_MAIN_IDS.has(idB))
     || (stationNameMatchesAnyPattern(a, SILLON_PARIS_ORLEANS_MAIN_NAME_PATTERNS) && stationNameMatchesAnyPattern(b, SILLON_PARIS_ORLEANS_MAIN_NAME_PATTERNS));
 
-  // Antenne Dourdan ↔ Brétigny : 8 sillons/h théoriques, 4 déjà consommés par le trafic structurel.
+  // Antenne Dourdan ↔ Brétigny : 8 sillons/h théoriques entièrement disponibles aux joueurs.
   if (onDourdanBranch && !onParisOrleans) return sillonCapacityModelPayload({
     class: 'branch',
     theoreticalCapacity: 8,
-    backgroundUsed: 4,
     reason: 'Antenne périurbaine moins capacitaire',
-    tags: ['antenne', 'trafic existant']
+    tags: ['antenne']
   });
 
-  // Axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : 24 sillons/h théoriques, 6 réservés au trafic RFN existant.
+  // Axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : 24 sillons/h théoriques entièrement disponibles aux joueurs.
   if (onParisOrleans) return sillonCapacityModelPayload({
     class: 'suburban-mainline',
     theoreticalCapacity: 24,
-    backgroundUsed: 6,
     reason: 'Axe structurant Paris-Orléans',
     tags: ['axe structurant', 'banlieue dense']
   });
@@ -686,14 +684,12 @@ function segmentSpecificCapacityModel(segment, a, b) {
   if (/\bdourdan\b/.test(pairName) && /\bbretigny\b/.test(pairName)) return sillonCapacityModelPayload({
     class: 'branch',
     theoreticalCapacity: 8,
-    backgroundUsed: 4,
     reason: 'Antenne Dourdan-Brétigny détectée par nom',
     tags: ['antenne']
   });
   if (/\betampes\b/.test(pairName) && /(austerlitz|bretigny|juvisy)/.test(pairName)) return sillonCapacityModelPayload({
     class: 'suburban-mainline',
     theoreticalCapacity: 24,
-    backgroundUsed: 6,
     reason: 'Axe Étampes-Brétigny-Paris détecté par nom',
     tags: ['axe structurant']
   });
@@ -721,83 +717,67 @@ function segmentSillonCapacityModel(segment) {
   const secondaryBranch = distance <= 35 && sumDemand < 760 && maxDemand < 460;
 
   let theoreticalCapacity = 12;
-  let backgroundRatio = 0.25;
   let cls = 'regional';
   const tags = [];
 
   if (denseCore && distance <= 35 && hub) {
     theoreticalCapacity = 32;
-    backgroundRatio = 0.48;
     cls = 'metropolitan-core';
     tags.push('nœud dense', 'gare majeure');
   } else if (denseCore && distance <= 45) {
     theoreticalCapacity = 28;
-    backgroundRatio = 0.42;
     cls = 'metropolitan';
     tags.push('zone dense');
   } else if (idfA && idfB && distance <= 60 && !secondaryBranch) {
     theoreticalCapacity = 24;
-    backgroundRatio = 0.38;
     cls = 'suburban-mainline';
     tags.push('Île-de-France');
   } else if (idfA && idfB && secondaryBranch) {
     theoreticalCapacity = 10;
-    backgroundRatio = 0.42;
     cls = 'suburban-branch';
     tags.push('antenne IDF');
   } else if (sumDemand >= 2200 || maxDemand >= 1300 || hub) {
     theoreticalCapacity = 24;
-    backgroundRatio = 0.36;
     cls = 'national-mainline';
     tags.push('axe national');
   } else if (sumDemand >= 1350 || maxDemand >= 780) {
     theoreticalCapacity = 20;
-    backgroundRatio = 0.32;
     cls = 'intercity-mainline';
     tags.push('intercités');
   } else if (sumDemand >= 800 || maxDemand >= 480) {
     theoreticalCapacity = 16;
-    backgroundRatio = 0.28;
     cls = 'regional-mainline';
     tags.push('régional structurant');
   } else if (distance >= 120 && sumDemand < 650) {
     theoreticalCapacity = 8;
-    backgroundRatio = 0.22;
     cls = 'long-rural';
     tags.push('longue section peu dense');
   } else if (distance >= 70 && sumDemand < 760) {
     theoreticalCapacity = 10;
-    backgroundRatio = 0.24;
     cls = 'regional-secondary';
     tags.push('secondaire');
   } else if (distance <= 25 && sumDemand >= 560) {
     theoreticalCapacity = 14;
-    backgroundRatio = 0.30;
     cls = 'local-busy';
     tags.push('local chargé');
   } else {
     theoreticalCapacity = 12;
-    backgroundRatio = 0.25;
     cls = 'regional';
     tags.push('régional');
   }
 
   if (distance <= 12 && theoreticalCapacity < 20 && sumDemand >= 900) {
     theoreticalCapacity += 2;
-    backgroundRatio += 0.03;
     tags.push('courte section');
   }
   if (distance >= 160) {
-    backgroundRatio = Math.max(0.18, backgroundRatio - 0.04);
     tags.push('espacement long');
   }
 
-  const backgroundUsed = clamp(Math.round(theoreticalCapacity * backgroundRatio), 0, theoreticalCapacity - 2);
   return sillonCapacityModelPayload({
     class: cls,
     theoreticalCapacity,
-    backgroundUsed,
-    reason: 'Modèle interne : densité, rôle des gares, distance et trafic RFN existant estimé',
+    reason: 'Modèle interne : densité, rôle des gares et distance',
     tags
   });
 }
@@ -841,10 +821,9 @@ function buildLineSillonModel(line) {
   const theoreticalBottleneck = details.reduce((best, item) => !best || item.theoreticalCapacity < best.theoreticalCapacity ? item : best, null);
   const sums = details.reduce((acc, item) => {
     acc.theoretical += Number(item.theoreticalCapacity || 0);
-    acc.background += Number(item.backgroundUsed || 0);
     acc.player += Number(item.playerCapacity || 0);
     return acc;
-  }, { theoretical: 0, background: 0, player: 0 });
+  }, { theoretical: 0, player: 0 });
   return {
     version: SILLON_CAPACITY_MODEL_VERSION,
     theoreticalCapacity: round2(bottleneck?.theoreticalCapacity || theoreticalBottleneck?.theoreticalCapacity || 0),
@@ -852,7 +831,6 @@ function buildLineSillonModel(line) {
     playerCapacity: round2(bottleneck?.playerCapacity || 0),
     lineCapacity: round2(bottleneck?.playerCapacity || 0),
     averageTheoreticalCapacity: round2(sums.theoretical / Math.max(1, details.length)),
-    averageBackgroundUsed: round2(sums.background / Math.max(1, details.length)),
     averagePlayerCapacity: round2(sums.player / Math.max(1, details.length)),
     bottleneck,
     segments: details
@@ -906,7 +884,6 @@ function computeLineSillonLimit(player, line, usage = null) {
   let maxFrequency = Number.POSITIVE_INFINITY;
   let lineCapacity = Number.POSITIVE_INFINITY;
   let theoreticalCapacity = Number.POSITIVE_INFINITY;
-  let externalUsedAtBottleneck = 0;
   let bottleneck = null;
   const details = [];
   for (const segment of segments) {
@@ -938,7 +915,7 @@ function computeLineSillonLimit(player, line, usage = null) {
       if (item.frequency > 0) usedByOthersDetails.push({ ...item, frequency: round2(item.frequency) });
     }
     const usedByPlayers = usedByOthers + requested;
-    const totalUsed = Number(model.backgroundUsed || 0) + usedByPlayers;
+    const totalUsed = usedByPlayers;
     const available = Math.max(0, capacity - usedByOthers);
     const utilizationPercent = Number(model.theoreticalCapacity || 0) > 0
       ? clamp(totalUsed / Number(model.theoreticalCapacity || 1) * 100, 0, 200)
@@ -971,7 +948,6 @@ function computeLineSillonLimit(player, line, usage = null) {
     if (Number(model.theoreticalCapacity || 0) < theoreticalCapacity) theoreticalCapacity = Number(model.theoreticalCapacity || 0);
     if (available < maxFrequency) {
       maxFrequency = available;
-      externalUsedAtBottleneck = Number(model.backgroundUsed || 0);
       bottleneck = detail;
     }
   }
@@ -986,7 +962,7 @@ function computeLineSillonLimit(player, line, usage = null) {
     modelVersion: SILLON_CAPACITY_MODEL_VERSION,
     requestedFrequency: round2(requested),
     theoreticalCapacity: round2(theoreticalCapacity),
-    backgroundUsed: round2(externalUsedAtBottleneck),
+    backgroundUsed: 0,
     lineCapacity: round2(lineCapacity),
     playerCapacity: round2(lineCapacity),
     maxFrequency: round2(maxFrequency),

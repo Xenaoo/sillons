@@ -1,3 +1,13 @@
+# v69.3.0 — Possession complète des sillons par les joueurs
+
+- Suppression de la notion d’occupation de fond / trafic RFN existant estimé dans le calcul des sillons.
+- La capacité ouverte aux joueurs est maintenant égale à la capacité théorique RFN du tronçon.
+- Les autres lignes des joueurs restent seules prises en compte pour calculer les sillons disponibles.
+- Les lignes existantes ont été migrées vers le modèle `sillon-capacity-v2`.
+- Le tooltip Sillons a été simplifié pour afficher uniquement la capacité totale RFN, l’occupation des joueurs, les autres joueurs et les sillons restants.
+- La case `Sillons` affiche désormais les sillons restants dans une petite pastille en haut à droite.
+- Schéma save : `166`.
+
 # v69.2.3 — Affichage des sillons restants
 
 - Ajout du nombre de sillons restants affectables directement dans la vignette courte des lignes.
