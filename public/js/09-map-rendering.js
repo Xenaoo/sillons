@@ -100,12 +100,14 @@ function drawLoop(timestamp = performance.now()) {
   }
 
   if (app.map.panOverlay.active || app.map.panOverlay.finishing) {
-    // Pendant le déplacement Leaflet, le canvas déjà rendu suit la carte par transform CSS.
-    // Pendant la finition, on attend le redessin atomique du moveend pour éviter une frame
-    // où l'ancien bitmap serait affiché sans sa translation.
+    // Les pastilles trains sont désormais de vrais marqueurs Leaflet : elles suivent
+    // automatiquement pan/zoom dans leur pane dédié. On garde donc le canvas figé
+    // pendant la navigation, sans recalculer des coordonnées écran concurrentes.
     requestAnimationFrame(drawLoop);
     return;
   }
+
+  updateTrainMarkerPositions();
 
   const moving = app.map.navigating;
   const delay = moving ? 84 : 33; // ~12 fps pendant le zoom, ~30 fps le reste.
@@ -336,7 +338,7 @@ function drawAllLines(ctx, lite = false) {
       )) continue;
 
       const visualLine = visualLineWithEffectiveFrequency(line);
-      const visualRoute = { ...route, speedProfile: route.speedProfile || null };
+      const visualRoute = { ...route, coords: route.coords || [], speedProfile: route.speedProfile || null };
       const speeds = trains.map(train => {
         const model = app.state.balance.trains[train.modelId];
         return model ? trainVisualAverageSpeedKmH(train, model, visualLine, visualRoute) : 0;
@@ -370,23 +372,11 @@ function drawAllLines(ctx, lite = false) {
   drawLinesForPlayer(me, true);
   drawLineDraftPreview(ctx, lite);
 
-  // Second passage : toutes les pastilles trains passent après tous les tracés.
-  // Cela évite qu'une ligne dessinée ensuite masque un train lorsqu'elles se chevauchent.
-  if (!lite && trainDrawQueue.length) {
-    for (const job of trainDrawQueue) {
-      drawTrainSprite(
-        ctx,
-        job.points,
-        job.color,
-        job.line,
-        job.model,
-        job.own,
-        job.train,
-        job.instanceIndex,
-        job.instanceCount,
-        job.route
-      );
-    }
+  if (!lite) {
+    // Les trains ne sont plus dessinés dans ce canvas. Ils sont synchronisés comme
+    // marqueurs Leaflet dans un pane dédié au-dessus des lignes, ce qui évite les
+    // décalages/« téléportations » quand Leaflet applique ses transforms de pan/zoom.
+    syncTrainMarkerLayer(trainDrawQueue);
   }
 }
 
@@ -846,6 +836,189 @@ function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanc
     stopCount: plan.stopCount,
     dwellSeconds: plan.dwellSeconds
   };
+}
+
+
+function ensureTrainMarkerLayer() {
+  const map = app.map.leaflet;
+  const container = map?.getContainer?.() || $('#osmMap');
+  if (!container) return null;
+  let layer = app.map.trainMarkerLayer || container.querySelector?.('#sillonsTrainLayer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'sillonsTrainLayer';
+    layer.className = 'sillons-train-layer';
+    container.appendChild(layer);
+  }
+  layer.style.zIndex = '780';
+  layer.style.pointerEvents = 'none';
+  app.map.trainMarkerLayer = layer;
+  app.map.trainMarkerPaneReady = true;
+  return layer;
+}
+
+function trainMarkerKey(job) {
+  const lineId = String(job?.line?.id || 'line');
+  const trainId = String(job?.train?.id || job?.train?.modelId || 'train');
+  return `${lineId}:${trainId}:${Number(job?.instanceIndex || 0)}`;
+}
+
+function validRouteCoords(coords) {
+  return (Array.isArray(coords) ? coords : [])
+    .map(pair => [Number(pair?.[0]), Number(pair?.[1])])
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
+}
+
+function bearingDegreesBetweenCoords(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return 0;
+  const lat1 = Number(a[1]) * Math.PI / 180;
+  const lat2 = Number(b[1]) * Math.PI / 180;
+  const dLon = (Number(b[0]) - Number(a[0])) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const deg = Math.atan2(y, x) * 180 / Math.PI;
+  return Number.isFinite(deg) ? deg : 0;
+}
+
+function trainGeoPoseAlongCoords(coords, progress) {
+  const line = validRouteCoords(coords);
+  if (!line.length) return null;
+  if (line.length === 1) return { lat: line[0][1], lon: line[0][0], bearing: 0 };
+
+  const targetT = clamp(Number(progress) || 0, 0, 1);
+  let total = 0;
+  const lengths = [];
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1];
+    const b = line[i];
+    const len = haversineClient(a[1], a[0], b[1], b[0]);
+    lengths.push(len);
+    total += Math.max(0, len);
+  }
+  if (!Number.isFinite(total) || total <= 0) {
+    return { lat: line[0][1], lon: line[0][0], bearing: bearingDegreesBetweenCoords(line[0], line[1]) };
+  }
+
+  const targetKm = total * targetT;
+  let walked = 0;
+  for (let i = 1; i < line.length; i += 1) {
+    const len = Math.max(0, lengths[i - 1] || 0);
+    if (walked + len >= targetKm || i === line.length - 1) {
+      const ratio = len > 0 ? clamp((targetKm - walked) / len, 0, 1) : 0;
+      const a = line[i - 1];
+      const b = line[i];
+      return {
+        lat: a[1] + (b[1] - a[1]) * ratio,
+        lon: a[0] + (b[0] - a[0]) * ratio,
+        bearing: bearingDegreesBetweenCoords(a, b)
+      };
+    }
+    walked += len;
+  }
+  const last = line[line.length - 1];
+  return { lat: last[1], lon: last[0], bearing: bearingDegreesBetweenCoords(line[line.length - 2], last) };
+}
+
+function trainMarkerColor(color) {
+  const raw = String(color || '#d9a852').trim();
+  return /^#[0-9a-f]{3,8}$/i.test(raw) ? raw : '#d9a852';
+}
+
+function trainMarkerIconHtml(job, pose) {
+  const trainCount = Math.max(1, Number(job?.instanceCount || 1));
+  const index = Number(job?.instanceIndex || 0);
+  const color = trainMarkerColor(job?.color);
+  const motion = pose?.motion || {};
+  const speed = motion.dwell ? 0 : Number(motion.speedKmh || job?.line?.visualAverageSpeed || trainVisualAverageSpeedKmH(job?.train, job?.model, job?.line, job?.route) || 0);
+  const normalizedSpeed = clamp((speed - 35) / 165, 0, 1);
+  const own = !!job?.own;
+  const densityShrink = clamp(1 - Math.max(0, trainCount - 1) * 0.025, 0.78, 1);
+  const radius = (own ? 7.2 : 5.8) * densityShrink;
+  const haloRadius = radius + 4 + normalizedSpeed * 3;
+  const label = trainCount > 1 ? String(index + 1) : '';
+  const angle = Number(pose?.bearing || 0);
+  const dwellClass = motion.dwell ? ' is-dwelling' : '';
+  const ownClass = own ? ' own' : ' other';
+  return `<span class="sillons-train-marker${ownClass}${dwellClass}" style="--train-color:${color};--train-angle:${angle}deg;--train-radius:${radius}px;--train-halo:${haloRadius}px;--train-speed:${normalizedSpeed}">
+    <span class="sillons-train-marker__halo"></span>
+    <span class="sillons-train-marker__trail"></span>
+    <span class="sillons-train-marker__core">${escapeHtml(label)}</span>
+  </span>`;
+}
+
+function computeTrainMarkerPose(job) {
+  if (!job?.route?.coords?.length || !job?.points?.length || !job.model) return null;
+  const motion = trainVisualMotion(job.line, job.train, job.model, job.route, job.instanceIndex, job.instanceCount, job.points);
+  const pose = trainGeoPoseAlongCoords(job.route.coords, motion.progress);
+  if (!pose || ![pose.lat, pose.lon].every(Number.isFinite)) return null;
+  return { ...pose, motion };
+}
+
+function trainMarkerScreenPoint(pose) {
+  const map = app.map.leaflet;
+  if (!map || !pose) return null;
+  const point = map.latLngToContainerPoint?.([pose.lat, pose.lon]);
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function applyTrainMarkerElementPosition(el, point, pose, job) {
+  if (!el || !point) return;
+  const ownBoost = job?.own ? 100 : 0;
+  el.style.transform = `translate3d(${Math.round((point.x - 22) * 1000) / 1000}px, ${Math.round((point.y - 22) * 1000) / 1000}px, 0)`;
+  el.style.zIndex = String(20000 + ownBoost + Number(job?.instanceIndex || 0));
+  const inner = el.querySelector?.('.sillons-train-marker');
+  if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
+}
+
+function syncTrainMarkerLayer(jobs = []) {
+  if (!app.map.leaflet) return;
+  const layer = ensureTrainMarkerLayer();
+  if (!layer) return;
+  const markers = app.map.trainMarkers || (app.map.trainMarkers = new Map());
+  app.map.trainMarkerJobs = Array.isArray(jobs) ? jobs : [];
+  const seen = new Set();
+
+  for (const job of app.map.trainMarkerJobs) {
+    const pose = computeTrainMarkerPose(job);
+    const point = trainMarkerScreenPoint(pose);
+    if (!pose || !point) continue;
+    const key = trainMarkerKey(job);
+    seen.add(key);
+    const sig = `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose.motion?.dwell ? 1 : 0}:${Math.round(Number(pose.motion?.speedKmh || 0) / 10)}`;
+    let marker = markers.get(key);
+    if (!marker) {
+      const el = document.createElement('div');
+      el.className = 'sillons-train-marker-icon';
+      el.setAttribute('data-train-marker-key', key);
+      el.innerHTML = trainMarkerIconHtml(job, pose);
+      layer.appendChild(el);
+      marker = { el, sig: '' };
+      markers.set(key, marker);
+    }
+    if (marker.sig !== sig) {
+      marker.el.innerHTML = trainMarkerIconHtml(job, pose);
+      marker.sig = sig;
+    }
+    applyTrainMarkerElementPosition(marker.el, point, pose, job);
+  }
+
+  for (const [key, marker] of markers.entries()) {
+    if (seen.has(key)) continue;
+    try { marker.el?.remove?.(); } catch {}
+    markers.delete(key);
+  }
+}
+
+function updateTrainMarkerPositions() {
+  if (!app.map.leaflet) return;
+  const jobs = app.map.trainMarkerJobs || [];
+  if (!jobs.length) return;
+  const now = performance.now();
+  if (now - Number(app.map.lastTrainMarkerSyncAt || 0) < 16) return;
+  app.map.lastTrainMarkerSyncAt = now;
+  syncTrainMarkerLayer(jobs);
 }
 
 function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1, route = null) {

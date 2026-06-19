@@ -385,6 +385,7 @@ function getRoute(a, b, options = {}) {
       ...reverse,
       ids: [...reverse.ids].reverse(),
       points: [...(reverse.points || [])].reverse(),
+      coords: [...(reverse.coords || [])].reverse(),
       speedProfile: reverseRouteSpeedProfile(reverse.speedProfile, reverse.distance)
     };
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
@@ -392,7 +393,7 @@ function getRoute(a, b, options = {}) {
 
   const geometry = geometryForRoute(a, b, profile);
   if (!geometry?.length) {
-    const route = { ids: [a, b].filter(Boolean), distance: 0, maxSegment: 0, points: [], pending: !routeGeometryMarkedMissing(routeGeometryKey(a, b, profile)) };
+    const route = { ids: [a, b].filter(Boolean), distance: 0, maxSegment: 0, points: [], coords: [], pending: !routeGeometryMarkedMissing(routeGeometryKey(a, b, profile)) };
     return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
   }
 
@@ -405,6 +406,7 @@ function getRoute(a, b, options = {}) {
     distance,
     maxSegment: distance,
     points,
+    coords: geometry,
     speedProfile: routeSpeedProfileForRoute(a, b, profile)
   };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
@@ -995,7 +997,7 @@ function getRouteForStops(stops, options = {}) {
   const cached = getCacheEntry(app.routeCache, key);
   if (cached) return cached;
   if (ids.length < 2) {
-    const single = { ids, distance: 0, maxSegment: 0, points: [] };
+    const single = { ids, distance: 0, maxSegment: 0, points: [], coords: [] };
     return rememberCacheEntry(app.routeCache, key, single, ROUTE_CACHE_MAX_ENTRIES);
   }
 
@@ -1011,6 +1013,7 @@ function getRouteForStops(stops, options = {}) {
         distance,
         maxSegment: distance,
         points: cleanRoutePoints(sequencePoints),
+        coords: sequenceGeometry,
         speedProfile: routeSpeedProfileForKey(key)
       };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
@@ -1021,12 +1024,13 @@ function getRouteForStops(stops, options = {}) {
   let distanceTotal = 0;
   let maxSegment = 0;
   let points = [];
+  let coords = [];
   const mergedSpeedSegments = [];
 
   for (let i = 1; i < ids.length; i++) {
     const segment = getRoute(ids[i - 1], ids[i], { profile });
     if (!segment.distance || !segment.points?.length) {
-      const route = { ids, distance: 0, maxSegment: 0, points: [], pending: Boolean(segment.pending) };
+      const route = { ids, distance: 0, maxSegment: 0, points: [], coords: [], pending: Boolean(segment.pending) };
       return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
     }
     mergedIds.push(...segment.ids.slice(1));
@@ -1037,13 +1041,17 @@ function getRouteForStops(stops, options = {}) {
 
     if (!points.length) points.push(...segment.points);
     else points.push(...segment.points.slice(1));
+    if (Array.isArray(segment.coords) && segment.coords.length) {
+      if (!coords.length) coords.push(...segment.coords);
+      else coords.push(...segment.coords.slice(1));
+    }
   }
 
   points = cleanRoutePoints(points);
   // Ne plus remplacer un tracé détaillé par une spline organique.
   // Cette ancienne sécurité était utile pour certains fallbacks, mais elle pouvait
   // dégrader un vrai parcours RFN en le simplifiant visuellement.
-  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points, speedProfile: combinedRouteSpeedProfile(mergedSpeedSegments, distanceTotal) };
+  const route = { ids: mergedIds, distance: Math.round(distanceTotal), maxSegment: Math.round(maxSegment), points, coords, speedProfile: combinedRouteSpeedProfile(mergedSpeedSegments, distanceTotal) };
   return rememberCacheEntry(app.routeCache, key, route, ROUTE_CACHE_MAX_ENTRIES);
 }
 

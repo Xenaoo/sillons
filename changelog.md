@@ -1,3 +1,15 @@
+## Version v69.1.6 — pastilles trains en couche HTML dédiée
+
+- incrément de version : badge interface `v69.1.6`, version serveur/client `v69.1.6`, package `69.1.6` et schéma serveur `157` ;
+- correction de fond du bug de téléportation des pastilles lors des déplacements et zooms de carte ;
+- les pastilles trains ne sont plus dessinées dans le canvas commun aux lignes/gares ;
+- ajout d’une couche HTML directe `#sillonsTrainLayer` au-dessus du canvas des tracés ;
+- les trains sont maintenant rendus comme éléments HTML positionnés à partir de leurs coordonnées géographiques et reprojetés en coordonnées conteneur Leaflet ;
+- les marqueurs sont recalculés dans une couche indépendante du bitmap canvas, ce qui supprime le mélange entre ancienne image canvas transformée et nouvelle projection Leaflet ;
+- conservation de la logique de vitesse réelle, de sens de marche, d’arrêts en gare et d’espacement des trains ;
+- les routes client conservent maintenant aussi leurs coordonnées géographiques `coords`, en plus des points écran `points`, pour positionner les marqueurs sans dépendre de la projection canvas ;
+- ajout d’un style CSS dédié pour conserver l’aspect pastille/halo/traînée au-dessus de tous les tracés.
+
 ## Version v69.1.5 — stabilisation pan + zoom des pastilles trains
 
 - incrément de version : badge interface `v69.1.5`, version serveur/client `v69.1.5`, package `69.1.5` et schéma serveur `156` ;

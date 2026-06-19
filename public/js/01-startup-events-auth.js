@@ -662,6 +662,7 @@ function initOsmMap() {
   });
 
   addReliableFrenchTileLayer(app.map.leaflet);
+  ensureTrainMarkerLayer();
 
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
 

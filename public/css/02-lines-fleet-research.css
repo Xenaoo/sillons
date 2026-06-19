@@ -2813,3 +2813,108 @@ button.train-prereq-chip.missing:hover {
 }
 
 
+
+/* ===== V69.1.6 : pastilles trains en couche HTML dédiée ===== */
+.sillons-train-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 780 !important;
+  pointer-events: none !important;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.sillons-train-marker-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  pointer-events: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  will-change: transform;
+}
+
+.sillons-train-marker {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  --train-color: #d9a852;
+  --train-angle: 0deg;
+  --train-radius: 7px;
+  --train-halo: 12px;
+  --train-speed: .35;
+}
+
+.sillons-train-marker__halo,
+.sillons-train-marker__trail,
+.sillons-train-marker__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+.sillons-train-marker__halo {
+  width: calc(var(--train-halo) * 2);
+  height: calc(var(--train-halo) * 2);
+  margin-left: calc(var(--train-halo) * -1);
+  margin-top: calc(var(--train-halo) * -1);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--train-color) 28%, transparent);
+  opacity: .64;
+  filter: blur(.2px);
+  animation: sillons-train-halo-pulse 1.35s ease-in-out infinite;
+}
+
+.sillons-train-marker.is-dwelling .sillons-train-marker__halo {
+  animation-duration: 2.4s;
+  opacity: .42;
+}
+
+.sillons-train-marker__trail {
+  width: calc(10px + var(--train-speed) * 14px);
+  height: 4px;
+  margin-left: calc((10px + var(--train-speed) * 14px) * -1 - var(--train-radius) * .25);
+  margin-top: -2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--train-color));
+  opacity: calc(.36 + var(--train-speed) * .28);
+  transform: rotate(var(--train-angle));
+}
+
+.sillons-train-marker.is-dwelling .sillons-train-marker__trail {
+  opacity: 0;
+}
+
+.sillons-train-marker__core {
+  width: calc(var(--train-radius) * 2);
+  height: calc(var(--train-radius) * 2);
+  margin-left: calc(var(--train-radius) * -1);
+  margin-top: calc(var(--train-radius) * -1);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: rgba(3, 8, 14, .94);
+  font: 700 8px/1 system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255,255,255,.95) 0 13%, #f8df98 14% 28%, var(--train-color) 45%, #17372a 100%);
+  border: 2px solid rgba(252, 230, 170, .94);
+  box-shadow:
+    0 0 0 2px rgba(5, 10, 18, .96),
+    0 0 14px color-mix(in srgb, var(--train-color) 76%, transparent);
+}
+
+.sillons-train-marker.other .sillons-train-marker__core {
+  border-width: 1.4px;
+  opacity: .92;
+}
+
+@keyframes sillons-train-halo-pulse {
+  0%, 100% { transform: scale(.82); }
+  50% { transform: scale(1.12); }
+}

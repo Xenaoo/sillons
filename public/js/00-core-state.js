@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v69.1.5';
+const PROJECT_VERSION = 'v69.1.6';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -155,6 +155,11 @@ const app = {
     routeDataSignature: '',
     trainMotion: {},
     trainMotionPlans: new Map(),
+    trainMarkers: new Map(),
+    trainMarkerLayer: null,
+    trainMarkerJobs: [],
+    trainMarkerPaneReady: false,
+    lastTrainMarkerSyncAt: 0,
     redrawAfterPan: false,
     lastMoveEventAt: 0,
     panOverlay: { active: false, finishing: false, zooming: false, baseZoom: null, basePixelOrigin: null, anchorLatLng: null, anchorPoint: null, raf: false, transform: '' },
