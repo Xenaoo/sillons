@@ -1,3 +1,13 @@
+# v69.2.2 — Correction du dénominateur sillons RFN
+
+- Correction de l’affichage court des sillons dans les vignettes et résumés de ligne.
+- Le format `utilisés / maximum` affiche maintenant la capacité théorique RFN du tronçon limitant.
+- Exemple : une ligne utilisant 6 sillons sur un tronçon théorique à 32 sillons/h affichera `6/32`.
+- La capacité réellement utilisable par les joueurs reste affichée séparément dans le tooltip.
+- La disponibilité après trafic des autres joueurs reste affichée sous la forme `disponibles / capacité joueurs` et reste utilisée pour les blocages d’affectation.
+- Le panneau Demande & capacité distingue maintenant `Capacité RFN théorique`, `Capacité joueurs` et `Sillons disponibles`.
+- Schéma save : `164`.
+
 # v69.2.1 — Correction affichage des sillons sur les vignettes
 
 - Correction de l’affichage court des sillons dans les vignettes de ligne.
