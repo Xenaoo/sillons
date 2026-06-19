@@ -1,3 +1,13 @@
+## Version v69.1.9 — correction réelle des pastilles trains au pan/zoom
+
+- incrément de version : badge interface `v69.1.9`, version serveur/client `v69.1.9`, package `69.1.9` et schéma serveur `160` ;
+- correction de la cause de masquage introduite en v69.1.8 : les marqueurs Leaflet étaient créés dans un pane enfant de `.leaflet-map-pane`, dont le stacking context restait sous le canvas `#map` (`z-index: 430`) ;
+- suppression du pane Leaflet `sillonsTrainPane` et retour à un overlay DOM unique `#sillonsTrainOverlay`, sibling direct du canvas, avec `z-index: 950` ;
+- correction de la cause de saut au zoom : l’ancien calcul ajoutait `_getMapPanePos()` à `_latLngToNewLayerPoint()`, alors que ce point correspond déjà au viewport cible du zoom ;
+- les pastilles sont maintenant projetées uniquement depuis la géométrie RFN géographique (`route.coords`) vers les coordonnées container Leaflet ;
+- mise à jour des pastilles sans throttling pendant une navigation carte active, pour suivre chaque événement de pan/zoom ;
+- aucun changement RFN, aucun changement cache vitesse.
+
 ## Version v69.1.8 — refonte native Leaflet des pastilles trains
 
 - incrément de version : badge interface `v69.1.8`, version serveur/client `v69.1.8`, package `69.1.8` et schéma serveur `159` ;

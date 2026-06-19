@@ -2814,16 +2814,14 @@ button.train-prereq-chip.missing:hover {
 
 
 
-/* ===== V69.1.8 : pastilles trains natives Leaflet ===== */
-#osmMap .sillons-train-pane,
-#osmMap .leaflet-sillonsTrainPane-pane {
-  z-index: 925 !important;
+/* ===== V69.1.9 : pastilles trains en overlay DOM au-dessus du canvas ===== */
+.sillons-train-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 950 !important;
   pointer-events: none !important;
-}
-
-#osmMap .sillons-train-pane .leaflet-marker-icon,
-#osmMap .leaflet-sillonsTrainPane-pane .leaflet-marker-icon {
-  pointer-events: none !important;
+  overflow: hidden;
+  contain: layout paint;
 }
 
 .sillons-train-marker-icon {

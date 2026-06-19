@@ -908,31 +908,39 @@ function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanc
 
 
 function ensureTrainMarkerLayer() {
-  const map = app.map.leaflet;
-  if (!map || !window.L) return null;
+  const container = app.map.leaflet?.getContainer?.() || $('#osmMap');
+  if (!container) return null;
 
-  const container = map.getContainer?.() || $('#osmMap');
-  for (const selector of ['#sillonsTrainLayer', '#sillonsTrainOverlay']) {
-    const obsolete = container?.querySelector?.(selector);
-    if (obsolete) {
+  // Les versions 69.1.6/69.1.8 ont laissé deux systèmes concurrents :
+  // - un overlay DOM historique ;
+  // - un pane Leaflet natif inséré dans .leaflet-map-pane.
+  // Le pane Leaflet restait prisonnier du stacking-context de Leaflet, qui est
+  // placé sous le canvas #map. Les pastilles pouvaient donc passer sous les
+  // tracés. On revient à un overlay DOM unique, sibling direct du canvas, au
+  // z-index supérieur, et on projette explicitement en coordonnées container.
+  for (const selector of ['#sillonsTrainLayer', '.leaflet-sillonsTrainPane-pane', '.sillons-train-pane']) {
+    for (const obsolete of Array.from(container.querySelectorAll?.(selector) || [])) {
+      if (obsolete.id === 'sillonsTrainOverlay') continue;
       try { obsolete.remove(); } catch {}
     }
   }
 
-  if (!map.getPane?.('sillonsTrainPane')) {
-    const pane = map.createPane?.('sillonsTrainPane');
-    if (pane) {
-      pane.classList.add('sillons-train-pane');
-      pane.style.zIndex = '925';
-      pane.style.pointerEvents = 'none';
-    }
+  if (app.map.trainMarkerLayer && app.map.trainMarkerLayer.nodeType === 1 && app.map.trainMarkerLayer.id === 'sillonsTrainOverlay') {
+    return app.map.trainMarkerLayer;
   }
 
-  if (!app.map.trainMarkerLayer || typeof app.map.trainMarkerLayer.addTo !== 'function') {
-    app.map.trainMarkerLayer = L.layerGroup().addTo(map);
+  let layer = container.querySelector?.('#sillonsTrainOverlay');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'sillonsTrainOverlay';
+    container.appendChild(layer);
   }
+  layer.className = 'sillons-train-overlay';
+  layer.style.zIndex = '950';
+  layer.style.pointerEvents = 'none';
+  app.map.trainMarkerLayer = layer;
   app.map.trainMarkerPaneReady = true;
-  return app.map.trainMarkerLayer;
+  return layer;
 }
 
 function trainMarkerKey(job) {
@@ -1032,68 +1040,113 @@ function computeTrainMarkerPose(job) {
   return { ...pose, motion };
 }
 
+function trainMarkerCurrentZoomFrame() {
+  const frame = app.map.trainMarkerZoomFrame;
+  if (!frame || !Number.isFinite(Number(frame.zoom)) || !frame.center) return null;
+  const age = performance.now() - Number(frame.at || 0);
+  return age < 650 ? frame : null;
+}
+
+function trainMarkerNewContainerPoint(map, latLng, frame) {
+  if (!map || !frame) return null;
+  const zoom = Number(frame.zoom);
+  const center = frame.center;
+  if (!Number.isFinite(zoom) || !center) return null;
+  try {
+    // Leaflet._latLngToNewLayerPoint renvoie déjà le point dans le viewport
+    // cible du zoom. Les versions précédentes ajoutaient l'offset courant du
+    // map-pane, ce qui doublait le décalage pendant les zooms animés.
+    if (typeof map._latLngToNewLayerPoint === 'function') {
+      const p = map._latLngToNewLayerPoint(latLng, zoom, center);
+      const x = Number(p?.x);
+      const y = Number(p?.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    }
+    const projected = map.project?.(latLng, zoom);
+    const origin = typeof map._getNewPixelOrigin === 'function' ? map._getNewPixelOrigin(center, zoom) : null;
+    const x = Number(projected?.x) - Number(origin?.x);
+    const y = Number(projected?.y) - Number(origin?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  } catch {
+    return null;
+  }
+}
+
+function trainMarkerProjectedPoint(pose, explicitFrame = null) {
+  const map = app.map.leaflet;
+  if (!map || !pose) return null;
+  const latLng = [pose.lat, pose.lon];
+  const frame = explicitFrame || trainMarkerCurrentZoomFrame();
+  if (frame) {
+    const zoomPoint = trainMarkerNewContainerPoint(map, latLng, frame);
+    if (zoomPoint) return zoomPoint;
+  }
+  try {
+    const point = map.latLngToContainerPoint?.(latLng);
+    const x = Number(point?.x);
+    const y = Number(point?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  } catch {
+    return null;
+  }
+}
+
 function trainMarkerSignature(job, pose) {
   return `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose?.motion?.dwell ? 1 : 0}:${Math.round(Number(pose?.motion?.speedKmh || 0) / 10)}:${Math.round(Number(pose?.bearing || 0) / 2)}`;
 }
 
-function createTrainLeafletIcon(job, pose) {
-  return L.divIcon({
-    className: 'sillons-train-marker-icon',
-    html: trainMarkerIconHtml(job, pose),
-    iconSize: [44, 44],
-    iconAnchor: [22, 22]
-  });
+function applyTrainMarkerElementPosition(el, point, pose, job) {
+  if (!el || !point) return;
+  const ownBoost = job?.own ? 1000 : 0;
+  const x = Math.round((Number(point.x) - 22) * 1000) / 1000;
+  const y = Math.round((Number(point.y) - 22) * 1000) / 1000;
+  el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  el.style.zIndex = String(30000 + ownBoost + Number(job?.instanceIndex || 0));
+  const inner = el.querySelector?.('.sillons-train-marker');
+  if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
 }
 
-function syncTrainMarkerLayer(jobs = []) {
+function syncTrainMarkerLayer(jobs = [], options = {}) {
   const layer = ensureTrainMarkerLayer();
-  if (!app.map.leaflet || !layer || !window.L) return;
+  if (!app.map.leaflet || !layer) return;
 
   const markers = app.map.trainMarkers || (app.map.trainMarkers = new Map());
   if (Array.isArray(jobs)) app.map.trainMarkerJobs = jobs;
   const activeJobs = Array.isArray(jobs) ? jobs : (app.map.trainMarkerJobs || []);
+  const frame = options.zoomFrame || trainMarkerCurrentZoomFrame();
   const seen = new Set();
 
   for (const job of activeJobs) {
     const pose = computeTrainMarkerPose(job);
     if (!pose) continue;
+    const point = trainMarkerProjectedPoint(pose, frame);
+    if (!point) continue;
 
     const key = trainMarkerKey(job);
     const sig = trainMarkerSignature(job, pose);
-    const latLng = [pose.lat, pose.lon];
     seen.add(key);
 
     let record = markers.get(key);
-    if (!record || !record.marker) {
-      const marker = L.marker(latLng, {
-        pane: 'sillonsTrainPane',
-        icon: createTrainLeafletIcon(job, pose),
-        interactive: false,
-        keyboard: false,
-        bubblingMouseEvents: false,
-        zIndexOffset: 20000 + (job?.own ? 1000 : 0) + Number(job?.instanceIndex || 0)
-      });
-      marker.addTo(layer);
-      record = { marker, sig: '' };
+    if (!record || !record.el) {
+      const el = document.createElement('div');
+      el.className = 'sillons-train-marker-icon';
+      el.setAttribute('data-train-marker-key', key);
+      el.innerHTML = trainMarkerIconHtml(job, pose);
+      layer.appendChild(el);
+      record = { el, sig: '' };
       markers.set(key, record);
-    } else {
-      record.marker.setLatLng(latLng);
-      record.marker.setZIndexOffset?.(20000 + (job?.own ? 1000 : 0) + Number(job?.instanceIndex || 0));
     }
 
     if (record.sig !== sig) {
-      record.marker.setIcon(createTrainLeafletIcon(job, pose));
+      record.el.innerHTML = trainMarkerIconHtml(job, pose);
       record.sig = sig;
-    } else {
-      const el = record.marker.getElement?.();
-      const inner = el?.querySelector?.('.sillons-train-marker');
-      if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
     }
+    applyTrainMarkerElementPosition(record.el, point, pose, job);
   }
 
   for (const [key, record] of markers.entries()) {
     if (seen.has(key)) continue;
-    try { layer.removeLayer(record.marker); } catch {}
+    try { record.el?.remove?.(); } catch {}
     markers.delete(key);
   }
 }
@@ -1101,15 +1154,18 @@ function syncTrainMarkerLayer(jobs = []) {
 function requestTrainMarkerLayerSync(options = {}) {
   if (!app.map.leaflet) return;
   const immediate = !!options.immediate;
+  if (options.zoomFrame) {
+    app.map.trainMarkerZoomFrame = { ...options.zoomFrame, at: performance.now() };
+  }
   if (immediate) {
-    syncTrainMarkerLayer(app.map.trainMarkerJobs || []);
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
     return;
   }
   if (app.map.trainMarkerRaf) return;
   app.map.trainMarkerRaf = true;
   requestAnimationFrame(() => {
     app.map.trainMarkerRaf = false;
-    syncTrainMarkerLayer(app.map.trainMarkerJobs || []);
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
   });
 }
 
@@ -1118,26 +1174,24 @@ function updateTrainMarkerPositions() {
   const jobs = app.map.trainMarkerJobs || [];
   if (!jobs.length) return;
   const now = performance.now();
-  if (now - Number(app.map.lastTrainMarkerSyncAt || 0) < 16) return;
+  const navigating = !!app.map.navigating || !!trainMarkerCurrentZoomFrame();
+  const minDelay = navigating ? 0 : 16;
+  if (minDelay && now - Number(app.map.lastTrainMarkerSyncAt || 0) < minDelay) return;
   app.map.lastTrainMarkerSyncAt = now;
   syncTrainMarkerLayer(jobs);
 }
 
 function clearTrainMarkerLayer() {
   const markers = app.map.trainMarkers || new Map();
-  const layer = app.map.trainMarkerLayer;
   for (const record of markers.values()) {
-    try {
-      if (record.marker && layer?.removeLayer) layer.removeLayer(record.marker);
-      else record.el?.remove?.();
-    } catch {}
+    try { record.el?.remove?.(); } catch {}
   }
   markers.clear();
-  if (layer?.clearLayers) layer.clearLayers();
+  const layer = app.map.trainMarkerLayer;
+  if (layer?.nodeType === 1) layer.textContent = '';
   const container = app.map.leaflet?.getContainer?.() || $('#osmMap');
-  for (const selector of ['#sillonsTrainLayer', '#sillonsTrainOverlay']) {
-    const obsolete = container?.querySelector?.(selector);
-    if (obsolete) {
+  for (const selector of ['#sillonsTrainLayer', '.leaflet-sillonsTrainPane-pane', '.sillons-train-pane']) {
+    for (const obsolete of Array.from(container?.querySelectorAll?.(selector) || [])) {
       try { obsolete.remove(); } catch {}
     }
   }
