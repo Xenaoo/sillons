@@ -385,9 +385,11 @@ function persistOsmRouteCache() {
 function startPanOverlay() {
   if (!app.map.leaflet || !app.map.canvas || app.map.panOverlay.active) return;
   app.map.panOverlay.active = true;
+  app.map.panOverlay.finishing = false;
   app.map.panOverlay.anchorLatLng = app.map.leaflet.getCenter();
   app.map.panOverlay.anchorPoint = app.map.leaflet.latLngToContainerPoint(app.map.panOverlay.anchorLatLng);
   app.map.panOverlay.raf = false;
+  app.map.panOverlay.transform = app.map.canvas.style.transform || '';
   app.map.canvas.classList.add('map-pan-overlay');
   app.map.canvas.style.willChange = 'transform';
 }
@@ -402,26 +404,41 @@ function updatePanOverlay() {
     const current = app.map.leaflet.latLngToContainerPoint(overlay.anchorLatLng);
     const dx = current.x - overlay.anchorPoint.x;
     const dy = current.y - overlay.anchorPoint.y;
-    app.map.canvas.style.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`;
+    overlay.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`;
+    app.map.canvas.style.transform = overlay.transform;
   });
 }
 
 function endPanOverlay() {
   const overlay = app.map.panOverlay;
-  if (!overlay.active || !app.map.canvas) return;
+  if (!app.map.canvas || overlay.finishing || !overlay.active) return;
+
+  // Ne pas retirer la transform CSS immédiatement : l'ancien bitmap doit rester
+  // visuellement accroché à Leaflet jusqu'au redessin complet avec la nouvelle
+  // projection. Sinon une frame intermédiaire affiche les pastilles à l'ancien
+  // endroit et produit l'effet de téléportation.
   overlay.active = false;
+  overlay.finishing = true;
   overlay.anchorLatLng = null;
   overlay.anchorPoint = null;
   overlay.raf = false;
-  app.map.canvas.style.transform = '';
-  app.map.canvas.style.willChange = '';
-  app.map.canvas.classList.remove('map-pan-overlay');
   app.map.redrawAfterPan = true;
+
   requestAnimationFrame(() => {
-    if (!app.map.panOverlay?.active && app.map.redrawAfterPan) {
-      app.map.redrawAfterPan = false;
-      drawMap({ forcePanOverlayRedraw: true });
-    }
+    if (!app.map.canvas || app.map.panOverlay?.active) return;
+    const finishingOverlay = app.map.panOverlay;
+    finishingOverlay.finishing = false;
+    finishingOverlay.transform = '';
+
+    app.map.canvas.style.transform = '';
+    app.map.canvas.style.willChange = '';
+    app.map.canvas.classList.remove('map-pan-overlay');
+    app.map.redrawAfterPan = false;
+
+    // Le nettoyage de transform et le redessin se font dans la même frame rAF,
+    // avant peinture navigateur : l'utilisateur ne voit jamais l'ancien bitmap
+    // sans sa translation de pan.
+    drawMap({ forcePanOverlayRedraw: true });
   });
 }
 

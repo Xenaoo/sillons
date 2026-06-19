@@ -99,9 +99,10 @@ function drawLoop(timestamp = performance.now()) {
     return;
   }
 
-  if (app.map.panOverlay.active) {
-    // Pendant le déplacement Leaflet, on ne redessine plus le canvas :
-    // il est simplement translaté par GPU, puis recalculé au moveend.
+  if (app.map.panOverlay.active || app.map.panOverlay.finishing) {
+    // Pendant le déplacement Leaflet, le canvas déjà rendu suit la carte par transform CSS.
+    // Pendant la finition, on attend le redessin atomique du moveend pour éviter une frame
+    // où l'ancien bitmap serait affiché sans sa translation.
     requestAnimationFrame(drawLoop);
     return;
   }
@@ -118,10 +119,9 @@ function drawLoop(timestamp = performance.now()) {
 
 function drawMap(options = {}) {
   if (!app.state?.world || !app.map.ctx) return;
-  if (app.map.panOverlay?.active && !options.forcePanOverlayRedraw) {
+  if ((app.map.panOverlay?.active || app.map.panOverlay?.finishing) && !options.forcePanOverlayRedraw) {
     // Pendant un glissement Leaflet, le canvas déjà rendu est déplacé par transform CSS.
-    // Redessiner avec la nouvelle projection alors que cette transform est encore active
-    // décale les pastilles/tracés et donne une impression de téléportation.
+    // Le redessin complet est différé jusqu'à la fin atomique du déplacement.
     app.map.redrawAfterPan = true;
     return;
   }

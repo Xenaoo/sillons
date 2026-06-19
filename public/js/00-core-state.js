@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v69.1.3';
+const PROJECT_VERSION = 'v69.1.4';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -157,7 +157,7 @@ const app = {
     trainMotionPlans: new Map(),
     redrawAfterPan: false,
     lastMoveEventAt: 0,
-    panOverlay: { active: false, anchorLatLng: null, anchorPoint: null, raf: false },
+    panOverlay: { active: false, finishing: false, anchorLatLng: null, anchorPoint: null, raf: false, transform: '' },
     view: { zoom: 1, panX: 0, panY: 0 },
     drag: { active: false, moved: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 }
   },

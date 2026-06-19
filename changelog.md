@@ -1,3 +1,13 @@
+## Version v69.1.4 — correction définitive de la téléportation au pan
+
+- incrément de version : badge interface `v69.1.4`, version serveur/client `v69.1.4`, package `69.1.4` et schéma serveur `155` ;
+- correction de la vraie cause restante du saut visuel : à la fin d’un déplacement Leaflet, la transform CSS du canvas était retirée immédiatement, avant que le redessin avec la nouvelle projection ne soit exécuté ;
+- maintien de la transform de pan jusqu’à la frame `requestAnimationFrame` de finition, pour que l’ancien bitmap reste accroché à la carte pendant toute la transition ;
+- remise à zéro de la transform et redessin complet forcé dans la même frame navigateur, avant peinture, afin d’éviter toute frame intermédiaire où les pastilles seraient affichées à l’ancienne position ;
+- blocage explicite de la boucle de dessin pendant cette courte phase de finition pour empêcher un rendu concurrent ;
+- ajout d’un état `panOverlay.finishing` pour distinguer le déplacement actif de la finalisation atomique ;
+- aucun changement RFN ni cache vitesse : les géométries et profils existants restent compatibles.
+
 ## Version v69.1.3 — stabilité des pastilles pendant déplacement carte
 
 - incrément de version : badge interface `v69.1.3`, version serveur/client `v69.1.3`, package `69.1.3` et schéma serveur `154` ;
