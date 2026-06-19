@@ -2947,25 +2947,25 @@ button.train-prereq-chip.missing:hover {
   text-overflow: ellipsis;
 }
 
-/* ===== v69.3.0 : pastille de sillons restants dans la case Sillons ===== */
+/* ===== v69.3.1 : libellé disponible(s) dans la pastille sillons ===== */
 .line-card-modern-stats .line-sillon-stat,
 .line-card-collapsed-summary .line-sillon-summary {
   position: relative;
-  padding-right: 34px;
+  padding-right: 92px;
 }
 
 .line-sillon-badge {
   position: absolute;
   top: 5px;
   right: 5px;
-  min-width: 22px;
+  min-width: 82px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 7px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 9px;
   font-style: normal;
   font-weight: 900;
   line-height: 1;

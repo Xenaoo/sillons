@@ -491,7 +491,7 @@ function renderLineSillonMini(line) {
   const cls = sillons.constrained || requested > playerCapacity ? 'warn-text' : 'good-text';
   const badgeCls = remainingForLine > 0 ? 'good' : 'warn';
   const tip = lineSillonLabel(line);
-  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(remainingForLine)} sillons restants">${formatInt(remainingForLine)}</em><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(displayCapacity)}</b></div>`;
+  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(remainingForLine)} sillon(s) disponible(s)">${formatInt(remainingForLine)} disponible(s)</em><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(displayCapacity)}</b></div>`;
 }
 
 function renderLineSillonCollapsedSummary(line) {
@@ -500,7 +500,7 @@ function renderLineSillonCollapsedSummary(line) {
   const requested = Number(data.sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const cls = data.sillons.constrained || requested > data.playerCapacity ? 'warn-text' : 'good-text';
   const badgeCls = data.remainingForLine > 0 ? 'good' : 'warn';
-  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(data.remainingForLine)} sillons restants">${formatInt(data.remainingForLine)}</em><b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.displayCapacity)}</b></span>`;
+  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <em class="line-sillon-badge ${badgeCls}" aria-label="${formatInt(data.remainingForLine)} sillon(s) disponible(s)">${formatInt(data.remainingForLine)} disponible(s)</em><b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.displayCapacity)}</b></span>`;
 }
 
 function renderLineItem(line) {

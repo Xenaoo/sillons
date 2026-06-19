@@ -1,3 +1,9 @@
+# v69.3.1 — Libellé des sillons disponibles
+
+- La pastille en haut à droite de la case `Sillons` affiche maintenant `XX disponible(s)` au lieu du nombre seul.
+- Ajustement de la largeur et du padding de la pastille pour éviter le chevauchement avec la valeur principale.
+- Schéma save : `167`.
+
 # v69.3.0 — Possession complète des sillons par les joueurs
 
 - Suppression de la notion d’occupation de fond / trafic RFN existant estimé dans le calcul des sillons.
