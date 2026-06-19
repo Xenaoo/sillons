@@ -2934,3 +2934,15 @@ button.train-prereq-chip.missing:hover {
 .sillons-train-pane {
   display: none !important;
 }
+
+.line-sillon-remaining {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,3 +1,12 @@
+# v69.2.3 — Affichage des sillons restants
+
+- Ajout du nombre de sillons restants affectables directement dans la vignette courte des lignes.
+- Le format principal reste `sillons utilisés / capacité théorique RFN`.
+- La ligne secondaire affiche désormais les sillons encore ajoutables à la ligne après trafic RFN existant et autres joueurs.
+- Correction du tooltip pour distinguer clairement capacité RFN théorique, trafic RFN existant, capacité ouverte aux joueurs, autres joueurs, plafond de la ligne, sillons utilisés et sillons restants.
+- Le panneau Demande & capacité affiche maintenant le plafond propre à la ligne et les sillons restants affectables.
+- Schéma save : `165`.
+
 # v69.2.2 — Correction du dénominateur sillons RFN
 
 - Correction de l’affichage court des sillons dans les vignettes et résumés de ligne.
