@@ -1,3 +1,12 @@
+# v69.2.1 — Correction affichage des sillons sur les vignettes
+
+- Correction de l’affichage court des sillons dans les vignettes de ligne.
+- Le format `utilisés / maximum` affiche maintenant la capacité joueurs totale du tronçon limitant, cohérente avec le tooltip.
+- La disponibilité restante après les autres joueurs reste utilisée pour les alertes et les blocages d’affectation.
+- Le tooltip précise maintenant aussi les sillons disponibles pour la ligne après occupation des autres compagnies.
+- Le panneau Demande & capacité distingue désormais `Capacité joueurs` et `Sillons disponibles`.
+- Schéma save : `163`.
+
 # v69.2.0 — Modèle interne de capacité sillons
 
 - Ajout d’un modèle interne de capacité RFN par tronçon.

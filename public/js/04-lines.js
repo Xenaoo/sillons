@@ -289,7 +289,8 @@ function renderLineInsightPanels(line) {
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
           <span>Sillons actifs</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(lineSlotDemandClient(line))}</b>
-          ${stats.capacity?.sillons ? `<span>Sillons utilisables</span><b>${round(stats.capacity.sillons.maxFrequency ?? stats.capacity.sillons.lineCapacity ?? 0)} / ${round(stats.capacity.sillons.lineCapacity ?? 0)}</b>` : ''}
+          ${lineSillonDataClient(line) ? `<span>Capacité joueurs</span><b>${round(lineSillonDataClient(line).displayCapacity)}</b>` : ''}
+          ${lineSillonDataClient(line) ? `<span>Sillons disponibles</span><b>${round(lineSillonDataClient(line).available)} / ${round(lineSillonDataClient(line).displayCapacity)}</b>` : ''}
           ${stats.capacity?.sillons ? `<span>Trafic RFN existant</span><b>${round(stats.capacity.sillons.backgroundUsed ?? 0)} / ${round(stats.capacity.sillons.theoreticalCapacity ?? 0)}</b>` : ''}
           <span>Composition</span><b>${escapeHtml(capacity.trainComposition || 'Standard')}</b>
         </div>
@@ -403,9 +404,11 @@ function lineSillonDataClient(line) {
   const bottleneck = sillons.bottleneck || null;
   const rawAvailable = Number(sillons.maxFrequency ?? bottleneck?.available ?? sillons.lineCapacity ?? lineSlotDemandClient(line));
   const available = Math.max(0, Math.floor(Number.isFinite(rawAvailable) ? rawAvailable : 0));
+  const rawDisplayCapacity = Number(bottleneck?.playerCapacity ?? sillons.playerCapacity ?? sillons.lineCapacity ?? rawAvailable ?? lineSlotDemandClient(line));
+  const displayCapacity = Math.max(0, Math.floor(Number.isFinite(rawDisplayCapacity) ? rawDisplayCapacity : available));
   const rawUsedByPlayer = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const usedByPlayer = Math.max(0, Math.floor(Number.isFinite(rawUsedByPlayer) ? rawUsedByPlayer : 0));
-  return { sillons, bottleneck, available, usedByPlayer };
+  return { sillons, bottleneck, available, displayCapacity, usedByPlayer };
 }
 
 function lineSillonOtherUsageLabel(bottleneck) {
@@ -424,7 +427,7 @@ function lineSillonOtherUsageLabel(bottleneck) {
 function lineSillonLabel(line) {
   const data = lineSillonDataClient(line);
   if (!data) return '';
-  const { sillons, bottleneck } = data;
+  const { sillons, bottleneck, available, displayCapacity, usedByPlayer } = data;
   const from = bottleneck ? (bottleneck.fromName || bottleneck.from || 'N/A') : 'N/A';
   const to = bottleneck ? (bottleneck.toName || bottleneck.to || 'N/A') : 'N/A';
   const theoretical = Number(bottleneck?.theoreticalCapacity ?? sillons.theoreticalCapacity ?? 0);
@@ -438,6 +441,8 @@ function lineSillonLabel(line) {
     `Capacité théorique RFN : ${round(theoretical)} sillon(s)/h`,
     `Trafic existant estimé : ${round(background)} sillon(s)/h`,
     `Capacité utilisable joueurs : ${round(playerCapacity)} sillon(s)/h`,
+    `Disponibles pour cette ligne : ${round(available)} / ${round(displayCapacity)} sillon(s)/h`,
+    `Sillons utilisés par cette ligne : ${round(usedByPlayer)} sillon(s)/h`,
     `Occupation totale estimée : ${round(totalUsed)} sillon(s)/h (${round(utilization)}%)`,
     lineSillonOtherUsageLabel(bottleneck),
     tags
@@ -447,11 +452,11 @@ function lineSillonLabel(line) {
 function renderLineSillonMini(line) {
   const data = lineSillonDataClient(line);
   if (!data) return '';
-  const { sillons, available, usedByPlayer } = data;
+  const { sillons, available, displayCapacity, usedByPlayer } = data;
   const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const cls = sillons.constrained || requested > available ? 'warn-text' : 'good-text';
   const tip = lineSillonLabel(line);
-  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(available)}</b></div>`;
+  return `<div class="line-sillon-stat" ${tooltipAttr(tip)}><span>Sillons</span><b class="${cls}">${formatInt(usedByPlayer)}/${formatInt(displayCapacity)}</b></div>`;
 }
 
 function renderLineSillonCollapsedSummary(line) {
@@ -459,7 +464,7 @@ function renderLineSillonCollapsedSummary(line) {
   if (!data) return '';
   const requested = Number(data.sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const cls = data.sillons.constrained || requested > data.available ? 'warn-text' : 'good-text';
-  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.available)}</b></span>`;
+  return `<span class="line-sillon-summary" ${tooltipAttr(lineSillonLabel(line))}>Sillons <b class="${cls}">${formatInt(data.usedByPlayer)}/${formatInt(data.displayCapacity)}</b></span>`;
 }
 
 function renderLineItem(line) {
