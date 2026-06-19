@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v69.1.6';
+const PROJECT_VERSION = 'v69.1.7';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -159,6 +159,8 @@ const app = {
     trainMarkerLayer: null,
     trainMarkerJobs: [],
     trainMarkerPaneReady: false,
+    trainMarkerRaf: false,
+    trainMarkerZoomFrame: null,
     lastTrainMarkerSyncAt: 0,
     redrawAfterPan: false,
     lastMoveEventAt: 0,

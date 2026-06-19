@@ -483,6 +483,7 @@ function updateZoomOverlay(event) {
   const center = event?.center || app.map.leaflet.getCenter();
   const zoom = Number.isFinite(Number(event?.zoom)) ? Number(event.zoom) : app.map.leaflet.getZoom();
   setMapOverlayTransform(center, zoom);
+  requestTrainMarkerLayerSync({ zoomFrame: { center, zoom }, immediate: true });
 }
 
 function endPanOverlay() {
@@ -672,6 +673,7 @@ function initOsmMap() {
     startPanOverlay('zoom');
     resizeCanvas();
     markMapProjectionDirty();
+    requestTrainMarkerLayerSync({ immediate: true });
   });
   app.map.leaflet.on('zoomanim', event => {
     app.map.navigating = true;
@@ -685,12 +687,15 @@ function initOsmMap() {
     // Ne pas écraser cette transform par un calcul intermédiaire incomplet.
     if (!app.map.panOverlay?.zooming) updatePanOverlay();
     markMapProjectionDirty();
+    requestTrainMarkerLayerSync({ immediate: true });
   });
   app.map.leaflet.on('zoomend', () => {
     app.map.navigating = false;
+    app.map.trainMarkerZoomFrame = null;
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('zoom-end');
+    requestTrainMarkerLayerSync({ immediate: true });
     endPanOverlay();
   });
 
@@ -698,17 +703,20 @@ function initOsmMap() {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
     startPanOverlay(app.map.panOverlay?.zooming ? 'zoom' : 'pan');
+    requestTrainMarkerLayerSync({ immediate: true });
   });
   app.map.leaflet.on('move', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
     updatePanOverlay();
+    requestTrainMarkerLayerSync({ immediate: true });
   });
   app.map.leaflet.on('moveend', () => {
     app.map.navigating = false;
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('move-end');
+    requestTrainMarkerLayerSync({ immediate: true });
     if (!app.map.panOverlay?.zooming) endPanOverlay();
   });
   app.map.leaflet.on('resize', () => {
@@ -716,6 +724,7 @@ function initOsmMap() {
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('map-resize');
+    requestTrainMarkerLayerSync({ immediate: true });
     if (!app.map.panOverlay?.zooming) endPanOverlay();
   });
   app.map.leaflet.on('mousemove', onOsmMouseMove);

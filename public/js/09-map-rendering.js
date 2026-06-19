@@ -99,15 +99,15 @@ function drawLoop(timestamp = performance.now()) {
     return;
   }
 
+  updateTrainMarkerPositions();
+
   if (app.map.panOverlay.active || app.map.panOverlay.finishing) {
-    // Les pastilles trains sont désormais de vrais marqueurs Leaflet : elles suivent
-    // automatiquement pan/zoom dans leur pane dédié. On garde donc le canvas figé
-    // pendant la navigation, sans recalculer des coordonnées écran concurrentes.
+    // Le canvas des lignes reste figé pendant que Leaflet navigue, mais les pastilles
+    // sont recalculées dans leur couche propre pour ne jamais conserver d'anciennes
+    // coordonnées écran pendant un pan ou un zoom.
     requestAnimationFrame(drawLoop);
     return;
   }
-
-  updateTrainMarkerPositions();
 
   const moving = app.map.navigating;
   const delay = moving ? 84 : 33; // ~12 fps pendant le zoom, ~30 fps le reste.
@@ -373,9 +373,9 @@ function drawAllLines(ctx, lite = false) {
   drawLineDraftPreview(ctx, lite);
 
   if (!lite) {
-    // Les trains ne sont plus dessinés dans ce canvas. Ils sont synchronisés comme
-    // marqueurs Leaflet dans un pane dédié au-dessus des lignes, ce qui évite les
-    // décalages/« téléportations » quand Leaflet applique ses transforms de pan/zoom.
+    // Les trains ne sont plus dessinés dans ce canvas. Ils sont synchronisés dans
+    // un overlay projeté au-dessus de toutes les lignes, recalculé sur chaque
+    // mouvement/zoom pour éviter toute coordonnée écran persistante.
     syncTrainMarkerLayer(trainDrawQueue);
   }
 }
@@ -843,14 +843,24 @@ function ensureTrainMarkerLayer() {
   const map = app.map.leaflet;
   const container = map?.getContainer?.() || $('#osmMap');
   if (!container) return null;
-  let layer = app.map.trainMarkerLayer || container.querySelector?.('#sillonsTrainLayer');
+
+  // v69.1.7 : couche entièrement reconstruite. Ce n'est plus un marqueur Leaflet
+  // partiellement détourné ni un rendu canvas : c'est un overlay fixe au-dessus de
+  // tout, alimenté exclusivement par la projection courante de Leaflet.
+  const obsoleteLayer = container.querySelector?.('#sillonsTrainLayer');
+  if (obsoleteLayer && obsoleteLayer !== app.map.trainMarkerLayer) {
+    try { obsoleteLayer.remove(); } catch {}
+  }
+
+  let layer = app.map.trainMarkerLayer || container.querySelector?.('#sillonsTrainOverlay');
   if (!layer) {
     layer = document.createElement('div');
-    layer.id = 'sillonsTrainLayer';
-    layer.className = 'sillons-train-layer';
+    layer.id = 'sillonsTrainOverlay';
+    layer.className = 'sillons-train-overlay';
     container.appendChild(layer);
   }
-  layer.style.zIndex = '780';
+
+  layer.style.zIndex = '880';
   layer.style.pointerEvents = 'none';
   app.map.trainMarkerLayer = layer;
   app.map.trainMarkerPaneReady = true;
@@ -954,61 +964,111 @@ function computeTrainMarkerPose(job) {
   return { ...pose, motion };
 }
 
-function trainMarkerScreenPoint(pose) {
+function trainMarkerCurrentZoomFrame() {
+  const frame = app.map.trainMarkerZoomFrame;
+  if (!frame || !Number.isFinite(Number(frame.zoom)) || !frame.center) return null;
+  const age = performance.now() - Number(frame.at || 0);
+  return age < 550 ? frame : null;
+}
+
+function trainMarkerProjectedPoint(pose, explicitFrame = null) {
   const map = app.map.leaflet;
   if (!map || !pose) return null;
-  const point = map.latLngToContainerPoint?.([pose.lat, pose.lon]);
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  const latLng = [pose.lat, pose.lon];
+  const frame = explicitFrame || trainMarkerCurrentZoomFrame();
+
+  try {
+    if (frame && typeof map._latLngToNewLayerPoint === 'function') {
+      const layerPoint = map._latLngToNewLayerPoint(latLng, frame.zoom, frame.center);
+      const panePoint = typeof map._getMapPanePos === 'function' ? map._getMapPanePos() : { x: 0, y: 0 };
+      const x = Number(layerPoint?.x) + Number(panePoint?.x || 0);
+      const y = Number(layerPoint?.y) + Number(panePoint?.y || 0);
+      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    }
+
+    const point = map.latLngToContainerPoint?.(latLng);
+    const x = Number(point?.x);
+    const y = Number(point?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  } catch {
+    return null;
+  }
+}
+
+function trainMarkerSignature(job, pose) {
+  return `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose?.motion?.dwell ? 1 : 0}:${Math.round(Number(pose?.motion?.speedKmh || 0) / 10)}:${Math.round(Number(pose?.bearing || 0) / 2)}`;
 }
 
 function applyTrainMarkerElementPosition(el, point, pose, job) {
   if (!el || !point) return;
-  const ownBoost = job?.own ? 100 : 0;
+  const ownBoost = job?.own ? 1000 : 0;
   el.style.transform = `translate3d(${Math.round((point.x - 22) * 1000) / 1000}px, ${Math.round((point.y - 22) * 1000) / 1000}px, 0)`;
   el.style.zIndex = String(20000 + ownBoost + Number(job?.instanceIndex || 0));
   const inner = el.querySelector?.('.sillons-train-marker');
   if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
 }
 
-function syncTrainMarkerLayer(jobs = []) {
-  if (!app.map.leaflet) return;
+function syncTrainMarkerLayer(jobs = [], options = {}) {
   const layer = ensureTrainMarkerLayer();
-  if (!layer) return;
+  if (!app.map.leaflet || !layer) return;
+
   const markers = app.map.trainMarkers || (app.map.trainMarkers = new Map());
-  app.map.trainMarkerJobs = Array.isArray(jobs) ? jobs : [];
+  if (Array.isArray(jobs)) app.map.trainMarkerJobs = jobs;
+  const activeJobs = Array.isArray(jobs) ? jobs : (app.map.trainMarkerJobs || []);
+  const frame = options.zoomFrame || null;
   const seen = new Set();
 
-  for (const job of app.map.trainMarkerJobs) {
+  for (const job of activeJobs) {
     const pose = computeTrainMarkerPose(job);
-    const point = trainMarkerScreenPoint(pose);
-    if (!pose || !point) continue;
+    if (!pose) continue;
+    const point = trainMarkerProjectedPoint(pose, frame);
+    if (!point) continue;
+
     const key = trainMarkerKey(job);
+    const sig = trainMarkerSignature(job, pose);
     seen.add(key);
-    const sig = `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose.motion?.dwell ? 1 : 0}:${Math.round(Number(pose.motion?.speedKmh || 0) / 10)}`;
-    let marker = markers.get(key);
-    if (!marker) {
+
+    let record = markers.get(key);
+    if (!record || !record.el) {
       const el = document.createElement('div');
       el.className = 'sillons-train-marker-icon';
       el.setAttribute('data-train-marker-key', key);
       el.innerHTML = trainMarkerIconHtml(job, pose);
       layer.appendChild(el);
-      marker = { el, sig: '' };
-      markers.set(key, marker);
+      record = { el, sig: '' };
+      markers.set(key, record);
     }
-    if (marker.sig !== sig) {
-      marker.el.innerHTML = trainMarkerIconHtml(job, pose);
-      marker.sig = sig;
+
+    if (record.sig !== sig) {
+      record.el.innerHTML = trainMarkerIconHtml(job, pose);
+      record.sig = sig;
     }
-    applyTrainMarkerElementPosition(marker.el, point, pose, job);
+    applyTrainMarkerElementPosition(record.el, point, pose, job);
   }
 
-  for (const [key, marker] of markers.entries()) {
+  for (const [key, record] of markers.entries()) {
     if (seen.has(key)) continue;
-    try { marker.el?.remove?.(); } catch {}
+    try { record.el?.remove?.(); } catch {}
     markers.delete(key);
   }
+}
+
+function requestTrainMarkerLayerSync(options = {}) {
+  if (!app.map.leaflet) return;
+  const immediate = !!options.immediate;
+  if (options.zoomFrame) {
+    app.map.trainMarkerZoomFrame = { ...options.zoomFrame, at: performance.now() };
+  }
+  if (immediate) {
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
+    return;
+  }
+  if (app.map.trainMarkerRaf) return;
+  app.map.trainMarkerRaf = true;
+  requestAnimationFrame(() => {
+    app.map.trainMarkerRaf = false;
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
+  });
 }
 
 function updateTrainMarkerPositions() {
@@ -1021,135 +1081,18 @@ function updateTrainMarkerPositions() {
   syncTrainMarkerLayer(jobs);
 }
 
-function drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex = 0, instanceCount = 1, route = null) {
-  const motion = trainVisualMotion(line, train, model, route, instanceIndex, instanceCount, points);
-  const reverse = motion.reverse;
-  const t = Math.max(0.001, Math.min(0.999, motion.progress));
-  const pose = pointAndAngleAlongPolyline(points, t);
-  const speed = motion.dwell ? 0 : Number(motion.speedKmh || line?.visualAverageSpeed || trainVisualAverageSpeedKmH(train, model, line, route) || 0);
-  const normalizedSpeed = clamp((speed - 35) / 165, 0, 1);
-  const trainCount = Math.max(1, instanceCount);
-  const densityShrink = clamp(1 - Math.max(0, trainCount - 1) * 0.025, 0.78, 1);
-  const radius = (own ? 7.2 : 5.8) * densityShrink;
-  const haloRadius = radius + 4 + normalizedSpeed * 3;
-  const pulse = 0.72 + 0.28 * Math.sin(performance.now() / 260 + instanceIndex * 0.9);
-  const directionX = Math.cos(reverse ? pose.angle + Math.PI : pose.angle);
-  const directionY = Math.sin(reverse ? pose.angle + Math.PI : pose.angle);
-  const dotColor = color || '#d9a852';
-
-  ctx.save();
-  ctx.translate(pose.x, pose.y);
-  ctx.imageSmoothingEnabled = true;
-  ctx.globalAlpha = own ? 0.98 : 0.88;
-
-  ctx.shadowColor = dotColor;
-  ctx.shadowBlur = own ? 14 + normalizedSpeed * 6 : 8 + normalizedSpeed * 3;
-
-  ctx.beginPath();
-  ctx.arc(0, 0, haloRadius * pulse, 0, Math.PI * 2);
-  ctx.fillStyle = hexToRgba(dotColor, own ? 0.18 : 0.12);
-  ctx.fill();
-
-  // Trainée dans le sens de circulation. Sa longueur reflète la vitesse moyenne.
-  const trailLength = 8 + normalizedSpeed * 12;
-  const gradient = ctx.createLinearGradient(-directionX * trailLength, -directionY * trailLength, 0, 0);
-  gradient.addColorStop(0, hexToRgba(dotColor, 0));
-  gradient.addColorStop(1, hexToRgba(dotColor, own ? 0.55 : 0.38));
-  ctx.strokeStyle = gradient;
-  ctx.lineWidth = Math.max(2.2, radius * 0.52);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(-directionX * trailLength, -directionY * trailLength);
-  ctx.lineTo(-directionX * radius * 0.45, -directionY * radius * 0.45);
-  ctx.stroke();
-
-  ctx.shadowBlur = own ? 10 : 5;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius + 1.8, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(5, 10, 18, 0.96)';
-  ctx.fill();
-
-  const dotGradient = ctx.createRadialGradient(-radius * 0.35, -radius * 0.45, 1, 0, 0, radius + 1);
-  dotGradient.addColorStop(0, 'rgba(255,255,255,0.92)');
-  dotGradient.addColorStop(0.22, '#f8df98');
-  dotGradient.addColorStop(0.5, dotColor);
-  dotGradient.addColorStop(1, own ? '#16372b' : '#2b2134');
-  ctx.fillStyle = dotGradient;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.lineWidth = own ? 2 : 1.4;
-  ctx.strokeStyle = own ? 'rgba(252, 230, 170, 0.95)' : 'rgba(252, 230, 170, 0.62)';
-  ctx.stroke();
-
-  if (trainCount > 1) {
-    ctx.font = `${Math.max(8, Math.round(radius * 1.08))}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(3, 8, 14, 0.92)';
-    ctx.fillText(String(instanceIndex + 1), 0, 0.4);
+function clearTrainMarkerLayer() {
+  const markers = app.map.trainMarkers || new Map();
+  for (const record of markers.values()) {
+    try { record.el?.remove?.(); } catch {}
   }
-  ctx.restore();
+  markers.clear();
+  const layer = app.map.trainMarkerLayer;
+  if (layer) layer.textContent = '';
 }
 
-function drawTrainSprite(ctx, points, color, line, model, own, train = null, instanceIndex = 0, instanceCount = 1, route = null) {
-  if (!points?.length) return;
-  drawTrainDot(ctx, points, color, line, model, own, train, instanceIndex, Math.max(1, instanceCount), route);
-}
 
-function drawPixelTrainBody(ctx, color, model) {
-  ctx.fillStyle = 'rgba(8, 12, 18, 0.95)';
-  ctx.fillRect(-14, -7, 28, 14);
-  ctx.fillStyle = color;
-  ctx.fillRect(-12, -5, 22, 10);
-  ctx.fillStyle = '#f3d48a';
-  ctx.fillRect(10, -2, 4, 4);
-  ctx.fillStyle = '#dbeafe';
-  ctx.fillRect(-8, -4, 4, 3);
-  ctx.fillRect(-3, -4, 4, 3);
-  if ((model?.capacity || 0) > 100 || model?.type?.toLowerCase().includes('tgv')) {
-    ctx.fillStyle = 'rgba(8, 12, 18, 0.95)';
-    ctx.fillRect(14, -5, 10, 10);
-    ctx.fillStyle = color;
-    ctx.fillRect(15, -4, 8, 8);
-    ctx.fillStyle = '#dbeafe';
-    ctx.fillRect(17, -3, 4, 2);
-  }
-  // rails
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#2c3647';
-  ctx.fillRect(-15, 7, 12, 2);
-  ctx.fillRect(2, 7, 12, 2);
-}
 
-function drawSteamPuffs(ctx, t) {
-  const phase = (t * 8) % 1;
-  ctx.fillStyle = 'rgba(245, 245, 245, 0.85)';
-  ctx.fillRect(-15 - phase * 8, -10, 4, 4);
-  ctx.fillStyle = 'rgba(220, 225, 235, 0.65)';
-  ctx.fillRect(-19 - phase * 10, -14, 5, 5);
-}
-
-function drawDieselExhaust(ctx, t) {
-  const phase = (t * 7) % 1;
-  ctx.fillStyle = 'rgba(170, 180, 190, 0.55)';
-  ctx.fillRect(-16 - phase * 9, -11, 4, 4);
-}
-
-function drawPantographSpark(ctx, t) {
-  if ((t * 10) % 1 > 0.55) return;
-  ctx.fillStyle = 'rgba(125, 211, 252, 0.9)';
-  ctx.fillRect(-2, -10, 5, 2);
-  ctx.fillRect(0, -12, 2, 2);
-}
-
-function pointAndAngleAlongPolyline(points, t) {
-  const p = pointAlongPolyline(points, t);
-  const p2 = pointAlongPolyline(points, Math.min(0.999, t + 0.01));
-  return { x: p.x, y: p.y, angle: Math.atan2(p2.y - p.y, p2.x - p.x) };
-}
 
 function polylineMetrics(points) {
   if (points._metrics) return points._metrics;

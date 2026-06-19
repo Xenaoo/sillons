@@ -1,3 +1,14 @@
+## Version v69.1.7 — reconstruction complète des pastilles trains
+
+- incrément de version : badge interface `v69.1.7`, version serveur/client `v69.1.7`, package `69.1.7` et schéma serveur `158` ;
+- suppression du vieux rendu canvas des pastilles trains et des fonctions associées ;
+- remplacement du système v69.1.6 par un overlay unique `#sillonsTrainOverlay`, positionné au-dessus de tous les tracés de lignes ;
+- les pastilles sont maintenant recalculées uniquement depuis les coordonnées géographiques de la route et la projection courante Leaflet ;
+- mise à jour immédiate des pastilles sur `movestart`, `move`, `moveend`, `zoomstart`, `zoomanim`, `zoom`, `zoomend` et `resize` ;
+- pendant un zoom animé, la projection utilise le couple `center/zoom` fourni par Leaflet afin d’éviter les anciennes coordonnées écran ;
+- la boucle d’animation continue à synchroniser les pastilles même quand le canvas des lignes est figé par l’overlay de pan/zoom ;
+- aucun changement RFN, aucun changement du cache vitesse, aucun changement du cache client des géométries.
+
 ## Version v69.1.6 — pastilles trains en couche HTML dédiée
 
 - incrément de version : badge interface `v69.1.6`, version serveur/client `v69.1.6`, package `69.1.6` et schéma serveur `157` ;
