@@ -382,45 +382,124 @@ function persistOsmRouteCache() {
   localStorage.removeItem(PERSISTED_OSM_ROUTE_CACHE_KEY);
 }
 
-function startPanOverlay() {
-  if (!app.map.leaflet || !app.map.canvas || app.map.panOverlay.active) return;
-  app.map.panOverlay.active = true;
-  app.map.panOverlay.finishing = false;
-  app.map.panOverlay.anchorLatLng = app.map.leaflet.getCenter();
-  app.map.panOverlay.anchorPoint = app.map.leaflet.latLngToContainerPoint(app.map.panOverlay.anchorLatLng);
-  app.map.panOverlay.raf = false;
-  app.map.panOverlay.transform = app.map.canvas.style.transform || '';
-  app.map.canvas.classList.add('map-pan-overlay');
-  app.map.canvas.style.willChange = 'transform';
+function cloneLeafletPoint(point) {
+  if (!point) return null;
+  return { x: Number(point.x || 0), y: Number(point.y || 0) };
+}
+
+function leafletNewPixelOrigin(center, zoom) {
+  const map = app.map.leaflet;
+  if (!map) return null;
+  try {
+    if (typeof map._getNewPixelOrigin === 'function') {
+      return cloneLeafletPoint(map._getNewPixelOrigin(center, zoom));
+    }
+    const projected = map.project(center, zoom);
+    const halfSize = map.getSize().divideBy(2);
+    return cloneLeafletPoint(projected.subtract(halfSize));
+  } catch {
+    return null;
+  }
+}
+
+function startPanOverlay(mode = 'pan') {
+  const map = app.map.leaflet;
+  const canvas = app.map.canvas;
+  if (!map || !canvas) return;
+  const overlay = app.map.panOverlay;
+  const isZoom = mode === 'zoom';
+
+  if (overlay.active) {
+    if (isZoom) overlay.zooming = true;
+    return;
+  }
+
+  overlay.active = true;
+  overlay.finishing = false;
+  overlay.zooming = isZoom;
+  overlay.baseZoom = map.getZoom();
+  overlay.basePixelOrigin = cloneLeafletPoint(map.getPixelOrigin?.());
+  overlay.anchorLatLng = map.getCenter();
+  overlay.anchorPoint = map.latLngToContainerPoint(overlay.anchorLatLng);
+  overlay.raf = false;
+  overlay.transform = canvas.style.transform || '';
+
+  canvas.classList.add('map-pan-overlay');
+  canvas.style.transformOrigin = '0 0';
+  canvas.style.willChange = 'transform';
+}
+
+function setMapOverlayTransform(center, zoom) {
+  const overlay = app.map.panOverlay;
+  const map = app.map.leaflet;
+  const canvas = app.map.canvas;
+  if (!overlay.active || !map || !canvas) return;
+
+  const baseZoom = Number.isFinite(Number(overlay.baseZoom)) ? Number(overlay.baseZoom) : map.getZoom();
+  const baseOrigin = overlay.basePixelOrigin || cloneLeafletPoint(map.getPixelOrigin?.());
+  const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
+  const targetCenter = center || map.getCenter();
+  const targetOrigin = leafletNewPixelOrigin(targetCenter, targetZoom);
+  if (!baseOrigin || !targetOrigin) return;
+
+  const scale = map.getZoomScale ? map.getZoomScale(targetZoom, baseZoom) : Math.pow(2, targetZoom - baseZoom);
+  const dx = (baseOrigin.x * scale) - targetOrigin.x;
+  const dy = (baseOrigin.y * scale) - targetOrigin.y;
+  const roundedDx = Math.round(dx * 1000) / 1000;
+  const roundedDy = Math.round(dy * 1000) / 1000;
+  const roundedScale = Math.round(scale * 1000000) / 1000000;
+  overlay.transform = `translate3d(${roundedDx}px, ${roundedDy}px, 0) scale(${roundedScale})`;
+  canvas.style.transform = overlay.transform;
 }
 
 function updatePanOverlay() {
   const overlay = app.map.panOverlay;
-  if (!overlay.active || overlay.raf || !app.map.leaflet || !app.map.canvas || !overlay.anchorLatLng || !overlay.anchorPoint) return;
+  if (!overlay.active || overlay.raf || !app.map.leaflet || !app.map.canvas) return;
   overlay.raf = true;
   requestAnimationFrame(() => {
     overlay.raf = false;
     if (!overlay.active || !app.map.leaflet || !app.map.canvas) return;
-    const current = app.map.leaflet.latLngToContainerPoint(overlay.anchorLatLng);
-    const dx = current.x - overlay.anchorPoint.x;
-    const dy = current.y - overlay.anchorPoint.y;
-    overlay.transform = `translate3d(${Math.round(dx)}px, ${Math.round(dy)}px, 0)`;
-    app.map.canvas.style.transform = overlay.transform;
+
+    // Pan pur : l'ancien système par point d'ancrage est plus fiable pendant
+    // le drag Leaflet, car le centre peut être lissé/interpolé entre deux ticks.
+    if (!overlay.zooming && overlay.anchorLatLng && overlay.anchorPoint) {
+      const current = app.map.leaflet.latLngToContainerPoint(overlay.anchorLatLng);
+      const dx = current.x - overlay.anchorPoint.x;
+      const dy = current.y - overlay.anchorPoint.y;
+      overlay.transform = `translate3d(${Math.round(dx * 1000) / 1000}px, ${Math.round(dy * 1000) / 1000}px, 0)`;
+      app.map.canvas.style.transform = overlay.transform;
+      return;
+    }
+
+    setMapOverlayTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
   });
+}
+
+function updateZoomOverlay(event) {
+  if (!app.map.leaflet || !app.map.canvas) return;
+  startPanOverlay('zoom');
+  const overlay = app.map.panOverlay;
+  overlay.zooming = true;
+  const center = event?.center || app.map.leaflet.getCenter();
+  const zoom = Number.isFinite(Number(event?.zoom)) ? Number(event.zoom) : app.map.leaflet.getZoom();
+  setMapOverlayTransform(center, zoom);
 }
 
 function endPanOverlay() {
   const overlay = app.map.panOverlay;
   if (!app.map.canvas || overlay.finishing || !overlay.active) return;
 
-  // Ne pas retirer la transform CSS immédiatement : l'ancien bitmap doit rester
-  // visuellement accroché à Leaflet jusqu'au redessin complet avec la nouvelle
-  // projection. Sinon une frame intermédiaire affiche les pastilles à l'ancien
-  // endroit et produit l'effet de téléportation.
+  // Le canvas est un bitmap indépendant placé au-dessus des tuiles Leaflet.
+  // Pendant un pan ou un zoom animé, Leaflet déplace/scalera ses propres panes via CSS.
+  // On conserve donc le bitmap courant et on lui applique exactement la même
+  // transformation géométrique jusqu'au redessin final.
   overlay.active = false;
   overlay.finishing = true;
+  overlay.zooming = false;
   overlay.anchorLatLng = null;
   overlay.anchorPoint = null;
+  overlay.basePixelOrigin = null;
+  overlay.baseZoom = null;
   overlay.raf = false;
   app.map.redrawAfterPan = true;
 
@@ -431,13 +510,14 @@ function endPanOverlay() {
     finishingOverlay.transform = '';
 
     app.map.canvas.style.transform = '';
+    app.map.canvas.style.transformOrigin = '';
     app.map.canvas.style.willChange = '';
     app.map.canvas.classList.remove('map-pan-overlay');
     app.map.redrawAfterPan = false;
 
-    // Le nettoyage de transform et le redessin se font dans la même frame rAF,
-    // avant peinture navigateur : l'utilisateur ne voit jamais l'ancien bitmap
-    // sans sa translation de pan.
+    // Nettoyage de la transform et redessin dans la même frame rAF : ni l'ancien
+    // bitmap non transformé, ni des pastilles recalculées avec une projection
+    // concurrente ne peuvent être peints entre deux états.
     drawMap({ forcePanOverlayRedraw: true });
   });
 }
@@ -588,38 +668,54 @@ function initOsmMap() {
   app.map.leaflet.on('zoomstart', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
+    startPanOverlay('zoom');
     resizeCanvas();
     markMapProjectionDirty();
+  });
+  app.map.leaflet.on('zoomanim', event => {
+    app.map.navigating = true;
+    app.map.lastMoveEventAt = performance.now();
+    updateZoomOverlay(event);
   });
   app.map.leaflet.on('zoom', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
+    // Pendant un zoom animé, `zoomanim` possède le couple center/zoom cible exact.
+    // Ne pas écraser cette transform par un calcul intermédiaire incomplet.
+    if (!app.map.panOverlay?.zooming) updatePanOverlay();
     markMapProjectionDirty();
   });
   app.map.leaflet.on('zoomend', () => {
     app.map.navigating = false;
-    endPanOverlay();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('zoom-end');
+    endPanOverlay();
   });
 
   app.map.leaflet.on('movestart', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    startPanOverlay();
+    startPanOverlay(app.map.panOverlay?.zooming ? 'zoom' : 'pan');
   });
   app.map.leaflet.on('move', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
     updatePanOverlay();
   });
-  app.map.leaflet.on('moveend resize', () => {
+  app.map.leaflet.on('moveend', () => {
     app.map.navigating = false;
-    endPanOverlay();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('move-end');
+    if (!app.map.panOverlay?.zooming) endPanOverlay();
+  });
+  app.map.leaflet.on('resize', () => {
+    app.map.navigating = false;
+    resizeCanvas();
+    updateIsoClass();
+    invalidateMapProjection('map-resize');
+    if (!app.map.panOverlay?.zooming) endPanOverlay();
   });
   app.map.leaflet.on('mousemove', onOsmMouseMove);
   app.map.leaflet.on('mouseout', () => {

@@ -1,3 +1,19 @@
+## Version v69.1.5 — stabilisation pan + zoom des pastilles trains
+
+- incrément de version : badge interface `v69.1.5`, version serveur/client `v69.1.5`, package `69.1.5` et schéma serveur `156` ;
+- correction de la cause restante lors des zooms/dézooms Leaflet : le canvas des lignes/trains était verrouillé comme un simple pan, donc il suivait la translation mais pas l’échelle CSS appliquée par Leaflet ;
+- ajout d’une transformation de navigation unifiée pour le canvas : `translate3d(...) scale(...)` pendant les zooms animés ;
+- calcul de cette transformation à partir des origines pixel Leaflet afin que l’ancien bitmap reste collé à la carte jusqu’au redessin final ;
+- conservation du mode par ancrage pour les pans purs, plus stable pendant le drag ;
+- séparation des fins `moveend` et `resize` pour éviter qu’un `moveend` interne à un zoom termine l’overlay trop tôt ;
+- aucun changement RFN, aucun changement cache vitesse, aucun changement de gameplay.
+
+### Vérifications
+
+- `npm run check` : OK ;
+- test local Node `ZOOM_OVERLAY_CONTINUITY_OK` : OK ;
+- test local Node `PAN_OVERLAY_CONTINUITY_OK` : OK.
+
 ## Version v69.1.4 — correction définitive de la téléportation au pan
 
 - incrément de version : badge interface `v69.1.4`, version serveur/client `v69.1.4`, package `69.1.4` et schéma serveur `155` ;
