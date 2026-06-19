@@ -670,11 +670,71 @@ function closestProgressOnPolyline(point, points, minT = 0, maxT = 1) {
   return best;
 }
 
+function geoPolylineMetrics(coords) {
+  const line = validRouteCoords(coords);
+  const segments = [];
+  let total = 0;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1];
+    const b = line[i];
+    const len = haversineClient(a[1], a[0], b[1], b[0]);
+    total += Math.max(0, len);
+    segments.push({ len, total });
+  }
+  return { line, segments, total };
+}
+
+function closestProgressOnGeoPolyline(point, coords, minT = 0, maxT = 1) {
+  if (!point || !Number.isFinite(point.lon) || !Number.isFinite(point.lat)) return null;
+  const { line, segments, total } = geoPolylineMetrics(coords);
+  if (line.length < 2 || !Number.isFinite(total) || total <= 0) return null;
+
+  const safeMinT = clamp(Number(minT) || 0, 0, 1);
+  const safeMaxT = clamp(Number(maxT) || 1, safeMinT, 1);
+  const lat0 = Number(point.lat) * Math.PI / 180;
+  const cosLat = Math.max(0.08, Math.cos(lat0));
+  const toLocal = ([lon, lat]) => ({
+    x: (Number(lon) - Number(point.lon)) * cosLat * 111.32,
+    y: (Number(lat) - Number(point.lat)) * 110.57
+  });
+
+  let walked = 0;
+  let best = null;
+  for (let i = 1; i < line.length; i += 1) {
+    const aGeo = line[i - 1];
+    const bGeo = line[i];
+    const len = segments[i - 1]?.len || haversineClient(aGeo[1], aGeo[0], bGeo[1], bGeo[0]);
+    if (len <= 0) continue;
+    const startT = walked / total;
+    const endT = (walked + len) / total;
+    walked += len;
+    if (endT < safeMinT - 0.035 || startT > safeMaxT + 0.035) continue;
+
+    const a = toLocal(aGeo);
+    const b = toLocal(bGeo);
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const denom = vx * vx + vy * vy;
+    const ratio = denom > 0 ? clamp(((-a.x) * vx + (-a.y) * vy) / denom, 0, 1) : 0;
+    const rawT = (walked - len + len * ratio) / total;
+    const t = clamp(rawT, safeMinT, safeMaxT);
+    const candidateKm = t * total;
+    const localX = a.x + vx * ratio;
+    const localY = a.y + vy * ratio;
+    const distance = Math.hypot(localX, localY);
+    const orderPenalty = Math.abs(t - rawT) * Math.max(3, total * 0.02);
+    const score = distance + orderPenalty;
+    if (!best || score < best.score) best = { t, km: candidateKm, distance, score };
+  }
+  return best;
+}
+
 function trainVisualStopPositionsKm(line, route, points, totalKm) {
   const ids = lineStopsOf(line);
   if (ids.length < 2) return [0, totalKm];
   const positions = [];
-  const minGapT = Math.min(0.0025, Math.max(0.00002, 0.02 / Math.max(1, totalKm)));
+  const minGapKm = Math.min(0.25, Math.max(0.03, totalKm * 0.00025));
+  const minGapT = Math.min(0.0025, Math.max(0.00002, minGapKm / Math.max(1, totalKm)));
   let previousT = 0;
   for (let i = 0; i < ids.length; i++) {
     if (i === 0) {
@@ -695,7 +755,12 @@ function trainVisualStopPositionsKm(line, route, points, totalKm) {
     let t = fallbackT;
     const lon = stationRouteLon(s);
     const lat = stationRouteLat(s);
-    if ([lon, lat].every(Number.isFinite)) {
+    if ([lon, lat].every(Number.isFinite) && Array.isArray(route?.coords) && route.coords.length >= 2) {
+      const nearest = closestProgressOnGeoPolyline({ lon, lat }, route.coords, minT, maxT);
+      if (nearest && Number.isFinite(nearest.t)) t = nearest.t;
+    } else if ([lon, lat].every(Number.isFinite) && points?.length) {
+      // Fallback hors Leaflet : utilisé seulement si la route n'a pas encore de
+      // coordonnées géographiques. Le chemin normal ne dépend plus de l'écran.
       const projectedStation = project(lon, lat);
       const nearest = closestProgressOnPolyline(projectedStation, points, minT, maxT);
       if (nearest && Number.isFinite(nearest.t)) t = nearest.t;
@@ -712,12 +777,14 @@ function trainMotionPlanCacheKey(line, train, model, route, points, totalKm) {
   const speedSig = speedProfile?.segments?.length
     ? `${Math.round(Number(speedProfile.totalKm || totalKm) * 1000)}:${speedProfile.coverage || 0}:${speedProfile.minSpeedKmh || ''}:${speedProfile.maxSpeedKmh || ''}:${speedProfile.segments.length}`
     : 'no-speed-profile';
-  const p0 = points?.[0] || { x: 0, y: 0 };
-  const p1 = points?.[points.length - 1] || { x: 0, y: 0 };
-  const metrics = points?.length ? polylineMetrics(points) : { total: 0 };
-  const pointSig = `${points?.length || 0}:${Math.round(p0.x)}:${Math.round(p0.y)}:${Math.round(p1.x)}:${Math.round(p1.y)}:${Math.round(metrics.total || 0)}`;
+  const coords = validRouteCoords(route?.coords || []);
+  const c0 = coords[0] || null;
+  const c1 = coords[coords.length - 1] || null;
+  const coordSig = coords.length
+    ? `${coords.length}:${Math.round(c0[0] * 100000)}:${Math.round(c0[1] * 100000)}:${Math.round(c1[0] * 100000)}:${Math.round(c1[1] * 100000)}`
+    : `screen-fallback:${points?.length || 0}`;
   const conditionSig = Math.round((Number(train?.condition ?? 1) || 1) * 1000);
-  return `${line.id}:${train?.id || 'train'}:${model?.id || train?.modelId || ''}:${conditionSig}:${Math.round(totalKm * 1000)}:${speedSig}:${lineStopsOf(line).join('>')}:${pointSig}`;
+  return `${line.id}:${train?.id || 'train'}:${model?.id || train?.modelId || ''}:${conditionSig}:${Math.round(totalKm * 1000)}:${speedSig}:${lineStopsOf(line).join('>')}:${coordSig}`;
 }
 
 function appendTrainRunEvents(events, line, train, model, route, fromKm, toKm, elapsedSeconds, speedScale = 1) {
@@ -813,7 +880,8 @@ function trainMotionAtOneWaySecond(plan, second) {
 
 function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanceCount = 1, points = null) {
   const totalKm = trainVisualRouteDistanceKm(line, route);
-  if (!points?.length) {
+  const hasGeoRoute = Array.isArray(route?.coords) && route.coords.length >= 2;
+  if (!hasGeoRoute && !points?.length) {
     return { progress: 0.5, reverse: false, speedKmh: 0, dwell: false, oneWaySeconds: 0 };
   }
   const plan = buildTrainMotionPlan(line, train, model, route, points);
@@ -841,30 +909,30 @@ function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanc
 
 function ensureTrainMarkerLayer() {
   const map = app.map.leaflet;
-  const container = map?.getContainer?.() || $('#osmMap');
-  if (!container) return null;
+  if (!map || !window.L) return null;
 
-  // v69.1.7 : couche entièrement reconstruite. Ce n'est plus un marqueur Leaflet
-  // partiellement détourné ni un rendu canvas : c'est un overlay fixe au-dessus de
-  // tout, alimenté exclusivement par la projection courante de Leaflet.
-  const obsoleteLayer = container.querySelector?.('#sillonsTrainLayer');
-  if (obsoleteLayer && obsoleteLayer !== app.map.trainMarkerLayer) {
-    try { obsoleteLayer.remove(); } catch {}
+  const container = map.getContainer?.() || $('#osmMap');
+  for (const selector of ['#sillonsTrainLayer', '#sillonsTrainOverlay']) {
+    const obsolete = container?.querySelector?.(selector);
+    if (obsolete) {
+      try { obsolete.remove(); } catch {}
+    }
   }
 
-  let layer = app.map.trainMarkerLayer || container.querySelector?.('#sillonsTrainOverlay');
-  if (!layer) {
-    layer = document.createElement('div');
-    layer.id = 'sillonsTrainOverlay';
-    layer.className = 'sillons-train-overlay';
-    container.appendChild(layer);
+  if (!map.getPane?.('sillonsTrainPane')) {
+    const pane = map.createPane?.('sillonsTrainPane');
+    if (pane) {
+      pane.classList.add('sillons-train-pane');
+      pane.style.zIndex = '925';
+      pane.style.pointerEvents = 'none';
+    }
   }
 
-  layer.style.zIndex = '880';
-  layer.style.pointerEvents = 'none';
-  app.map.trainMarkerLayer = layer;
+  if (!app.map.trainMarkerLayer || typeof app.map.trainMarkerLayer.addTo !== 'function') {
+    app.map.trainMarkerLayer = L.layerGroup().addTo(map);
+  }
   app.map.trainMarkerPaneReady = true;
-  return layer;
+  return app.map.trainMarkerLayer;
 }
 
 function trainMarkerKey(job) {
@@ -957,98 +1025,75 @@ function trainMarkerIconHtml(job, pose) {
 }
 
 function computeTrainMarkerPose(job) {
-  if (!job?.route?.coords?.length || !job?.points?.length || !job.model) return null;
+  if (!job?.route?.coords?.length || !job.model) return null;
   const motion = trainVisualMotion(job.line, job.train, job.model, job.route, job.instanceIndex, job.instanceCount, job.points);
   const pose = trainGeoPoseAlongCoords(job.route.coords, motion.progress);
   if (!pose || ![pose.lat, pose.lon].every(Number.isFinite)) return null;
   return { ...pose, motion };
 }
 
-function trainMarkerCurrentZoomFrame() {
-  const frame = app.map.trainMarkerZoomFrame;
-  if (!frame || !Number.isFinite(Number(frame.zoom)) || !frame.center) return null;
-  const age = performance.now() - Number(frame.at || 0);
-  return age < 550 ? frame : null;
-}
-
-function trainMarkerProjectedPoint(pose, explicitFrame = null) {
-  const map = app.map.leaflet;
-  if (!map || !pose) return null;
-  const latLng = [pose.lat, pose.lon];
-  const frame = explicitFrame || trainMarkerCurrentZoomFrame();
-
-  try {
-    if (frame && typeof map._latLngToNewLayerPoint === 'function') {
-      const layerPoint = map._latLngToNewLayerPoint(latLng, frame.zoom, frame.center);
-      const panePoint = typeof map._getMapPanePos === 'function' ? map._getMapPanePos() : { x: 0, y: 0 };
-      const x = Number(layerPoint?.x) + Number(panePoint?.x || 0);
-      const y = Number(layerPoint?.y) + Number(panePoint?.y || 0);
-      if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
-    }
-
-    const point = map.latLngToContainerPoint?.(latLng);
-    const x = Number(point?.x);
-    const y = Number(point?.y);
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-  } catch {
-    return null;
-  }
-}
-
 function trainMarkerSignature(job, pose) {
   return `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose?.motion?.dwell ? 1 : 0}:${Math.round(Number(pose?.motion?.speedKmh || 0) / 10)}:${Math.round(Number(pose?.bearing || 0) / 2)}`;
 }
 
-function applyTrainMarkerElementPosition(el, point, pose, job) {
-  if (!el || !point) return;
-  const ownBoost = job?.own ? 1000 : 0;
-  el.style.transform = `translate3d(${Math.round((point.x - 22) * 1000) / 1000}px, ${Math.round((point.y - 22) * 1000) / 1000}px, 0)`;
-  el.style.zIndex = String(20000 + ownBoost + Number(job?.instanceIndex || 0));
-  const inner = el.querySelector?.('.sillons-train-marker');
-  if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
+function createTrainLeafletIcon(job, pose) {
+  return L.divIcon({
+    className: 'sillons-train-marker-icon',
+    html: trainMarkerIconHtml(job, pose),
+    iconSize: [44, 44],
+    iconAnchor: [22, 22]
+  });
 }
 
-function syncTrainMarkerLayer(jobs = [], options = {}) {
+function syncTrainMarkerLayer(jobs = []) {
   const layer = ensureTrainMarkerLayer();
-  if (!app.map.leaflet || !layer) return;
+  if (!app.map.leaflet || !layer || !window.L) return;
 
   const markers = app.map.trainMarkers || (app.map.trainMarkers = new Map());
   if (Array.isArray(jobs)) app.map.trainMarkerJobs = jobs;
   const activeJobs = Array.isArray(jobs) ? jobs : (app.map.trainMarkerJobs || []);
-  const frame = options.zoomFrame || null;
   const seen = new Set();
 
   for (const job of activeJobs) {
     const pose = computeTrainMarkerPose(job);
     if (!pose) continue;
-    const point = trainMarkerProjectedPoint(pose, frame);
-    if (!point) continue;
 
     const key = trainMarkerKey(job);
     const sig = trainMarkerSignature(job, pose);
+    const latLng = [pose.lat, pose.lon];
     seen.add(key);
 
     let record = markers.get(key);
-    if (!record || !record.el) {
-      const el = document.createElement('div');
-      el.className = 'sillons-train-marker-icon';
-      el.setAttribute('data-train-marker-key', key);
-      el.innerHTML = trainMarkerIconHtml(job, pose);
-      layer.appendChild(el);
-      record = { el, sig: '' };
+    if (!record || !record.marker) {
+      const marker = L.marker(latLng, {
+        pane: 'sillonsTrainPane',
+        icon: createTrainLeafletIcon(job, pose),
+        interactive: false,
+        keyboard: false,
+        bubblingMouseEvents: false,
+        zIndexOffset: 20000 + (job?.own ? 1000 : 0) + Number(job?.instanceIndex || 0)
+      });
+      marker.addTo(layer);
+      record = { marker, sig: '' };
       markers.set(key, record);
+    } else {
+      record.marker.setLatLng(latLng);
+      record.marker.setZIndexOffset?.(20000 + (job?.own ? 1000 : 0) + Number(job?.instanceIndex || 0));
     }
 
     if (record.sig !== sig) {
-      record.el.innerHTML = trainMarkerIconHtml(job, pose);
+      record.marker.setIcon(createTrainLeafletIcon(job, pose));
       record.sig = sig;
+    } else {
+      const el = record.marker.getElement?.();
+      const inner = el?.querySelector?.('.sillons-train-marker');
+      if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
     }
-    applyTrainMarkerElementPosition(record.el, point, pose, job);
   }
 
   for (const [key, record] of markers.entries()) {
     if (seen.has(key)) continue;
-    try { record.el?.remove?.(); } catch {}
+    try { layer.removeLayer(record.marker); } catch {}
     markers.delete(key);
   }
 }
@@ -1056,18 +1101,15 @@ function syncTrainMarkerLayer(jobs = [], options = {}) {
 function requestTrainMarkerLayerSync(options = {}) {
   if (!app.map.leaflet) return;
   const immediate = !!options.immediate;
-  if (options.zoomFrame) {
-    app.map.trainMarkerZoomFrame = { ...options.zoomFrame, at: performance.now() };
-  }
   if (immediate) {
-    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || []);
     return;
   }
   if (app.map.trainMarkerRaf) return;
   app.map.trainMarkerRaf = true;
   requestAnimationFrame(() => {
     app.map.trainMarkerRaf = false;
-    syncTrainMarkerLayer(app.map.trainMarkerJobs || [], options);
+    syncTrainMarkerLayer(app.map.trainMarkerJobs || []);
   });
 }
 
@@ -1083,12 +1125,22 @@ function updateTrainMarkerPositions() {
 
 function clearTrainMarkerLayer() {
   const markers = app.map.trainMarkers || new Map();
+  const layer = app.map.trainMarkerLayer;
   for (const record of markers.values()) {
-    try { record.el?.remove?.(); } catch {}
+    try {
+      if (record.marker && layer?.removeLayer) layer.removeLayer(record.marker);
+      else record.el?.remove?.();
+    } catch {}
   }
   markers.clear();
-  const layer = app.map.trainMarkerLayer;
-  if (layer) layer.textContent = '';
+  if (layer?.clearLayers) layer.clearLayers();
+  const container = app.map.leaflet?.getContainer?.() || $('#osmMap');
+  for (const selector of ['#sillonsTrainLayer', '#sillonsTrainOverlay']) {
+    const obsolete = container?.querySelector?.(selector);
+    if (obsolete) {
+      try { obsolete.remove(); } catch {}
+    }
+  }
 }
 
 

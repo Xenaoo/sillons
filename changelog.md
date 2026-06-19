@@ -1,3 +1,13 @@
+## Version v69.1.8 — refonte native Leaflet des pastilles trains
+
+- incrément de version : badge interface `v69.1.8`, version serveur/client `v69.1.8`, package `69.1.8` et schéma serveur `159` ;
+- remplacement du système de pastilles DOM projetées manuellement par de vrais marqueurs Leaflet `L.marker` dans un pane dédié `sillonsTrainPane` ;
+- suppression de la dépendance aux coordonnées écran persistantes pour les pastilles : Leaflet gère maintenant directement le pan, le zoom et le zoom animé ;
+- correction profonde du planning de mouvement des trains : les positions d'arrêts sont désormais calculées sur la géométrie géographique RFN (`route.coords`) et non plus sur des points écran (`route.points`) ;
+- suppression du signal de cache lié aux coordonnées écran dans les plans de marche, pour éviter les recalculs incohérents pendant les déplacements/zooms ;
+- maintien de l'animation temps réel : vitesse par tronçon, matériel, état du train, arrêts en gare et espacement des circulations ;
+- aucun changement RFN ni cache vitesse.
+
 ## Version v69.1.7 — reconstruction complète des pastilles trains
 
 - incrément de version : badge interface `v69.1.7`, version serveur/client `v69.1.7`, package `69.1.7` et schéma serveur `158` ;
