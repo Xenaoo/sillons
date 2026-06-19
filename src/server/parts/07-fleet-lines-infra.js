@@ -494,7 +494,16 @@ function normalizeLine(line) {
   if (!line.stats) line.stats = { passengers: 0, freightTons: 0, revenue: 0, expenses: 0, profit: 0, punctuality: 100, satisfaction: 50, share: 0 };
   const distance = lineDistance(line);
   setLineTicketPrice(line, lineTicketPrice(line, distance), distance);
+  line.sillonModel = buildLineSillonModel(line);
   return line;
+}
+
+
+function refreshPersistedLineSillonModels() {
+  for (const player of Object.values(state?.players || {})) {
+    if (!Array.isArray(player?.lines)) continue;
+    player.lines = player.lines.map(line => normalizeLine(line)).filter(Boolean);
+  }
 }
 
 function lineRouteName(stops) {
@@ -582,6 +591,23 @@ const SILLON_DOURDAN_BRANCH_IDS = new Set([
   'COM_91103'  // Brétigny-sur-Orge
 ]);
 
+const SILLON_PARIS_ORLEANS_MAIN_NAME_PATTERNS = [
+  /etampes/, /etrechy/, /lardy/, /marolles.*hurepoix/, /bretigny.*orge/,
+  /saint.*michel.*orge/, /sainte.*genevieve.*bois/, /savigny.*orge/,
+  /juvisy/, /choisy.*roi/, /vitry.*seine/, /ivry.*seine/, /austerlitz/
+];
+
+const SILLON_DOURDAN_BRANCH_NAME_PATTERNS = [
+  /dourdan/, /saint.*cheron/, /breuillet/, /arpajon/, /saint.*germain.*arpajon/,
+  /egly/, /ollainville/, /norville/, /bretigny.*orge/
+];
+
+function stationNameMatchesAnyPattern(station, patterns) {
+  const text = normalizeSearch(`${station?.id || ''} ${station?.name || ''} ${station?.stationName || ''}`);
+  return patterns.some(pattern => pattern.test(text));
+}
+
+
 function stationDeptCode(station) {
   const code = String(station?.codeDepartement || station?.code || station?.postal || station?.codesPostaux?.[0] || '');
   return code.slice(0, 2);
@@ -592,58 +618,245 @@ function stationIdOrNameMatches(station, regex) {
   return regex.test(text);
 }
 
-function segmentSpecificCapacityPerHour(segment, a, b) {
+function idfSillonDept(dept) {
+  return ['75', '77', '78', '91', '92', '93', '94', '95'].includes(String(dept || '').slice(0, 2));
+}
+
+function denseSillonDept(dept) {
+  return ['75', '92', '93', '94', '69', '13', '59'].includes(String(dept || '').slice(0, 2));
+}
+
+function stationSillonDemandIndex(station) {
+  if (!station) return 0;
+  const population = Math.max(0, Number(station.population || 0));
+  const baseDemand = Math.max(0, Number(station.baseDemand || 0));
+  const annualPassengers = Math.max(0, Number(station.annualPassengers || 0));
+  const passengerScore = annualPassengers > 0 ? Math.log10(annualPassengers + 10) * 95 : 0;
+  const terminalScore = station.majorTerminal ? 440 : station.multiStation ? 220 : 0;
+  const stationScore = station.hasPassengerStation ? 90 : 0;
+  const freightScore = station.hasFreightStation ? Math.max(35, Number(station.freight || 0) * 0.6) : 0;
+  return baseDemand + Math.min(900, population / 2500) + passengerScore + terminalScore + stationScore + freightScore;
+}
+
+function sillonCapacityModelPayload(input = {}) {
+  const theoreticalCapacity = clamp(Math.round(Number(input.theoreticalCapacity || input.capacity || 0)), 2, 48);
+  const backgroundUsed = clamp(Math.round(Number(input.backgroundUsed || 0)), 0, Math.max(0, theoreticalCapacity - 2));
+  const playerCapacity = clamp(Math.round(Number(input.playerCapacity ?? (theoreticalCapacity - backgroundUsed))), 2, theoreticalCapacity);
+  return {
+    version: SILLON_CAPACITY_MODEL_VERSION,
+    class: input.class || 'regional',
+    reason: input.reason || 'Modèle interne capacité RFN',
+    theoreticalCapacity,
+    backgroundUsed,
+    playerCapacity,
+    capacity: playerCapacity,
+    tags: Array.isArray(input.tags) ? input.tags.filter(Boolean).slice(0, 8) : []
+  };
+}
+
+function segmentSpecificCapacityModel(segment, a, b) {
   const idA = currentStationId(segment.from);
   const idB = currentStationId(segment.to);
-  const onDourdanBranch = SILLON_DOURDAN_BRANCH_IDS.has(idA) && SILLON_DOURDAN_BRANCH_IDS.has(idB);
-  const onParisOrleans = SILLON_PARIS_ORLEANS_MAIN_IDS.has(idA) && SILLON_PARIS_ORLEANS_MAIN_IDS.has(idB);
+  const onDourdanBranch = (SILLON_DOURDAN_BRANCH_IDS.has(idA) && SILLON_DOURDAN_BRANCH_IDS.has(idB))
+    || (stationNameMatchesAnyPattern(a, SILLON_DOURDAN_BRANCH_NAME_PATTERNS) && stationNameMatchesAnyPattern(b, SILLON_DOURDAN_BRANCH_NAME_PATTERNS));
+  const onParisOrleans = (SILLON_PARIS_ORLEANS_MAIN_IDS.has(idA) && SILLON_PARIS_ORLEANS_MAIN_IDS.has(idB))
+    || (stationNameMatchesAnyPattern(a, SILLON_PARIS_ORLEANS_MAIN_NAME_PATTERNS) && stationNameMatchesAnyPattern(b, SILLON_PARIS_ORLEANS_MAIN_NAME_PATTERNS));
 
-  // Antenne Dourdan ↔ Brétigny : voie moins capacitaire, référence demandée 4 trains/h.
-  if (onDourdanBranch && !onParisOrleans) return 4;
+  // Antenne Dourdan ↔ Brétigny : 8 sillons/h théoriques, 4 déjà consommés par le trafic structurel.
+  if (onDourdanBranch && !onParisOrleans) return sillonCapacityModelPayload({
+    class: 'branch',
+    theoreticalCapacity: 8,
+    backgroundUsed: 4,
+    reason: 'Antenne périurbaine moins capacitaire',
+    tags: ['antenne', 'trafic existant']
+  });
 
-  // Axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : capacité haute, référence demandée 18 trains/h.
-  if (onParisOrleans) return 18;
+  // Axe Paris-Austerlitz ↔ Brétigny ↔ Étampes : 24 sillons/h théoriques, 6 réservés au trafic RFN existant.
+  if (onParisOrleans) return sillonCapacityModelPayload({
+    class: 'suburban-mainline',
+    theoreticalCapacity: 24,
+    backgroundUsed: 6,
+    reason: 'Axe structurant Paris-Orléans',
+    tags: ['axe structurant', 'banlieue dense']
+  });
 
   const nameA = normalizeSearch(a?.name || '');
   const nameB = normalizeSearch(b?.name || '');
   const pairName = `${nameA} ${nameB}`;
-  if (/\bdourdan\b/.test(pairName) && /\bbretigny\b/.test(pairName)) return 4;
-  if (/\betampes\b/.test(pairName) && /(austerlitz|bretigny|juvisy)/.test(pairName)) return 18;
+  if (/\bdourdan\b/.test(pairName) && /\bbretigny\b/.test(pairName)) return sillonCapacityModelPayload({
+    class: 'branch',
+    theoreticalCapacity: 8,
+    backgroundUsed: 4,
+    reason: 'Antenne Dourdan-Brétigny détectée par nom',
+    tags: ['antenne']
+  });
+  if (/\betampes\b/.test(pairName) && /(austerlitz|bretigny|juvisy)/.test(pairName)) return sillonCapacityModelPayload({
+    class: 'suburban-mainline',
+    theoreticalCapacity: 24,
+    backgroundUsed: 6,
+    reason: 'Axe Étampes-Brétigny-Paris détecté par nom',
+    tags: ['axe structurant']
+  });
 
   return null;
 }
 
-function segmentCapacityPerHour(segment) {
+function segmentSillonCapacityModel(segment) {
   const a = stationById(segment.from);
   const b = stationById(segment.to);
   const distance = Math.max(1, Number(segment.distance || distanceBetween(segment.from, segment.to) || 1));
-  const specific = segmentSpecificCapacityPerHour(segment, a, b);
-  if (Number.isFinite(specific) && specific > 0) return clamp(Math.round(specific), 2, 40);
+  const specific = segmentSpecificCapacityModel(segment, a, b);
+  if (specific) return { ...specific, distance: round2(distance) };
 
-  const demandA = Number(a?.baseDemand || 0) + Math.min(900, Number(a?.population || 0) / 2500);
-  const demandB = Number(b?.baseDemand || 0) + Math.min(900, Number(b?.population || 0) / 2500);
+  const demandA = stationSillonDemandIndex(a);
+  const demandB = stationSillonDemandIndex(b);
   const maxDemand = Math.max(demandA, demandB);
   const sumDemand = demandA + demandB;
   const deptA = stationDeptCode(a);
   const deptB = stationDeptCode(b);
-  const idfA = ['75', '77', '78', '91', '92', '93', '94', '95'].includes(deptA) || /^PAR_/.test(String(a?.id || ''));
-  const idfB = ['75', '77', '78', '91', '92', '93', '94', '95'].includes(deptB) || /^PAR_/.test(String(b?.id || ''));
-  const denseCore = ['75', '92', '93', '94'].includes(deptA) || ['75', '92', '93', '94'].includes(deptB) || /^PAR_/.test(String(a?.id || '')) || /^PAR_/.test(String(b?.id || ''));
-  const secondaryBranch = distance <= 35 && sumDemand < 620 && maxDemand < 380;
+  const idfA = idfSillonDept(deptA) || /^PAR_/.test(String(a?.id || ''));
+  const idfB = idfSillonDept(deptB) || /^PAR_/.test(String(b?.id || ''));
+  const denseCore = denseSillonDept(deptA) || denseSillonDept(deptB) || /^PAR_/.test(String(a?.id || '')) || /^PAR_/.test(String(b?.id || ''));
+  const hub = Boolean(a?.majorTerminal || b?.majorTerminal || maxDemand >= 1400);
+  const secondaryBranch = distance <= 35 && sumDemand < 760 && maxDemand < 460;
 
-  let capacity = 8;
-  if (denseCore && distance <= 45) capacity = 20;
-  else if (idfA && idfB && distance <= 55 && !secondaryBranch) capacity = 14;
-  else if (idfA && idfB && secondaryBranch) capacity = 6;
-  else if (sumDemand >= 1500 || maxDemand >= 850) capacity = 18;
-  else if (sumDemand >= 900 || maxDemand >= 520) capacity = 14;
-  else if (sumDemand >= 520 || maxDemand >= 300) capacity = 10;
-  else if (distance >= 120 && sumDemand < 500) capacity = 4;
-  else if (distance >= 70 && sumDemand < 650) capacity = 6;
-  else if (distance <= 25 && sumDemand >= 380) capacity = 8;
-  else capacity = 6;
+  let theoreticalCapacity = 12;
+  let backgroundRatio = 0.25;
+  let cls = 'regional';
+  const tags = [];
 
-  return clamp(Math.round(capacity), 2, 40);
+  if (denseCore && distance <= 35 && hub) {
+    theoreticalCapacity = 32;
+    backgroundRatio = 0.48;
+    cls = 'metropolitan-core';
+    tags.push('nœud dense', 'gare majeure');
+  } else if (denseCore && distance <= 45) {
+    theoreticalCapacity = 28;
+    backgroundRatio = 0.42;
+    cls = 'metropolitan';
+    tags.push('zone dense');
+  } else if (idfA && idfB && distance <= 60 && !secondaryBranch) {
+    theoreticalCapacity = 24;
+    backgroundRatio = 0.38;
+    cls = 'suburban-mainline';
+    tags.push('Île-de-France');
+  } else if (idfA && idfB && secondaryBranch) {
+    theoreticalCapacity = 10;
+    backgroundRatio = 0.42;
+    cls = 'suburban-branch';
+    tags.push('antenne IDF');
+  } else if (sumDemand >= 2200 || maxDemand >= 1300 || hub) {
+    theoreticalCapacity = 24;
+    backgroundRatio = 0.36;
+    cls = 'national-mainline';
+    tags.push('axe national');
+  } else if (sumDemand >= 1350 || maxDemand >= 780) {
+    theoreticalCapacity = 20;
+    backgroundRatio = 0.32;
+    cls = 'intercity-mainline';
+    tags.push('intercités');
+  } else if (sumDemand >= 800 || maxDemand >= 480) {
+    theoreticalCapacity = 16;
+    backgroundRatio = 0.28;
+    cls = 'regional-mainline';
+    tags.push('régional structurant');
+  } else if (distance >= 120 && sumDemand < 650) {
+    theoreticalCapacity = 8;
+    backgroundRatio = 0.22;
+    cls = 'long-rural';
+    tags.push('longue section peu dense');
+  } else if (distance >= 70 && sumDemand < 760) {
+    theoreticalCapacity = 10;
+    backgroundRatio = 0.24;
+    cls = 'regional-secondary';
+    tags.push('secondaire');
+  } else if (distance <= 25 && sumDemand >= 560) {
+    theoreticalCapacity = 14;
+    backgroundRatio = 0.30;
+    cls = 'local-busy';
+    tags.push('local chargé');
+  } else {
+    theoreticalCapacity = 12;
+    backgroundRatio = 0.25;
+    cls = 'regional';
+    tags.push('régional');
+  }
+
+  if (distance <= 12 && theoreticalCapacity < 20 && sumDemand >= 900) {
+    theoreticalCapacity += 2;
+    backgroundRatio += 0.03;
+    tags.push('courte section');
+  }
+  if (distance >= 160) {
+    backgroundRatio = Math.max(0.18, backgroundRatio - 0.04);
+    tags.push('espacement long');
+  }
+
+  const backgroundUsed = clamp(Math.round(theoreticalCapacity * backgroundRatio), 0, theoreticalCapacity - 2);
+  return sillonCapacityModelPayload({
+    class: cls,
+    theoreticalCapacity,
+    backgroundUsed,
+    reason: 'Modèle interne : densité, rôle des gares, distance et trafic RFN existant estimé',
+    tags
+  });
+}
+
+function segmentCapacityPerHour(segment) {
+  return segmentSillonCapacityModel(segment).playerCapacity;
+}
+
+function buildLineSillonModel(line) {
+  const segments = lineSegments(line);
+  if (!segments.length) {
+    return {
+      version: SILLON_CAPACITY_MODEL_VERSION,
+      theoreticalCapacity: 0,
+      backgroundUsed: 0,
+      playerCapacity: 0,
+      lineCapacity: 0,
+      bottleneck: null,
+      segments: []
+    };
+  }
+  const details = segments.map(segment => {
+    const model = segmentSillonCapacityModel(segment);
+    return {
+      key: segment.key,
+      from: segment.from,
+      to: segment.to,
+      fromName: stationById(segment.from)?.name || segment.from,
+      toName: stationById(segment.to)?.name || segment.to,
+      distance: round2(segment.distance || 0),
+      class: model.class,
+      reason: model.reason,
+      theoreticalCapacity: round2(model.theoreticalCapacity),
+      backgroundUsed: round2(model.backgroundUsed),
+      playerCapacity: round2(model.playerCapacity),
+      capacity: round2(model.playerCapacity),
+      tags: model.tags || []
+    };
+  });
+  const bottleneck = details.reduce((best, item) => !best || item.playerCapacity < best.playerCapacity ? item : best, null);
+  const theoreticalBottleneck = details.reduce((best, item) => !best || item.theoreticalCapacity < best.theoreticalCapacity ? item : best, null);
+  const sums = details.reduce((acc, item) => {
+    acc.theoretical += Number(item.theoreticalCapacity || 0);
+    acc.background += Number(item.backgroundUsed || 0);
+    acc.player += Number(item.playerCapacity || 0);
+    return acc;
+  }, { theoretical: 0, background: 0, player: 0 });
+  return {
+    version: SILLON_CAPACITY_MODEL_VERSION,
+    theoreticalCapacity: round2(bottleneck?.theoreticalCapacity || theoreticalBottleneck?.theoreticalCapacity || 0),
+    backgroundUsed: round2(bottleneck?.backgroundUsed || 0),
+    playerCapacity: round2(bottleneck?.playerCapacity || 0),
+    lineCapacity: round2(bottleneck?.playerCapacity || 0),
+    averageTheoreticalCapacity: round2(sums.theoretical / Math.max(1, details.length)),
+    averageBackgroundUsed: round2(sums.background / Math.max(1, details.length)),
+    averagePlayerCapacity: round2(sums.player / Math.max(1, details.length)),
+    bottleneck,
+    segments: details
+  };
 }
 
 function buildSillonUsage() {
@@ -692,10 +905,13 @@ function computeLineSillonLimit(player, line, usage = null) {
 
   let maxFrequency = Number.POSITIVE_INFINITY;
   let lineCapacity = Number.POSITIVE_INFINITY;
+  let theoreticalCapacity = Number.POSITIVE_INFINITY;
+  let externalUsedAtBottleneck = 0;
   let bottleneck = null;
   const details = [];
   for (const segment of segments) {
-    const capacity = segmentCapacityPerHour(segment);
+    const model = segmentSillonCapacityModel(segment);
+    const capacity = model.playerCapacity;
     const entry = sillonUsage.get(segment.key);
     const ownRequested = (entry?.entries || [])
       .filter(item => item.playerId === player.id && item.lineId === line.id)
@@ -721,37 +937,63 @@ function computeLineSillonLimit(player, line, usage = null) {
     for (const item of otherUsage.values()) {
       if (item.frequency > 0) usedByOthersDetails.push({ ...item, frequency: round2(item.frequency) });
     }
-    const totalUsed = usedByOthers + requested;
+    const usedByPlayers = usedByOthers + requested;
+    const totalUsed = Number(model.backgroundUsed || 0) + usedByPlayers;
     const available = Math.max(0, capacity - usedByOthers);
+    const utilizationPercent = Number(model.theoreticalCapacity || 0) > 0
+      ? clamp(totalUsed / Number(model.theoreticalCapacity || 1) * 100, 0, 200)
+      : 0;
     const detail = {
       key: segment.key,
       from: segment.from,
       to: segment.to,
       fromName: stationById(segment.from)?.name || segment.from,
       toName: stationById(segment.to)?.name || segment.to,
-      capacity,
+      distance: round2(segment.distance || 0),
+      modelVersion: model.version,
+      class: model.class,
+      reason: model.reason,
+      tags: model.tags || [],
+      theoreticalCapacity: round2(model.theoreticalCapacity || 0),
+      backgroundUsed: round2(model.backgroundUsed || 0),
+      playerCapacity: round2(capacity || 0),
+      capacity: round2(capacity || 0),
       usedByOthers: round2(usedByOthers),
       usedByOthersDetails,
+      usedByPlayers: round2(usedByPlayers),
       totalUsed: round2(totalUsed),
+      utilizationPercent: round2(utilizationPercent),
       available: round2(available),
       requested
     };
     details.push(detail);
     if (capacity < lineCapacity) lineCapacity = capacity;
+    if (Number(model.theoreticalCapacity || 0) < theoreticalCapacity) theoreticalCapacity = Number(model.theoreticalCapacity || 0);
     if (available < maxFrequency) {
       maxFrequency = available;
+      externalUsedAtBottleneck = Number(model.backgroundUsed || 0);
       bottleneck = detail;
     }
   }
 
   if (!Number.isFinite(maxFrequency)) maxFrequency = requested;
   if (!Number.isFinite(lineCapacity)) lineCapacity = maxFrequency;
+  if (!Number.isFinite(theoreticalCapacity)) theoreticalCapacity = lineCapacity;
+  if (bottleneck && Number.isFinite(Number(bottleneck.theoreticalCapacity))) theoreticalCapacity = Number(bottleneck.theoreticalCapacity);
   const effectiveFrequency = Math.max(0, Math.min(requested, maxFrequency));
+  const totalUsedAtBottleneck = bottleneck ? Number(bottleneck.totalUsed || 0) : requested;
   return {
+    modelVersion: SILLON_CAPACITY_MODEL_VERSION,
     requestedFrequency: round2(requested),
+    theoreticalCapacity: round2(theoreticalCapacity),
+    backgroundUsed: round2(externalUsedAtBottleneck),
     lineCapacity: round2(lineCapacity),
+    playerCapacity: round2(lineCapacity),
     maxFrequency: round2(maxFrequency),
     effectiveFrequency: round2(effectiveFrequency),
+    usedByPlayers: round2((bottleneck?.usedByPlayers ?? requested) || 0),
+    totalUsed: round2(totalUsedAtBottleneck),
+    utilizationPercent: bottleneck ? round2(bottleneck.utilizationPercent || 0) : 0,
     constrained: effectiveFrequency + 0.001 < requested,
     bottleneck,
     segments: details
@@ -761,10 +1003,17 @@ function computeLineSillonLimit(player, line, usage = null) {
 function sillonStatsPayload(info) {
   if (!info) return null;
   return {
+    modelVersion: info.modelVersion || SILLON_CAPACITY_MODEL_VERSION,
     requestedFrequency: round2(info.requestedFrequency || 0),
+    theoreticalCapacity: round2(info.theoreticalCapacity ?? info.bottleneck?.theoreticalCapacity ?? 0),
+    backgroundUsed: round2(info.backgroundUsed ?? info.bottleneck?.backgroundUsed ?? 0),
     lineCapacity: round2(info.lineCapacity ?? info.maxFrequency ?? 0),
+    playerCapacity: round2(info.playerCapacity ?? info.lineCapacity ?? info.maxFrequency ?? 0),
     maxFrequency: round2(info.maxFrequency || 0),
     effectiveFrequency: round2(info.effectiveFrequency || 0),
+    usedByPlayers: round2(info.usedByPlayers ?? info.bottleneck?.usedByPlayers ?? info.requestedFrequency ?? 0),
+    totalUsed: round2(info.totalUsed ?? info.bottleneck?.totalUsed ?? 0),
+    utilizationPercent: round2(info.utilizationPercent ?? info.bottleneck?.utilizationPercent ?? 0),
     constrained: Boolean(info.constrained),
     bottleneck: info.bottleneck ? {
       key: info.bottleneck.key,
@@ -772,6 +1021,14 @@ function sillonStatsPayload(info) {
       to: info.bottleneck.to,
       fromName: info.bottleneck.fromName,
       toName: info.bottleneck.toName,
+      distance: round2(info.bottleneck.distance || 0),
+      modelVersion: info.bottleneck.modelVersion || info.modelVersion || SILLON_CAPACITY_MODEL_VERSION,
+      class: cleanText(info.bottleneck.class || '', 32),
+      reason: cleanText(info.bottleneck.reason || '', 120),
+      tags: Array.isArray(info.bottleneck.tags) ? info.bottleneck.tags.map(tag => cleanText(tag, 32)).filter(Boolean).slice(0, 8) : [],
+      theoreticalCapacity: round2(info.bottleneck.theoreticalCapacity || 0),
+      backgroundUsed: round2(info.bottleneck.backgroundUsed || 0),
+      playerCapacity: round2(info.bottleneck.playerCapacity ?? info.bottleneck.capacity ?? 0),
       capacity: round2(info.bottleneck.capacity || 0),
       usedByOthers: round2(info.bottleneck.usedByOthers || 0),
       usedByOthersDetails: Array.isArray(info.bottleneck.usedByOthersDetails)
@@ -783,7 +1040,9 @@ function sillonStatsPayload(info) {
           frequency: round2(item.frequency || 0)
         }))
         : [],
+      usedByPlayers: round2(info.bottleneck.usedByPlayers || 0),
       totalUsed: round2(info.bottleneck.totalUsed || 0),
+      utilizationPercent: round2(info.bottleneck.utilizationPercent || 0),
       available: round2(info.bottleneck.available || 0)
     } : null
   };

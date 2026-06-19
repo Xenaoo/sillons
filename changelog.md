@@ -1,3 +1,14 @@
+# v69.2.0 — Modèle interne de capacité sillons
+
+- Ajout d’un modèle interne de capacité RFN par tronçon.
+- Chaque tronçon calcule désormais une capacité théorique, un trafic RFN existant estimé et une capacité réellement utilisable par les joueurs.
+- Le modèle tient compte de la densité des gares, de la population, du rôle des grandes gares, de la distance et de cas ferroviaires spécifiques déjà connus.
+- Les tronçons Paris-Austerlitz / Brétigny / Étampes et l’antenne Dourdan conservent des valeurs de référence explicites.
+- Les lignes existantes et les nouvelles lignes reçoivent un `sillonModel`.
+- Les statistiques de ligne exposent maintenant l’occupation totale estimée, le trafic RFN existant et le goulet d’étranglement.
+- L’interface affiche ces données dans les tooltips et le panneau Demande & capacité.
+- Schéma save : `162`.
+
 # v69.1.10 — Correction réelle des pastilles trains pan/zoom
 
 - Suppression de la double logique canvas + overlay DOM pour les pastilles trains.
