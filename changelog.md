@@ -1,3 +1,13 @@
+# v69.8.3 — Persistance SQLite relationnelle
+
+- La sauvegarde de jeu est désormais persistée dans `data/save.sqlite` sous forme de tables relationnelles, avec migration depuis `data/save.json`.
+- Les comptes, sessions, historiques de connexion, compagnies, ressources, personnel, statistiques, gares, trains, compositions, maintenances, lignes, arrêts, affectations et notifications disposent de tables dédiées.
+- Les technologies sont séparées entre les niveaux par domaine (`player_tech`) et les recherches individuelles (`player_research`), avec prise en charge de la recherche en cours et de sa file d’attente.
+- Les événements, actualités, signalements et images associées sont également stockés dans SQLite ; les images de signalement sont liées via `bug_report_images`.
+- La lecture et l’écriture du serveur utilisent désormais ces tables. La migration reconstruit exactement l’état du jeu sans perte de données ; les champs évolutifs restent conservés dans les colonnes JSON de secours appropriées.
+- Suppression de la limite de migration qui tronquait les actualités à 50 entrées.
+- Schéma SQLite : `2`.
+
 # v69.8.2 — Filtre de matériel dans l’éditeur de ligne
 
 - Le sélecteur `Voyageurs`, `Fret` et `Mixte` de `Lignes > Modifier une ligne` filtre maintenant immédiatement les trains proposés.
