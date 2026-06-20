@@ -1,3 +1,9 @@
+# v69.8.2 — Filtre de matériel dans l’éditeur de ligne
+
+- Le sélecteur `Voyageurs`, `Fret` et `Mixte` de `Lignes > Modifier une ligne` filtre maintenant immédiatement les trains proposés.
+- Les trains incompatibles avec le nouveau type de transport sont retirés de la sélection afin d’empêcher un enregistrement invalide.
+- Schéma save : `176`.
+
 # v69.8.1 — Correction des sillons disponibles dans l’éditeur de ligne
 
 - Dans `Lignes > Modifier une ligne`, `Sillons disponibles` affiche désormais uniquement les sillons ajoutables, après déduction de ceux déjà consommés par la ligne en cours.

@@ -532,6 +532,14 @@ function openLineModal(lineId) {
     `;
   };
 
+  const compatibleTrainsForService = service => freeOrCurrent
+    .map(train => {
+      const model = app.state.balance.trains[train.modelId];
+      const profile = model ? previewOperatingProfile(train, model) : null;
+      return { train, model, profile };
+    })
+    .filter(item => item.model && lineServiceCompatibleWithProfileClient(service, item.profile));
+
   const renderEditorHtml = () => {
     const editorDistance = getRouteForStops(app.lineEditor.stops).distance || 0;
     app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
@@ -543,10 +551,9 @@ function openLineModal(lineId) {
     const maxForLine = sillonData ? Math.max(0, sillonData.maxForLine) : selectedTrainCount;
     const availableForLine = Math.max(0, maxForLine - selectedTrainCount);
     const sillonCost = addedSillons > 0 ? slotPurchaseCostClient(line, addedSillons) : 0;
-    const trainChoices = freeOrCurrent.map(t => {
+    const compatibleTrains = compatibleTrainsForService(app.lineEditor.service);
+    const trainChoices = compatibleTrains.map(({ train: t, model, profile }) => {
       const selected = app.lineEditor.trainIds.includes(t.id);
-      const profile = previewOperatingProfile(t, app.state.balance.trains[t.modelId]);
-      const model = app.state.balance.trains[t.modelId];
       return `
         <label class="line-train-choice ${selected ? 'selected' : ''}" title="${escapeAttr(trainName(t))}">
           <input type="checkbox" class="edit-line-train-check" value="${escapeAttr(t.id)}" ${selected ? 'checked' : ''}>
@@ -581,7 +588,7 @@ function openLineModal(lineId) {
           <div><span>Nouveaux à acheter</span><b id="lineEditorAddedSillons">${formatInt(addedSillons)}</b></div>
           <div><span>Coût estimé</span><b id="lineEditorSillonCost">${money(sillonCost)}</b></div>
         </div>
-        <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre.</p>'}</div>
+        <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre compatible avec ce type de transport.</p>'}</div>
       </div>
       <div class="two form-grid">
         <label>Prix billet moyen
@@ -656,7 +663,13 @@ function openLineModal(lineId) {
       app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
       refreshTicketPriceControl('editLineTicketPrice', 'editLineTicketPriceRange', 'editLineTicketPriceHint', editorDistance, app.lineEditor.ticketPrice, sourceId);
     };
-    $('#editLineService')?.addEventListener('change', e => app.lineEditor.service = e.target.value);
+    $('#editLineService')?.addEventListener('change', e => {
+      app.lineEditor.service = e.target.value;
+      const compatibleIds = new Set(compatibleTrainsForService(app.lineEditor.service).map(item => item.train.id));
+      app.lineEditor.trainIds = app.lineEditor.trainIds.filter(id => compatibleIds.has(id));
+      app.lineEditor.trainId = app.lineEditor.trainIds[0] || '';
+      rerenderBody();
+    });
     document.querySelectorAll('.edit-line-train-check').forEach(input => input.addEventListener('change', () => {
       const checked = [...document.querySelectorAll('.edit-line-train-check:checked')].map(item => item.value);
       app.lineEditor.trainIds = checked;
