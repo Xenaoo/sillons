@@ -198,6 +198,7 @@ async function applyAction(playerId, type, payload) {
     buyTrain: () => actionBuyTrain(player, payload),
     duplicateTrain: () => actionDuplicateTrain(player, payload),
     sellTrain: () => actionSellTrain(player, payload),
+    sellSelectedTrains: () => actionSellSelectedTrains(player, payload),
     repairTrain: () => actionRepairTrain(player, payload),
     repairAllTrains: () => actionRepairAllTrains(player, payload),
     updateTrainComposition: () => actionUpdateTrainComposition(player, payload),
@@ -296,20 +297,54 @@ function newlyAddedTrainIds(currentIds, nextIds) {
   return [...new Set((nextIds || []).map(id => String(id || '').trim()).filter(Boolean))].filter(id => !current.has(id));
 }
 
-function actionSellTrain(player, payload) {
-  const train = player.trains.find(t => t.id === payload.trainId);
+function trainSaleIssue(player, train) {
   if (!train) return fail('Train introuvable.');
   if (train.maintenance?.active) return fail('Ce train est en maintenance.', 'Attends la fin de l’intervention avant de le vendre.');
-  const used = player.lines.some(l => l.active && lineTrainIds(l).includes(train.id));
-  if (used) return fail('Ce train est affecté à une ligne active. Fermez ou modifiez la ligne avant de le vendre.');
-  const model = BALANCE.trains[train.modelId];
+  if (player.lines.some(line => line.active && lineTrainIds(line).includes(train.id))) {
+    return fail('Ce train est affecté à une ligne active. Fermez ou modifiez la ligne avant de le vendre.');
+  }
+  if (!BALANCE.trains[train.modelId]) return fail('Modèle de train introuvable.');
+  return null;
+}
+
+function trainSaleValue(train, model = BALANCE.trains[train.modelId]) {
   const capitalValue = trainCapitalValue(model, train);
-  const value = Math.max(5000, Math.round(capitalValue * (0.45 - Math.min(0.3, train.age / 1000)) * train.condition));
+  return Math.max(5000, Math.round(capitalValue * (0.45 - Math.min(0.3, train.age / 1000)) * train.condition));
+}
+
+function actionSellTrain(player, payload = {}) {
+  const train = player.trains.find(t => t.id === String(payload.trainId || ''));
+  const issue = trainSaleIssue(player, train);
+  if (issue) return issue;
+  const model = BALANCE.trains[train.modelId];
+  const value = trainSaleValue(train, model);
   player.cash += value;
   player.trains = player.trains.filter(t => t.id !== train.id);
   removeTrainFromPlayerLines(player, train.id);
   notify(player, `${model.name} vendu pour ${money(value)}.`);
   return ok();
+}
+
+function actionSellSelectedTrains(player, payload = {}) {
+  const trainIds = [...new Set((Array.isArray(payload.trainIds) ? payload.trainIds : [])
+    .map(id => String(id || '').trim())
+    .filter(Boolean))];
+  if (trainIds.length < 2) return fail('Sélectionne au moins deux trains à vendre.');
+
+  const trainsById = new Map(player.trains.map(train => [train.id, train]));
+  const trains = trainIds.map(id => trainsById.get(id));
+  for (const train of trains) {
+    const issue = trainSaleIssue(player, train);
+    if (issue) return fail('Vente groupée impossible.', issue.error || issue.hint);
+  }
+
+  const totalValue = trains.reduce((total, train) => total + trainSaleValue(train), 0);
+  const soldIds = new Set(trainIds);
+  player.cash += totalValue;
+  player.trains = player.trains.filter(train => !soldIds.has(train.id));
+  for (const trainId of soldIds) removeTrainFromPlayerLines(player, trainId);
+  notify(player, `${trains.length} trains vendus pour ${money(totalValue)}.`);
+  return ok(`${trains.length} trains vendus pour ${money(totalValue)}.`);
 }
 
 
@@ -1237,4 +1272,3 @@ function processTrainMaintenance(player) {
     }
   }
 }
-

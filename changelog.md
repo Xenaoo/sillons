@@ -1,3 +1,10 @@
+# v69.7.0 — Vente groupée des compositions
+
+- Dans `Parc > Compositions`, le bouton `Tout vendre` apparaît à droite de `Vider` lorsqu’au moins deux trains sont sélectionnés.
+- La confirmation affiche la valeur de revente totale estimée avant toute vente.
+- La vente est atomique : si un train est en maintenance ou affecté à une ligne active, la vente entière est refusée et aucun train n’est retiré.
+- Schéma save : `173`.
+
 # v69.6.0 — Recherche de gares tolérante
 
 - La recherche de gares accepte indifféremment les tirets, espaces et ponctuations.

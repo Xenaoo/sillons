@@ -775,6 +775,17 @@ function compositionFilteredTrainIds() {
   return compositionFilteredTrains().map(train => train.id).filter(Boolean);
 }
 
+function compositionSelectionSaleSummary(selectedIds = compositionSelectedIds()) {
+  const selected = new Set(selectedIds);
+  const trains = (app.state?.me?.trains || []).filter(train => selected.has(train.id));
+  const unavailable = trains.filter(train => train.maintenance?.active || trainCurrentLine(train.id));
+  const estimatedValue = trains.reduce((total, train) => {
+    const model = app.state.balance.trains[train.modelId];
+    return total + (model ? trainResaleEstimateClient(train, model) : 0);
+  }, 0);
+  return { trains, unavailable, estimatedValue };
+}
+
 function setCompositionModelFilter(value) {
   const allowed = new Set(['all', ...compositionOwnedModelOptions().map(option => option.id)]);
   app.compositionModelFilter = allowed.has(value) ? value : 'all';
@@ -985,6 +996,11 @@ function renderCompositionSelectionToolbar(selectedIds, displayedTrains) {
   const visibleIds = (displayedTrains || []).map(train => train.id).filter(Boolean);
   const visibleCount = visibleIds.length;
   const allVisibleSelected = visibleCount > 0 && visibleIds.every(id => selectedIds.includes(id));
+  const sale = compositionSelectionSaleSummary(selectedIds);
+  const saleBlocked = sale.unavailable.length > 0;
+  const saleTooltip = saleBlocked
+    ? `Vente impossible : ${sale.unavailable.length} train${sale.unavailable.length > 1 ? 's sont' : ' est'} en maintenance ou affecté à une ligne active.`
+    : `Vendre les ${selectedCount} trains sélectionnés. Valeur estimée : ${money(sale.estimatedValue)}.`;
   const hint = selectedCount
     ? 'Sélection faite. Clique sur Modifier pour ouvrir l’atelier d’édition de la composition.'
     : 'Clique sur une zone libre d’une vignette pour sélectionner un ou plusieurs trains.';
@@ -997,6 +1013,7 @@ function renderCompositionSelectionToolbar(selectedIds, displayedTrains) {
         <button type="button" class="ghost" data-action="select-visible-composition-trains" ${allVisibleSelected || !visibleCount ? 'disabled' : ''}>Tout sélectionner affiché</button>
         <button type="button" class="primary" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Modifier</button>
         <button type="button" class="ghost" data-action="clear-composition-selection" ${selectedCount ? '' : 'disabled'}>Vider</button>
+        ${selectedCount > 1 ? `<button type="button" class="danger ghost" data-action="sell-composition-selection" ${tooltipAttr(saleTooltip)} ${saleBlocked ? 'disabled' : ''}>Tout vendre</button>` : ''}
       </div>
     </div>
   `;
@@ -1897,4 +1914,3 @@ function renderMaintenanceButton(train, model, action) {
     </button>
   `;
 }
-

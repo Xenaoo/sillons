@@ -151,6 +151,19 @@ if (action === 'clear-composition-selection') {
   renderAll();
   return;
 }
+if (action === 'sell-composition-selection') {
+  const ids = compositionSelectedIds();
+  if (ids.length < 2) return toast('Sélectionne au moins deux trains.', 'error');
+  const sale = compositionSelectionSaleSummary(ids);
+  if (sale.unavailable.length) return toast('Vente impossible : un ou plusieurs trains sont en maintenance ou affectés à une ligne active.', 'error');
+  const message = `Vendre définitivement les ${ids.length} trains sélectionnés ?
+
+Valeur estimée totale : ${money(sale.estimatedValue)}.
+
+Cette action est irréversible.`;
+  if (!(await gameConfirm('Vendre les trains sélectionnés', message, { confirmLabel: 'Tout vendre', danger: true }))) return;
+  return doAction('sellSelectedTrains', { trainIds: ids });
+}
 if (action === 'close-composition-editor') {
   setCompositionEditorTrain('');
   renderAll();
@@ -420,6 +433,10 @@ async function performAction(type, payload) {
     if (!response.ok) {
       toast([response.error, response.hint].filter(Boolean).join(' ' ) || 'Action refusée.', 'error');
     } else {
+      if (type === 'sellSelectedTrains') {
+        setCompositionSelection([], '');
+        setCompositionEditorTrain('');
+      }
       if (type === 'createLine') {
         app.lineDraft.trainId = '';
         app.lineDraft.waypoints = [];
@@ -974,4 +991,3 @@ function gameConfirm(title, message, options = {}) {
     modal.showModal();
   });
 }
-

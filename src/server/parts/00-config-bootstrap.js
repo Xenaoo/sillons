@@ -13,8 +13,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v69.6.0';
-const STATE_SCHEMA_VERSION = 172;
+const PROJECT_VERSION = 'v69.7.0';
+const STATE_SCHEMA_VERSION = 173;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
