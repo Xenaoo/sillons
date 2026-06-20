@@ -513,7 +513,9 @@ function stateRenderSignature(state = app.state) {
 
 
 function isFleetSubmenuAutoRefreshFrozen() {
-  return app.activeTab === 'fleet' && ['catalog', 'maintenance', 'composition'].includes(app.activeFleetSubtab || '');
+  // La maintenance doit refléter immédiatement les sorties d'atelier ; seuls les
+  // sous-menus avec sélections ou champs à préserver restent gelés entre deux ticks.
+  return app.activeTab === 'fleet' && ['catalog', 'composition'].includes(app.activeFleetSubtab || '');
 }
 
 async function refreshState(first) {
@@ -1374,5 +1376,4 @@ function adjustCompositionRefitScroll() {
     }
   }
 }
-
 

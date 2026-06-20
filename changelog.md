@@ -1,3 +1,8 @@
+# v69.4.1 — Correction rafraîchissement de maintenance
+
+- Correction de l’affichage du sous-menu `Parc > Maintenance` : un train sorti d’atelier redevient automatiquement visible comme disponible, sans devoir quitter ni rouvrir le menu.
+- Schéma save : `169`.
+
 # v69.4.0 — Fiabilisation des affectations et maintenance
 
 - Suppression des références de trains inexistants dans les lignes lors de la migration de sauvegarde.

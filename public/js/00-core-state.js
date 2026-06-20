@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v69.4.0';
+const PROJECT_VERSION = 'v69.4.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -385,4 +385,3 @@ const RAIL_SEGMENT_SHAPES = {
   'CLE|LYO': [[0.548,0.556]], 'CLE|NEV': [[0.515,0.511]], 'NIM|AVI': [[0.607,0.709]], 'MON|NIM': [[0.566,0.756]],
   'PER|BEZ': [[0.499,0.793]], 'TOU|CAR': [[0.453,0.705]], 'MAR|AVI': [[0.648,0.748]], 'NIC|CAN': [[0.762,0.711]]
 };
-
