@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const save = path.join(__dirname, '..', 'data', 'save.json');
-if (fs.existsSync(save)) fs.unlinkSync(save);
+const dataDir = path.join(__dirname, '..', 'data');
+for (const name of ['save.sqlite', 'save.sqlite-wal', 'save.sqlite-shm', 'save.json']) {
+  const file = path.join(dataDir, name);
+  if (fs.existsSync(file)) fs.unlinkSync(file);
+}
 console.log('Sauvegarde supprimée.');

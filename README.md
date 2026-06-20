@@ -4,6 +4,8 @@ Prototype complet jouable, sans dépendance npm externe.
 
 ## Lancement
 
+Node.js 22.5 ou plus récent est requis pour le pilote SQLite natif.
+
 ```bash
 node server.js
 ```
@@ -33,7 +35,7 @@ Plusieurs joueurs peuvent se connecter depuis plusieurs onglets ou machines du m
 - Événements dynamiques.
 - Classement multijoueur entre comptes réels uniquement, sans génération de compagnies IA.
 - Utilisation possible des gares possédées par un autre joueur, avec péage uniquement lorsque la ligne dessert une gare concurrente.
-- Sauvegarde automatique dans `data/save.json`.
+- Sauvegarde automatique SQLite dans `data/save.sqlite` (migration automatique de l'ancien `data/save.json`).
 - Panneau administrateur réservé au compte `Xenao`, avec édition des compagnies et journal de connexions horodatées.
 
 

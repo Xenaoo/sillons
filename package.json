@@ -7,7 +7,8 @@
     "start": "node server.js",
     "check": "node scripts/check-split-code.js",
     "reset": "node scripts/reset-save.js",
-    "check:stations": "node scripts/check-station-duplicates.js"
+    "check:stations": "node scripts/check-station-duplicates.js",
+    "migrate:save": "node scripts/migrate-save-to-sqlite.js"
   },
   "keywords": [
     "rail",
@@ -19,6 +20,6 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.5"
   }
 }

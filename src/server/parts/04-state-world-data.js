@@ -1,4 +1,14 @@
 // Migration de sauvegarde, monde public, gares et chargements de données.
+var saveStore;
+
+function getSaveStore() {
+  if (!saveStore) {
+    const { createSaveStore } = require(path.join(__dirname, 'src', 'server', 'persistence-sqlite'));
+    saveStore = createSaveStore(SAVE_DB_FILE);
+  }
+  return saveStore;
+}
+
 function mimeType(file) {
   const ext = path.extname(file).toLowerCase();
   return {
@@ -15,10 +25,22 @@ function mimeType(file) {
 }
 
 function loadOrCreateState() {
-  if (fs.existsSync(SAVE_FILE)) {
+  try {
+    const loaded = getSaveStore().read();
+    if (loaded?.players) return migrateState(loaded);
+  } catch (error) {
+    console.warn('Base SQLite illisible, tentative de reprise depuis le JSON.', error.message);
+  }
+
+  if (fs.existsSync(LEGACY_SAVE_FILE)) {
     try {
-      const loaded = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8'));
-      if (loaded && loaded.players) return migrateState(loaded);
+      const loaded = JSON.parse(fs.readFileSync(LEGACY_SAVE_FILE, 'utf8'));
+      if (loaded && loaded.players) {
+        const migrated = migrateState(loaded);
+        getSaveStore().write(migrated);
+        console.log(`Sauvegarde JSON migrée vers ${path.basename(SAVE_DB_FILE)}.`);
+        return migrated;
+      }
     } catch (error) {
       console.warn('Sauvegarde illisible, nouvelle partie créée.', error.message);
     }
@@ -335,8 +357,7 @@ function createMarket() {
 }
 
 function saveState() {
-  fs.mkdirSync(path.dirname(SAVE_FILE), { recursive: true });
-  fs.writeFileSync(SAVE_FILE, JSON.stringify(state, null, 2));
+  getSaveStore().write(state);
 }
 
 
