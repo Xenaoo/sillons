@@ -1,3 +1,10 @@
+# v69.5.0 — Actualisation des tracés RFN client
+
+- Invalidation du cache persistant des géométries RFN côté navigateur.
+- Les lignes passant par Lyon-Part-Dieu redemandent maintenant leur tracé courant au serveur, ce qui supprime les anciens détours mémorisés par Perrache/Vaise.
+- Le moteur RFN, ses données et ses raccordements ne sont pas modifiés.
+- Schéma save : `170`.
+
 # v69.4.1 — Correction rafraîchissement de maintenance
 
 - Correction de l’affichage du sous-menu `Parc > Maintenance` : un train sorti d’atelier redevient automatiquement visible comme disponible, sans devoir quitter ni rouvrir le menu.
