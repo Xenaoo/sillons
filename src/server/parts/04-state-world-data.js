@@ -84,7 +84,7 @@ function migrateState(loaded) {
     tickSpeed: TICK_MS,
     market: { ...createMarket(), ...(loaded.market || {}) },
     events: Array.isArray(loaded.events) ? loaded.events : [],
-    news: Array.isArray(loaded.news) ? loaded.news.slice(0, 50) : [],
+    news: Array.isArray(loaded.news) ? loaded.news : [],
     bugReports: normalizeBugReports(loaded.bugReports || []),
     users: normalizeUsers(loaded.users || {}),
     players: purgeUnlinkedPlayers(players, loaded.users || {}),
