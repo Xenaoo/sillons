@@ -1,3 +1,11 @@
+# v69.8.0 — Cadencement automatique des lignes
+
+- Chaque ligne calcule maintenant un cycle aller-retour incluant le temps de parcours, les arrêts intermédiaires et les retournements aux terminus.
+- Les trains affectés sont répartis à intervalles réguliers sur ce cycle : ajouter un train resserre automatiquement la cadence.
+- La fiche de ligne affiche la cadence, la durée du cycle aller-retour et le détail de calcul au survol.
+- Une maintenance, un manque de conducteurs ou une limitation de sillons dégrade automatiquement la cadence exploitée, sans modifier les coûts ou l’équilibre économique existants.
+- Schéma save : `174`.
+
 # v69.7.0 — Vente groupée des compositions
 
 - Dans `Parc > Compositions`, le bouton `Tout vendre` apparaît à droite de `Vider` lorsqu’au moins deux trains sont sélectionnés.

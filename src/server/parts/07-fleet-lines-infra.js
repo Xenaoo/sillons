@@ -298,6 +298,65 @@ function lineAssignedTrains(player, line, { availableOnly = false } = {}) {
     .filter(train => !availableOnly || (!train.maintenance?.active && trainConditionValue(train) > 0));
 }
 
+function lineCadenceTiming(service, stopCount) {
+  const intermediateStops = Math.max(0, Number(stopCount || 0) - 2);
+  if (service === 'freight') return { intermediateStops, dwellMinutes: 5, turnaroundMinutes: 18 };
+  if (service === 'mixed') return { intermediateStops, dwellMinutes: 4, turnaroundMinutes: 12 };
+  return { intermediateStops, dwellMinutes: 3, turnaroundMinutes: 8 };
+}
+
+function computeLineCadence(player, line, { availableTrains = null, utilizationFactor = 1 } = {}) {
+  const plannedTrains = lineAssignedTrains(player, line);
+  const operatingTrains = Array.isArray(availableTrains)
+    ? availableTrains
+    : plannedTrains.filter(train => !train.maintenance?.active && trainConditionValue(train) > 0);
+  const timingTrains = operatingTrains.length ? operatingTrains : plannedTrains;
+  const timing = lineCadenceTiming(line?.service, lineStops(line).length);
+  const distance = Math.max(0, Number(lineDistance(line) || 0));
+  const speeds = timingTrains
+    .map(train => {
+      const model = BALANCE.trains[train?.modelId];
+      return model ? Number(getTrainOperatingProfile(train, model, player).speed || model.speed) : 0;
+    })
+    .filter(speed => Number.isFinite(speed) && speed > 0);
+  const operatingSpeedKmh = Math.max(25, Math.min(...(speeds.length ? speeds : [80])));
+  const oneWayMinutes = distance > 0
+    ? distance / operatingSpeedKmh * 60 + timing.intermediateStops * timing.dwellMinutes
+    : 0;
+  const roundTripMinutes = oneWayMinutes > 0
+    ? oneWayMinutes * 2 + timing.turnaroundMinutes * 2
+    : 0;
+  const plannedTrainCount = plannedTrains.length;
+  const availableTrainCount = operatingTrains.length;
+  const plannedHeadwayMinutes = plannedTrainCount > 0 && roundTripMinutes > 0
+    ? roundTripMinutes / plannedTrainCount
+    : null;
+  const effectiveTrainCount = Math.max(0, availableTrainCount * clamp(Number(utilizationFactor), 0, 1));
+  const headwayMinutes = effectiveTrainCount > 0 && roundTripMinutes > 0
+    ? roundTripMinutes / effectiveTrainCount
+    : null;
+  const regularOffsets = plannedHeadwayMinutes == null
+    ? []
+    : plannedTrains.map((train, index) => ({ trainId: train.id, offsetMinutes: round2(index * plannedHeadwayMinutes) }));
+
+  return {
+    version: 'cadence-v1',
+    plannedTrainCount,
+    availableTrainCount,
+    effectiveTrainCount: round2(effectiveTrainCount),
+    operatingSpeedKmh: Math.round(operatingSpeedKmh),
+    intermediateStops: timing.intermediateStops,
+    oneWayMinutes: round2(oneWayMinutes),
+    turnaroundMinutes: timing.turnaroundMinutes,
+    roundTripMinutes: round2(roundTripMinutes),
+    plannedHeadwayMinutes: plannedHeadwayMinutes == null ? null : round2(plannedHeadwayMinutes),
+    headwayMinutes: headwayMinutes == null ? null : round2(headwayMinutes),
+    departuresPerHour: headwayMinutes ? round2(60 / headwayMinutes) : 0,
+    status: !plannedTrainCount ? 'no-train' : !availableTrainCount ? 'suspended' : effectiveTrainCount + 0.001 < plannedTrainCount ? 'reduced' : 'normal',
+    regularOffsets
+  };
+}
+
 function trainUsedByActiveLine(player, trainId, exceptLineId = '') {
   return (player?.lines || []).some(line => line?.active && line.id !== exceptLineId && lineTrainIds(line).includes(trainId));
 }

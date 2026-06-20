@@ -243,12 +243,48 @@ function lineMoney(value) {
   return moneyPerHour(Number(value || 0));
 }
 
+function formatCadenceMinutes(value) {
+  const minutes = Math.max(0, Math.round(Number(value || 0)));
+  if (!minutes) return '—';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} min`;
+  return `${hours} h${rest ? ` ${String(rest).padStart(2, '0')}` : ''}`;
+}
+
+function lineCadenceLabel(line) {
+  const cadence = lineCadenceClient(line);
+  if (!cadence?.plannedTrainCount) return '—';
+  if (!Number(cadence.headwayMinutes)) return 'Suspendue';
+  return `Toutes les ${formatCadenceMinutes(cadence.headwayMinutes)}`;
+}
+
+function lineCadenceTooltip(line) {
+  const cadence = lineCadenceClient(line);
+  if (!cadence?.plannedTrainCount) return 'Aucun train n’est affecté à cette ligne.';
+  const lines = [
+    'Cadencement réparti régulièrement sur le cycle complet aller-retour.',
+    `Trajet aller estimé : ${formatCadenceMinutes(cadence.oneWayMinutes)} à ${round(cadence.operatingSpeedKmh)} km/h.`,
+    `Cycle aller-retour : ${formatCadenceMinutes(cadence.roundTripMinutes)}, retournements inclus.`,
+    `Trains affectés : ${cadence.plannedTrainCount}.`,
+    `Intervalle programmé : toutes les ${formatCadenceMinutes(cadence.plannedHeadwayMinutes)}.`
+  ];
+  if (Number(cadence.headwayMinutes)) {
+    lines.push(`Intervalle exploité : toutes les ${formatCadenceMinutes(cadence.headwayMinutes)} (${round(cadence.departuresPerHour)} départ(s)/h/sens).`);
+  } else {
+    lines.push('Exploitation suspendue : aucun train disponible.');
+  }
+  if (cadence.status === 'reduced') lines.push('Cadence dégradée par une indisponibilité, les conducteurs ou les sillons.');
+  return lines.join('\n');
+}
+
 function renderLineInsightPanels(line) {
   const stats = line.stats || {};
   const finance = stats.finance || {};
   const market = stats.market || {};
   const capacity = stats.capacity || {};
   const lineSillonData = lineSillonDataClient(line);
+  const cadence = lineCadenceClient(line);
   const contribution = Number(finance.contribution ?? stats.profit ?? 0);
   const netProfit = Number(finance.netProfit ?? stats.profit ?? 0);
   const factorDetails = line.service === 'freight'
@@ -289,6 +325,8 @@ function renderLineInsightPanels(line) {
           <span>Transporte</span><b>${formatInt(stats.freightTons || 0)} t</b>
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
+          <span>Cadence exploitée</span><b>${lineCadenceLabel(line)}</b>
+          <span>Cycle aller-retour</span><b>${formatCadenceMinutes(cadence.roundTripMinutes)}</b>
           <span>Sillons actifs</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(lineSlotDemandClient(line))}</b>
           ${lineSillonData ? `<span>Capacité totale RFN</span><b>${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
           ${lineSillonData ? `<span>Capacité joueurs</span><b>${round(lineSillonData.playerCapacity)} / ${round(lineSillonData.theoreticalCapacity)}</b>` : ''}
@@ -509,6 +547,9 @@ function renderLineItem(line) {
   const train = assignedTrains[0];
   const model = train ? app.state.balance.trains[train.modelId] : null;
   const trainLabel = assignedTrains.length > 1 ? `${assignedTrains.length} trains` : (model?.name || 'Aucun');
+  const cadence = lineCadenceClient(line);
+  const cadenceLabel = lineCadenceLabel(line);
+  const cadenceTip = lineCadenceTooltip(line);
   const profit = Number(line.stats?.finance?.netProfit ?? line.stats?.profit ?? 0);
   const profitCls = profit >= 0 ? 'good-text' : 'bad-text';
   const ticketPrice = lineTicketPrice(line);
@@ -533,6 +574,7 @@ function renderLineItem(line) {
   const collapsedSummary = `
     <div class="line-card-collapsed-summary">
       <span>Distance <b>${formatInt(lineDistance(line))} km</b></span>
+      <span ${tooltipAttr(cadenceTip)}>Cadence <b>${escapeHtml(cadenceLabel)}</b></span>
       ${renderLineSillonCollapsedSummary(line)}
       <span>Net /h <b class="${profitCls}">${moneyPerHour(profit)}</b></span>
     </div>
@@ -547,6 +589,8 @@ function renderLineItem(line) {
         <div><span>Distance</span><b>${formatInt(lineDistance(line))} km</b></div>
         <div><span>Service</span><b>${serviceLabels[line.service]}</b></div>
         <div><span>Trains affectés</span><b>${assignedTrains.length}</b></div>
+        <div ${tooltipAttr(cadenceTip)}><span>Cadence</span><b>${escapeHtml(cadenceLabel)}</b></div>
+        <div ${tooltipAttr(cadenceTip)}><span>Cycle A/R</span><b>${formatCadenceMinutes(cadence.roundTripMinutes)}</b></div>
         ${renderLineSillonMini(line)}
         <div><span>Billet moyen</span><b>${money(ticketPrice)}</b></div>
         <div><span>Attractivite</span><b>${escapeHtml(String(lineAttractivenessLabel(line)))}</b></div>
@@ -587,4 +631,3 @@ function renderLineItem(line) {
     </article>
   `;
 }
-

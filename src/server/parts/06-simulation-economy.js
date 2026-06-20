@@ -327,6 +327,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveFrequency = Number(effectiveLine.effectiveSlots ?? effectiveLine.frequency ?? 0);
     const serviceFactor = lineUtilizationFactor(effectiveLine);
     const requestedSillons = Number(sillonInfo?.requestedFrequency ?? lineSlotDemand(player, line));
+    const cadence = computeLineCadence(player, line, { availableTrains, utilizationFactor: serviceFactor });
     const lineStaffingStats = {
       needs: lineNeeds,
       driverCoverage: round2(lineDriverCoverage * 100),
@@ -334,6 +335,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       requiredDrivers: lineNeeds.drivers,
       effectiveFrequency: round2(effectiveFrequency),
       requestedFrequency: round2(requestedSillons),
+      cadence,
       sillons: sillonStatsPayload(sillonInfo)
     };
     if (!bundle) {
@@ -348,6 +350,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         satisfaction: stoppedForCondition ? 4 : 20,
         share: 0,
         status: stoppedForCondition ? 'train-out-of-service' : 'maintenance',
+        cadence,
         staffing: lineStaffingStats,
         capacity: {
           passengers: 0,
@@ -401,6 +404,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         satisfaction: 8,
         share: 0,
         status: 'driver-shortage',
+        cadence,
         staffing: lineStaffingStats,
         capacity: {
           passengers: 0,
@@ -432,6 +436,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         satisfaction: 18,
         share: 0,
         status: 'resource-shortage',
+        cadence,
         staffing: lineStaffingStats,
         capacity: {
           passengers: 0,
@@ -564,6 +569,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       satisfaction: round2(satisfaction),
       share: round2((scoredShares.reduce((sum, share) => sum + share, 0) / Math.max(1, scoredShares.length)) * 100),
       status: lineDriverCoverage < 0.999 ? 'driver-shortage' : (sillonInfo.constrained ? 'sillon-limited' : 'ok'),
+      cadence,
       staffing: lineStaffingStats,
       market: {
         passengerDemand: Math.round(routeDemand.passengers),
@@ -1529,4 +1535,3 @@ function trainCapitalValue(model, train) {
   const baseTractionValue = Math.max(Math.round(Number(model?.price || 0) * 0.42), Math.round(Number(model?.price || 0) - defaultCompositionValue));
   return Math.max(0, baseTractionValue + currentCompositionValue);
 }
-

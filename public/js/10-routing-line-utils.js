@@ -547,6 +547,57 @@ function lineAssignedTrainsClient(line, player = app.state?.me) {
   return lineTrainIdsOf(line).map(id => trainsById.get(id)).filter(Boolean);
 }
 
+function lineCadenceTimingClient(service, stopCount) {
+  const intermediateStops = Math.max(0, Number(stopCount || 0) - 2);
+  if (service === 'freight') return { intermediateStops, dwellMinutes: 5, turnaroundMinutes: 18 };
+  if (service === 'mixed') return { intermediateStops, dwellMinutes: 4, turnaroundMinutes: 12 };
+  return { intermediateStops, dwellMinutes: 3, turnaroundMinutes: 8 };
+}
+
+function lineCadenceClient(line) {
+  const stored = line?.stats?.cadence;
+  if (stored && Number.isFinite(Number(stored.roundTripMinutes))) return stored;
+
+  const plannedTrains = lineAssignedTrainsClient(line);
+  const operatingTrains = plannedTrains.filter(train => !train.maintenance?.active && Number(train.condition ?? 1) > 0);
+  const timingTrains = operatingTrains.length ? operatingTrains : plannedTrains;
+  const timing = lineCadenceTimingClient(line?.service, lineStopsOf(line).length);
+  const speeds = timingTrains
+    .map(train => Number(train.profile?.speed || app.state.balance.trains[train.modelId]?.speed || 0))
+    .filter(speed => Number.isFinite(speed) && speed > 0);
+  const operatingSpeedKmh = Math.max(25, Math.min(...(speeds.length ? speeds : [80])));
+  const distance = Math.max(0, Number(lineDistance(line) || 0));
+  const oneWayMinutes = distance > 0
+    ? distance / operatingSpeedKmh * 60 + timing.intermediateStops * timing.dwellMinutes
+    : 0;
+  const roundTripMinutes = oneWayMinutes > 0
+    ? oneWayMinutes * 2 + timing.turnaroundMinutes * 2
+    : 0;
+  const plannedTrainCount = plannedTrains.length;
+  const availableTrainCount = operatingTrains.length;
+  const requestedFrequency = Number(line?.stats?.capacity?.requestedFrequency ?? lineSlotDemandClient(line));
+  const effectiveFrequency = Number(line?.stats?.capacity?.effectiveFrequency ?? requestedFrequency);
+  const utilizationFactor = requestedFrequency > 0 ? Math.max(0, Math.min(1, effectiveFrequency / requestedFrequency)) : 0;
+  const effectiveTrainCount = availableTrainCount * utilizationFactor;
+  const plannedHeadwayMinutes = plannedTrainCount > 0 && roundTripMinutes > 0 ? roundTripMinutes / plannedTrainCount : null;
+  const headwayMinutes = effectiveTrainCount > 0 && roundTripMinutes > 0 ? roundTripMinutes / effectiveTrainCount : null;
+  return {
+    version: 'cadence-v1',
+    plannedTrainCount,
+    availableTrainCount,
+    effectiveTrainCount: round(effectiveTrainCount),
+    operatingSpeedKmh: Math.round(operatingSpeedKmh),
+    intermediateStops: timing.intermediateStops,
+    oneWayMinutes: round(oneWayMinutes),
+    turnaroundMinutes: timing.turnaroundMinutes,
+    roundTripMinutes: round(roundTripMinutes),
+    plannedHeadwayMinutes: plannedHeadwayMinutes == null ? null : round(plannedHeadwayMinutes),
+    headwayMinutes: headwayMinutes == null ? null : round(headwayMinutes),
+    departuresPerHour: headwayMinutes ? round(60 / headwayMinutes) : 0,
+    status: !plannedTrainCount ? 'no-train' : !availableTrainCount ? 'suspended' : effectiveTrainCount + 0.001 < plannedTrainCount ? 'reduced' : 'normal'
+  };
+}
+
 function stationOwnerClient(stationId) {
   for (const player of app.state?.players || []) {
     if (player?.stations?.[stationId]) return { player, asset: player.stations[stationId] };
