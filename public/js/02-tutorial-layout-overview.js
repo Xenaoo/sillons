@@ -645,86 +645,141 @@ async function collectBugImageAttachments() {
   return images;
 }
 
-function renderAdmin() {
-  if (!isAdminSession()) {
-    return `<div class="card"><h2>Admin</h2><p class="muted">Accès réservé au compte Xenao.</p></div>`;
-  }
-  const players = app.state.admin.players || [];
-  if (!players.length) return `<div class="card"><h2>Admin</h2><p class="muted">Aucun joueur à administrer.</p></div>`;
-  let selected = players.find(p => p.id === app.admin.selectedPlayerId) || players[0];
-  app.admin.selectedPlayerId = selected.id;
-  localStorage.setItem('sillons.adminSelectedPlayer', selected.id);
-  const logRows = (selected.loginHistory || []).map(entry => `
+function adminActivityLabel(type, detail = '') {
+  const label = {
+    login: 'Connexion réussie',
+    logout: 'Déconnexion',
+    session: 'Session active',
+    action: 'Action de jeu',
+    admin: 'Action d’administration'
+  }[type] || type || 'Activité';
+  return detail ? `${label} · ${detail}` : label;
+}
+
+function adminRelativeTime(value) {
+  const delta = Math.max(0, Date.now() - Number(value || 0));
+  if (!Number.isFinite(delta)) return '—';
+  if (delta < 10_000) return 'à l’instant';
+  if (delta < 60_000) return `il y a ${Math.round(delta / 1000)} s`;
+  if (delta < 3_600_000) return `il y a ${Math.round(delta / 60_000)} min`;
+  return `il y a ${Math.round(delta / 3_600_000)} h`;
+}
+
+function renderAdminActivityChart(timeline = []) {
+  if (!timeline.length) return '<p class="muted small">L’historique se construit au fil des sessions.</p>';
+  const width = 760;
+  const height = 190;
+  const padding = 28;
+  const max = Math.max(1, ...timeline.flatMap(point => [Number(point.online || 0), Number(point.activities || 0)]));
+  const pointFor = (value, index) => {
+    const x = padding + (index * (width - padding * 2)) / Math.max(1, timeline.length - 1);
+    const y = height - padding - (Number(value || 0) * (height - padding * 2)) / max;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  };
+  const online = timeline.map((point, index) => pointFor(point.online, index)).join(' ');
+  const activities = timeline.map((point, index) => pointFor(point.activities, index)).join(' ');
+  const first = formatDateTime(timeline[0]?.at);
+  const last = formatDateTime(timeline[timeline.length - 1]?.at);
+  return `
+    <div class="admin-chart-legend"><span class="admin-legend-online">Joueurs actifs</span><span class="admin-legend-actions">Actions / connexions</span><em>maximum : ${formatInt(max)}</em></div>
+    <svg class="admin-activity-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Activité des dernières 24 heures">
+      <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="admin-chart-axis" />
+      <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" class="admin-chart-axis" />
+      <polyline points="${activities}" class="admin-chart-line admin-chart-actions" />
+      <polyline points="${online}" class="admin-chart-line admin-chart-online" />
+    </svg>
+    <div class="admin-chart-labels"><span>${escapeHtml(first)}</span><span>${escapeHtml(last)}</span></div>
+  `;
+}
+
+function renderAdminActivity(activity, players) {
+  const onlineRows = (activity.onlinePlayers || []).map(player => `
     <tr>
-      <td>${escapeHtml(formatDateTime(entry.at))}</td>
-      <td>${escapeHtml(entry.ip || '—')}</td>
-      <td>${escapeHtml(entry.userAgent || '—')}</td>
+      <td><span class="admin-online-dot"></span><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(player.username || 'sans compte')}</small></td>
+      <td>${formatInt(player.activeSessions)} session${player.activeSessions > 1 ? 's' : ''}</td>
+      <td>${formatInt(player.lines)} ligne${player.lines > 1 ? 's' : ''} active${player.lines > 1 ? 's' : ''}</td>
+      <td title="${escapeAttr(formatDateTime(player.lastActivityAt))}">${escapeHtml(adminRelativeTime(player.lastActivityAt))}</td>
     </tr>
   `).join('');
-  const rawJson = escapeHtml(JSON.stringify(selected.rawPlayer || {}, null, 2));
+  const recentRows = (activity.recentActivity || []).map(event => `
+    <tr>
+      <td title="${escapeAttr(formatDateTime(event.at))}">${escapeHtml(formatDateTime(event.at))}</td>
+      <td><span class="${event.online ? 'admin-online-dot' : 'admin-offline-dot'}"></span>${escapeHtml(event.playerName)}</td>
+      <td>${escapeHtml(adminActivityLabel(event.type, event.detail))}</td>
+    </tr>
+  `).join('');
+  const breakdown = Object.entries(activity.activityBreakdown || {}).map(([type, count]) => `<span class="tag">${escapeHtml(adminActivityLabel(type))} : ${formatInt(count)}</span>`).join('') || '<span class="muted small">Aucune action mémorisée sur les dernières 24 h.</span>';
   return `
-    ${renderSectionHero('ADMINISTRATION', 'Console Xenao', 'Pilote les comptes joueurs, corrige leur progression et consulte les connexions horodatées enregistrées côté serveur.', ART.tabs.budget, ['Accès privé', `${players.length} joueurs`, `${selected.loginCount || 0} connexions`])}
-    <div class="admin-grid">
-      <section class="card admin-list-card">
-        <h2>Comptes joueurs</h2>
-        <div class="admin-player-list">
-          ${players.map(player => `
-            <button type="button" class="admin-player-row ${player.id === selected.id ? 'active' : ''}" data-action="admin-select-player" data-id="${escapeAttr(player.id)}">
-              <span><strong>${escapeHtml(player.name)}</strong><em>${escapeHtml(player.username || 'Sans compte lié')}</em></span>
-              <b>${money(player.cash)}</b>
-            </button>
-          `).join('')}
+    <section class="admin-activity-metrics card-grid">
+      ${metric('Joueurs en ligne', `${formatInt(activity.onlineCount || 0)}/${formatInt(players.length)}`)}
+      ${metric('Sessions actives', formatInt(activity.activeSessionCount || 0))}
+      ${metric('Fenêtre de présence', `${Math.round(Number(activity.activeWindowMs || 0) / 1000)} s`)}
+      ${metric('Dernière mise à jour', adminRelativeTime(activity.generatedAt))}
+    </section>
+    <section class="card admin-chart-card">
+      <div class="admin-detail-head"><div><h2>Présence et activité — 24 h</h2><p class="muted small">Actualisé à chaque synchronisation ; une session est considérée active si elle a communiqué avec le serveur dans la fenêtre indiquée.</p></div></div>
+      ${renderAdminActivityChart(activity.timeline || [])}
+      <div class="admin-activity-breakdown">${breakdown}</div>
+    </section>
+    <div class="admin-grid admin-activity-grid">
+      <section class="card">
+        <h2>Joueurs actuellement en ligne</h2>
+        <div class="admin-log-wrap">
+          <table class="admin-log-table"><thead><tr><th>Joueur</th><th>Sessions</th><th>Exploitation</th><th>Dernière activité</th></tr></thead>
+          <tbody>${onlineRows || '<tr><td colspan="4">Aucun joueur actif actuellement.</td></tr>'}</tbody></table>
         </div>
       </section>
-      <section class="card admin-detail-card">
-        <div class="admin-detail-head">
-          <div>
-            <h2>${escapeHtml(selected.name)}</h2>
-            <p class="muted small">Identifiant : ${escapeHtml(selected.username || 'aucun')} · ID joueur : <code>${escapeHtml(selected.id)}</code></p>
-          </div>
-          <span class="tag ${selected.isAdmin ? 'good' : ''}">${selected.isAdmin ? 'Admin' : 'Joueur'}</span>
-        </div>
-        <div class="card-grid">
-          ${metric('Trésorerie', money(selected.cash))}
-          ${metric('Dette', money(selected.debt))}
-          ${metric('Lignes actives', `${selected.activeLines}/${selected.lines}`)}
-          ${metric('Connexions', selected.loginCount || 0)}
-        </div>
-        <div class="admin-action-panel">
-          <label>Nom de compagnie
-            <input id="adminCompanyName" maxlength="28" value="${escapeAttr(selected.name)}">
-          </label>
-          <label>Trésorerie exacte
-            <input id="adminCash" type="number" step="1000" value="${Number(selected.cash || 0)}">
-          </label>
-          <label>Ajouter / retirer
-            <input id="adminCashDelta" type="number" step="1000" placeholder="ex : 1000000 ou -500000">
-          </label>
-          <div class="actions">
-            <button class="primary" data-action="admin-save-quick" data-id="${escapeAttr(selected.id)}">Enregistrer nom + trésorerie</button>
-            <button data-action="admin-add-cash" data-id="${escapeAttr(selected.id)}">Appliquer variation</button>
-          </div>
+      <section class="card">
+        <h2>Flux d’activité récent</h2>
+        <div class="admin-log-wrap">
+          <table class="admin-log-table"><thead><tr><th>Horodatage</th><th>Joueur</th><th>Événement</th></tr></thead>
+          <tbody>${recentRows || '<tr><td colspan="3">Aucune activité enregistrée.</td></tr>'}</tbody></table>
         </div>
       </section>
     </div>
-    <section class="card">
-      <h2>Connexions horodatées</h2>
-      <p class="muted small">Le journal est alimenté à chaque connexion réussie. Les anciennes sauvegardes récupèrent au moins la dernière connexion connue.</p>
-      <div class="admin-log-wrap">
-        <table class="admin-log-table">
-          <thead><tr><th>Date</th><th>IP</th><th>Navigateur</th></tr></thead>
-          <tbody>${logRows || '<tr><td colspan="3">Aucune connexion enregistrée.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </section>
-    <section class="card">
-      <h2>Édition avancée du joueur</h2>
-      <p class="muted small">Zone volontairement puissante : modifie le JSON puis enregistre. Le serveur remigre la compagnie pour éviter les champs essentiels cassés.</p>
-      <textarea id="adminRawPlayerJson" class="admin-json-editor" spellcheck="false">${rawJson}</textarea>
-      <div class="actions">
-        <button class="primary" data-action="admin-save-json" data-id="${escapeAttr(selected.id)}">Enregistrer le JSON joueur</button>
-      </div>
-    </section>
+  `;
+}
+
+function renderAdminAccounts(players, selected) {
+  const logRows = (selected.loginHistory || []).map(entry => `
+    <tr><td>${escapeHtml(formatDateTime(entry.at))}</td><td>${escapeHtml(entry.ip || '—')}</td><td>${escapeHtml(entry.userAgent || '—')}</td></tr>
+  `).join('');
+  const sessionRows = (selected.sessions || []).map(session => `
+    <tr><td><span class="${session.active ? 'admin-online-dot' : 'admin-offline-dot'}"></span>${session.active ? 'Active' : 'Inactive'}</td><td>${escapeHtml(formatDateTime(session.lastSeenAt))}</td><td>${escapeHtml(formatDateTime(session.expiresAt))}</td></tr>
+  `).join('');
+  const rawJson = escapeHtml(JSON.stringify(selected.rawPlayer || {}, null, 2));
+  return `
+    <div class="admin-grid">
+      <section class="card admin-list-card"><h2>Comptes joueurs</h2><div class="admin-player-list">
+        ${players.map(player => `<button type="button" class="admin-player-row ${player.id === selected.id ? 'active' : ''}" data-action="admin-select-player" data-id="${escapeAttr(player.id)}"><span><strong>${player.online ? '<i class="admin-online-dot"></i>' : ''}${escapeHtml(player.name)}</strong><em>${escapeHtml(player.username || 'Sans compte lié')} · ${escapeHtml(adminRelativeTime(player.lastActivityAt))}</em></span><b>${money(player.cash)}</b></button>`).join('')}
+      </div></section>
+      <section class="card admin-detail-card">
+        <div class="admin-detail-head"><div><h2>${escapeHtml(selected.name)}</h2><p class="muted small">Identifiant : ${escapeHtml(selected.username || 'aucun')} · ID joueur : <code>${escapeHtml(selected.id)}</code></p></div><span class="tag ${selected.online ? 'good' : ''}">${selected.online ? 'En ligne' : (selected.isAdmin ? 'Admin' : 'Hors ligne')}</span></div>
+        <div class="card-grid">${metric('Trésorerie', money(selected.cash))}${metric('Dette', money(selected.debt))}${metric('Lignes actives', `${selected.activeLines}/${selected.lines}`)}${metric('Sessions', `${selected.activeSessions || 0}/${selected.validSessions || 0}`)}</div>
+        <div class="admin-action-panel"><label>Nom de compagnie<input id="adminCompanyName" maxlength="28" value="${escapeAttr(selected.name)}"></label><label>Trésorerie exacte<input id="adminCash" type="number" step="1000" value="${Number(selected.cash || 0)}"></label><label>Ajouter / retirer<input id="adminCashDelta" type="number" step="1000" placeholder="ex : 1000000 ou -500000"></label><div class="actions"><button class="primary" data-action="admin-save-quick" data-id="${escapeAttr(selected.id)}">Enregistrer nom + trésorerie</button><button data-action="admin-add-cash" data-id="${escapeAttr(selected.id)}">Appliquer variation</button></div></div>
+      </section>
+    </div>
+    <div class="admin-grid admin-session-grid">
+      <section class="card"><h2>Sessions</h2><div class="admin-log-wrap"><table class="admin-log-table"><thead><tr><th>État</th><th>Dernière activité</th><th>Expiration</th></tr></thead><tbody>${sessionRows || '<tr><td colspan="3">Aucune session valide.</td></tr>'}</tbody></table></div></section>
+      <section class="card"><h2>Connexions horodatées</h2><div class="admin-log-wrap"><table class="admin-log-table"><thead><tr><th>Date</th><th>IP</th><th>Navigateur</th></tr></thead><tbody>${logRows || '<tr><td colspan="3">Aucune connexion enregistrée.</td></tr>'}</tbody></table></div></section>
+    </div>
+    <section class="card"><h2>Édition avancée du joueur</h2><p class="muted small">Zone volontairement puissante : modifie le JSON puis enregistre. Le serveur remigre la compagnie pour éviter les champs essentiels cassés.</p><textarea id="adminRawPlayerJson" class="admin-json-editor" spellcheck="false">${rawJson}</textarea><div class="actions"><button class="primary" data-action="admin-save-json" data-id="${escapeAttr(selected.id)}">Enregistrer le JSON joueur</button></div></section>
+  `;
+}
+
+function renderAdmin() {
+  if (!isAdminSession()) return `<div class="card"><h2>Admin</h2><p class="muted">Accès réservé au compte Xenao.</p></div>`;
+  const players = app.state.admin.players || [];
+  if (!players.length) return `<div class="card"><h2>Admin</h2><p class="muted">Aucun joueur à administrer.</p></div>`;
+  const activity = app.state.admin.activity || {};
+  const selected = players.find(player => player.id === app.admin.selectedPlayerId) || players[0];
+  app.admin.selectedPlayerId = selected.id;
+  localStorage.setItem('sillons.adminSelectedPlayer', selected.id);
+  const activeSubtab = app.admin.activeSubtab === 'accounts' ? 'accounts' : 'activity';
+  return `
+    ${renderSectionHero('ADMINISTRATION', 'Console Xenao', 'Surveille les sessions actives, l’activité des compagnies et les données de connexion, puis administre les comptes si nécessaire.', ART.tabs.budget, ['Accès privé', `${activity.onlineCount || 0} en ligne`, `${players.length} joueurs`])}
+    <div class="admin-subtabs"><button type="button" class="${activeSubtab === 'activity' ? 'active' : ''}" data-admin-subtab="activity">Activité en direct</button><button type="button" class="${activeSubtab === 'accounts' ? 'active' : ''}" data-admin-subtab="accounts">Comptes & édition</button></div>
+    ${activeSubtab === 'activity' ? renderAdminActivity(activity, players) : renderAdminAccounts(players, selected)}
   `;
 }
 
@@ -941,4 +996,3 @@ function renderFinanceSummary(me) {
     </div>
   `;
 }
-

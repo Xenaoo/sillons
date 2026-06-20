@@ -41,6 +41,7 @@ function createUserRecord(username, password, playerId) {
     passwordSalt: salt,
     passwordHash: passwordHash(password, salt),
     sessions: {},
+    activityHistory: [],
     createdAt: Date.now(),
     lastLoginAt: null,
     bugReportsReadAt: 0
@@ -65,6 +66,36 @@ function normalizeLoginHistory(raw, fallbackLastLoginAt = null) {
   const fallback = Number(fallbackLastLoginAt || 0);
   if (!cleaned.length && Number.isFinite(fallback) && fallback > 0) cleaned.push({ at: fallback, userAgent: '', ip: '' });
   return cleaned.slice(-250);
+}
+
+function normalizeActivityHistory(raw) {
+  const values = Array.isArray(raw) ? raw : [];
+  return values
+    .map(entry => {
+      const at = Number(entry?.at ?? entry?.time ?? entry);
+      if (!Number.isFinite(at) || at <= 0) return null;
+      const type = cleanOptionalText(entry?.type || entry?.kind || 'session', 40) || 'session';
+      const detail = cleanOptionalText(entry?.detail || entry?.action || '', 80);
+      return { at, type, detail };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.at - b.at)
+    .slice(-USER_ACTIVITY_HISTORY_MAX);
+}
+
+function recordUserActivity(user, type = 'session', detail = '') {
+  if (!user) return;
+  const now = Date.now();
+  const normalizedType = cleanOptionalText(type, 40) || 'session';
+  const normalizedDetail = cleanOptionalText(detail, 80);
+  const history = normalizeActivityHistory(user.activityHistory);
+  const last = history[history.length - 1];
+  if (normalizedType === 'session' && last?.type === 'session' && now - Number(last.at || 0) < ACTIVITY_HEARTBEAT_INTERVAL_MS) {
+    user.activityHistory = history;
+    return;
+  }
+  history.push({ at: now, type: normalizedType, detail: normalizedDetail });
+  user.activityHistory = history.slice(-USER_ACTIVITY_HISTORY_MAX);
 }
 
 function clientIpFromRequest(req) {
@@ -116,6 +147,7 @@ function normalizeUsers(raw = {}) {
       createdAt: Number(value.createdAt || now),
       lastLoginAt: value.lastLoginAt || null,
       loginHistory: normalizeLoginHistory(value.loginHistory, value.lastLoginAt),
+      activityHistory: normalizeActivityHistory(value.activityHistory),
       bugReportsReadAt: Number.isFinite(Number(value.bugReportsReadAt)) ? Math.max(0, Number(value.bugReportsReadAt)) : 0
     };
   }
@@ -139,6 +171,7 @@ function issueSession(user, req = null) {
     expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_MS
   };
   recordUserLogin(user, req);
+  recordUserActivity(user, 'login');
   return token;
 }
 
@@ -167,6 +200,7 @@ function authenticateRequest(req, url, body = {}) {
       return null;
     }
     session.lastSeenAt = now;
+    recordUserActivity(user, 'session', url?.pathname || '');
     return { user, token, player: state.players?.[user.playerId] || null };
   }
   return null;
@@ -441,15 +475,42 @@ function loginAccount(body = {}, req = null) {
 }
 
 
-function buildAdminDashboard() {
-  const usersByPlayer = new Map();
-  for (const user of Object.values(state.users || {})) {
-    usersByPlayer.set(user.playerId, user);
+function sessionIsActive(session, now = Date.now()) {
+  return Number(session?.expiresAt || 0) > now && Number(session?.lastSeenAt || 0) >= now - SESSION_ACTIVE_WINDOW_MS;
+}
+
+function buildActivityTimeline(players, now = Date.now()) {
+  const bucketMs = 60 * 60 * 1000;
+  const points = [];
+  for (let offset = 23; offset >= 0; offset -= 1) {
+    const end = now - offset * bucketMs;
+    const start = end - bucketMs;
+    let online = 0;
+    let activities = 0;
+    for (const player of players) {
+      const history = player.activityTimeline || [];
+      if (history.some(event => Number(event.at || 0) > end - SESSION_ACTIVE_WINDOW_MS && Number(event.at || 0) <= end)) online += 1;
+      activities += history.filter(event => Number(event.at || 0) > start && Number(event.at || 0) <= end && event.type !== 'session').length;
+    }
+    points.push({ at: end, online, activities });
   }
+  return points;
+}
+
+function buildAdminDashboard() {
+  const now = Date.now();
+  const usersByPlayer = new Map(Object.values(state.users || {}).map(user => [user.playerId, user]));
   const players = activePlayers().map(player => {
     const user = usersByPlayer.get(player.id) || null;
-    const history = normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).slice(-80).reverse();
-    const sessions = Object.values(user?.sessions || {}).filter(session => Number(session.expiresAt || 0) > Date.now());
+    const allSessions = Object.values(user?.sessions || {}).filter(session => Number(session.expiresAt || 0) > now);
+    const activeSessions = allSessions.filter(session => sessionIsActive(session, now));
+    const activityHistory = normalizeActivityHistory(user?.activityHistory);
+    const lastActivityAt = Math.max(
+      Number(player.lastSeen || 0),
+      Number(user?.lastLoginAt || 0),
+      ...allSessions.map(session => Number(session.lastSeenAt || 0)),
+      ...activityHistory.map(event => Number(event.at || 0))
+    );
     return {
       id: player.id,
       name: player.name,
@@ -457,7 +518,7 @@ function buildAdminDashboard() {
       debt: Math.round(Number(player.debt || 0)),
       score: Math.round(scorePlayer(player)),
       lines: Array.isArray(player.lines) ? player.lines.length : 0,
-      activeLines: Array.isArray(player.lines) ? player.lines.filter(l => l.active).length : 0,
+      activeLines: Array.isArray(player.lines) ? player.lines.filter(line => line.active).length : 0,
       trains: Array.isArray(player.trains) ? player.trains.length : 0,
       username: user?.username || '',
       usernameKey: user?.usernameKey || '',
@@ -465,13 +526,56 @@ function buildAdminDashboard() {
       createdAt: player.createdAt || null,
       lastSeen: player.lastSeen || null,
       lastLoginAt: user?.lastLoginAt || null,
+      lastActivityAt: lastActivityAt || null,
+      online: activeSessions.length > 0,
+      activeSessions: activeSessions.length,
+      validSessions: allSessions.length,
+      sessions: allSessions.map(session => ({
+        createdAt: Number(session.createdAt || 0) || null,
+        lastSeenAt: Number(session.lastSeenAt || 0) || null,
+        expiresAt: Number(session.expiresAt || 0) || null,
+        active: sessionIsActive(session, now)
+      })).sort((a, b) => Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0)),
       loginCount: normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).length,
-      activeSessions: sessions.length,
-      loginHistory: history,
+      loginHistory: normalizeLoginHistory(user?.loginHistory, user?.lastLoginAt).slice(-80).reverse(),
+      activityTimeline: activityHistory,
       rawPlayer: player
     };
-  }).sort((a, b) => (b.isAdmin - a.isAdmin) || String(a.name).localeCompare(String(b.name), 'fr'));
-  return { players, bugReports: publicBugReports({ usernameKey: ADMIN_USERNAME_KEY, username: 'Xenao' }), openBugs: normalizeBugReports(state.bugReports || []).filter(bug => bug.status !== 'closed').length, generatedAt: Date.now() };
+  }).sort((a, b) => (Number(b.online) - Number(a.online)) || (b.isAdmin - a.isAdmin) || String(a.name).localeCompare(String(b.name), 'fr'));
+
+  const activityEvents = players.flatMap(player => (player.activityTimeline || []).map(event => ({
+    ...event,
+    playerId: player.id,
+    playerName: player.name,
+    username: player.username,
+    online: player.online
+  }))).sort((a, b) => Number(b.at || 0) - Number(a.at || 0));
+  const recentActivity = activityEvents.slice(0, 80);
+  const since = now - 24 * HOUR_MS;
+  const activityBreakdown = {};
+  for (const event of activityEvents.filter(event => Number(event.at || 0) >= since && event.type !== 'session')) {
+    const key = event.type || 'autre';
+    activityBreakdown[key] = (activityBreakdown[key] || 0) + 1;
+  }
+  const onlinePlayers = players.filter(player => player.online);
+  const timeline = buildActivityTimeline(players, now);
+  for (const player of players) delete player.activityTimeline;
+  return {
+    players,
+    activity: {
+      onlineCount: onlinePlayers.length,
+      activeSessionCount: onlinePlayers.reduce((sum, player) => sum + player.activeSessions, 0),
+      onlinePlayers: onlinePlayers.map(player => ({ id: player.id, name: player.name, username: player.username, activeSessions: player.activeSessions, lastActivityAt: player.lastActivityAt, lines: player.activeLines, trains: player.trains })),
+      recentActivity,
+      activityBreakdown,
+      timeline,
+      activeWindowMs: SESSION_ACTIVE_WINDOW_MS,
+      generatedAt: now
+    },
+    bugReports: publicBugReports({ usernameKey: ADMIN_USERNAME_KEY, username: 'Xenao' }),
+    openBugs: normalizeBugReports(state.bugReports || []).filter(bug => bug.status !== 'closed').length,
+    generatedAt: now
+  };
 }
 
 function adminFindPlayer(payload = {}) {

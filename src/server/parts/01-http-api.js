@@ -16,7 +16,10 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
     const auth = authenticateRequest(req, url, {});
-    if (auth) revokeSession(auth.user, auth.token);
+    if (auth) {
+      recordUserActivity(auth.user, 'logout');
+      revokeSession(auth.user, auth.token);
+    }
     saveState();
     sendJson(res, 200, { ok: true });
     return;
@@ -105,6 +108,7 @@ async function handleApi(req, res, url) {
       return;
     }
     const result = adminUpdatePlayer(body || {}, auth.user);
+    if (result.ok) recordUserActivity(auth.user, 'admin', 'update-player');
     sendJson(res, result.ok ? 200 : 400, { ...result, state: publicState(auth.user.playerId, auth.user) });
     return;
   }
@@ -131,6 +135,7 @@ async function handleApi(req, res, url) {
     const playerBefore = state.players?.[playerId] || null;
     const cashBefore = Number(playerBefore?.cash);
     const result = await applyAction(playerId, body.type, body.payload || {});
+    if (result.ok && auth?.user) recordUserActivity(auth.user, 'action', String(body.type || 'unknown'));
     const playerAfter = state.players?.[playerId] || null;
     const cashAfter = Number(playerAfter?.cash);
     const cashDelta = Number.isFinite(cashBefore) && Number.isFinite(cashAfter)
@@ -216,4 +221,3 @@ function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(payload));
 }
-

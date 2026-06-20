@@ -475,6 +475,12 @@ function stateRenderSignature(state = app.state) {
   const world = state.world?.communesStatus;
   const bugSig = (state.bugReports || []).map(bug => `${bug.id}:${bug.status}:${bug.createdAt}:${bug.closedAt || 0}`).join('|');
   const bugReadSig = `${state.auth?.bugReportsReadAt || 0}:${state.auth?.bugReportsUnreadCount || 0}`;
+  const adminSig = state.auth?.isAdmin ? [
+    state.admin?.activity?.generatedAt || 0,
+    state.admin?.activity?.onlineCount || 0,
+    state.admin?.activity?.activeSessionCount || 0,
+    (state.admin?.activity?.recentActivity || []).slice(0, 8).map(event => `${event.at}:${event.playerId}:${event.type}:${event.detail || ''}`).join('|')
+  ].join(';') : '';
   const meSig = me ? [
     me.id,
     me.cash,
@@ -507,7 +513,8 @@ function stateRenderSignature(state = app.state) {
     worldRouteSignature(state),
     bugSig,
     bugReadSig,
-    meSig
+    meSig,
+    adminSig
   ].join('::');
 }
 
@@ -1376,4 +1383,3 @@ function adjustCompositionRefitScroll() {
     }
   }
 }
-

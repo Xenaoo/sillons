@@ -989,8 +989,108 @@ dialog.modal--wide {
   color: #b8aa84;
 }
 
+.admin-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.admin-subtabs button {
+  border: 1px solid rgba(217,168,82,.2);
+  border-radius: 999px;
+  background: rgba(3,8,18,.3);
+  color: #cfc09a;
+  padding: 8px 13px;
+}
+
+.admin-subtabs button.active {
+  border-color: rgba(217,168,82,.72);
+  background: rgba(217,168,82,.16);
+  color: #fff0c8;
+}
+
+.admin-activity-metrics {
+  margin-bottom: 14px;
+}
+
+.admin-activity-grid,
+.admin-session-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.admin-chart-card {
+  margin-bottom: 14px;
+}
+
+.admin-chart-legend,
+.admin-chart-labels,
+.admin-activity-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: #b8aa84;
+  font-size: 12px;
+}
+
+.admin-chart-legend { margin: 10px 0 4px; }
+.admin-chart-legend em { margin-left: auto; font-style: normal; }
+.admin-legend-online::before,
+.admin-legend-actions::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.admin-legend-online::before { background: #76d99d; }
+.admin-legend-actions::before { background: #e0b663; }
+
+.admin-activity-chart {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  margin: 2px 0;
+  overflow: visible;
+}
+
+.admin-chart-axis { stroke: rgba(217,168,82,.24); stroke-width: 1; }
+.admin-chart-line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.admin-chart-online { stroke: #76d99d; }
+.admin-chart-actions { stroke: #e0b663; stroke-dasharray: 5 5; }
+.admin-chart-labels { justify-content: space-between; }
+.admin-activity-breakdown { margin-top: 12px; }
+
+.admin-online-dot,
+.admin-offline-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.admin-online-dot { background: #76d99d; box-shadow: 0 0 0 3px rgba(118,217,157,.13); }
+.admin-offline-dot { background: #7b745f; }
+
+.admin-log-table small {
+  display: block;
+  margin-top: 2px;
+  color: #8e846a;
+  font-size: 10px;
+}
+
 @media (max-width: 980px) {
   .admin-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-activity-grid,
+  .admin-session-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1853,4 +1953,3 @@ dialog.modal--wide {
     min-height: 330px !important;
   }
 }
-

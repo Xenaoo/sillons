@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_info (version INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS game_state (
@@ -28,6 +28,11 @@ const SCHEMA = `
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, position INTEGER NOT NULL,
     at INTEGER, user_agent TEXT, ip TEXT, payload_json TEXT NOT NULL, PRIMARY KEY (user_id, position)
   );
+  CREATE TABLE IF NOT EXISTS user_activity (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, position INTEGER NOT NULL,
+    at INTEGER NOT NULL, type TEXT NOT NULL, detail TEXT, PRIMARY KEY (user_id, position)
+  );
+  CREATE INDEX IF NOT EXISTS user_activity_at_idx ON user_activity(at DESC);
 
   CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT, logo TEXT, region TEXT,
@@ -262,6 +267,7 @@ function createSaveStore(filename) {
     user: db.prepare('INSERT INTO users(id, username, username_key, player_id, password_salt, password_hash, created_at, last_login_at, bug_reports_read_at, fields_json, extra_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
     session: db.prepare('INSERT INTO user_sessions(user_id, token_hash, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)'),
     login: db.prepare('INSERT INTO user_login_history(user_id, position, at, user_agent, ip, payload_json) VALUES (?, ?, ?, ?, ?, ?)'),
+    activity: db.prepare('INSERT INTO user_activity(user_id, position, at, type, detail) VALUES (?, ?, ?, ?, ?)'),
     player: db.prepare('INSERT INTO players(id, name, color, logo, region, cash, debt, epoch, research, maintenance_policy, reputation, co2, energy_strategy, created_at, last_seen, epoch_started_at, notifications_read_at, fields_json, extra_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
     tech: db.prepare('INSERT INTO player_tech(player_id, tech_id, level) VALUES (?, ?, ?)'),
     research: db.prepare('INSERT INTO player_research(player_id, research_id, level) VALUES (?, ?, ?)'),
@@ -302,6 +308,8 @@ function createSaveStore(filename) {
       user.sessions = {};
       for (const session of db.prepare('SELECT * FROM user_sessions WHERE user_id = ? ORDER BY token_hash').all(row.id)) user.sessions[session.token_hash] = { createdAt: session.created_at, lastSeenAt: session.last_seen_at, expiresAt: session.expires_at };
       user.loginHistory = db.prepare('SELECT payload_json FROM user_login_history WHERE user_id = ? ORDER BY position').all(row.id).map(item => parseJson(item.payload_json, {}));
+      const activityHistory = db.prepare('SELECT at, type, detail FROM user_activity WHERE user_id = ? ORDER BY position').all(row.id).map(item => ({ at: item.at, type: item.type, detail: item.detail || '' }));
+      if (activityHistory.length) user.activityHistory = activityHistory;
       state.users[user.usernameKey] = user;
     }
     for (const row of db.prepare('SELECT * FROM players ORDER BY rowid').all()) {
@@ -362,15 +370,16 @@ function createSaveStore(filename) {
     const globalKeys = ['version', 'createdAt', 'now', 'day', 'eraYear', 'tickSpeed', 'market', 'events', 'news', 'bugReports', 'users', 'players'];
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(`DELETE FROM user_sessions; DELETE FROM user_login_history; DELETE FROM users; DELETE FROM player_tech; DELETE FROM player_research; DELETE FROM research_projects; DELETE FROM research_queue; DELETE FROM player_era_transitions; DELETE FROM player_resources; DELETE FROM player_staff; DELETE FROM player_stats; DELETE FROM player_tutorial_actions; DELETE FROM player_tutorials; DELETE FROM player_stations; DELETE FROM train_maintenance; DELETE FROM train_compositions; DELETE FROM trains; DELETE FROM line_stops; DELETE FROM line_trains; DELETE FROM line_stats; DELETE FROM line_sillon_models; DELETE FROM lines; DELETE FROM player_notifications; DELETE FROM players; DELETE FROM market_prices; DELETE FROM events; DELETE FROM news; DELETE FROM bug_report_images; DELETE FROM bug_reports; DELETE FROM game_state;`);
+      db.exec(`DELETE FROM user_sessions; DELETE FROM user_login_history; DELETE FROM user_activity; DELETE FROM users; DELETE FROM player_tech; DELETE FROM player_research; DELETE FROM research_projects; DELETE FROM research_queue; DELETE FROM player_era_transitions; DELETE FROM player_resources; DELETE FROM player_staff; DELETE FROM player_stats; DELETE FROM player_tutorial_actions; DELETE FROM player_tutorials; DELETE FROM player_stations; DELETE FROM train_maintenance; DELETE FROM train_compositions; DELETE FROM trains; DELETE FROM line_stops; DELETE FROM line_trains; DELETE FROM line_stats; DELETE FROM line_sillon_models; DELETE FROM lines; DELETE FROM player_notifications; DELETE FROM players; DELETE FROM market_prices; DELETE FROM events; DELETE FROM news; DELETE FROM bug_report_images; DELETE FROM bug_reports; DELETE FROM game_state;`);
       insert.gameState.run(state.version ?? null, state.createdAt ?? null, state.now ?? null, state.day ?? null, state.eraYear ?? null, state.tickSpeed ?? null, JSON.stringify(omit(state, globalKeys)));
       for (const [resourceId, price] of Object.entries(state.market || {})) insert.market.run(resourceId, Number(price));
       for (const user of Object.values(state.users || {})) {
         if (!user?.id || !user.usernameKey) continue;
-        const extra = omit(user, [...USER_FIELDS.map(([key]) => key), 'sessions', 'loginHistory']);
+        const extra = omit(user, [...USER_FIELDS.map(([key]) => key), 'sessions', 'loginHistory', 'activityHistory']);
         insert.user.run(...fieldValues(user, USER_FIELDS), JSON.stringify(fieldNames(user, USER_FIELDS)), JSON.stringify(extra));
         for (const [tokenHash, session] of Object.entries(user.sessions || {})) insert.session.run(user.id, tokenHash, session?.createdAt ?? null, session?.lastSeenAt ?? null, session?.expiresAt ?? null);
         for (const [position, login] of (user.loginHistory || []).entries()) insert.login.run(user.id, position, login?.at ?? null, login?.userAgent ?? null, login?.ip ?? null, JSON.stringify(login));
+        for (const [position, activity] of (user.activityHistory || []).entries()) insert.activity.run(user.id, position, activity?.at ?? Date.now(), activity?.type || 'session', activity?.detail || '');
       }
       for (const [playerId, player] of Object.entries(state.players || {})) {
         if (!player) continue;

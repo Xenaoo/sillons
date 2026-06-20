@@ -6,7 +6,9 @@
 - Les événements, actualités, signalements et images associées sont également stockés dans SQLite ; les images de signalement sont liées via `bug_report_images`.
 - La lecture et l’écriture du serveur utilisent désormais ces tables. La migration reconstruit exactement l’état du jeu sans perte de données ; les champs évolutifs restent conservés dans les colonnes JSON de secours appropriées.
 - Suppression de la limite de migration qui tronquait les actualités à 50 entrées.
-- Schéma SQLite : `2`.
+- Ajout du sous-onglet administration `Activité en direct` : présence de session, dernière activité horodatée, flux des actions et courbe sur 24 h des joueurs actifs et des actions.
+- Les pulsations de session, connexions, déconnexions, actions de jeu et opérations d’administration sont journalisées dans `user_activity` (limité aux 2 000 événements récents par compte).
+- Schéma SQLite : `3`.
 
 # v69.8.2 — Filtre de matériel dans l’éditeur de ligne
 

@@ -120,7 +120,10 @@ const app = {
   fleetCatalogEraCollapsed: loadJson('sillons.fleetCatalogEraCollapsed', {}),
   fleetMaintenanceEraCollapsed: loadJson('sillons.fleetMaintenanceEraCollapsed', {}),
   sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
-  admin: { selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '' },
+  admin: {
+    selectedPlayerId: localStorage.getItem('sillons.adminSelectedPlayer') || '',
+    activeSubtab: localStorage.getItem('sillons.adminSubtab') || 'activity'
+  },
   mapPref: 'show',
   showOtherLines: localStorage.getItem('sillons.showOtherLines') !== '0',
   focusedLineId: localStorage.getItem('sillons.focusedLineId') || '',

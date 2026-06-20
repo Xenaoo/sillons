@@ -55,6 +55,14 @@ async function onTabContentClick(event) {
     return;
   }
 
+  const adminSubtab = event.target.closest('[data-admin-subtab]');
+  if (adminSubtab) {
+    app.admin.activeSubtab = adminSubtab.dataset.adminSubtab || 'activity';
+    localStorage.setItem('sillons.adminSubtab', app.admin.activeSubtab);
+    renderAll();
+    return;
+  }
+
   const button = event.target.closest('[data-action], #createLineBtn, #addWaypointBtn');
   if (!button) {
     const lineCard = event.target.closest('.line-card-modern[data-line-id]');
