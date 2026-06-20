@@ -1665,12 +1665,12 @@ function normalizeCommuneStation(station) {
 
 
 function searchCommuneStations(query, limit = 30) {
-  const q = normalizeSearch(query || '');
+  const q = normalizeStationSearchText(query || '');
   const all = Object.values(communeCache.byId || {});
   if (!q) return all.sort((a, b) => (b.population || 0) - (a.population || 0)).slice(0, limit);
   return all
     .map(s => {
-      const name = normalizeSearch(s.name);
+      const name = normalizeStationSearchText(s.name);
       const postal = (s.codesPostaux || []).join(' ');
       const starts = name.startsWith(q) ? 1000 : 0;
       const includes = name.includes(q) ? 300 : 0;
@@ -1681,6 +1681,16 @@ function searchCommuneStations(query, limit = 30) {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(x => x.s);
+}
+
+function normalizeStationSearchText(value) {
+  return normalizeSearch(value)
+    .replace(/[’'`]/g, ' ')
+    .replace(/[-_/.,;:()[\]{}]+/g, ' ')
+    .replace(/\b(?:st|ste)\.?(?=\s|$)/g, 'saint')
+    .replace(/\bsainte\b/g, 'saint')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizeSearch(value) {

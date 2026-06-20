@@ -1,3 +1,11 @@
+# v69.6.0 — Recherche de gares tolérante
+
+- La recherche de gares accepte indifféremment les tirets, espaces et ponctuations.
+- Les abréviations `St`, `St.` et `Ste` sont normalisées en `Saint` pour la recherche.
+- Exemple : `St-Michel-Notre-Dame`, `Saint Michel Notre Dame` et `Saint-Michel Notre Dame` trouvent la même gare.
+- La normalisation s’applique à l’interface et à l’endpoint de recherche de gares.
+- Schéma save : `172`.
+
 # v69.5.1 — Correction du raccordement Lyon-Part-Dieu
 
 - Correction de la classification des courtes sections RFN urbaines : sans code RFN LGV explicite, leur proximité d’une LGV ne les fait plus considérer comme ligne à grande vitesse.

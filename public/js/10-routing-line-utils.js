@@ -1367,7 +1367,7 @@ function renderStationSuggestions(role, matches, rawValue) {
 }
 
 function findStationMatches(query, limit = 12, sortMode = '') {
-  const q = normalizeSearchText(query || '');
+  const q = normalizeStationSearchText(query || '');
   const all = dedupedStations(app.state?.world?.stations || []);
   if (!q) {
     const candidates = sortMode ? sortStationsForPurchase(all, sortMode) : topStationCandidates(limit);
@@ -1375,7 +1375,7 @@ function findStationMatches(query, limit = 12, sortMode = '') {
   }
   const matches = all
     .map(s => {
-      const name = normalizeSearchText(s.name);
+      const name = normalizeStationSearchText(s.name);
       const postal = (s.codesPostaux || []).join(' ');
       const starts = name.startsWith(q) ? 1200 : 0;
       const exact = name === q ? 3000 : 0;
@@ -1416,6 +1416,16 @@ function stationMetaLabel(s) {
 
 function normalizeSearchText(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function normalizeStationSearchText(value) {
+  return normalizeSearchText(value)
+    .replace(/[’'`]/g, ' ')
+    .replace(/[-_/.,;:()[\]{}]+/g, ' ')
+    .replace(/\b(?:st|ste)\.?(?=\s|$)/g, 'saint')
+    .replace(/\bsainte\b/g, 'saint')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function capitalize(value) {
