@@ -1,3 +1,10 @@
+# v69.8.1 — Correction des sillons disponibles dans l’éditeur de ligne
+
+- Dans `Lignes > Modifier une ligne`, `Sillons disponibles` affiche désormais uniquement les sillons ajoutables, après déduction de ceux déjà consommés par la ligne en cours.
+- Le compteur indique distinctement les sillons affectés et le plafond autorisé pour la ligne.
+- Le coût et le nombre de nouveaux sillons se recalculent correctement lors du remplacement d’un train, même si le nombre total de trains ne change pas.
+- Schéma save : `175`.
+
 # v69.8.0 — Cadencement automatique des lignes
 
 - Chaque ligne calcule maintenant un cycle aller-retour incluant le temps de parcours, les arrêts intermédiaires et les retournements aux terminus.

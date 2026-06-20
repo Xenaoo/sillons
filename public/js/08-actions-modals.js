@@ -537,10 +537,11 @@ function openLineModal(lineId) {
     app.lineEditor.ticketPrice = normalizeTicketPrice(app.lineEditor.ticketPrice, lineTicketPrice(line), editorDistance);
     app.lineEditor.tariff = ticketPriceToTariff(app.lineEditor.ticketPrice, editorDistance);
     const selectedTrainCount = app.lineEditor.trainIds.length;
-    const currentTrainCount = lineTrainIdsOf(line).length;
-    const addedSillons = Math.max(0, selectedTrainCount - currentTrainCount);
+    const currentTrainIds = lineTrainIdsOf(line);
+    const addedSillons = app.lineEditor.trainIds.filter(id => !currentTrainIds.includes(id)).length;
     const sillonData = lineAvailableSillonsClient(line);
-    const availableForLine = sillonData ? Math.max(0, sillonData.available) : selectedTrainCount;
+    const maxForLine = sillonData ? Math.max(0, sillonData.maxForLine) : selectedTrainCount;
+    const availableForLine = Math.max(0, maxForLine - selectedTrainCount);
     const sillonCost = addedSillons > 0 ? slotPurchaseCostClient(line, addedSillons) : 0;
     const trainChoices = freeOrCurrent.map(t => {
       const selected = app.lineEditor.trainIds.includes(t.id);
@@ -573,12 +574,12 @@ function openLineModal(lineId) {
             <strong>Sillons et trains affectés à cette ligne</strong>
             <span class="small muted">Chaque train coché consomme 1 sillon. Les nouveaux sillons sont achetés sur la ligne, sans achat de gare.</span>
           </div>
-          <span class="tag ${selectedTrainCount ? 'good' : 'warn'}">${selectedTrainCount}/${availableForLine} sillons</span>
+          <span class="tag ${selectedTrainCount ? 'good' : 'warn'}">${selectedTrainCount}/${maxForLine} sillons</span>
         </div>
         <div class="line-sillon-purchase-summary">
-          <div><span>Sillons disponibles</span><b>${sillonData ? formatInt(sillonData.available) : 'N/A'}</b></div>
-          <div><span>Nouveaux à acheter</span><b>${formatInt(addedSillons)}</b></div>
-          <div><span>Coût estimé</span><b>${money(sillonCost)}</b></div>
+          <div><span>Sillons disponibles</span><b id="lineEditorAvailableSillons">${sillonData ? formatInt(availableForLine) : 'N/A'}</b></div>
+          <div><span>Nouveaux à acheter</span><b id="lineEditorAddedSillons">${formatInt(addedSillons)}</b></div>
+          <div><span>Coût estimé</span><b id="lineEditorSillonCost">${money(sillonCost)}</b></div>
         </div>
         <div class="line-train-choice-grid">${trainChoices || '<p class="muted small">Aucun train libre.</p>'}</div>
       </div>
@@ -671,9 +672,18 @@ function openLineModal(lineId) {
         tag.classList.toggle('good', checked.length > 0);
         tag.classList.toggle('warn', checked.length <= 0);
         const slots = lineAvailableSillonsClient(line);
-        const baseCount = lineTrainIdsOf(line).length;
-        const available = slots ? Math.max(0, slots.available) : checked.length;
-        tag.textContent = `${checked.length}/${available} sillons`;
+        const currentIds = lineTrainIdsOf(line);
+        const maxForLine = slots ? Math.max(0, slots.maxForLine) : checked.length;
+        const available = Math.max(0, maxForLine - checked.length);
+        const addedSillons = checked.filter(id => !currentIds.includes(id)).length;
+        const sillonCost = addedSillons > 0 ? slotPurchaseCostClient(line, addedSillons) : 0;
+        tag.textContent = `${checked.length}/${maxForLine} sillons`;
+        const availableLabel = $('#lineEditorAvailableSillons');
+        const addedLabel = $('#lineEditorAddedSillons');
+        const costLabel = $('#lineEditorSillonCost');
+        if (availableLabel) availableLabel.textContent = formatInt(available);
+        if (addedLabel) addedLabel.textContent = formatInt(addedSillons);
+        if (costLabel) costLabel.textContent = money(sillonCost);
       }
     }));
     $('#editLineTicketPrice').addEventListener('input', () => syncEditorTicketControls('editLineTicketPrice'));

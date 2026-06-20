@@ -820,9 +820,10 @@ function lineAvailableSillonsClient(line) {
   const sillons = line?.stats?.capacity?.sillons || line?.stats?.staffing?.sillons || null;
   if (!sillons) return null;
   const max = Number(sillons.maxFrequency ?? sillons.bottleneck?.available ?? sillons.lineCapacity ?? 0);
-  const requested = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
-  const available = Math.max(0, Math.floor(max));
-  return { available, requested: Math.max(0, Math.floor(requested)), capacity: Math.max(0, Math.floor(Number(sillons.lineCapacity ?? max))) };
+  const requested = Math.max(0, Math.floor(Number(sillons.requestedFrequency ?? lineSlotDemandClient(line))));
+  const maxForLine = Math.max(0, Math.floor(max));
+  const available = Math.max(0, maxForLine - requested);
+  return { available, requested, maxForLine, capacity: Math.max(0, Math.floor(Number(sillons.lineCapacity ?? max))) };
 }
 
 function slotPurchaseCostClient(line, count = 1) {
