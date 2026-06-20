@@ -3,13 +3,13 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v69.5.0';
+const PROJECT_VERSION = 'v69.5.1';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
 const PERSISTED_OSM_ROUTE_CACHE_KEY = 'sillons.osmRouteCache.v1';
-// Invalide les géométries client antérieures au correctif de corridor lyonnais.
-const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v18';
+// Invalide les géométries client antérieures à la correction des branches urbaines RFN.
+const PERSISTED_OSM_ROUTE_CACHE_VERSION = 'sncf-geometry-v19';
 const PERSISTED_OSM_ROUTE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 180;
 const PERSISTED_OSM_ROUTE_CACHE_SAVE_DELAY_MS = 500;
 

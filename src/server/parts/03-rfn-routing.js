@@ -2001,6 +2001,11 @@ function isLikelyHighSpeedRailShapeLine(line) {
   if (rawCode && HIGH_SPEED_RAIL_LINE_CODES.has(rawCode.padStart(6, '0'))) return true;
   const coords = Array.isArray(line.coords) ? line.coords : [];
   if (coords.length < 2) return false;
+  // Sans code RFN explicite, la seule proximité géographique d'un corridor LGV
+  // ne suffit pas à qualifier une courte section urbaine. À Lyon, elle faisait
+  // par exemple rejeter le bon raccordement Part-Dieu → Jean-Macé au profit
+  // d'un détour classique par Perrache.
+  if (!rawCode && polylineDistanceKm(coords) < 35) return false;
   const samples = [];
   const sampleCount = Math.min(7, Math.max(3, coords.length));
   for (let i = 0; i < sampleCount; i += 1) {
@@ -2374,4 +2379,3 @@ async function realRailRouteBetweenStops(stops) {
     missing: null
   };
 }
-

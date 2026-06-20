@@ -1,3 +1,10 @@
+# v69.5.1 — Correction du raccordement Lyon-Part-Dieu
+
+- Correction de la classification des courtes sections RFN urbaines : sans code RFN LGV explicite, leur proximité d’une LGV ne les fait plus considérer comme ligne à grande vitesse.
+- Le profil `classic` emprunte de nouveau le raccordement est Lyon-Part-Dieu → Jean-Macé, au lieu du détour par Perrache/Vaise.
+- Cache serveur RFN : `rfn-route-v17` ; cache client : `sncf-geometry-v19`.
+- Schéma save : `171`.
+
 # v69.5.0 — Actualisation des tracés RFN client
 
 - Invalidation du cache persistant des géométries RFN côté navigateur.
