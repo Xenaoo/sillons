@@ -13,8 +13,8 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v69.3.1';
-const STATE_SCHEMA_VERSION = 167;
+const PROJECT_VERSION = 'v69.4.0';
+const STATE_SCHEMA_VERSION = 168;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
@@ -466,4 +466,3 @@ if (isMainThread) {
     refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
   });
 }
-

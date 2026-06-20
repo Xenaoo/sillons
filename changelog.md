@@ -1,3 +1,13 @@
+# v69.4.0 — Fiabilisation des affectations et maintenance
+
+- Suppression des références de trains inexistants dans les lignes lors de la migration de sauvegarde.
+- Nettoyage des identifiants redondants dans les actifs de gare, déjà portés par leur clé de stockage.
+- La vente d’un train le retire désormais aussi de toutes les lignes fermées qui le référençaient encore.
+- Les calculs de sillons ne comptent plus une référence de train invalide comme une circulation réelle.
+- Optimisation de la résolution des trains affectés : les recherches répétées sont remplacées par un index local côté serveur et client.
+- Suppression d’un classifieur de rames à grande vitesse dupliqué et durcissement de l’authentification : un jeton n’est plus accepté dans l’URL.
+- Schéma save : `168`.
+
 # v69.3.1 — Libellé des sillons disponibles
 
 - La pastille en haut à droite de la case `Sillons` affiche maintenant `XX disponible(s)` au lieu du nombre seul.

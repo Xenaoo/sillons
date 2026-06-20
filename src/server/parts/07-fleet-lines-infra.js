@@ -291,8 +291,9 @@ function lineTrainIds(line) {
 
 function lineAssignedTrains(player, line, { availableOnly = false } = {}) {
   const ids = lineTrainIds(line);
+  const trainsById = new Map((player?.trains || []).map(train => [train.id, train]));
   return ids
-    .map(id => player?.trains?.find(t => t.id === id))
+    .map(id => trainsById.get(id))
     .filter(Boolean)
     .filter(train => !availableOnly || (!train.maintenance?.active && trainConditionValue(train) > 0));
 }
@@ -306,6 +307,38 @@ function normalizeLineTrainIds(line) {
   line.trainIds = ids;
   line.trainId = ids[0] || line.trainId || '';
   return ids;
+}
+
+function normalizePlayerLineAssignments(player) {
+  if (!player || typeof player !== 'object') return false;
+  const existingTrainIds = new Set((player.trains || []).map(train => String(train?.id || '')).filter(Boolean));
+  let changed = false;
+  for (const line of player.lines || []) {
+    if (!line || typeof line !== 'object') continue;
+    const currentIds = lineTrainIds(line);
+    const nextIds = currentIds.filter(id => existingTrainIds.has(id));
+    const nextTrainId = nextIds[0] || '';
+    if (currentIds.length !== nextIds.length || line.trainId !== nextTrainId || !Array.isArray(line.trainIds)) changed = true;
+    line.trainIds = nextIds;
+    line.trainId = nextTrainId;
+  }
+  return changed;
+}
+
+function removeTrainFromPlayerLines(player, trainId) {
+  if (!player || !trainId) return false;
+  const id = String(trainId);
+  let changed = false;
+  for (const line of player.lines || []) {
+    if (!line || typeof line !== 'object') continue;
+    const currentIds = lineTrainIds(line);
+    const nextIds = currentIds.filter(candidate => candidate !== id);
+    if (currentIds.length === nextIds.length) continue;
+    line.trainIds = nextIds;
+    line.trainId = nextIds[0] || '';
+    changed = true;
+  }
+  return changed;
 }
 
 function combinedOperatingProfile(player, trains) {

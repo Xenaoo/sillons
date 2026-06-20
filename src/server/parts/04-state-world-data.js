@@ -217,6 +217,7 @@ function migratePlayer(player, fallbackId) {
   p.lines = Array.isArray(p.lines) ? p.lines : [];
   p.stations = p.stations && typeof p.stations === 'object' ? p.stations : {};
   migrateLegacyStationReferences(p);
+  normalizePlayerLineAssignments(p);
   for (const stationId of Object.keys(p.stations)) normalizeStationAsset(p, stationId);
   p.energyStrategy = BALANCE.energyStrategies[p.energyStrategy] ? p.energyStrategy : 'spot';
   p.resources = normalizeResources(p.resources);
@@ -1699,4 +1700,3 @@ function normalizeNameKey(value) {
 function isInFranceBounds(lat, lon) {
   return lat >= 41.0 && lat <= 51.5 && lon >= -5.7 && lon <= 10.2;
 }
-

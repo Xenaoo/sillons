@@ -1,5 +1,5 @@
 {
-  "version": 167,
+  "version": 168,
   "createdAt": 1781511648911,
   "now": 1781896499797,
   "day": 105660,
@@ -1052,7 +1052,7 @@
             "GARE_87444000",
             "GARE_87444067"
           ],
-          "trainId": "starter-steam-030-mixte",
+          "trainId": "",
           "service": "passengers",
           "frequency": 4,
           "ticketPrice": 4,
@@ -1226,9 +1226,7 @@
             }
           },
           "name": "Caen → Bayeux",
-          "trainIds": [
-            "starter-steam-030-mixte"
-          ],
+          "trainIds": [],
           "sillonModel": {
             "version": "sillon-capacity-v2",
             "theoreticalCapacity": 20,
@@ -1299,7 +1297,7 @@
             "GARE_87545301",
             "GARE_87547000"
           ],
-          "trainId": "e4cebd02-96a6-4913-9db8-bf604670abf0",
+          "trainId": "",
           "service": "passengers",
           "frequency": 16,
           "ticketPrice": 11,
@@ -1473,9 +1471,7 @@
             }
           },
           "name": "Étampes → Paris-Austerlitz",
-          "trainIds": [
-            "e4cebd02-96a6-4913-9db8-bf604670abf0"
-          ],
+          "trainIds": [],
           "sillonModel": {
             "version": "sillon-capacity-v2",
             "theoreticalCapacity": 24,
@@ -1796,10 +1792,8 @@
             "GARE_87545467",
             "GARE_87545194"
           ],
-          "trainId": "74221be5-6839-4f76-8266-715073634417",
-          "trainIds": [
-            "74221be5-6839-4f76-8266-715073634417"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "passengers",
           "frequency": 16,
           "ticketPrice": 7,
@@ -2099,10 +2093,8 @@
             "GARE_87393173",
             "GARE_87710921"
           ],
-          "trainId": "199f1358-c2c1-4804-8a7d-4f03b7fe71f1",
-          "trainIds": [
-            "199f1358-c2c1-4804-8a7d-4f03b7fe71f1"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "passengers",
           "frequency": 12,
           "ticketPrice": 5,
@@ -2387,10 +2379,8 @@
             "GARE_87276147",
             "GARE_87276139"
           ],
-          "trainId": "d085fb9e-dbe3-4c87-b42e-2944c8e18472",
-          "trainIds": [
-            "d085fb9e-dbe3-4c87-b42e-2944c8e18472"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "passengers",
           "frequency": 12,
           "ticketPrice": 5,
@@ -2557,10 +2547,8 @@
             "GARE_87393512",
             "GARE_87710921"
           ],
-          "trainId": "abcea0eb-a5a4-4111-a8dd-b98bd4943c57",
-          "trainIds": [
-            "abcea0eb-a5a4-4111-a8dd-b98bd4943c57"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "passengers",
           "frequency": 12,
           "ticketPrice": 7,
@@ -6955,8 +6943,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87545509"
+          "electrified": false
         },
         "GARE_87545483": {
           "level": 1,
@@ -7005,8 +6992,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87710921"
+          "electrified": false
         },
         "GARE_87276139": {
           "level": 1,
@@ -7020,8 +7006,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87276147"
+          "electrified": false
         },
         "GARE_87276097": {
           "level": 1,
@@ -7084,16 +7069,14 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393611"
+          "electrified": false
         },
         "GARE_87393637": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393637"
+          "electrified": false
         },
         "GARE_87547315": {
           "level": 1,
@@ -7233,8 +7216,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87546309"
+          "electrified": false
         },
         "GARE_87546317": {
           "level": 1,
@@ -7276,16 +7258,14 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393645"
+          "electrified": false
         },
         "GARE_87393652": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393652"
+          "electrified": false
         },
         "GARE_87545160": {
           "level": 1,
@@ -7446,8 +7426,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87546002"
+          "electrified": false
         }
       },
       "stats": {
@@ -8689,8 +8668,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393488"
+          "electrified": false
         },
         "GARE_87386680": {
           "level": 1,
@@ -8725,24 +8703,21 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87381137"
+          "electrified": false
         },
         "GARE_87386409": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87386409"
+          "electrified": false
         },
         "GARE_87393835": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87393835"
+          "electrified": false
         }
       },
       "stats": {
@@ -19401,8 +19376,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87582775"
+          "electrified": true
         },
         "GARE_87753509": {
           "level": 5,
@@ -19416,8 +19390,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87546291"
+          "electrified": true
         },
         "GARE_87394007": {
           "level": 5,
@@ -19459,144 +19432,126 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87113209"
+          "electrified": true
         },
         "GARE_87113696": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87113696"
+          "electrified": true
         },
         "GARE_87116111": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87116111"
+          "electrified": true
         },
         "GARE_87382374": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87382374"
+          "electrified": true
         },
         "GARE_87381129": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87381129"
+          "electrified": true
         },
         "GARE_87114389": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87114389"
+          "electrified": true
         },
         "GARE_87382002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87382002"
+          "electrified": true
         },
         "GARE_87382218": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87382218"
+          "electrified": true
         },
         "GARE_87386011": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87386011"
+          "electrified": true
         },
         "GARE_87382119": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 1,
-          "electrified": true,
-          "id": "GARE_87382119"
+          "electrified": true
         },
         "GARE_87271403": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87271403"
+          "electrified": true
         },
         "GARE_87271478": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87271478"
+          "electrified": true
         },
         "GARE_87271411": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87271411"
+          "electrified": true
         },
         "GARE_87271445": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87271445"
+          "electrified": true
         },
         "GARE_87271338": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87271338"
+          "electrified": true
         },
         "GARE_87113217": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87113217"
+          "electrified": true
         },
         "GARE_87113407": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87113407"
+          "electrified": true
         },
         "GARE_87113779": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87113779"
+          "electrified": true
         },
         "GARE_87471003": {
           "level": 5,
@@ -19610,8 +19565,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87497461"
+          "electrified": false
         },
         "GARE_87474007": {
           "level": 5,
@@ -19667,16 +19621,14 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87726190"
+          "electrified": true
         },
         "GARE_87751404": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87751404"
+          "electrified": false
         },
         "GARE_87113001": {
           "level": 5,
@@ -19697,16 +19649,14 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87317263"
+          "electrified": true
         },
         "GARE_87317586": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87317586"
+          "electrified": true
         },
         "GARE_87415018": {
           "level": 5,
@@ -19727,8 +19677,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87281006"
+          "electrified": true
         },
         "GARE_87342014": {
           "level": 5,
@@ -19749,40 +19698,35 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87592006"
+          "electrified": false
         },
         "GARE_87594002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87594002"
+          "electrified": false
         },
         "GARE_87611244": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87611244"
+          "electrified": false
         },
         "GARE_87673004": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87673004"
+          "electrified": false
         },
         "GARE_87784009": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87784009"
+          "electrified": true
         },
         "GARE_87781104": {
           "level": 5,
@@ -19796,24 +19740,21 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87773200"
+          "electrified": true
         },
         "GARE_87781005": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87781005"
+          "electrified": true
         },
         "GARE_87773002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87773002"
+          "electrified": true
         },
         "GARE_87753657": {
           "level": 5,
@@ -19862,16 +19803,14 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87734004"
+          "electrified": false
         },
         "GARE_87576207": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87576207"
+          "electrified": false
         },
         "GARE_87571000": {
           "level": 5,
@@ -19913,8 +19852,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87597005"
+          "electrified": false
         },
         "GARE_87192039": {
           "level": 5,
@@ -19949,32 +19887,28 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87713008"
+          "electrified": true
         },
         "GARE_87118000": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87118000"
+          "electrified": true
         },
         "GARE_87141002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87141002"
+          "electrified": false
         },
         "GARE_87725002": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87725002"
+          "electrified": true
         },
         "GARE_87757500": {
           "level": 5,
@@ -19988,32 +19922,28 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87757625"
+          "electrified": true
         },
         "GARE_87756007": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87756007"
+          "electrified": true
         },
         "GARE_87756320": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87756320"
+          "electrified": true
         },
         "GARE_87615286": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87615286"
+          "electrified": false
         },
         "GARE_87171009": {
           "level": 5,
@@ -20027,8 +19957,7 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87478404"
+          "electrified": true
         },
         "GARE_87396002": {
           "level": 5,
@@ -20049,32 +19978,28 @@
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87686667"
+          "electrified": false
         },
         "GARE_87393108": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87393108"
+          "electrified": false
         },
         "GARE_87781278": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87781278"
+          "electrified": false
         },
         "GARE_87688887": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": false,
-          "id": "GARE_87688887"
+          "electrified": false
         },
         "GARE_87611004": {
           "level": 5,
@@ -21317,7 +21242,7 @@
             "GARE_87683003",
             "GARE_87683573"
           ],
-          "trainId": "41e032ea-ff51-4adb-8c7a-bc1d1ef6349c",
+          "trainId": "275246b2-89b1-4b6a-a0aa-31306195700a",
           "service": "passengers",
           "frequency": 20,
           "ticketPrice": 23,
@@ -21492,38 +21417,6 @@
           },
           "name": "Rethondes → Auxerre-St-Gervais",
           "trainIds": [
-            "41e032ea-ff51-4adb-8c7a-bc1d1ef6349c",
-            "7e5a87f5-b88a-4fd9-ad08-05cfbe3e662f",
-            "07177c7b-1a18-4a50-befc-482310f75dc0",
-            "359e449d-3cea-4151-9380-235bc26f1e03",
-            "79558c2b-9f19-4ef6-874c-f1c594fd6b84",
-            "2e7a1e51-5446-4fb0-bb56-d065382e1a18",
-            "84f5f207-971a-4168-91f8-7b6e9393463a",
-            "77e353df-9d93-48b1-a06a-413b978e9109",
-            "1dc8cfb6-977b-4296-bb1c-1a252a35efc9",
-            "931e2510-dc33-4fd2-b951-8085567d4799",
-            "62c2343b-1b4e-4db0-910c-bcbccd2b8f12",
-            "b2489cb2-a876-4a6b-b1de-0d51d9e0e4fa",
-            "ce290d91-b8b2-4452-a0ef-f4e69f845f31",
-            "5fc70be2-9d1a-4bc4-9e56-1a43f76671bf",
-            "6122119a-0dd2-4af6-b37a-809c4faf5d5e",
-            "ef49f336-5f1f-45af-8538-6966697ccdc5",
-            "cb140e97-f128-487d-8ee5-d9bfc592c396",
-            "9498db49-d15b-48a3-88a4-0af47eeffc28",
-            "47d56185-72a8-404a-889d-a4f7134ebbc8",
-            "931e7204-04c2-4913-a1c5-d121d6a3a4b9",
-            "2d45c4ff-24b8-44a3-8c89-529edd7c8871",
-            "5743c27f-6627-447c-8947-f8db0ef2bc79",
-            "8fd6c968-87c2-4c54-9890-892a8b5595f1",
-            "030072ef-cc38-4a44-bb73-49c2f9dd9b8a",
-            "a935c426-a733-4c51-8004-3a2b76999bf7",
-            "846fc246-cbbe-4292-ab99-ba4f61cdcc15",
-            "9fb5db2d-3f30-4be6-a6ee-cccbfbbde64e",
-            "c0526d02-5538-48e3-bda5-6d9b3a00abe0",
-            "ba324c5f-2fdc-45cc-bc7d-8996b6fa47c0",
-            "a6261007-9223-48c4-a49f-c4dad579d5e6",
-            "57e4fffe-13cc-4989-9ef7-225ce86844e4",
-            "31819433-2b6d-4481-a4f9-3a16203f7808",
             "275246b2-89b1-4b6a-a0aa-31306195700a",
             "7b792c08-710e-4281-be62-718902d65b34",
             "2e6a6491-9290-4c9c-a5e4-4e0e66bfe70f",
@@ -21988,7 +21881,7 @@
             "GARE_87681304",
             "GARE_87682302"
           ],
-          "trainId": "ece513aa-55a4-4a7d-aa0b-092c2fa93a6c",
+          "trainId": "",
           "service": "freight",
           "frequency": 4,
           "ticketPrice": 5,
@@ -22102,9 +21995,7 @@
             }
           },
           "name": "Vigneux-sur-Seine → Montereau",
-          "trainIds": [
-            "ece513aa-55a4-4a7d-aa0b-092c2fa93a6c"
-          ],
+          "trainIds": [],
           "sillonModel": {
             "version": "sillon-capacity-v2",
             "theoreticalCapacity": 24,
@@ -22182,10 +22073,8 @@
             "GARE_87746008",
             "GARE_87741009"
           ],
-          "trainId": "ece513aa-55a4-4a7d-aa0b-092c2fa93a6c",
-          "trainIds": [
-            "ece513aa-55a4-4a7d-aa0b-092c2fa93a6c"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "freight",
           "frequency": 6,
           "ticketPrice": 28,
@@ -22445,10 +22334,8 @@
             "GARE_87741009",
             "GARE_87746008"
           ],
-          "trainId": "1bc8b46e-9a33-422a-ae4a-e1f9c8f77a24",
-          "trainIds": [
-            "1bc8b46e-9a33-422a-ae4a-e1f9c8f77a24"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "freight",
           "frequency": 7,
           "ticketPrice": 28,
@@ -22704,10 +22591,8 @@
             "GARE_87723320",
             "GARE_87741009"
           ],
-          "trainId": "7fa9cb4f-a373-4336-924a-01e2db22411a",
-          "trainIds": [
-            "7fa9cb4f-a373-4336-924a-01e2db22411a"
-          ],
+          "trainId": "",
+          "trainIds": [],
           "service": "passengers",
           "frequency": 7,
           "ticketPrice": 7,
@@ -25050,16 +24935,14 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": true,
-          "id": "GARE_87682252"
+          "electrified": true
         },
         "GARE_87682302": {
           "level": 1,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": true,
-          "id": "GARE_87682302"
+          "electrified": true
         },
         "GARE_87681379": {
           "level": 1,
@@ -25108,16 +24991,14 @@
           "depot": false,
           "commerce": 4,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87723197"
+          "electrified": false
         },
         "GARE_87686006": {
           "level": 5,
           "depot": true,
           "commerce": 4,
           "maintenance": 4,
-          "electrified": true,
-          "id": "GARE_87686006"
+          "electrified": true
         },
         "GARE_87271015": {
           "level": 1,
@@ -25194,16 +25075,14 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87683003"
+          "electrified": false
         },
         "GARE_87683573": {
           "level": 5,
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87683573"
+          "electrified": false
         },
         "GARE_87271007": {
           "level": 5,
@@ -25217,8 +25096,7 @@
           "depot": false,
           "commerce": 0,
           "maintenance": 0,
-          "electrified": false,
-          "id": "GARE_87276865"
+          "electrified": false
         },
         "GARE_87681155": {
           "level": 1,

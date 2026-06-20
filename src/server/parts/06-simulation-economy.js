@@ -1137,9 +1137,8 @@ function emptyStaffNeeds() {
 
 function lineSlotDemand(player, line) {
   normalizeLineTrainIds(line);
-  const assigned = player ? lineAssignedTrains(player, line).length : 0;
-  const ids = lineTrainIds(line).length;
-  return Math.max(0, assigned || ids || 0);
+  if (player) return Math.max(0, lineAssignedTrains(player, line).length);
+  return Math.max(0, lineTrainIds(line).length);
 }
 
 function lineUtilizationFactor(line) {
@@ -1318,12 +1317,6 @@ function isMultipleUnitModel(model) {
   if (/(^|_)(emu|railcar|trainset|unit)(_|$)/.test(id)) return true;
   const label = trainModelSearchLabel(model);
   return /(autorail|automotrice|rame|navette|tgv|duplex|régio|regio|ter|hydrogène|hydrogene|batterie|maglev|grande vitesse)/.test(label);
-}
-
-function isHighSpeedTrainsetModel(model) {
-  if (!model) return false;
-  const label = trainModelSearchLabel(model);
-  return /(tgv|grande vitesse|duplex)/.test(label);
 }
 
 function routeProfileForModel(model) {
@@ -1536,5 +1529,4 @@ function trainCapitalValue(model, train) {
   const baseTractionValue = Math.max(Math.round(Number(model?.price || 0) * 0.42), Math.round(Number(model?.price || 0) - defaultCompositionValue));
   return Math.max(0, baseTractionValue + currentCompositionValue);
 }
-
 

@@ -151,7 +151,7 @@ function revokeSession(user, token) {
 function authTokenFromRequest(req, url, body = {}) {
   const header = String(req.headers.authorization || '');
   const bearer = header.match(/^Bearer\s+(.+)$/i)?.[1];
-  return String(bearer || body.authToken || url.searchParams.get('authToken') || '').trim();
+  return String(bearer || body.authToken || '').trim();
 }
 
 function authenticateRequest(req, url, body = {}) {
@@ -521,4 +521,3 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
   saveState();
   return ok('Modification admin enregistrée.');
 }
-

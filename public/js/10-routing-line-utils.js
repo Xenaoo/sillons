@@ -543,8 +543,8 @@ function lineHasTrain(line, trainId) {
 }
 
 function lineAssignedTrainsClient(line, player = app.state?.me) {
-  const trains = player?.trains || [];
-  return lineTrainIdsOf(line).map(id => trains.find(t => t.id === id)).filter(Boolean);
+  const trainsById = new Map((player?.trains || []).map(train => [train.id, train]));
+  return lineTrainIdsOf(line).map(id => trainsById.get(id)).filter(Boolean);
 }
 
 function stationOwnerClient(stationId) {

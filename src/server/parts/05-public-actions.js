@@ -307,6 +307,7 @@ function actionSellTrain(player, payload) {
   const value = Math.max(5000, Math.round(capitalValue * (0.45 - Math.min(0.3, train.age / 1000)) * train.condition));
   player.cash += value;
   player.trains = player.trains.filter(t => t.id !== train.id);
+  removeTrainFromPlayerLines(player, train.id);
   notify(player, `${model.name} vendu pour ${money(value)}.`);
   return ok();
 }
@@ -1236,5 +1237,4 @@ function processTrainMaintenance(player) {
     }
   }
 }
-
 
