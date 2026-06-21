@@ -3,7 +3,7 @@
 // Point d'entrée client minimal.
 // Les fichiers métier sont récupérés puis exécutés comme un seul script afin de
 // préserver la portée et le hoisting historiques de l'ancien public/app.js.
-const SILLONS_CLIENT_VERSION = 'v69.8.2';
+const SILLONS_CLIENT_VERSION = 'v69.8.3';
 const SILLONS_CLIENT_PARTS = [
   '00-core-state.js',
   '01-startup-events-auth.js',
@@ -30,15 +30,14 @@ function showSillonsClientBootError(error) {
 window.__sillonsClientBootError = showSillonsClientBootError;
 
 async function fetchSillonsClientPart(src) {
-  const response = await fetch(`/js/${src}?v=${encodeURIComponent(SILLONS_CLIENT_VERSION)}`, { cache: 'no-cache' });
+  const response = await fetch(`/js/${src}?v=${encodeURIComponent(SILLONS_CLIENT_VERSION)}`, { cache: 'force-cache' });
   if (!response.ok) throw new Error(`Chargement impossible : ${src}`);
   return `\n// ===== public/js/${src} =====\n${await response.text()}`;
 }
 
 (async function loadSillonsClient() {
   try {
-    const parts = [];
-    for (const part of SILLONS_CLIENT_PARTS) parts.push(await fetchSillonsClientPart(part));
+    const parts = await Promise.all(SILLONS_CLIENT_PARTS.map(fetchSillonsClientPart));
     const script = document.createElement('script');
     script.textContent = [
       "'use strict';",

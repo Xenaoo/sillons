@@ -28,9 +28,19 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/state') {
     const auth = authenticateRequest(req, url, {});
     const playerId = auth?.user?.playerId || '';
-    await waitForCommuneCache(3500);
-    if (sanitizeStateStationReferencesForPublicWorld()) saveState();
+    // Ne bloque jamais l'écran de jeu sur une actualisation réseau des gares.
+    // Un cache local, même en cours de rafraîchissement, suffit à construire
+    // le monde ; le rafraîchissement se poursuit en arrière-plan.
+    if (Object.keys(communeCache.byId || {}).length) {
+      ensureCommuneCacheReady(false).catch(error => console.warn('Actualisation des gares différée:', error.message));
+    } else {
+      await waitForCommuneCache(3500);
+    }
+    const stationReferencesChanged = sanitizeStateStationReferencesForPublicWorld();
     sendJson(res, 200, publicState(playerId, auth?.user || null));
+    // La persistance ne doit pas retenir le premier rendu client : la réponse
+    // contient déjà les références nettoyées. L'écriture SQLite suit ensuite.
+    if (stationReferencesChanged) setImmediate(saveState);
     return;
   }
 
@@ -179,7 +189,7 @@ function serveStatic(req, res, url) {
       return;
     }
     const ext = path.extname(absolute).toLowerCase();
-    const cacheControl = ['.png', '.jpg', '.jpeg', '.webp', '.ico'].includes(ext)
+    const cacheControl = ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css'].includes(ext)
       ? 'public, max-age=604800, immutable'
       : 'no-store';
     res.writeHead(200, { 'Content-Type': mimeType(absolute), 'Cache-Control': cacheControl });
@@ -218,6 +228,20 @@ function httpError(statusCode, message) {
 }
 
 function sendJson(res, status, payload) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(payload));
+  const json = JSON.stringify(payload);
+  const acceptsGzip = /(?:^|,)\s*gzip(?:;|,|$)/i.test(String(res.__sillonsAcceptEncoding || ''));
+  if (acceptsGzip) {
+    const body = zlib.gzipSync(json, { level: 6 });
+    res.writeHead(status, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Encoding': 'gzip',
+      'Content-Length': body.length,
+      Vary: 'Accept-Encoding'
+    });
+    res.end(body);
+    return;
+  }
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' });
+  res.end(json);
 }

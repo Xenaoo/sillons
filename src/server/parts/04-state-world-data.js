@@ -547,8 +547,6 @@ function publicWorld() {
   const world = {
     ...WORLD,
     stations,
-    stationIndex,
-    communeStations,
     communesStatus: {
       status: communeCache.status,
       count: communeStations.length,
@@ -564,6 +562,10 @@ function publicWorld() {
     railPlacement: railPlacementStats(stations),
     regions: [...new Set(WORLD.regions)].sort()
   };
+  // Le serveur a besoin d'un index, mais le client le reconstruit déjà depuis
+  // `stations`. Le rendre non énumérable évite d'envoyer les mêmes 3 420 gares
+  // une seconde fois dans chaque réponse /api/state.
+  Object.defineProperty(world, 'stationIndex', { value: stationIndex, enumerable: false });
   publicWorldCache = { key: cacheKey, value: world };
   return world;
 }

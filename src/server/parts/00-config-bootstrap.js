@@ -1,6 +1,7 @@
 // Configuration, constantes, initialisation générale et démarrage HTTP.
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -465,11 +466,13 @@ if (isMainThread) {
     process.exit(0);
   });
 
-  setTimeout(warmSncfRailShapeLinesCache, 0);
-  setTimeout(prewarmExistingLineRouteGeometryCache, SNCF_ROUTE_PREWARM_DELAY_MS);
+  // Le cache RFN pèse plusieurs Mo et son indexation est synchrone. Le charger
+  // au démarrage bloquait toutes les premières requêtes, dont /api/state. Les
+  // géométries sont maintenant chargées à la demande lors d’un calcul d’itinéraire.
 
   const server = http.createServer(async (req, res) => {
     try {
+      res.__sillonsAcceptEncoding = req.headers['accept-encoding'] || '';
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname.startsWith('/api/')) {
         await handleApi(req, res, url);

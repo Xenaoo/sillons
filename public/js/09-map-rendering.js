@@ -1410,12 +1410,34 @@ function stationMarkerMinDistance(a, b, baseRadius) {
   return Math.max(baseRadius, stationMarkerRadiusForItem(a) + stationMarkerRadiusForItem(b) + 5);
 }
 
-function stationItemOverlaps(item, kept, baseRadius) {
-  for (const other of kept) {
-    const minDistance = stationMarkerMinDistance(item, other, baseRadius);
-    if (Math.hypot(item.p.x - other.p.x, item.p.y - other.p.y) < minDistance) return true;
-  }
-  return false;
+function createStationCollisionGrid(cellSize = 48) {
+  const cells = new Map();
+  const cellForPoint = point => ({ x: Math.floor(point.x / cellSize), y: Math.floor(point.y / cellSize) });
+  const keyForCell = (x, y) => `${x}:${y}`;
+
+  return {
+    overlaps(item, baseRadius) {
+      const cell = cellForPoint(item.p);
+      // La distance d'exclusion maximale est inférieure à une cellule. On ne
+      // compare donc qu'aux voisins immédiats, au lieu de toutes les gares.
+      for (let x = cell.x - 1; x <= cell.x + 1; x += 1) {
+        for (let y = cell.y - 1; y <= cell.y + 1; y += 1) {
+          for (const other of cells.get(keyForCell(x, y)) || []) {
+            const minDistance = stationMarkerMinDistance(item, other, baseRadius);
+            if (Math.hypot(item.p.x - other.p.x, item.p.y - other.p.y) < minDistance) return true;
+          }
+        }
+      }
+      return false;
+    },
+    add(item) {
+      const cell = cellForPoint(item.p);
+      const key = keyForCell(cell.x, cell.y);
+      const items = cells.get(key) || [];
+      items.push(item);
+      cells.set(key, items);
+    }
+  };
 }
 
 function drawableStations(lite = false) {
@@ -1468,19 +1490,22 @@ function drawableStations(lite = false) {
     .forEach(item => {
       if (item.selected || item.asset) protectedItems.push(item);
       else normalItems.push(item);
-    });
+  });
 
   const kept = [];
+  const collisionGrid = createStationCollisionGrid();
   for (const item of protectedItems) {
-    for (let i = kept.length - 1; i >= 0; i -= 1) {
-      const other = kept[i];
-      if (!other.selected && !other.asset && stationItemOverlaps(item, [other], baseRadius)) kept.splice(i, 1);
+    if (!collisionGrid.overlaps(item, baseRadius)) {
+      kept.push(item);
+      collisionGrid.add(item);
     }
-    if (!stationItemOverlaps(item, kept.filter(other => other.selected || other.asset), baseRadius)) kept.push(item);
   }
 
   for (const item of normalItems) {
-    if (!stationItemOverlaps(item, kept, baseRadius)) kept.push(item);
+    if (!collisionGrid.overlaps(item, baseRadius)) {
+      kept.push(item);
+      collisionGrid.add(item);
+    }
   }
 
   kept.sort((a, b) => a.priority - b.priority);
@@ -2081,4 +2106,3 @@ function station(id) {
   const found = app.state.world.stationIndex[id] || dedupedStations(app.state.world.stations).find(s => s.id === id);
   return canonicalizeStationDisplayClient(found);
 }
-
