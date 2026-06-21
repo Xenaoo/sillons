@@ -67,7 +67,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   electric_emu_007_z_20500: '/assets/trains/electric/electric_emu_007_z_20500.png',
   electric_emu_008_z_50000: '/assets/trains/electric/electric_emu_008_z_50000.png',
   electric_emu_009_z_21500: '/assets/trains/electric/electric_emu_009_z_21500.png',
-  electric_emu_010_regio_2n: '/assets/trains/electric/electric_emu_010_regio_2n.png'
+  electric_emu_010_regio_2n: '/assets/trains/electric/electric_emu_010_regio_2n.png',
+  high_speed_001_tgv_sud_est: '/assets/trains/high_speed/high_speed_001_tgv_sud_est.png',
+  high_speed_002_tgv_atlantique: '/assets/trains/high_speed/high_speed_002_tgv_atlantique.png',
+  high_speed_003_tgv_reseau: '/assets/trains/high_speed/high_speed_003_tgv_reseau.png',
+  high_speed_004_tgv_duplex: '/assets/trains/high_speed/high_speed_004_tgv_duplex.png',
+  high_speed_005_tgv_pos: '/assets/trains/high_speed/high_speed_005_tgv_pos.png',
+  high_speed_006_tgv_dasye: '/assets/trains/high_speed/high_speed_006_tgv_dasye.png',
+  high_speed_007_euroduplex_2n2: '/assets/trains/high_speed/high_speed_007_euroduplex_2n2.png',
+  high_speed_008_thalys_pbka: '/assets/trains/high_speed/high_speed_008_thalys_pbka.png',
+  high_speed_009_eurostar_tmst: '/assets/trains/high_speed/high_speed_009_eurostar_tmst.png',
+  high_speed_010_tgv_m: '/assets/trains/high_speed/high_speed_010_tgv_m.png'
 });
 
 function trainArtUrl(model) {
