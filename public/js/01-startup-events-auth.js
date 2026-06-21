@@ -1,4 +1,8 @@
 // Initialisation, événements statiques, authentification, notifications et scroll compositions.
+const STATE_SNAPSHOT_DB = 'sillons-state-snapshot-v1';
+const STATE_SNAPSHOT_STORE = 'players';
+const STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 async function init() {
   app.map.canvas = $('#map');
   app.map.ctx = app.map.canvas.getContext('2d');
@@ -7,10 +11,79 @@ async function init() {
   preloadArt();
   preloadMapSprites();
   initOsmMap();
-  await refreshState(true);
-  setInterval(() => refreshState(false), 2300);
   startResearchAnimationLoop();
   requestAnimationFrame(drawLoop);
+
+  const snapshot = await readStateSnapshot();
+  if (snapshot) applyStateSnapshot(snapshot);
+
+  void refreshState(true);
+  setInterval(() => refreshState(false), 2300);
+}
+
+function openStateSnapshotDb() {
+  if (!window.indexedDB) return Promise.reject(new Error('IndexedDB indisponible.'));
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(STATE_SNAPSHOT_DB, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STATE_SNAPSHOT_STORE)) {
+        request.result.createObjectStore(STATE_SNAPSHOT_STORE, { keyPath: 'playerId' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Ouverture IndexedDB impossible.'));
+  });
+}
+
+async function readStateSnapshot() {
+  const playerId = String(app.playerId || '');
+  if (!app.authToken || !playerId) return null;
+  try {
+    const db = await openStateSnapshotDb();
+    const record = await new Promise((resolve, reject) => {
+      const transaction = db.transaction(STATE_SNAPSHOT_STORE, 'readonly');
+      const request = transaction.objectStore(STATE_SNAPSHOT_STORE).get(playerId);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible.'));
+    });
+    db.close();
+    if (!record?.state || Date.now() - Number(record.savedAt || 0) > STATE_SNAPSHOT_MAX_AGE_MS) return null;
+    if (String(record.state.auth?.playerId || record.state.me?.id || '') !== playerId) return null;
+    return record.state;
+  } catch (error) {
+    console.warn('Cache local de session indisponible:', error.message);
+    return null;
+  }
+}
+
+function scheduleStateSnapshot(data) {
+  const playerId = String(data?.auth?.playerId || data?.me?.id || '');
+  if (!playerId || !data?.me) return;
+  clearTimeout(app.stateSnapshotTimer);
+  app.stateSnapshotTimer = setTimeout(async () => {
+    try {
+      const db = await openStateSnapshotDb();
+      const transaction = db.transaction(STATE_SNAPSHOT_STORE, 'readwrite');
+      transaction.objectStore(STATE_SNAPSHOT_STORE).put({ playerId, savedAt: Date.now(), state: data });
+      transaction.oncomplete = () => db.close();
+      transaction.onerror = () => { db.close(); console.warn('Écriture du cache local impossible.'); };
+    } catch (error) {
+      console.warn('Cache local de session indisponible:', error.message);
+    }
+  }, 0);
+}
+
+function applyStateSnapshot(data) {
+  if (!data?.ok || !data?.me || !data?.world) return false;
+  canonicalizeStateStationDisplays(data);
+  app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
+  app.routeDataSignature = worldRouteSignature(data);
+  app.state = data;
+  $('#setup')?.classList.add('hidden');
+  ensureSelectedStation();
+  resizeCanvas();
+  renderAll();
+  return true;
 }
 
 
@@ -541,6 +614,7 @@ async function refreshState(first) {
     const previousSignature = app.routeDataSignature;
     const previousCash = Number(app.state?.me?.cash);
     app.state = data;
+    scheduleStateSnapshot(data);
     const nextSignature = worldRouteSignature(data);
     if (nextSignature !== previousSignature) {
       app.routeDataSignature = nextSignature;
