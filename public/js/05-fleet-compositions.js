@@ -77,7 +77,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   high_speed_007_euroduplex_2n2: '/assets/trains/high_speed/high_speed_007_euroduplex_2n2.png',
   high_speed_008_thalys_pbka: '/assets/trains/high_speed/high_speed_008_thalys_pbka.png',
   high_speed_009_eurostar_tmst: '/assets/trains/high_speed/high_speed_009_eurostar_tmst.png',
-  high_speed_010_tgv_m: '/assets/trains/high_speed/high_speed_010_tgv_m.png'
+  high_speed_010_tgv_m: '/assets/trains/high_speed/high_speed_010_tgv_m.png',
+  hydrogen_001_regiolis_h2: '/assets/trains/hydrogen/hydrogen_001_regiolis_h2.png',
+  hydrogen_002_coradia_ilint: '/assets/trains/hydrogen/hydrogen_002_coradia_ilint.png',
+  hydrogen_003_coradia_stream_h: '/assets/trains/hydrogen/hydrogen_003_coradia_stream_h.png',
+  hydrogen_004_mireo_plus_h: '/assets/trains/hydrogen/hydrogen_004_mireo_plus_h.png',
+  hydrogen_005_flirt_h2: '/assets/trains/hydrogen/hydrogen_005_flirt_h2.png',
+  hydrogen_006_fch2rail: '/assets/trains/hydrogen/hydrogen_006_fch2rail.png',
+  hydrogen_007_hybari: '/assets/trains/hydrogen/hydrogen_007_hybari.png',
+  hydrogen_008_crrc_h2: '/assets/trains/hydrogen/hydrogen_008_crrc_h2.png',
+  hydrogen_009_hyundai_h2: '/assets/trains/hydrogen/hydrogen_009_hyundai_h2.png',
+  hydrogen_010_vittal_one_h2: '/assets/trains/hydrogen/hydrogen_010_vittal_one_h2.png'
 });
 
 function trainArtUrl(model) {
