@@ -1,3 +1,11 @@
+# v69.9.1 — ajustement du cadrage des visuels du parc
+
+- Reprise du cadrage des 10 premiers visuels vapeur intégrés dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Uniformisation explicite des zones de visuel sur un ratio commun `13:8`, aligné sur le format de référence du catalogue.
+- `Parc > Compositions` : la vignette média n’utilise plus une bande trop basse ; elle adopte désormais le bon ratio pour supprimer l’effet d’image tassée ou flottante dans un grand espace vide.
+- `Parc > Catalogue` et `Parc > Maintenance` : suppression des paddings internes et passage à un remplissage plein de la vignette pour un rendu plus propre et homogène.
+- Schéma save : `179`.
+
 # v69.9.0 — premiers visuels du catalogue roulant dans le parc
 
 - Intégration des 10 premiers visuels du catalogue (141 R, 231 K, 241 P, 141 P, 150 P, 140 C, 231 G, 241 A, 232 U 1 et 030 TU) dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.

@@ -645,8 +645,9 @@
 }
 
 .fleet-owned-grid .owned-train-card .train-art img {
-  object-fit: contain !important;
-  padding: 6px;
+  object-fit: cover !important;
+  object-position: center;
+  padding: 0;
 }
 
 .composition-cost-summary {

@@ -1821,10 +1821,11 @@ button[data-tooltip]:focus-visible::before {
   gap: 12px;
 }
 .owned-train-card .train-art {
-  min-height: 130px;
+  min-height: 0;
+  aspect-ratio: 13 / 8;
 }
 .owned-train-card .train-art img {
-  min-height: 130px;
+  min-height: 0;
 }
 @media (max-width: 760px) {
   .train-catalog-card,
@@ -1833,7 +1834,7 @@ button[data-tooltip]:focus-visible::before {
   }
   .train-art,
   .train-art img {
-    min-height: 190px;
+    min-height: 0;
   }
 }
 
@@ -1961,10 +1962,12 @@ button[data-tooltip]:focus-visible::before {
 
 .train-catalog-card .train-art {
   width: 100%;
-  height: clamp(132px, 13vw, 178px);
+  height: auto;
   min-height: 0 !important;
+  aspect-ratio: 13 / 8;
   display: grid;
-  place-items: center;
+  place-items: stretch;
+  overflow: hidden;
   background:
     radial-gradient(circle at 70% 45%, rgba(217,168,82,.12), transparent 36%),
     linear-gradient(180deg, rgba(5,10,18,.72), rgba(7,13,24,.90));
@@ -1974,9 +1977,9 @@ button[data-tooltip]:focus-visible::before {
   width: 100%;
   height: 100%;
   min-height: 0 !important;
-  object-fit: contain !important;
+  object-fit: cover !important;
   object-position: center;
-  padding: 4px;
+  padding: 0;
   box-sizing: border-box;
 }
 

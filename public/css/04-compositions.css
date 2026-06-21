@@ -212,7 +212,7 @@
 }
 .composition-vignette-main {
   display: grid;
-  grid-template-rows: 110px auto;
+  grid-template-rows: auto auto;
   gap: 10px;
   width: 100%;
   min-width: 0;
@@ -229,19 +229,22 @@
   overflow: hidden;
   border: 1px solid rgba(217,168,82,.13);
   background: rgba(2,6,23,.38);
+  aspect-ratio: 13 / 8;
 }
 .composition-vignette-media .train-art {
   width: 100%;
   height: 100%;
-  min-height: 110px;
+  min-height: 0;
   border: 0;
   border-radius: 0;
 }
 .composition-vignette-media .train-art img {
-  min-height: 110px;
-  object-fit: contain;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   object-position: center;
-  padding: 4px;
+  padding: 0;
   box-sizing: border-box;
 }
 .composition-vignette-body {
@@ -316,10 +319,10 @@
     padding: 10px;
   }
   .composition-vignette-main {
-    grid-template-rows: 92px auto;
+    grid-template-rows: auto auto;
   }
   .composition-vignette-media .train-art {
-    min-height: 92px;
+    min-height: 0;
   }
 }
 
@@ -1325,15 +1328,16 @@
 }
 
 .fleet-maintenance-grid .maintenance-train-card .train-art {
-  height: clamp(142px, 14vw, 190px);
+  height: auto;
+  aspect-ratio: 13 / 8;
   background:
     radial-gradient(circle at 50% 52%, rgba(217,168,82,.13), transparent 38%),
     linear-gradient(180deg, rgba(3,8,18,.60), rgba(3,8,18,.88));
 }
 .fleet-maintenance-grid .maintenance-train-card .train-art img {
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  padding: 6px;
+  padding: 0;
   box-sizing: border-box;
 }
 
