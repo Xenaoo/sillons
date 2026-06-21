@@ -322,7 +322,7 @@ function renderStationAsset(s, asset) {
         <span>Revente ${money(refund.total)}</span>
         <div class="station-owned-actions">
           <button data-action="select-station" data-id="${s.id}" ${tooltipAttr('Sélectionne cette gare, centre ton travail sur sa fiche et permet de lancer ses améliorations.')}>Voir</button>
-          <button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${users.length ? 'disabled' : ''}>Vendre</button>
+          <button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))}>Vendre</button>
         </div>
       </div>
     </article>
@@ -1111,4 +1111,3 @@ function renderResearchEffectChip(effect, node) {
     </button>
   `;
 }
-
