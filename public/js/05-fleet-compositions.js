@@ -1789,7 +1789,6 @@ function renderTrainCatalogItem(model, buyable) {
   const powerKw = estimateTrainPowerKw(model);
   const multipleUnit = isMultipleUnitModelClient(model);
   const muSpec = multipleUnit ? buildClientCompositionSpec(model, 'multiple_unit') : null;
-  const muUnitCountLabel = muSpec ? `UM 1 à ${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}` : '';
   return `
     <div class="list-item train-catalog-card ${buyable ? 'buyable' : 'locked'}">
       ${renderTrainArt(model)}
@@ -1799,7 +1798,6 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="tag ${buyable ? 'good' : 'warn'}">${buyable ? money(unitPrice) : 'À débloquer'}</span>
         </div>
         <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
-        ${multipleUnit ? `<p class="small muted train-mu-note"><b>Voyageurs uniquement</b> · capacité par rame ${formatInt(model.capacity)} voy. · ${escapeHtml(muUnitCountLabel)} · aucune voiture ou wagon ajoutable</p>` : ''}
         <div class="train-stat-grid">
           ${renderTrainStat('Vitesse', `${model.speed} km/h`, model.speed / 420, model.speed >= 250 ? 'good' : '', `${effective.speed} km/h`, effective.speed / 420)}
           ${renderTrainStat('Portée', `${formatInt(model.range)} km`, (model.range || 0) / 1400, effectiveRange >= 900 ? 'good' : '', `${formatInt(effectiveRange)} km`, effectiveRange / 1400)}

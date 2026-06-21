@@ -405,7 +405,7 @@ function catalogTrainModel(entry) {
     reliability: round2(clamp(0.35 + catalogGameplay(entry, 'reliability') * 0.0065, 0.45, 0.97)),
     comfort: round2(clamp(0.2 + catalogGameplay(entry, 'prestige') * 0.007, 0.2, 0.95)),
     range: catalogTrainRange(entry),
-    description: `${entry.notes} Référence réelle : ${entry.realReference}.`,
+    description: entry.notes,
     requiredTech: catalogTrainRequiredTech(entry),
     requiredTechLevel: Math.max(1, Math.floor(catalogGameplay(entry, 'unlockLevel'))),
     catalog: {
