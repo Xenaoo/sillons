@@ -1,3 +1,12 @@
+# v69.11.0 — intégration des 10 visuels diesel suivants
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `CC 72000`, `BB 67400`, `X 2800`, `X 72500`, `X 73500`, `X 4300 Caravelle`, `BB 67000`, `A1A-A1A 68000`, `BB 66000` et `BB 75000`.
+- Ajout des assets dédiés dans `public/assets/trains/diesel/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `182`.
+
 # v69.10.0 — refonte des 10 premiers visuels vapeur sans liseré
 
 - Regénération des 10 premiers visuels vapeur du catalogue roulant pour supprimer le liseré / cadre doré autour des illustrations.

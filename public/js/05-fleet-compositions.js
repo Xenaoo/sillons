@@ -47,7 +47,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   steam_007_231_g: '/assets/trains/steam/steam_007_231_g.png',
   steam_008_241_a: '/assets/trains/steam/steam_008_241_a.png',
   steam_009_232_u1: '/assets/trains/steam/steam_009_232_u1.png',
-  steam_010_030_tu: '/assets/trains/steam/steam_010_030_tu.png'
+  steam_010_030_tu: '/assets/trains/steam/steam_010_030_tu.png',
+  diesel_001_cc_72000: '/assets/trains/diesel/diesel_001_cc_72000.png',
+  diesel_002_bb_67400: '/assets/trains/diesel/diesel_002_bb_67400.png',
+  diesel_003_x_2800: '/assets/trains/diesel/diesel_003_x_2800.png',
+  diesel_004_x_72500: '/assets/trains/diesel/diesel_004_x_72500.png',
+  diesel_005_x_73500: '/assets/trains/diesel/diesel_005_x_73500.png',
+  diesel_006_x_4300: '/assets/trains/diesel/diesel_006_x_4300.png',
+  diesel_007_bb_67000: '/assets/trains/diesel/diesel_007_bb_67000.png',
+  diesel_008_a1a_a1a_68000: '/assets/trains/diesel/diesel_008_a1a_a1a_68000.png',
+  diesel_009_bb_66000: '/assets/trains/diesel/diesel_009_bb_66000.png',
+  diesel_010_bb_75000: '/assets/trains/diesel/diesel_010_bb_75000.png'
 });
 
 function trainArtUrl(model) {
