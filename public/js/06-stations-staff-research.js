@@ -135,7 +135,7 @@ function renderSelectedStation(s) {
             ${escapeHtml(up.label)} <span>${!asset ? 'Via sillons' : up.maxed ? 'Max' : money(up.cost)}</span>
           </button>
         `).join('')}
-        ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))} ${activeStationUsersClient(s.id).length ? 'disabled' : ''}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
+        ${ownedByMe ? `<button class="danger" data-action="sell-station" data-id="${s.id}" ${tooltipAttr(stationSaleTooltip(s, asset))}>Vendre <span>${money(stationSaleRefundBreakdown(s, asset).total)}</span></button>` : ''}
       </div>
       ${lockedByOwner ? `<p class="muted small">Cette gare est possédée par ${escapeHtml(owner.player.name)}. Tu peux l’utiliser avec un péage de gare si ta ligne la dessert.</p>` : asset ? '<p class="muted small">Gare possédée par ta compagnie. Les concurrents paieront un péage s’ils la desservent.</p>' : '<p class="muted small">L’achat direct de gare est remplacé par l’achat de sillons : ajoute cette gare à une ligne, puis affecte du matériel à cette ligne.</p>'}
     </div>
@@ -266,12 +266,11 @@ function activeStationUsersClient(stationId) {
 
 function stationSaleTooltip(s, asset) {
   const users = activeStationUsersClient(s.id);
-  if (users.length) {
-    const first = users[0];
-    return `Vente impossible : ${s.name} est encore desservie par ${lineDisplayName(first.line)} (${first.player.name}). Ferme ou modifie d’abord les lignes actives qui l’utilisent.`;
-  }
   const refund = stationSaleRefundBreakdown(s, asset);
-  return `Vend ${s.name} et rembourse la gare, les niveaux, les commerces, les ateliers et le dépôt. Remboursement total : ${money(refund.total)}.`;
+  const circulation = users.length
+    ? ` ${users.length} ligne${users.length > 1 ? 's' : ''} la desservent encore et resteront actives.`
+    : '';
+  return `Vend ${s.name} et rembourse la gare, les niveaux, les commerces, les ateliers et le dépôt. Remboursement total : ${money(refund.total)}.${circulation}`;
 }
 
 function economyValue(key, fallback = 0) {
@@ -1112,5 +1111,4 @@ function renderResearchEffectChip(effect, node) {
     </button>
   `;
 }
-
 

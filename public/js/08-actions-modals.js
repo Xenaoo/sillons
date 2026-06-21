@@ -325,7 +325,11 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     const s = station(button.dataset.id);
     const asset = app.state.me.stations?.[button.dataset.id];
     const refund = s && asset ? stationSaleRefundBreakdown(s, asset).total : 0;
-    if (!(await gameConfirm('Vendre la gare', `Vendre ${s?.name || 'cette gare'} pour ${money(refund)} ?`, { confirmLabel: 'Vendre', danger: true }))) return;
+    const servedLines = s ? activeStationUsersClient(s.id).length : 0;
+    const circulationNotice = servedLines
+      ? ` ${servedLines} ligne${servedLines > 1 ? 's' : ''} la desservent encore ; elles resteront actives.`
+      : '';
+    if (!(await gameConfirm('Vendre la gare', `Vendre ${s?.name || 'cette gare'} pour ${money(refund)} ?${circulationNotice}`, { confirmLabel: 'Vendre', danger: true }))) return;
     return doAction('sellStation', { stationId: button.dataset.id });
   }
   if (action === 'select-station') {

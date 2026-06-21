@@ -929,33 +929,11 @@ function stationSaleRefundBreakdown(station, asset) {
   return { acquisition, levels, commerces, maintenance, depot, total };
 }
 
-function stationSaleBlockingLine(stationId) {
-  for (const player of activePlayers()) {
-    for (const line of player.lines || []) {
-      if (!line?.active) continue;
-      if (lineStops(line).includes(stationId)) {
-        return { player, line };
-      }
-    }
-  }
-  return null;
-}
-
 function actionSellStation(player, payload) {
   const stationId = String(payload.stationId || '');
   const station = stationById(stationId);
   if (!station) return fail('Gare introuvable.');
   if (!player.stations?.[stationId]) return fail('Cette gare ne t’appartient pas.');
-
-  const blocking = stationSaleBlockingLine(stationId);
-  if (blocking) {
-    const lineName = lineRouteName(lineStops(blocking.line));
-    const ownerName = blocking.player.id === player.id ? 'ta compagnie' : blocking.player.name;
-    return fail(
-      'Vente impossible : gare encore utilisée.',
-      `${station.name} est desservie par ${lineName} (${ownerName}). Ferme ou modifie d’abord les lignes actives qui utilisent cette gare.`
-    );
-  }
 
   const asset = normalizeStationAsset(player, stationId);
   const refund = stationSaleRefundBreakdown(station, asset);
@@ -965,7 +943,7 @@ function actionSellStation(player, payload) {
   notify(
     player,
     `${station.name} vendue : remboursement ${money(refund.total)} ` +
-    `(gare ${money(refund.acquisition)}, niveaux ${money(refund.levels)}, commerces ${money(refund.commerces)}, ateliers ${money(refund.maintenance)}, dépôt ${money(refund.depot)}).`
+    `(gare ${money(refund.acquisition)}, niveaux ${money(refund.levels)}, commerces ${money(refund.commerces)}, ateliers ${money(refund.maintenance)}, dépôt ${money(refund.depot)}). Les lignes qui la desservent restent actives.`
   );
   return ok(`${station.name} vendue pour ${money(refund.total)}.`);
 }
