@@ -5,6 +5,7 @@ const STATE_SESSION_SNAPSHOT_KEY = 'sillons.stateSnapshot.v1';
 const STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function init() {
+  app.bootTimings = { startedAt: performance.now(), initMs: 0, snapshotMs: 0 };
   app.map.canvas = $('#map');
   app.map.ctx = app.map.canvas.getContext('2d');
   hydratePersistedOsmRouteCache();
@@ -15,9 +16,12 @@ async function init() {
   startResearchAnimationLoop();
   requestAnimationFrame(drawLoop);
   window.addEventListener('pagehide', persistStateSnapshotBeforeReload);
+  app.bootTimings.initMs = performance.now() - app.bootTimings.startedAt;
 
+  const snapshotStartedAt = performance.now();
   const snapshot = await readStateSnapshot();
   if (snapshot) applyStateSnapshot(snapshot);
+  app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
   void refreshState(true);
   setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
@@ -652,15 +656,19 @@ async function refreshState(first, { includeAdmin = false } = {}) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
   try {
+    const requestStartedAt = performance.now();
     const stateUrl = includeAdmin ? '/api/state?include=admin' : '/api/state';
     const response = await fetch(stateUrl, { cache: 'no-store', headers: authHeaders() });
+    const responseReceivedAt = performance.now();
     const data = await readJsonResponse(response, 'Reponse serveur invalide.');
+    const parsedAt = performance.now();
     if (response.status === 401) {
       clearAuthState();
       $('#setup')?.classList.remove('hidden');
     }
     if (!data.ok) throw new Error(data.error || 'État indisponible.');
     canonicalizeStateStationDisplays(data);
+    const normalizedAt = performance.now();
     app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
     const previousSignature = app.routeDataSignature;
     const previousCash = Number(app.state?.me?.cash);
@@ -697,6 +705,18 @@ async function refreshState(first, { includeAdmin = false } = {}) {
     } else {
       renderAll();
     }
+    if (first) {
+      reportClientBootMetrics({
+        initMs: app.bootTimings?.initMs || 0,
+        snapshotMs: app.bootTimings?.snapshotMs || 0,
+        requestMs: responseReceivedAt - requestStartedAt,
+        parseMs: parsedAt - responseReceivedAt,
+        normalizeMs: normalizedAt - parsedAt,
+        renderMs: performance.now() - normalizedAt,
+        totalMs: performance.now() - (app.bootTimings?.startedAt || requestStartedAt),
+        stateBytes: Number(response.headers.get('content-length') || 0)
+      });
+    }
     const nextCash = Number(data.me?.cash);
     if (!first && Number.isFinite(previousCash) && Number.isFinite(nextCash) && previousCash !== nextCash) {
       animateCashDelta(nextCash - previousCash);
@@ -709,6 +729,14 @@ async function refreshState(first, { includeAdmin = false } = {}) {
   }
 }
 
+
+function reportClientBootMetrics(metrics) {
+  const clean = Object.fromEntries(Object.entries(metrics).map(([key, value]) => [key, Math.round(Number(value) || 0)]));
+  window.__sillonsBootMetrics = clean;
+  const body = JSON.stringify(clean);
+  if (navigator.sendBeacon?.('/api/client-boot-metrics', body)) return;
+  fetch('/api/client-boot-metrics', { method: 'POST', body, keepalive: true }).catch(() => null);
+}
 
 function initOsmMap() {
   const target = $('#osmMap');

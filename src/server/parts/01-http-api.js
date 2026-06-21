@@ -1,5 +1,29 @@
 // Routage HTTP/API, réponses JSON et fichiers statiques.
 async function handleApi(req, res, url) {
+  if (req.method === 'POST' && url.pathname === '/api/client-boot-metrics') {
+    const body = await readBody(req);
+    const numeric = value => Math.max(0, Math.min(60_000, Math.round(Number(value) || 0)));
+    lastClientBootMetrics = {
+      receivedAt: Date.now(),
+      initMs: numeric(body.initMs),
+      snapshotMs: numeric(body.snapshotMs),
+      requestMs: numeric(body.requestMs),
+      parseMs: numeric(body.parseMs),
+      normalizeMs: numeric(body.normalizeMs),
+      renderMs: numeric(body.renderMs),
+      totalMs: numeric(body.totalMs),
+      stateBytes: numeric(body.stateBytes)
+    };
+    sendJson(res, 204, {});
+    return;
+  }
+
+  // Sonde de diagnostic locale, sans données de compte ni de partie.
+  if (req.method === 'GET' && url.pathname === '/api/client-boot-metrics') {
+    sendJson(res, 200, { ok: true, metrics: lastClientBootMetrics });
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
     const body = await readBody(req);
     const result = registerAccount(body, req);
