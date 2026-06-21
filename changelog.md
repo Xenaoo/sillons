@@ -1,3 +1,10 @@
+# v69.9.2 — harmonisation du rendu Catalogue / Maintenance
+
+- `Parc > Catalogue` : adaptation du rendu visuel pour reprendre le même cadrage perçu comme correct dans `Parc > Compositions`.
+- `Parc > Maintenance` : alignement du conteneur image et du comportement de cadrage sur le même modèle que `Parc > Compositions`.
+- Uniformisation finale des visuels `Catalogue`, `Maintenance` et `Compositions` sur une même logique de vignette : ratio `13:8`, remplissage plein, cadrage centré et suppression des marges internes parasites.
+- Schéma save : `180`.
+
 # v69.9.1 — ajustement du cadrage des visuels du parc
 
 - Reprise du cadrage des 10 premiers visuels vapeur intégrés dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.

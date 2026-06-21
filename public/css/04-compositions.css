@@ -1525,3 +1525,30 @@
 }
 
 
+
+
+/* ===== v69.9.2 — harmonisation complète des visuels Catalogue / Maintenance ===== */
+.train-catalog-card .train-art,
+.fleet-maintenance-grid .maintenance-train-card .train-art {
+  width: 100%;
+  height: auto;
+  min-height: 0 !important;
+  aspect-ratio: 13 / 8;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+  border-radius: 15px;
+  border: 1px solid rgba(217,168,82,.13);
+  background: rgba(2,6,23,.38);
+}
+
+.train-catalog-card .train-art img,
+.fleet-maintenance-grid .maintenance-train-card .train-art img {
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  object-fit: cover !important;
+  object-position: center;
+  padding: 0;
+  box-sizing: border-box;
+}
