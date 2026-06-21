@@ -28,6 +28,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/state') {
     const auth = authenticateRequest(req, url, {});
     const playerId = auth?.user?.playerId || '';
+    const includeAdmin = url.searchParams.get('include') === 'admin';
     // Ne bloque jamais l'écran de jeu sur une actualisation réseau des gares.
     // Un cache local, même en cours de rafraîchissement, suffit à construire
     // le monde ; le rafraîchissement se poursuit en arrière-plan.
@@ -37,7 +38,7 @@ async function handleApi(req, res, url) {
       await waitForCommuneCache(3500);
     }
     const stationReferencesChanged = sanitizeStateStationReferencesForPublicWorld();
-    sendJson(res, 200, publicState(playerId, auth?.user || null));
+    sendJson(res, 200, publicState(playerId, auth?.user || null, { includeAdmin }));
     // La persistance ne doit pas retenir le premier rendu client : la réponse
     // contient déjà les références nettoyées. L'écriture SQLite suit ensuite.
     if (stationReferencesChanged) setImmediate(saveState);

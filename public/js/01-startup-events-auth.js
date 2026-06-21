@@ -20,7 +20,7 @@ async function init() {
   if (snapshot) applyStateSnapshot(snapshot);
 
   void refreshState(true);
-  setInterval(() => refreshState(false), 2300);
+  setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
 }
 
 function openStateSnapshotDb() {
@@ -172,6 +172,9 @@ function bindStaticEvents() {
     localStorage.setItem('sillons.activeTab', app.activeTab);
     if (app.activeTab === 'bugs') markBugReportsRead({ syncServer: true, skipRender: true });
     renderAll();
+    if (app.activeTab === 'admin' && app.state?.auth?.isAdmin && !app.state.admin) {
+      void refreshState(false, { includeAdmin: true });
+    }
   });
 
   $('#mapToggleBtn')?.addEventListener('click', toggleMapVisibility);
@@ -645,11 +648,12 @@ function isFleetSubmenuAutoRefreshFrozen() {
   return app.activeTab === 'fleet' && ['catalog', 'composition'].includes(app.activeFleetSubtab || '');
 }
 
-async function refreshState(first) {
+async function refreshState(first, { includeAdmin = false } = {}) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
   try {
-    const response = await fetch('/api/state', { cache: 'no-store', headers: authHeaders() });
+    const stateUrl = includeAdmin ? '/api/state?include=admin' : '/api/state';
+    const response = await fetch(stateUrl, { cache: 'no-store', headers: authHeaders() });
     const data = await readJsonResponse(response, 'Reponse serveur invalide.');
     if (response.status === 401) {
       clearAuthState();

@@ -1,7 +1,8 @@
 // État public, création joueur et actions de gameplay.
-function publicState(playerId, authUser = null) {
+function publicState(playerId, authUser = null, { includeAdmin = false } = {}) {
   const players = activePlayers().map(p => publicPlayer(p));
   const me = playerId ? players.find(p => p.id === playerId) || null : null;
+  const isAdmin = isAdminUser(authUser);
   return {
     ok: true,
     serverTime: Date.now(),
@@ -26,7 +27,9 @@ function publicState(playerId, authUser = null) {
     players,
     me,
     bugReports: publicBugReports(authUser),
-    admin: isAdminUser(authUser) ? buildAdminDashboard() : null
+    // La console contient notamment le JSON brut des joueurs ; elle ne doit
+    // jamais bloquer le démarrage du jeu ni les synchronisations ordinaires.
+    admin: isAdmin && includeAdmin ? buildAdminDashboard() : null
   };
 }
 

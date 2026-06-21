@@ -768,6 +768,9 @@ function renderAdminAccounts(players, selected) {
 }
 
 function renderAdmin() {
+  if (app.state?.auth?.isAdmin && !app.state.admin) {
+    return `<div class="card"><h2>Admin</h2><p class="muted">Chargement de la console d’administration…</p></div>`;
+  }
   if (!isAdminSession()) return `<div class="card"><h2>Admin</h2><p class="muted">Accès réservé au compte Xenao.</p></div>`;
   const players = app.state.admin.players || [];
   if (!players.length) return `<div class="card"><h2>Admin</h2><p class="muted">Aucun joueur à administrer.</p></div>`;
