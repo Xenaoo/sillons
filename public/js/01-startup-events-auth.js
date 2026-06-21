@@ -1,6 +1,7 @@
 // Initialisation, événements statiques, authentification, notifications et scroll compositions.
 const STATE_SNAPSHOT_DB = 'sillons-state-snapshot-v1';
 const STATE_SNAPSHOT_STORE = 'players';
+const STATE_SESSION_SNAPSHOT_KEY = 'sillons.stateSnapshot.v1';
 const STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function init() {
@@ -13,6 +14,7 @@ async function init() {
   initOsmMap();
   startResearchAnimationLoop();
   requestAnimationFrame(drawLoop);
+  window.addEventListener('pagehide', persistStateSnapshotBeforeReload);
 
   const snapshot = await readStateSnapshot();
   if (snapshot) applyStateSnapshot(snapshot);
@@ -38,6 +40,8 @@ function openStateSnapshotDb() {
 async function readStateSnapshot() {
   const playerId = String(app.playerId || '');
   if (!app.authToken || !playerId) return null;
+  const sessionSnapshot = readSessionStateSnapshot(playerId);
+  if (sessionSnapshot) return sessionSnapshot;
   try {
     const db = await openStateSnapshotDb();
     const record = await new Promise((resolve, reject) => {
@@ -56,21 +60,64 @@ async function readStateSnapshot() {
   }
 }
 
+function isUsableStateSnapshot(record, playerId) {
+  if (!record?.state || Date.now() - Number(record.savedAt || 0) > STATE_SNAPSHOT_MAX_AGE_MS) return false;
+  return String(record.playerId || record.state.auth?.playerId || record.state.me?.id || '') === playerId;
+}
+
+function readSessionStateSnapshot(playerId) {
+  try {
+    const raw = window.sessionStorage?.getItem(STATE_SESSION_SNAPSHOT_KEY);
+    const record = raw ? JSON.parse(raw) : null;
+    return isUsableStateSnapshot(record, playerId) ? record.state : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeSessionStateSnapshot(playerId, data) {
+  try {
+    window.sessionStorage?.setItem(STATE_SESSION_SNAPSHOT_KEY, JSON.stringify({ playerId, savedAt: Date.now(), state: data }));
+  } catch (error) {
+    // Les navigateurs aux quotas faibles conservent toujours le secours IndexedDB.
+  }
+}
+
+function compactStateSnapshot(data) {
+  // Le premier rendu n'a besoin que de la compagnie courante. Les données des
+  // autres joueurs et les rapports administratifs arrivent à la synchronisation
+  // suivante ; cela garde le snapshot sous le quota des stockages synchrones.
+  return {
+    ...data,
+    players: data.me ? [data.me] : [],
+    bugReports: [],
+    admin: null
+  };
+}
+
 function scheduleStateSnapshot(data) {
   const playerId = String(data?.auth?.playerId || data?.me?.id || '');
   if (!playerId || !data?.me) return;
+  const snapshot = compactStateSnapshot(data);
   clearTimeout(app.stateSnapshotTimer);
   app.stateSnapshotTimer = setTimeout(async () => {
     try {
+      writeSessionStateSnapshot(playerId, snapshot);
       const db = await openStateSnapshotDb();
       const transaction = db.transaction(STATE_SNAPSHOT_STORE, 'readwrite');
-      transaction.objectStore(STATE_SNAPSHOT_STORE).put({ playerId, savedAt: Date.now(), state: data });
+      transaction.objectStore(STATE_SNAPSHOT_STORE).put({ playerId, savedAt: Date.now(), state: snapshot });
       transaction.oncomplete = () => db.close();
       transaction.onerror = () => { db.close(); console.warn('Écriture du cache local impossible.'); };
     } catch (error) {
       console.warn('Cache local de session indisponible:', error.message);
     }
   }, 0);
+}
+
+function persistStateSnapshotBeforeReload() {
+  const playerId = String(app.state?.auth?.playerId || app.state?.me?.id || '');
+  if (!playerId || !app.state?.me) return;
+  writeSessionStateSnapshot(playerId, compactStateSnapshot(app.state));
 }
 
 function applyStateSnapshot(data) {
