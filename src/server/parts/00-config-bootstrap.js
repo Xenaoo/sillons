@@ -136,6 +136,23 @@ const PARIS_TERMINAL_STATIONS = Object.freeze([
 ]);
 const PARIS_TERMINAL_SOURCE = 'sncf-gares-de-voyageurs + frequentation-gares-2024';
 const PARIS_INTERCHANGE_SOURCE = 'sillons-manual-rer-interchange';
+// Cette gare est publiée dans le référentiel « gares de voyageurs », mais pas
+// dans « liste-des-gares » utilisé pour la génération générale du monde.
+// Le fallback reste sans effet dès que la source principale l'expose.
+const MISSING_SNCF_STATION_FALLBACK_SOURCE = 'sncf-gares-de-voyageurs fallback';
+const MISSING_SNCF_STATION_FALLBACKS = Object.freeze([
+  {
+    id: 'GARE_87382861',
+    code: '78646',
+    name: 'Versailles-Rive-Droite',
+    postal: '78000',
+    lat: 48.8096525,
+    lon: 2.1347523,
+    stationUic: '87382861',
+    stationIdGare: 'e9cdfa6c-5807-4882-beb4-e33e07e470f9',
+    stationName: 'Versailles Rive Droite'
+  }
+]);
 const PARIS_INTERCHANGE_STATIONS = Object.freeze([
   {
     id: 'PAR_CHATELET_LES_HALLES',

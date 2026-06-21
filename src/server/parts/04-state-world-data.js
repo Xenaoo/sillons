@@ -798,6 +798,53 @@ function applyParisInterchangeStations(byId) {
   return { added };
 }
 
+function missingSncfStationFallbackEntry(entry) {
+  return normalizeCommuneStation({
+    id: entry.id,
+    code: entry.code,
+    name: entry.name,
+    lat: roundCoord(entry.lat),
+    lon: roundCoord(entry.lon),
+    population: 84095,
+    region: 'Gare voyageurs',
+    codesPostaux: [entry.postal],
+    codeDepartement: '78',
+    commune: true,
+    realStation: true,
+    multiStation: true,
+    allowSameCommuneStation: true,
+    populationSource: 'data.gouv.fr population municipale',
+    stationLat: roundCoord(entry.lat),
+    stationLon: roundCoord(entry.lon),
+    stationName: entry.stationName || entry.name,
+    stationUic: entry.stationUic,
+    stationTrigramme: 'VRD',
+    stationIdGare: entry.stationIdGare || entry.id,
+    stationSource: MISSING_SNCF_STATION_FALLBACK_SOURCE,
+    hasPassengerStation: true,
+    hasFreightStation: false,
+    stationKind: 'passenger',
+    sourceRecords: 1
+  });
+}
+
+function applyMissingSncfStationFallbacks(byId) {
+  if (!byId || typeof byId !== 'object') return { added: 0 };
+  let added = 0;
+  for (const entry of MISSING_SNCF_STATION_FALLBACKS) {
+    const hasEquivalentStation = Object.values(byId).some(station =>
+      String(station.stationUic || '') === entry.stationUic
+      || stationDedupName(station.name) === stationDedupName(entry.name)
+    );
+    if (hasEquivalentStation) continue;
+    const station = missingSncfStationFallbackEntry(entry);
+    if (!station?.id) continue;
+    byId[station.id] = station;
+    added += 1;
+  }
+  return { added };
+}
+
 function applyParisTerminalStations(byId) {
   if (!byId || typeof byId !== 'object') return { removed: 0, added: 0 };
   let removed = 0;
@@ -828,6 +875,7 @@ function loadCommuneCache() {
       const normalized = canonicalizeStationDisplay(normalizeCommuneStation(station));
       if (normalized) byId[normalized.id] = normalized;
     }
+    applyMissingSncfStationFallbacks(byId);
     applyParisInterchangeStations(byId);
     for (const [id, station] of Object.entries(byId)) byId[id] = canonicalizeStationDisplay(station);
     rebuildStationAliasMap(byId);
@@ -1546,6 +1594,7 @@ async function refreshCommuneCache(force = false) {
     const built = buildStationsFromSncfList(sncfStations, populationIndex);
     const byId = {};
     for (const station of built.stations) byId[station.id] = station;
+    applyMissingSncfStationFallbacks(byId);
     applyParisInterchangeStations(byId);
     const coverageCount = Object.keys(byId).length;
     if (coverageCount < COMMUNE_CACHE_MIN_READY_COUNT) {
