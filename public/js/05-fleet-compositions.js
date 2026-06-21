@@ -37,7 +37,29 @@ function renderTrainStat(label, value, ratio, cls = '', modifiedValue = '', modi
     </div>`;
 }
 
+const TRAIN_ART_BY_MODEL_ID = Object.freeze({
+  steam_001_141_r: '/assets/trains/steam/steam_001_141_r.png',
+  steam_002_231_k: '/assets/trains/steam/steam_002_231_k.png',
+  steam_003_241_p: '/assets/trains/steam/steam_003_241_p.png',
+  steam_004_141_p: '/assets/trains/steam/steam_004_141_p.png',
+  steam_005_150_p: '/assets/trains/steam/steam_005_150_p.png',
+  steam_006_140_c: '/assets/trains/steam/steam_006_140_c.png',
+  steam_007_231_g: '/assets/trains/steam/steam_007_231_g.png',
+  steam_008_241_a: '/assets/trains/steam/steam_008_241_a.png',
+  steam_009_232_u1: '/assets/trains/steam/steam_009_232_u1.png',
+  steam_010_030_tu: '/assets/trains/steam/steam_010_030_tu.png'
+});
+
+function trainArtUrl(model) {
+  const src = TRAIN_ART_BY_MODEL_ID[model?.id];
+  return src ? `${src}?v=${encodeURIComponent(PROJECT_VERSION)}` : '';
+}
+
 function renderTrainArt(model) {
+  const artUrl = trainArtUrl(model);
+  if (artUrl) {
+    return `<div class="train-art" aria-label="Visuel de ${escapeAttr(model.name)}"><img src="${escapeAttr(artUrl)}" alt="Illustration du train ${escapeAttr(model.name)}" loading="lazy" decoding="async"></div>`;
+  }
   return `<div class="train-art train-art-placeholder" aria-label="Visuel à refaire pour ${escapeAttr(model.name)}"><span>Visuel matériel</span><b>À refaire</b></div>`;
 }
 

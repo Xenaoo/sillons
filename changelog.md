@@ -1,3 +1,11 @@
+# v69.9.0 — premiers visuels du catalogue roulant dans le parc
+
+- Intégration des 10 premiers visuels du catalogue (141 R, 231 K, 241 P, 141 P, 150 P, 140 C, 231 G, 241 A, 232 U 1 et 030 TU) dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Ajout d’un mapping d’illustrations côté client pour afficher automatiquement ces visuels à la place du placeholder `À refaire`.
+- Uniformisation du rendu sur la base du format du catalogue : les cartes de maintenance et les vignettes de composition affichent maintenant les images en `contain`, sans rognage.
+- Ajout des assets dédiés dans `public/assets/trains/steam/` avec normalisation du format des 10 images.
+- Schéma save : `178`.
+
 # v69.8.3 — Persistance SQLite relationnelle
 
 - La sauvegarde de jeu est désormais persistée dans `data/save.sqlite` sous forme de tables relationnelles, avec migration depuis `data/save.json`.
