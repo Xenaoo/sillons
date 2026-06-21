@@ -1,12 +1,3 @@
-# v69.14.0 — intégration des 10 visuels de l’ère de l’hydrogène
-
-- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
-- Trains ajoutés : `Régiolis H2`, `Coradia iLint`, `Coradia Stream H`, `Mireo Plus H`, `FLIRT H2`, `FCH2Rail`, `HYBARI`, `CRRC H2 Urban`, `Hyundai Rotem H2` et `Talgo Vittal-One H2`.
-- Ajout des assets dédiés dans `public/assets/trains/hydrogen/`.
-- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
-- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
-- Schéma save : `186`.
-
 # v69.13.1 — correction d’intégration des visuels grande vitesse
 
 - Correction de l’intégration des visuels `Train à grande vitesse` dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.

@@ -87,7 +87,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   hydrogen_007_hybari: '/assets/trains/hydrogen/hydrogen_007_hybari.png',
   hydrogen_008_crrc_h2: '/assets/trains/hydrogen/hydrogen_008_crrc_h2.png',
   hydrogen_009_hyundai_h2: '/assets/trains/hydrogen/hydrogen_009_hyundai_h2.png',
-  hydrogen_010_vittal_one_h2: '/assets/trains/hydrogen/hydrogen_010_vittal_one_h2.png'
+  hydrogen_010_vittal_one_h2: '/assets/trains/hydrogen/hydrogen_010_vittal_one_h2.png',
+  battery_001_agc_batteries: '/assets/trains/battery/battery_001_agc_batteries.png',
+  battery_002_regiolis_hybride: '/assets/trains/battery/battery_002_regiolis_hybride.png',
+  battery_003_coradia_bemu: '/assets/trains/battery/battery_003_coradia_bemu.png',
+  battery_004_flirt_akku: '/assets/trains/battery/battery_004_flirt_akku.png',
+  battery_005_mireo_plus_b: '/assets/trains/battery/battery_005_mireo_plus_b.png',
+  battery_006_cityjet_eco: '/assets/trains/battery/battery_006_cityjet_eco.png',
+  battery_007_talent_3_bemu: '/assets/trains/battery/battery_007_talent_3_bemu.png',
+  battery_008_class_230_battery: '/assets/trains/battery/battery_008_class_230_battery.png',
+  battery_009_hitachi_blues: '/assets/trains/battery/battery_009_hitachi_blues.png',
+  battery_010_ev_e301_accum: '/assets/trains/battery/battery_010_ev_e301_accum.png'
 });
 
 function trainArtUrl(model) {
