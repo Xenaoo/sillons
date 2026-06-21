@@ -7,6 +7,7 @@ async function handleApi(req, res, url) {
       receivedAt: Date.now(),
       initMs: numeric(body.initMs),
       snapshotMs: numeric(body.snapshotMs),
+      snapshotHit: numeric(body.snapshotHit, 1),
       requestMs: numeric(body.requestMs),
       parseMs: numeric(body.parseMs),
       normalizeMs: numeric(body.normalizeMs),

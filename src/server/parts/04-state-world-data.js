@@ -587,10 +587,12 @@ function publicWorld() {
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
   const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement));
-  // `communeStations` vient déjà d'être dédupliqué. Le second passage complet
-  // ne faisait qu'ajouter un coût inutile à chaque reconstruction du monde.
-  const stations = communeStations;
-  const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
+  // Conserver les fiches complètes côté serveur pour les actions de jeu, mais
+  // ne transmettre au navigateur que les champs utilisés par la carte, la
+  // recherche et les fiches de gare. Les données de provenance SNCF et les
+  // doublons de coordonnées faisaient peser plus de 3 Mo sur chaque état.
+  const stations = communeStations.map(publicStationForClient);
+  const stationIndex = Object.fromEntries(communeStations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
     stations,
@@ -615,6 +617,34 @@ function publicWorld() {
   Object.defineProperty(world, 'stationIndex', { value: stationIndex, enumerable: false });
   publicWorldCache = { key: cacheKey, value: world };
   return world;
+}
+
+function publicStationForClient(station) {
+  return {
+    id: station.id,
+    name: station.name,
+    commune: Boolean(station.commune),
+    multiStation: Boolean(station.multiStation),
+    lat: Number(station.lat),
+    lon: Number(station.lon),
+    railLat: Number(station.railLat ?? station.stationLat ?? station.lat),
+    railLon: Number(station.railLon ?? station.stationLon ?? station.lon),
+    placement: station.placement || 'commune',
+    population: Number(station.population || 0),
+    baseDemand: Number(station.baseDemand || 0),
+    freight: Number(station.freight || 0),
+    annualPassengers: Number(station.annualPassengers || 0),
+    passengerTrafficYear: Number(station.passengerTrafficYear || 0),
+    purchaseCost: Number(station.purchaseCost || station.acquisitionCost || 0),
+    majorTerminal: Boolean(station.majorTerminal),
+    codesPostaux: Array.isArray(station.codesPostaux) ? station.codesPostaux : [],
+    codeDepartement: station.codeDepartement || '',
+    region: station.region || '',
+    hasPassengerStation: Boolean(station.hasPassengerStation),
+    hasFreightStation: Boolean(station.hasFreightStation),
+    stationUic: station.stationUic || station.codeUic || '',
+    stationName: station.stationName || station.name
+  };
 }
 
 function sanitizeStateStationReferencesForPublicWorld() {

@@ -1,7 +1,12 @@
 // État public, création joueur et actions de gameplay.
 function publicState(playerId, authUser = null, { includeAdmin = false } = {}) {
-  const players = activePlayers().map(p => publicPlayer(p));
-  const me = playerId ? players.find(p => p.id === playerId) || null : null;
+  const active = activePlayers();
+  const player = playerId ? active.find(item => item.id === playerId) || null : null;
+  // La carte a seulement besoin d'un résumé des autres compagnies. Envoyer
+  // leur parc complet, leurs RH, recherches et projections de maintenance
+  // faisait grossir /api/state de plusieurs mégaoctets à chaque F5.
+  const players = active.map(publicPlayerSummary);
+  const me = player ? publicPlayer(player) : null;
   const isAdmin = isAdminUser(authUser);
   return {
     ok: true,
@@ -30,6 +35,61 @@ function publicState(playerId, authUser = null, { includeAdmin = false } = {}) {
     // La console contient notamment le JSON brut des joueurs ; elle ne doit
     // jamais bloquer le démarrage du jeu ni les synchronisations ordinaires.
     admin: isAdmin && includeAdmin ? buildAdminDashboard() : null
+  };
+}
+
+function publicPlayerSummary(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    logo: p.logo,
+    region: p.region,
+    cash: Math.round(p.cash),
+    debt: Math.round(p.debt),
+    reputation: round2(p.reputation),
+    co2: Math.round(p.co2),
+    epoch: p.epoch,
+    eraName: BALANCE.epochs[p.epoch]?.name || 'Inconnue',
+    score: Math.round(scorePlayer(p)),
+    // Les informations ci-dessous couvrent le classement, les propriétaires
+    // de gare et le tracé/animation des lignes concurrentes.
+    stations: p.stations || {},
+    trains: (p.trains || []).map(train => publicMapTrain(train, p)),
+    lines: (p.lines || []).map(publicMapLine)
+  };
+}
+
+function publicMapTrain(train, player = null) {
+  const model = BALANCE.trains[train?.modelId];
+  const profile = model ? getTrainOperatingProfile(train, model, player) : null;
+  return {
+    id: train?.id,
+    modelId: train?.modelId,
+    condition: Number(train?.condition ?? 0.9),
+    maintenance: { active: Boolean(train?.maintenance?.active) },
+    // La vitesse personnalisée est nécessaire à l'animation sur la carte ;
+    // les autres propriétés restent dans `me.trains` pour leur propriétaire.
+    profile: profile ? { speed: Number(profile.speed || model.speed || 0) } : null
+  };
+}
+
+function publicMapLine(line) {
+  const stops = sanitizeStopsPayload(line?.stops, line?.from, line?.to);
+  const trainIds = lineTrainIds(line);
+  return {
+    id: line?.id,
+    name: line?.name || lineRouteName(stops),
+    active: Boolean(line?.active),
+    electrified: Boolean(line?.electrified),
+    service: line?.service || 'passengers',
+    frequency: Number(line?.frequency || 0),
+    from: stops[0] || '',
+    to: stops[stops.length - 1] || '',
+    stops,
+    trainId: trainIds[0] || '',
+    trainIds,
+    stats: { status: line?.stats?.status || '' }
   };
 }
 

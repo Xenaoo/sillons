@@ -20,6 +20,7 @@ async function init() {
 
   const snapshotStartedAt = performance.now();
   const snapshot = await readStateSnapshot();
+  app.bootTimings.snapshotHit = Boolean(snapshot);
   if (snapshot) applyStateSnapshot(snapshot);
   app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
@@ -88,12 +89,34 @@ function writeSessionStateSnapshot(playerId, data) {
 }
 
 function compactStateSnapshot(data) {
+  const snapshotStations = Array.isArray(data?.world?.stations)
+    ? data.world.stations.map(station => ({
+      id: station.id,
+      name: station.name,
+      commune: Boolean(station.commune),
+      multiStation: Boolean(station.multiStation),
+      lat: station.lat,
+      lon: station.lon,
+      railLat: station.railLat,
+      railLon: station.railLon,
+      placement: station.placement,
+      population: station.population,
+      baseDemand: station.baseDemand,
+      freight: station.freight,
+      annualPassengers: station.annualPassengers,
+      passengerTrafficYear: station.passengerTrafficYear,
+      purchaseCost: station.purchaseCost,
+      majorTerminal: Boolean(station.majorTerminal),
+      hasPassengerStation: Boolean(station.hasPassengerStation),
+      hasFreightStation: Boolean(station.hasFreightStation)
+    }))
+    : [];
   // Le premier rendu n'a besoin que de la compagnie courante. Les données des
   // autres joueurs et les rapports administratifs arrivent à la synchronisation
   // suivante ; cela garde le snapshot sous le quota des stockages synchrones.
   return {
     ...data,
-    players: data.me ? [data.me] : [],
+    world: data.world ? { ...data.world, stations: snapshotStations } : data.world,
     bugReports: [],
     admin: null
   };
@@ -709,6 +732,7 @@ async function refreshState(first, { includeAdmin = false } = {}) {
       reportClientBootMetrics({
         initMs: app.bootTimings?.initMs || 0,
         snapshotMs: app.bootTimings?.snapshotMs || 0,
+        snapshotHit: app.bootTimings?.snapshotHit ? 1 : 0,
         requestMs: responseReceivedAt - requestStartedAt,
         parseMs: parsedAt - responseReceivedAt,
         normalizeMs: normalizedAt - parsedAt,
