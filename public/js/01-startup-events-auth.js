@@ -714,7 +714,8 @@ async function refreshState(first, { includeAdmin = false } = {}) {
         normalizeMs: normalizedAt - parsedAt,
         renderMs: performance.now() - normalizedAt,
         totalMs: performance.now() - (app.bootTimings?.startedAt || requestStartedAt),
-        stateBytes: Number(response.headers.get('content-length') || 0)
+        stateBytes: Number(response.headers.get('content-length') || 0),
+        serverTiming: response.headers.get('server-timing') || ''
       });
     }
     const nextCash = Number(data.me?.cash);
@@ -731,7 +732,10 @@ async function refreshState(first, { includeAdmin = false } = {}) {
 
 
 function reportClientBootMetrics(metrics) {
-  const clean = Object.fromEntries(Object.entries(metrics).map(([key, value]) => [key, Math.round(Number(value) || 0)]));
+  const clean = {
+    ...Object.fromEntries(Object.entries(metrics).filter(([key]) => key !== 'serverTiming').map(([key, value]) => [key, Math.round(Number(value) || 0)])),
+    serverTiming: String(metrics.serverTiming || '').slice(0, 400)
+  };
   window.__sillonsBootMetrics = clean;
   const body = JSON.stringify(clean);
   if (navigator.sendBeacon?.('/api/client-boot-metrics', body)) return;

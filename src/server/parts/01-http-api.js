@@ -2,7 +2,7 @@
 async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/client-boot-metrics') {
     const body = await readBody(req);
-    const numeric = value => Math.max(0, Math.min(60_000, Math.round(Number(value) || 0)));
+    const numeric = (value, max = 60_000) => Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
     lastClientBootMetrics = {
       receivedAt: Date.now(),
       initMs: numeric(body.initMs),
@@ -12,7 +12,8 @@ async function handleApi(req, res, url) {
       normalizeMs: numeric(body.normalizeMs),
       renderMs: numeric(body.renderMs),
       totalMs: numeric(body.totalMs),
-      stateBytes: numeric(body.stateBytes)
+      stateBytes: numeric(body.stateBytes, 100_000_000),
+      serverTiming: String(body.serverTiming || '').slice(0, 400)
     };
     try {
       fs.writeFileSync(CLIENT_BOOT_METRICS_FILE, JSON.stringify(lastClientBootMetrics, null, 2));
@@ -55,6 +56,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/state') {
+    const stateStartedAt = process.hrtime.bigint();
     const auth = authenticateRequest(req, url, {});
     const playerId = auth?.user?.playerId || '';
     const includeAdmin = url.searchParams.get('include') === 'admin';
@@ -67,7 +69,10 @@ async function handleApi(req, res, url) {
       await waitForCommuneCache(3500);
     }
     const stationReferencesChanged = sanitizeStateStationReferencesForPublicWorld();
-    sendJson(res, 200, publicState(playerId, auth?.user || null, { includeAdmin }));
+    const payload = publicState(playerId, auth?.user || null, { includeAdmin });
+    const stateBuildMs = Number(process.hrtime.bigint() - stateStartedAt) / 1e6;
+    res.setHeader('Server-Timing', `state;dur=${stateBuildMs.toFixed(1)}`);
+    sendJson(res, 200, payload);
     // La persistance ne doit pas retenir le premier rendu client : la réponse
     // contient déjà les références nettoyées. L'écriture SQLite suit ensuite.
     if (stationReferencesChanged) setImmediate(saveState);
@@ -258,10 +263,16 @@ function httpError(statusCode, message) {
 }
 
 function sendJson(res, status, payload) {
+  const serializeStartedAt = process.hrtime.bigint();
   const json = JSON.stringify(payload);
+  const stringifyMs = Number(process.hrtime.bigint() - serializeStartedAt) / 1e6;
   const acceptsGzip = /(?:^|,)\s*gzip(?:;|,|$)/i.test(String(res.__sillonsAcceptEncoding || ''));
   if (acceptsGzip) {
+    const gzipStartedAt = process.hrtime.bigint();
     const body = zlib.gzipSync(json, { level: 6 });
+    const gzipMs = Number(process.hrtime.bigint() - gzipStartedAt) / 1e6;
+    const existingTiming = String(res.getHeader('Server-Timing') || '');
+    res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}, gzip;dur=${gzipMs.toFixed(1)}`);
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -272,6 +283,8 @@ function sendJson(res, status, payload) {
     res.end(body);
     return;
   }
+  const existingTiming = String(res.getHeader('Server-Timing') || '');
+  res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}`);
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' });
   res.end(json);
 }

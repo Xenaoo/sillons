@@ -515,34 +515,81 @@ function stationPhysicalKey(station) {
 
 function deduplicatePublicStations(stations, existingStations = []) {
   const out = [];
-  const seenIds = new Set();
-  const seenPhysical = new Set((existingStations || []).map(stationPhysicalKey).filter(Boolean));
   const existing = Array.isArray(existingStations) ? existingStations : [];
+  // Cette liste contient plus de 3 000 gares. L'ancienne version comparait
+  // chaque gare à l'ensemble des gares déjà retenues et reconstruisait ce
+  // tableau à chaque itération : O(n²) au premier /api/state.
+  const seenIds = new Set();
+  const seenPhysical = new Set();
+  const stationCodes = new Map();
+  const stationsByNormalizedName = new Map();
+
+  const registerStation = station => {
+    if (!station) return;
+    const id = String(station.id || '').trim();
+    if (id) seenIds.add(id);
+    const physicalKey = stationPhysicalKey(station);
+    if (physicalKey) seenPhysical.add(physicalKey);
+    const code = stationCommuneCode(station);
+    if (code) {
+      const entry = stationCodes.get(code) || { count: 0, hasNonMultiStation: false };
+      entry.count += 1;
+      entry.hasNonMultiStation ||= !station.multiStation;
+      stationCodes.set(code, entry);
+    }
+    const name = stationDedupName(station.name);
+    if (!name) return;
+    const list = stationsByNormalizedName.get(name) || [];
+    list.push(station);
+    stationsByNormalizedName.set(name, list);
+  };
+
+  for (const station of existing) registerStation(station);
   for (const raw of stations || []) {
     if (!raw || !raw.id) continue;
     const station = canonicalizeStationDisplay({ ...raw, id: currentStationId(raw.id) });
     const id = String(station.id || '').trim();
     if (!id || seenIds.has(id)) continue;
-    if (isDuplicatePublicStation(station, [...existing, ...out])) continue;
     const physicalKey = stationPhysicalKey(station);
     if (physicalKey && seenPhysical.has(physicalKey)) continue;
-    seenIds.add(id);
-    if (physicalKey) seenPhysical.add(physicalKey);
+
+    const code = stationCommuneCode(station);
+    const sameCode = code ? stationCodes.get(code) : null;
+    // Une commune mono-gare masque toutes ses autres entrées. Une commune
+    // multi-gares ne peut coexister qu'avec d'autres entrées multi-gares.
+    if (sameCode && (sameCode.hasNonMultiStation || !station.multiStation)) continue;
+
+    const name = stationDedupName(station.name);
+    const sameName = name ? stationsByNormalizedName.get(name) : null;
+    const duplicateByNameAndLocation = sameName?.some(existingStation => {
+      const candidateLat = Number(station.lat);
+      const candidateLon = Number(station.lon);
+      const existingLat = Number(existingStation.lat);
+      const existingLon = Number(existingStation.lon);
+      return Number.isFinite(candidateLat) && Number.isFinite(candidateLon)
+        && Number.isFinite(existingLat) && Number.isFinite(existingLon)
+        && haversine(candidateLat, candidateLon, existingLat, existingLon) <= 1.25;
+    });
+    if (duplicateByNameAndLocation) continue;
+
     out.push(station);
+    registerStation(station);
   }
   return out;
 }
 
 
 function publicWorld() {
-  const communeCodes = Object.values(communeCache.byId || {}).map(s => s.code || s.id).sort().join(',');
   const communeCount = Object.keys(communeCache.byId || {}).length;
-  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCodes.length}:${communeCache.error || ''}`;
+  // La cache est invalidée explicitement lors d'un rafraîchissement des gares.
+  // Éviter de trier et concaténer les 3 420 codes à chaque F5.
+  const cacheKey = `${communeCache.status}:${communeCache.updatedAt || ''}:${communeCache.sourceVersion || 0}:${MIN_COMMUNE_POPULATION}:${communeCount}:${communeCache.error || ''}`;
   if (publicWorldCache.key === cacheKey && publicWorldCache.value) return publicWorldCache.value;
 
-  const baseStations = [];
-  const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement), baseStations);
-  const stations = deduplicatePublicStations([...baseStations, ...communeStations]);
+  const communeStations = deduplicatePublicStations(Object.values(communeCache.byId || {}).map(stationRailPlacement));
+  // `communeStations` vient déjà d'être dédupliqué. Le second passage complet
+  // ne faisait qu'ajouter un coût inutile à chaque reconstruction du monde.
+  const stations = communeStations;
   const stationIndex = Object.fromEntries(stations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
@@ -572,6 +619,10 @@ function publicWorld() {
 
 function sanitizeStateStationReferencesForPublicWorld() {
   const world = publicWorld();
+  // Cette normalisation est une migration des sauvegardes, pas une donnée qui
+  // doit être recalculée à chaque rafraîchissement client. Elle est relancée
+  // automatiquement dès que `invalidatePublicWorldCache()` remplace le monde.
+  if (publicWorldCache.stationReferencesSanitized) return false;
   const stationIndex = world?.stationIndex || {};
   const hasStation = id => Boolean(id && stationIndex[currentStationId(id)]);
   const normalizeId = id => {
@@ -638,6 +689,7 @@ function sanitizeStateStationReferencesForPublicWorld() {
     if ((player.lines || []).length !== cleanLines.length) changed = true;
     player.lines = cleanLines;
   }
+  publicWorldCache.stationReferencesSanitized = true;
   return changed;
 }
 
@@ -676,26 +728,6 @@ function invalidatePublicWorldCache() {
 
 function stationCommuneCode(station) {
   return String(station?.code || station?.communeCode || '').trim();
-}
-
-function isDuplicatePublicStation(candidate, existingStations) {
-  if (!candidate || !Array.isArray(existingStations)) return false;
-  const candidateCode = stationCommuneCode(candidate);
-  const cname = stationDedupName(candidate.name);
-  for (const s of existingStations) {
-    const existingCode = stationCommuneCode(s);
-    const sameMultiStationCommune = candidate.multiStation && s.multiStation && candidateCode && existingCode && candidateCode === existingCode;
-    if (candidateCode && existingCode && candidateCode === existingCode && !sameMultiStationCommune) return true;
-    if (candidate.id && s.id && candidate.id === s.id) return true;
-
-    const sname = stationDedupName(s.name);
-    const exactSameName = cname && sname && cname === sname;
-    const close = Number.isFinite(candidate.lat) && Number.isFinite(candidate.lon) && Number.isFinite(s.lat) && Number.isFinite(s.lon)
-      ? haversine(candidate.lat, candidate.lon, s.lat, s.lon) <= 1.25
-      : false;
-    if (exactSameName && close) return true;
-  }
-  return false;
 }
 
 function stationDedupName(name) {
