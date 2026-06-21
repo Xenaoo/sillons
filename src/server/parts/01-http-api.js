@@ -14,6 +14,11 @@ async function handleApi(req, res, url) {
       totalMs: numeric(body.totalMs),
       stateBytes: numeric(body.stateBytes)
     };
+    try {
+      fs.writeFileSync(CLIENT_BOOT_METRICS_FILE, JSON.stringify(lastClientBootMetrics, null, 2));
+    } catch (error) {
+      console.warn('Écriture des métriques de démarrage impossible:', error.message);
+    }
     sendJson(res, 204, {});
     return;
   }

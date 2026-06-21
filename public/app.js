@@ -3,7 +3,7 @@
 // Point d'entrée client minimal.
 // Les fichiers métier sont récupérés puis exécutés comme un seul script afin de
 // préserver la portée et le hoisting historiques de l'ancien public/app.js.
-const SILLONS_CLIENT_VERSION = 'v69.8.8';
+const SILLONS_CLIENT_VERSION = 'v69.8.9';
 const SILLONS_CLIENT_PARTS = [
   '00-core-state.js',
   '01-startup-events-auth.js',

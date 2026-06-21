@@ -1,3 +1,4 @@
 # Fichiers temporaires créés par SQLite en mode WAL.
 data/save.sqlite-shm
 data/save.sqlite-wal
+data/client-boot-metrics.json
