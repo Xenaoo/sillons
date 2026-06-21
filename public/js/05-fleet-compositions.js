@@ -57,7 +57,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   diesel_007_bb_67000: '/assets/trains/diesel/diesel_007_bb_67000.png',
   diesel_008_a1a_a1a_68000: '/assets/trains/diesel/diesel_008_a1a_a1a_68000.png',
   diesel_009_bb_66000: '/assets/trains/diesel/diesel_009_bb_66000.png',
-  diesel_010_bb_75000: '/assets/trains/diesel/diesel_010_bb_75000.png'
+  diesel_010_bb_75000: '/assets/trains/diesel/diesel_010_bb_75000.png',
+  electric_loco_001_cc_6500: '/assets/trains/electric/electric_loco_001_cc_6500.png',
+  electric_loco_002_bb_26000: '/assets/trains/electric/electric_loco_002_bb_26000.png',
+  electric_loco_003_bb_22200: '/assets/trains/electric/electric_loco_003_bb_22200.png',
+  electric_loco_004_bb_15000: '/assets/trains/electric/electric_loco_004_bb_15000.png',
+  electric_loco_005_bb_7200: '/assets/trains/electric/electric_loco_005_bb_7200.png',
+  electric_emu_006_z_5600: '/assets/trains/electric/electric_emu_006_z_5600.png',
+  electric_emu_007_z_20500: '/assets/trains/electric/electric_emu_007_z_20500.png',
+  electric_emu_008_z_50000: '/assets/trains/electric/electric_emu_008_z_50000.png',
+  electric_emu_009_z_21500: '/assets/trains/electric/electric_emu_009_z_21500.png',
+  electric_emu_010_regio_2n: '/assets/trains/electric/electric_emu_010_regio_2n.png'
 });
 
 function trainArtUrl(model) {

@@ -1,3 +1,12 @@
+# v69.12.0 — intégration des 10 visuels électriques suivants
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `CC 6500`, `BB 26000 Sybic`, `BB 22200`, `BB 15000`, `BB 7200`, `Z 5600 / Z2N`, `Z 20500`, `Z 50000 Francilien`, `Z 21500 / Z TER` et `Regio 2N`.
+- Ajout des assets dédiés dans `public/assets/trains/electric/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `183`.
+
 # v69.11.0 — intégration des 10 visuels diesel suivants
 
 - Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
