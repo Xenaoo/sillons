@@ -1,3 +1,10 @@
+# v69.10.0 — refonte des 10 premiers visuels vapeur sans liseré
+
+- Regénération des 10 premiers visuels vapeur du catalogue roulant pour supprimer le liseré / cadre doré autour des illustrations.
+- Remplacement des assets intégrés dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions` par les nouvelles versions sans bordure décorative.
+- Conservation du format uniforme `13:8` afin de rester compatible avec les vignettes déjà harmonisées dans le parc.
+- Schéma save : `181`.
+
 # v69.9.2 — harmonisation du rendu Catalogue / Maintenance
 
 - `Parc > Catalogue` : adaptation du rendu visuel pour reprendre le même cadrage perçu comme correct dans `Parc > Compositions`.
