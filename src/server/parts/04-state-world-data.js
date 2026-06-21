@@ -27,7 +27,14 @@ function mimeType(file) {
 function loadOrCreateState() {
   try {
     const loaded = getSaveStore().read();
-    if (loaded?.players) return migrateState(loaded);
+    if (loaded?.players) {
+      const migrated = migrateState(loaded);
+      if (migrated.__trainCatalogMigrated) {
+        delete migrated.__trainCatalogMigrated;
+        getSaveStore().write(migrated);
+      }
+      return migrated;
+    }
   } catch (error) {
     console.warn('Base SQLite illisible, tentative de reprise depuis le JSON.', error.message);
   }
@@ -90,7 +97,68 @@ function migrateState(loaded) {
     players: purgeUnlinkedPlayers(players, loaded.users || {}),
   };
   canonicalizePersistedStationLabels(migrated.players);
+  if (migrateLegacyTrainCatalogModels(migrated.players)) migrated.__trainCatalogMigrated = true;
   return migrated;
+}
+
+function migrateLegacyTrainCatalogModels(players) {
+  // Les identifiants ci-dessous couvrent le catalogue historique complet.
+  // Les remplacements gardent la même ère et le même usage (voyageurs, fret
+  // ou mixte), tout en conservant l'id du train et ses affectations de ligne.
+  const replacements = {
+    steam_030_mixte: 'steam_001_141_r',
+    steam_120_omnibus: 'steam_002_231_k',
+    steam_040_freight: 'steam_005_150_p',
+    steam_220_express: 'steam_007_231_g',
+    steam_241_articulated: 'steam_003_241_p',
+    diesel_shunter_030: 'diesel_009_bb_66000',
+    diesel_light_railcar: 'diesel_006_x_4300',
+    diesel_mechanical_regional: 'diesel_005_x_73500',
+    diesel_hydraulic_express: 'diesel_001_cc_72000',
+    diesel_electric_freight: 'diesel_010_bb_75000',
+    electric_pioneer_loco: 'electric_loco_003_bb_22200',
+    electric_third_rail_emu: 'electric_emu_006_z_5600',
+    electric_dc_regional_emu: 'electric_emu_010_regio_2n',
+    electric_dual_current_loco: 'electric_loco_002_bb_26000',
+    electric_heavy_freight: 'electric_loco_001_cc_6500',
+    hsv_intercity_200: 'high_speed_001_tgv_sud_est',
+    hsv_trainset_pioneer: 'high_speed_001_tgv_sud_est',
+    hsv_duplex_capacity: 'high_speed_004_tgv_duplex',
+    hsv_distributed_trainset: 'high_speed_007_euroduplex_2n2',
+    hsv_premium_long_distance: 'high_speed_010_tgv_m',
+    hydrogen_regional_unit: 'hydrogen_001_regiolis_h2',
+    hydrogen_fuel_cell_unit: 'hydrogen_002_coradia_ilint',
+    hydrogen_rural_unit: 'hydrogen_007_hybari',
+    hydrogen_long_range_unit: 'hydrogen_004_mireo_plus_h',
+    hydrogen_next_gen_unit: 'hydrogen_010_vittal_one_h2',
+    battery_suburban_unit: 'battery_001_agc_batteries',
+    battery_regional_unit: 'battery_003_coradia_bemu',
+    battery_fast_charge_unit: 'battery_004_flirt_akku',
+    battery_modular_unit: 'battery_007_talent_3_bemu',
+    battery_high_density_unit: 'battery_004_flirt_akku',
+    maglev_shuttle_pioneer: 'maglev_005_transrapid_09',
+    maglev_guided_regional: 'maglev_003_shanghai_transrapid',
+    maglev_linear_express: 'maglev_004_transrapid_08',
+    maglev_metropolitan_express: 'maglev_001_l0_series',
+    maglev_next_gen_unit: 'maglev_001_l0_series'
+  };
+  let changed = false;
+  for (const player of Object.values(players || {})) {
+    if (!player || !Array.isArray(player.trains)) continue;
+    let playerChanged = false;
+    for (const train of player.trains) {
+      const replacement = replacements[train?.modelId];
+      if (!replacement || !BALANCE.trains[replacement]) continue;
+      train.modelId = replacement;
+      // Les locomotives restent des locomotives et les automotrices des UM :
+      // les lignes conservent donc leurs ids de trains et leur service.
+      ensureTrainComposition(train, BALANCE.trains[replacement]);
+      changed = true;
+      playerChanged = true;
+    }
+    if (playerChanged) normalizePlayerLineAssignments(player);
+  }
+  return changed;
 }
 
 

@@ -1,0 +1,2526 @@
+{
+  "schemaVersion": 1,
+  "project": "Sillons",
+  "generatedFor": "Intégration Codex",
+  "description": "Catalogue de 70 trains réels ou inspirés de trains réels, classés par 7 ères. Les valeurs realWorld sont approximatives et les valeurs gameplay sont volontairement normalisées de 1 à 100 pour équilibrage.",
+  "integrationNotes": [
+    "Utiliser id comme clé stable.",
+    "Afficher gameName côté joueur.",
+    "Conserver realReference pour l'infobulle, le lore ou l'écran encyclopédie.",
+    "Les trains sont déjà ordonnés par priority, avec les plus connus en priorité.",
+    "Pour electric, la liste contient volontairement 5 locomotives puis 5 automotrices.",
+    "Pour hydrogen, battery et maglev, plusieurs références sont non françaises car il n'existe pas 10 séries françaises connues dans ces ères.",
+    "Les scores gameplay sont des points de départ : ils doivent être ajustés selon l'économie réelle du jeu."
+  ],
+  "eras": [
+    {
+      "id": "steam",
+      "label": "Ère de la vapeur",
+      "sortOrder": 1,
+      "trainCount": 10
+    },
+    {
+      "id": "diesel",
+      "label": "Ère du diesel",
+      "sortOrder": 2,
+      "trainCount": 10
+    },
+    {
+      "id": "electric",
+      "label": "Ère de l'électrique",
+      "sortOrder": 3,
+      "trainCount": 10
+    },
+    {
+      "id": "high_speed",
+      "label": "Ère de la grande vitesse",
+      "sortOrder": 4,
+      "trainCount": 10
+    },
+    {
+      "id": "hydrogen",
+      "label": "Ère de l'hydrogène",
+      "sortOrder": 5,
+      "trainCount": 10
+    },
+    {
+      "id": "battery",
+      "label": "Ère de la batterie",
+      "sortOrder": 6,
+      "trainCount": 10
+    },
+    {
+      "id": "maglev",
+      "label": "Ère de la sustentation magnétique",
+      "sortOrder": 7,
+      "trainCount": 10
+    }
+  ],
+  "trains": [
+    {
+      "id": "steam_001_141_r",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 1,
+      "gameName": "141 R",
+      "realReference": "SNCF 141 R",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1945,
+        "status": "historique",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": 2150,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 18,
+        "tractionPower": 62,
+        "range": 42,
+        "efficiency": 22,
+        "reliability": 72,
+        "maintenanceCost": 66,
+        "purchaseCost": 35,
+        "prestige": 76,
+        "unlockLevel": 1
+      },
+      "notes": "Locomotive vapeur française emblématique de l'après-guerre, très polyvalente."
+    },
+    {
+      "id": "steam_002_231_k",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 2,
+      "gameName": "231 K",
+      "realReference": "SNCF 231 K",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1912,
+        "status": "historique",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 2200,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 26,
+        "tractionPower": 56,
+        "range": 38,
+        "efficiency": 20,
+        "reliability": 60,
+        "maintenanceCost": 70,
+        "purchaseCost": 38,
+        "prestige": 82,
+        "unlockLevel": 2
+      },
+      "notes": "Pacific voyageurs rapide, connue pour les trains express."
+    },
+    {
+      "id": "steam_003_241_p",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 3,
+      "gameName": "241 P",
+      "realReference": "SNCF 241 P",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1948,
+        "status": "historique",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 2940,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 78,
+        "range": 44,
+        "efficiency": 19,
+        "reliability": 58,
+        "maintenanceCost": 82,
+        "purchaseCost": 52,
+        "prestige": 90,
+        "unlockLevel": 3
+      },
+      "notes": "Une des vapeurs françaises les plus puissantes pour trains voyageurs lourds."
+    },
+    {
+      "id": "steam_004_141_p",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 4,
+      "gameName": "141 P",
+      "realReference": "SNCF 141 P",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1942,
+        "status": "historique",
+        "maxSpeedKmhApprox": 105,
+        "powerKwApprox": 2300,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 21,
+        "tractionPower": 66,
+        "range": 41,
+        "efficiency": 21,
+        "reliability": 62,
+        "maintenanceCost": 74,
+        "purchaseCost": 44,
+        "prestige": 68,
+        "unlockLevel": 2
+      },
+      "notes": "Vapeur mixte puissante et polyvalente."
+    },
+    {
+      "id": "steam_005_150_p",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 5,
+      "gameName": "150 P",
+      "realReference": "SNCF 150 P",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1940,
+        "status": "historique",
+        "maxSpeedKmhApprox": 105,
+        "powerKwApprox": 2500,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 19,
+        "tractionPower": 82,
+        "range": 39,
+        "efficiency": 18,
+        "reliability": 61,
+        "maintenanceCost": 78,
+        "purchaseCost": 48,
+        "prestige": 64,
+        "unlockLevel": 3
+      },
+      "notes": "Vapeur lourde orientée fret, moins prestigieuse mais très utile."
+    },
+    {
+      "id": "steam_006_140_c",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 6,
+      "gameName": "140 C",
+      "realReference": "SNCF 140 C",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1913,
+        "status": "historique",
+        "maxSpeedKmhApprox": 80,
+        "powerKwApprox": 1100,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 12,
+        "tractionPower": 42,
+        "range": 32,
+        "efficiency": 24,
+        "reliability": 70,
+        "maintenanceCost": 50,
+        "purchaseCost": 24,
+        "prestige": 48,
+        "unlockLevel": 1
+      },
+      "notes": "Machine simple, robuste, adaptée aux lignes secondaires et au fret modéré."
+    },
+    {
+      "id": "steam_007_231_g",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 7,
+      "gameName": "231 G",
+      "realReference": "SNCF 231 G",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1912,
+        "status": "historique",
+        "maxSpeedKmhApprox": 130,
+        "powerKwApprox": 2200,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 31,
+        "tractionPower": 58,
+        "range": 38,
+        "efficiency": 20,
+        "reliability": 57,
+        "maintenanceCost": 72,
+        "purchaseCost": 42,
+        "prestige": 84,
+        "unlockLevel": 3
+      },
+      "notes": "Pacific express rapide, bonne pour des services voyageurs plus performants."
+    },
+    {
+      "id": "steam_008_241_a",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 8,
+      "gameName": "241 A",
+      "realReference": "SNCF 241 A",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1925,
+        "status": "historique",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 2600,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 27,
+        "tractionPower": 72,
+        "range": 40,
+        "efficiency": 18,
+        "reliability": 54,
+        "maintenanceCost": 80,
+        "purchaseCost": 50,
+        "prestige": 86,
+        "unlockLevel": 3
+      },
+      "notes": "Grande locomotive express lourde de première génération."
+    },
+    {
+      "id": "steam_009_232_u1",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 9,
+      "gameName": "232 U 1",
+      "realReference": "SNCF 232 U 1",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1949,
+        "status": "historique",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 2940,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 38,
+        "tractionPower": 76,
+        "range": 36,
+        "efficiency": 20,
+        "reliability": 45,
+        "maintenanceCost": 95,
+        "purchaseCost": 70,
+        "prestige": 98,
+        "unlockLevel": 4
+      },
+      "notes": "Prototype vapeur français très performant mais unique."
+    },
+    {
+      "id": "steam_010_030_tu",
+      "era": "steam",
+      "eraLabel": "Ère de la vapeur",
+      "priority": 10,
+      "gameName": "030 TU",
+      "realReference": "SNCF 030 TU",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "vapeur",
+      "role": [
+        "manœuvre"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1944,
+        "status": "historique",
+        "maxSpeedKmhApprox": 60,
+        "powerKwApprox": 550,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 6,
+        "tractionPower": 26,
+        "range": 22,
+        "efficiency": 26,
+        "reliability": 66,
+        "maintenanceCost": 35,
+        "purchaseCost": 14,
+        "prestige": 28,
+        "unlockLevel": 1
+      },
+      "notes": "Locomotive-tender de manœuvre, lente mais économique au début du jeu."
+    },
+    {
+      "id": "diesel_001_cc_72000",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 1,
+      "gameName": "CC 72000",
+      "realReference": "SNCF CC 72000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1967,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 2650,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 45,
+        "tractionPower": 75,
+        "range": 70,
+        "efficiency": 42,
+        "reliability": 62,
+        "maintenanceCost": 76,
+        "purchaseCost": 62,
+        "prestige": 90,
+        "unlockLevel": 1
+      },
+      "notes": "La grande diesel française de prestige, très connue sur trains rapides."
+    },
+    {
+      "id": "diesel_002_bb_67400",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 2,
+      "gameName": "BB 67400",
+      "realReference": "SNCF BB 67400",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1969,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 1765,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 36,
+        "tractionPower": 56,
+        "range": 64,
+        "efficiency": 46,
+        "reliability": 70,
+        "maintenanceCost": 58,
+        "purchaseCost": 42,
+        "prestige": 72,
+        "unlockLevel": 1
+      },
+      "notes": "Diesel polyvalente voyageurs/fret, très répandue."
+    },
+    {
+      "id": "diesel_003_x_2800",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 3,
+      "gameName": "X 2800",
+      "realReference": "SNCF X 2800",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "autorail",
+      "traction": "diesel",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1957,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 825,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 30,
+        "range": 58,
+        "efficiency": 54,
+        "reliability": 74,
+        "maintenanceCost": 42,
+        "purchaseCost": 26,
+        "prestige": 62,
+        "unlockLevel": 1
+      },
+      "notes": "Autorail diesel emblématique des lignes secondaires."
+    },
+    {
+      "id": "diesel_004_x_72500",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 4,
+      "gameName": "X 72500",
+      "realReference": "SNCF X 72500",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "autorail",
+      "traction": "diesel",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1997,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 882,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 46,
+        "tractionPower": 38,
+        "range": 62,
+        "efficiency": 50,
+        "reliability": 48,
+        "maintenanceCost": 62,
+        "purchaseCost": 48,
+        "prestige": 58,
+        "unlockLevel": 3
+      },
+      "notes": "Autorail régional moderne et rapide."
+    },
+    {
+      "id": "diesel_005_x_73500",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 5,
+      "gameName": "X 73500",
+      "realReference": "SNCF X 73500",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "autorail",
+      "traction": "diesel",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1999,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 514,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 36,
+        "tractionPower": 24,
+        "range": 60,
+        "efficiency": 62,
+        "reliability": 68,
+        "maintenanceCost": 38,
+        "purchaseCost": 30,
+        "prestige": 46,
+        "unlockLevel": 2
+      },
+      "notes": "Autorail TER très répandu sur petites lignes."
+    },
+    {
+      "id": "diesel_006_x_4300",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 6,
+      "gameName": "X 4300 Caravelle",
+      "realReference": "SNCF X 4300 / EAD",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "autorail",
+      "traction": "diesel",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1963,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 425,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 22,
+        "range": 54,
+        "efficiency": 48,
+        "reliability": 66,
+        "maintenanceCost": 36,
+        "purchaseCost": 22,
+        "prestige": 52,
+        "unlockLevel": 1
+      },
+      "notes": "Autorail diesel classique, bon pour un réseau régional ancien."
+    },
+    {
+      "id": "diesel_007_bb_67000",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 7,
+      "gameName": "BB 67000",
+      "realReference": "SNCF BB 67000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1963,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 90,
+        "powerKwApprox": 1240,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 18,
+        "tractionPower": 48,
+        "range": 60,
+        "efficiency": 40,
+        "reliability": 64,
+        "maintenanceCost": 52,
+        "purchaseCost": 34,
+        "prestige": 50,
+        "unlockLevel": 1
+      },
+      "notes": "Diesel de transition, robuste mais moins rapide."
+    },
+    {
+      "id": "diesel_008_a1a_a1a_68000",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 8,
+      "gameName": "A1A-A1A 68000",
+      "realReference": "SNCF A1A-A1A 68000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1963,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 130,
+        "powerKwApprox": 1985,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 32,
+        "tractionPower": 68,
+        "range": 66,
+        "efficiency": 38,
+        "reliability": 56,
+        "maintenanceCost": 70,
+        "purchaseCost": 50,
+        "prestige": 66,
+        "unlockLevel": 2
+      },
+      "notes": "Diesel lourde pour trains importants hors lignes électrifiées."
+    },
+    {
+      "id": "diesel_009_bb_66000",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 9,
+      "gameName": "BB 66000",
+      "realReference": "SNCF BB 66000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1960,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 830,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 25,
+        "tractionPower": 38,
+        "range": 58,
+        "efficiency": 44,
+        "reliability": 72,
+        "maintenanceCost": 44,
+        "purchaseCost": 28,
+        "prestige": 44,
+        "unlockLevel": 1
+      },
+      "notes": "Diesel très utilisée pour fret, dessertes et manœuvres."
+    },
+    {
+      "id": "diesel_010_bb_75000",
+      "era": "diesel",
+      "eraLabel": "Ère du diesel",
+      "priority": 10,
+      "gameName": "BB 75000",
+      "realReference": "SNCF / Fret BB 75000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "diesel",
+      "role": [
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2007,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": 2000,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 70,
+        "range": 76,
+        "efficiency": 58,
+        "reliability": 78,
+        "maintenanceCost": 54,
+        "purchaseCost": 58,
+        "prestige": 60,
+        "unlockLevel": 4
+      },
+      "notes": "Diesel fret moderne, fiable et sobre par rapport aux anciennes séries."
+    },
+    {
+      "id": "electric_loco_001_cc_6500",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 1,
+      "gameName": "CC 6500",
+      "realReference": "SNCF CC 6500",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "électrique",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1969,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 200,
+        "powerKwApprox": 5900,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 58,
+        "tractionPower": 82,
+        "range": 88,
+        "efficiency": 72,
+        "reliability": 65,
+        "maintenanceCost": 72,
+        "purchaseCost": 68,
+        "prestige": 92,
+        "unlockLevel": 1
+      },
+      "notes": "Locomotive électrique de prestige, grands express et forte puissance."
+    },
+    {
+      "id": "electric_loco_002_bb_26000",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 2,
+      "gameName": "BB 26000 Sybic",
+      "realReference": "SNCF BB 26000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "électrique",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1988,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 200,
+        "powerKwApprox": 5600,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 58,
+        "tractionPower": 78,
+        "range": 90,
+        "efficiency": 76,
+        "reliability": 74,
+        "maintenanceCost": 58,
+        "purchaseCost": 64,
+        "prestige": 86,
+        "unlockLevel": 2
+      },
+      "notes": "Bicourant moderne, très polyvalente voyageurs/fret."
+    },
+    {
+      "id": "electric_loco_003_bb_22200",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 3,
+      "gameName": "BB 22200",
+      "realReference": "SNCF BB 22200",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "électrique",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1976,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 4400,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 46,
+        "tractionPower": 64,
+        "range": 86,
+        "efficiency": 70,
+        "reliability": 72,
+        "maintenanceCost": 52,
+        "purchaseCost": 50,
+        "prestige": 70,
+        "unlockLevel": 1
+      },
+      "notes": "Bicourant polyvalente, utile sur beaucoup de lignes."
+    },
+    {
+      "id": "electric_loco_004_bb_15000",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 4,
+      "gameName": "BB 15000",
+      "realReference": "SNCF BB 15000",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "électrique",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1971,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 4400,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 46,
+        "tractionPower": 64,
+        "range": 84,
+        "efficiency": 71,
+        "reliability": 74,
+        "maintenanceCost": 50,
+        "purchaseCost": 48,
+        "prestige": 68,
+        "unlockLevel": 1
+      },
+      "notes": "Locomotive 25 kV connue sur les axes Nord/Est."
+    },
+    {
+      "id": "electric_loco_005_bb_7200",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 5,
+      "gameName": "BB 7200",
+      "realReference": "SNCF BB 7200",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "locomotive",
+      "traction": "électrique",
+      "role": [
+        "voyageurs",
+        "fret"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1976,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 4040,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 45,
+        "tractionPower": 60,
+        "range": 82,
+        "efficiency": 70,
+        "reliability": 76,
+        "maintenanceCost": 48,
+        "purchaseCost": 45,
+        "prestige": 66,
+        "unlockLevel": 1
+      },
+      "notes": "Locomotive 1,5 kV classique, efficace et très répandue."
+    },
+    {
+      "id": "electric_emu_006_z_5600",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 6,
+      "gameName": "Z 5600 / Z2N",
+      "realReference": "SNCF Z 5600",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "électrique",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1982,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 2800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 38,
+        "tractionPower": 52,
+        "range": 78,
+        "efficiency": 74,
+        "reliability": 68,
+        "maintenanceCost": 46,
+        "purchaseCost": 42,
+        "prestige": 64,
+        "unlockLevel": 1
+      },
+      "notes": "Automotrice deux niveaux très connue en Île-de-France, notamment RER C."
+    },
+    {
+      "id": "electric_emu_007_z_20500",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 7,
+      "gameName": "Z 20500",
+      "realReference": "SNCF Z 20500",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "électrique",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1988,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 2800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 38,
+        "tractionPower": 54,
+        "range": 80,
+        "efficiency": 75,
+        "reliability": 70,
+        "maintenanceCost": 48,
+        "purchaseCost": 44,
+        "prestige": 66,
+        "unlockLevel": 2
+      },
+      "notes": "Automotrice deux niveaux Transilien/RER, forte capacité."
+    },
+    {
+      "id": "electric_emu_008_z_50000",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 8,
+      "gameName": "Z 50000 Francilien",
+      "realReference": "SNCF Z 50000 Francilien",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "électrique",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2009,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": 2950,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 40,
+        "tractionPower": 58,
+        "range": 78,
+        "efficiency": 82,
+        "reliability": 76,
+        "maintenanceCost": 52,
+        "purchaseCost": 62,
+        "prestige": 72,
+        "unlockLevel": 3
+      },
+      "notes": "Automotrice moderne de banlieue, bonne accélération et capacité."
+    },
+    {
+      "id": "electric_emu_009_z_21500",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 9,
+      "gameName": "Z 21500 / Z TER",
+      "realReference": "SNCF Z 21500",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "électrique",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2002,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 200,
+        "powerKwApprox": 1760,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 58,
+        "tractionPower": 46,
+        "range": 84,
+        "efficiency": 78,
+        "reliability": 72,
+        "maintenanceCost": 50,
+        "purchaseCost": 56,
+        "prestige": 70,
+        "unlockLevel": 3
+      },
+      "notes": "Automotrice régionale rapide, adaptée aux TER longue distance."
+    },
+    {
+      "id": "electric_emu_010_regio_2n",
+      "era": "electric",
+      "eraLabel": "Ère de l'électrique",
+      "priority": 10,
+      "gameName": "Regio 2N",
+      "realReference": "SNCF Z 55500 / Z 56300 Regio 2N",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "électrique",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2014,
+        "status": "historique/exploité selon série",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": 2400,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 47,
+        "tractionPower": 56,
+        "range": 84,
+        "efficiency": 84,
+        "reliability": 74,
+        "maintenanceCost": 54,
+        "purchaseCost": 68,
+        "prestige": 76,
+        "unlockLevel": 4
+      },
+      "notes": "Automotrice moderne deux niveaux, forte capacité régionale."
+    },
+    {
+      "id": "high_speed_001_tgv_sud_est",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 1,
+      "gameName": "TGV Sud-Est",
+      "realReference": "SNCF TGV Sud-Est",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1981,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 300,
+        "powerKwApprox": 6450,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 70,
+        "tractionPower": 72,
+        "range": 90,
+        "efficiency": 72,
+        "reliability": 78,
+        "maintenanceCost": 62,
+        "purchaseCost": 70,
+        "prestige": 95,
+        "unlockLevel": 1
+      },
+      "notes": "Premier TGV commercial français, icône absolue."
+    },
+    {
+      "id": "high_speed_002_tgv_atlantique",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 2,
+      "gameName": "TGV Atlantique",
+      "realReference": "SNCF TGV Atlantique",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1989,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 300,
+        "powerKwApprox": 8800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 515
+      },
+      "gameplay": {
+        "speed": 72,
+        "tractionPower": 82,
+        "range": 92,
+        "efficiency": 74,
+        "reliability": 76,
+        "maintenanceCost": 66,
+        "purchaseCost": 76,
+        "prestige": 94,
+        "unlockLevel": 2
+      },
+      "notes": "TGV Atlantique, associé au record de 1990."
+    },
+    {
+      "id": "high_speed_003_tgv_reseau",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 3,
+      "gameName": "TGV Réseau",
+      "realReference": "SNCF TGV Réseau",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1992,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 8800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 76,
+        "tractionPower": 82,
+        "range": 93,
+        "efficiency": 76,
+        "reliability": 77,
+        "maintenanceCost": 66,
+        "purchaseCost": 78,
+        "prestige": 88,
+        "unlockLevel": 2
+      },
+      "notes": "TGV interrégional et international polyvalent."
+    },
+    {
+      "id": "high_speed_004_tgv_duplex",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 4,
+      "gameName": "TGV Duplex",
+      "realReference": "SNCF TGV Duplex",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1995,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 8800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 76,
+        "tractionPower": 82,
+        "range": 94,
+        "efficiency": 78,
+        "reliability": 80,
+        "maintenanceCost": 68,
+        "purchaseCost": 84,
+        "prestige": 92,
+        "unlockLevel": 3
+      },
+      "notes": "TGV deux niveaux très connu, forte capacité."
+    },
+    {
+      "id": "high_speed_005_tgv_pos",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 5,
+      "gameName": "TGV POS",
+      "realReference": "SNCF TGV POS",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2006,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 9600,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 574.8
+      },
+      "gameplay": {
+        "speed": 80,
+        "tractionPower": 88,
+        "range": 94,
+        "efficiency": 78,
+        "reliability": 76,
+        "maintenanceCost": 75,
+        "purchaseCost": 92,
+        "prestige": 98,
+        "unlockLevel": 4
+      },
+      "notes": "Base technique du record V150 à 574,8 km/h."
+    },
+    {
+      "id": "high_speed_006_tgv_dasye",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 6,
+      "gameName": "TGV Dasye",
+      "realReference": "SNCF TGV Dasye",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2008,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 9280,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 78,
+        "tractionPower": 86,
+        "range": 94,
+        "efficiency": 81,
+        "reliability": 78,
+        "maintenanceCost": 70,
+        "purchaseCost": 88,
+        "prestige": 88,
+        "unlockLevel": 4
+      },
+      "notes": "Duplex amélioré avec motorisation moderne."
+    },
+    {
+      "id": "high_speed_007_euroduplex_2n2",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 7,
+      "gameName": "Euroduplex / 2N2",
+      "realReference": "SNCF TGV 2N2 Euroduplex",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2011,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 9280,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 78,
+        "tractionPower": 86,
+        "range": 96,
+        "efficiency": 82,
+        "reliability": 80,
+        "maintenanceCost": 72,
+        "purchaseCost": 92,
+        "prestige": 90,
+        "unlockLevel": 5
+      },
+      "notes": "TGV international moderne, multi-tension selon versions."
+    },
+    {
+      "id": "high_speed_008_thalys_pbka",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 8,
+      "gameName": "Thalys PBA/PBKA",
+      "realReference": "Thalys PBA/PBKA",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1996,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 300,
+        "powerKwApprox": 8800,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 72,
+        "tractionPower": 82,
+        "range": 96,
+        "efficiency": 76,
+        "reliability": 74,
+        "maintenanceCost": 70,
+        "purchaseCost": 86,
+        "prestige": 88,
+        "unlockLevel": 3
+      },
+      "notes": "TGV international France-Belgique-Pays-Bas-Allemagne."
+    },
+    {
+      "id": "high_speed_009_eurostar_tmst",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 9,
+      "gameName": "Eurostar TMST",
+      "realReference": "Eurostar Class 373 / TMST",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1993,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 300,
+        "powerKwApprox": 12200,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 72,
+        "tractionPower": 92,
+        "range": 98,
+        "efficiency": 72,
+        "reliability": 72,
+        "maintenanceCost": 82,
+        "purchaseCost": 96,
+        "prestige": 94,
+        "unlockLevel": 4
+      },
+      "notes": "Train transmanche, très grande puissance et image forte."
+    },
+    {
+      "id": "high_speed_010_tgv_m",
+      "era": "high_speed",
+      "eraLabel": "Ère de la grande vitesse",
+      "priority": 10,
+      "gameName": "TGV M / Avelia Horizon",
+      "realReference": "SNCF TGV M / Alstom Avelia Horizon",
+      "origin": "France / Europe",
+      "isFrenchOrFrenchLinked": true,
+      "category": "rame grande vitesse",
+      "traction": "électrique grande vitesse",
+      "role": [
+        "voyageurs grande vitesse"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2026,
+        "status": "historique/exploité/projet selon série",
+        "maxSpeedKmhApprox": 320,
+        "powerKwApprox": 7760,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 80,
+        "tractionPower": 82,
+        "range": 98,
+        "efficiency": 92,
+        "reliability": 80,
+        "maintenanceCost": 74,
+        "purchaseCost": 100,
+        "prestige": 98,
+        "unlockLevel": 6
+      },
+      "notes": "Nouvelle génération TGV deux niveaux, plus capacitaire et plus efficiente."
+    },
+    {
+      "id": "hydrogen_001_regiolis_h2",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 1,
+      "gameName": "Régiolis H2",
+      "realReference": "Alstom Coradia Polyvalent / Régiolis H2",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2027,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 600,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 48,
+        "tractionPower": 52,
+        "range": 78,
+        "efficiency": 78,
+        "reliability": 62,
+        "maintenanceCost": 64,
+        "purchaseCost": 78,
+        "prestige": 86,
+        "unlockLevel": 1
+      },
+      "notes": "TER hydrogène français, à utiliser comme référence principale de l’ère H2."
+    },
+    {
+      "id": "hydrogen_002_coradia_ilint",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 2,
+      "gameName": "Coradia iLint",
+      "realReference": "Alstom Coradia iLint",
+      "origin": "Allemagne / Alstom",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2018,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 1000,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 42,
+        "tractionPower": 48,
+        "range": 90,
+        "efficiency": 82,
+        "reliability": 68,
+        "maintenanceCost": 60,
+        "purchaseCost": 72,
+        "prestige": 92,
+        "unlockLevel": 1
+      },
+      "notes": "Premier train voyageurs hydrogène commercial connu."
+    },
+    {
+      "id": "hydrogen_003_coradia_stream_h",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 3,
+      "gameName": "Coradia Stream H",
+      "realReference": "Alstom Coradia Stream H",
+      "origin": "Italie / Alstom",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2020,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 600,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 54,
+        "range": 80,
+        "efficiency": 84,
+        "reliability": 66,
+        "maintenanceCost": 62,
+        "purchaseCost": 82,
+        "prestige": 82,
+        "unlockLevel": 2
+      },
+      "notes": "Version hydrogène moderne de la famille Coradia Stream."
+    },
+    {
+      "id": "hydrogen_004_mireo_plus_h",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 4,
+      "gameName": "Mireo Plus H",
+      "realReference": "Siemens Mireo Plus H",
+      "origin": "Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2024,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 1000,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 56,
+        "range": 92,
+        "efficiency": 84,
+        "reliability": 70,
+        "maintenanceCost": 64,
+        "purchaseCost": 84,
+        "prestige": 80,
+        "unlockLevel": 3
+      },
+      "notes": "Concurrent hydrogène régional performant."
+    },
+    {
+      "id": "hydrogen_005_flirt_h2",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 5,
+      "gameName": "FLIRT H2",
+      "realReference": "Stadler FLIRT H2",
+      "origin": "Suisse / USA",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2024,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 130,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 460,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 38,
+        "tractionPower": 52,
+        "range": 88,
+        "efficiency": 82,
+        "reliability": 70,
+        "maintenanceCost": 66,
+        "purchaseCost": 86,
+        "prestige": 84,
+        "unlockLevel": 3
+      },
+      "notes": "Matériel hydrogène régional, intéressant pour l’autonomie et les records d’essai."
+    },
+    {
+      "id": "hydrogen_006_fch2rail",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 6,
+      "gameName": "FCH2Rail",
+      "realReference": "CAF FCH2Rail",
+      "origin": "Espagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2022,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 600,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 58,
+        "range": 82,
+        "efficiency": 80,
+        "reliability": 58,
+        "maintenanceCost": 72,
+        "purchaseCost": 88,
+        "prestige": 78,
+        "unlockLevel": 4
+      },
+      "notes": "Prototype hybride caténaire/hydrogène/batterie."
+    },
+    {
+      "id": "hydrogen_007_hybari",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 7,
+      "gameName": "HYBARI",
+      "realReference": "JR East FV-E991 HYBARI",
+      "origin": "Japon",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2022,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 140,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 40,
+        "range": 52,
+        "efficiency": 78,
+        "reliability": 56,
+        "maintenanceCost": 62,
+        "purchaseCost": 70,
+        "prestige": 72,
+        "unlockLevel": 2
+      },
+      "notes": "Prototype hydrogène japonais, utile pour une branche expérimentale."
+    },
+    {
+      "id": "hydrogen_008_crrc_h2",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 8,
+      "gameName": "CRRC H2 Urban",
+      "realReference": "CRRC hydrogen urban train",
+      "origin": "Chine",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2020,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 600,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 48,
+        "tractionPower": 54,
+        "range": 80,
+        "efficiency": 80,
+        "reliability": 64,
+        "maintenanceCost": 60,
+        "purchaseCost": 78,
+        "prestige": 70,
+        "unlockLevel": 3
+      },
+      "notes": "Train hydrogène urbain/régional chinois."
+    },
+    {
+      "id": "hydrogen_009_hyundai_h2",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 9,
+      "gameName": "Hyundai Rotem H2",
+      "realReference": "Hyundai Rotem hydrogen train/tram",
+      "origin": "Corée du Sud",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2020,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 110,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 200,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 32,
+        "tractionPower": 38,
+        "range": 58,
+        "efficiency": 84,
+        "reliability": 62,
+        "maintenanceCost": 54,
+        "purchaseCost": 62,
+        "prestige": 64,
+        "unlockLevel": 2
+      },
+      "notes": "Matériel hydrogène urbain, moins rapide mais sobre."
+    },
+    {
+      "id": "hydrogen_010_vittal_one_h2",
+      "era": "hydrogen",
+      "eraLabel": "Ère de l'hydrogène",
+      "priority": 10,
+      "gameName": "Talgo Vittal-One H2",
+      "realReference": "Talgo Vittal-One H2",
+      "origin": "Espagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "hydrogène",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2021,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 220,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 800,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 66,
+        "tractionPower": 60,
+        "range": 88,
+        "efficiency": 82,
+        "reliability": 50,
+        "maintenanceCost": 82,
+        "purchaseCost": 98,
+        "prestige": 88,
+        "unlockLevel": 5
+      },
+      "notes": "Concept hydrogène ambitieux pour services plus rapides."
+    },
+    {
+      "id": "battery_001_agc_batteries",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 1,
+      "gameName": "AGC Batteries",
+      "realReference": "SNCF / Alstom AGC batteries",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2024,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 80,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 50,
+        "range": 54,
+        "efficiency": 88,
+        "reliability": 62,
+        "maintenanceCost": 52,
+        "purchaseCost": 66,
+        "prestige": 82,
+        "unlockLevel": 1
+      },
+      "notes": "Référence française principale : AGC bimode transformé en rame batterie."
+    },
+    {
+      "id": "battery_002_regiolis_hybride",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 2,
+      "gameName": "Régiolis Hybride",
+      "realReference": "SNCF / Alstom Régiolis hybride",
+      "origin": "France",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2020,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 20,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 52,
+        "range": 42,
+        "efficiency": 76,
+        "reliability": 64,
+        "maintenanceCost": 58,
+        "purchaseCost": 68,
+        "prestige": 74,
+        "unlockLevel": 1
+      },
+      "notes": "Transition hybride utile en gameplay avant le 100 % batterie."
+    },
+    {
+      "id": "battery_003_coradia_bemu",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 3,
+      "gameName": "Coradia Continental BEMU",
+      "realReference": "Alstom Coradia Continental BEMU",
+      "origin": "Allemagne / Alstom",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2021,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 120,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 54,
+        "range": 70,
+        "efficiency": 90,
+        "reliability": 70,
+        "maintenanceCost": 54,
+        "purchaseCost": 76,
+        "prestige": 78,
+        "unlockLevel": 2
+      },
+      "notes": "BEMU régional moderne, bonne autonomie."
+    },
+    {
+      "id": "battery_004_flirt_akku",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 4,
+      "gameName": "FLIRT Akku",
+      "realReference": "Stadler FLIRT Akku",
+      "origin": "Suisse / Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2022,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 150,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 56,
+        "range": 78,
+        "efficiency": 90,
+        "reliability": 74,
+        "maintenanceCost": 56,
+        "purchaseCost": 80,
+        "prestige": 82,
+        "unlockLevel": 3
+      },
+      "notes": "Référence batterie internationale, autonomie élevée."
+    },
+    {
+      "id": "battery_005_mireo_plus_b",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 5,
+      "gameName": "Mireo Plus B",
+      "realReference": "Siemens Mireo Plus B",
+      "origin": "Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2024,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 120,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 42,
+        "tractionPower": 52,
+        "range": 70,
+        "efficiency": 88,
+        "reliability": 72,
+        "maintenanceCost": 54,
+        "purchaseCost": 78,
+        "prestige": 74,
+        "unlockLevel": 3
+      },
+      "notes": "BEMU allemand, sobre et adapté aux lignes régionales."
+    },
+    {
+      "id": "battery_006_cityjet_eco",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 6,
+      "gameName": "Cityjet Eco",
+      "realReference": "Siemens Desiro ML Cityjet eco",
+      "origin": "Autriche",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2019,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 120,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 80,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 34,
+        "tractionPower": 46,
+        "range": 56,
+        "efficiency": 86,
+        "reliability": 64,
+        "maintenanceCost": 50,
+        "purchaseCost": 62,
+        "prestige": 68,
+        "unlockLevel": 2
+      },
+      "notes": "Prototype batterie pour exploitation régionale."
+    },
+    {
+      "id": "battery_007_talent_3_bemu",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 7,
+      "gameName": "Talent 3 BEMU",
+      "realReference": "Bombardier / Alstom Talent 3 BEMU",
+      "origin": "Allemagne / Autriche",
+      "isFrenchOrFrenchLinked": true,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2018,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 140,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 100,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 42,
+        "tractionPower": 50,
+        "range": 64,
+        "efficiency": 86,
+        "reliability": 60,
+        "maintenanceCost": 58,
+        "purchaseCost": 70,
+        "prestige": 70,
+        "unlockLevel": 2
+      },
+      "notes": "Train batterie expérimental, bon intermédiaire."
+    },
+    {
+      "id": "battery_008_class_230_battery",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 8,
+      "gameName": "Class 230 Battery",
+      "realReference": "Vivarail Class 230 Battery",
+      "origin": "Royaume-Uni",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2021,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 80,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 36,
+        "range": 54,
+        "efficiency": 82,
+        "reliability": 58,
+        "maintenanceCost": 42,
+        "purchaseCost": 40,
+        "prestige": 48,
+        "unlockLevel": 1
+      },
+      "notes": "Train batterie plus lent, intéressant comme option économique."
+    },
+    {
+      "id": "battery_009_hitachi_blues",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 9,
+      "gameName": "Hitachi Blues",
+      "realReference": "Hitachi Masaccio / Blues hybride batterie",
+      "origin": "Italie",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2022,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 160,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 15,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 50,
+        "tractionPower": 54,
+        "range": 38,
+        "efficiency": 78,
+        "reliability": 70,
+        "maintenanceCost": 58,
+        "purchaseCost": 76,
+        "prestige": 72,
+        "unlockLevel": 3
+      },
+      "notes": "Hybride régional avec batterie, très utile en exploitation mixte."
+    },
+    {
+      "id": "battery_010_ev_e301_accum",
+      "era": "battery",
+      "eraLabel": "Ère de la batterie",
+      "priority": 10,
+      "gameName": "EV-E301 ACCUM",
+      "realReference": "JR East EV-E301 ACCUM",
+      "origin": "Japon",
+      "isFrenchOrFrenchLinked": false,
+      "category": "automotrice",
+      "traction": "batterie",
+      "role": [
+        "voyageurs régional"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2014,
+        "status": "exploité/prototype/projet selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": 50,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 28,
+        "tractionPower": 34,
+        "range": 46,
+        "efficiency": 88,
+        "reliability": 72,
+        "maintenanceCost": 38,
+        "purchaseCost": 48,
+        "prestige": 66,
+        "unlockLevel": 1
+      },
+      "notes": "Train batterie pionnier, lent mais très efficient."
+    },
+    {
+      "id": "maglev_001_l0_series",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 1,
+      "gameName": "L0 Series SCMaglev",
+      "realReference": "JR Central L0 Series SCMaglev",
+      "origin": "Japon",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2011,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 500,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 603
+      },
+      "gameplay": {
+        "speed": 100,
+        "tractionPower": 100,
+        "range": 100,
+        "efficiency": 86,
+        "reliability": 60,
+        "maintenanceCost": 100,
+        "purchaseCost": 100,
+        "prestige": 100,
+        "unlockLevel": 5
+      },
+      "notes": "Référence absolue de performance maglev."
+    },
+    {
+      "id": "maglev_002_mlx01",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 2,
+      "gameName": "MLX01",
+      "realReference": "JR Central MLX01",
+      "origin": "Japon",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1996,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 500,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 581
+      },
+      "gameplay": {
+        "speed": 96,
+        "tractionPower": 96,
+        "range": 96,
+        "efficiency": 82,
+        "reliability": 52,
+        "maintenanceCost": 98,
+        "purchaseCost": 96,
+        "prestige": 96,
+        "unlockLevel": 4
+      },
+      "notes": "Prototype japonais très rapide, prédécesseur du L0."
+    },
+    {
+      "id": "maglev_003_shanghai_transrapid",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 3,
+      "gameName": "Shanghai Transrapid",
+      "realReference": "Shanghai Maglev / Transrapid",
+      "origin": "Chine / Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2004,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 431,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 501
+      },
+      "gameplay": {
+        "speed": 88,
+        "tractionPower": 90,
+        "range": 86,
+        "efficiency": 80,
+        "reliability": 70,
+        "maintenanceCost": 90,
+        "purchaseCost": 94,
+        "prestige": 94,
+        "unlockLevel": 4
+      },
+      "notes": "Maglev commercial rapide le plus connu."
+    },
+    {
+      "id": "maglev_004_transrapid_08",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 4,
+      "gameName": "Transrapid 08",
+      "realReference": "Transrapid 08",
+      "origin": "Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1999,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 500,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 500
+      },
+      "gameplay": {
+        "speed": 94,
+        "tractionPower": 92,
+        "range": 90,
+        "efficiency": 78,
+        "reliability": 50,
+        "maintenanceCost": 96,
+        "purchaseCost": 92,
+        "prestige": 90,
+        "unlockLevel": 4
+      },
+      "notes": "Prototype allemand de très grande vitesse."
+    },
+    {
+      "id": "maglev_005_transrapid_09",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 5,
+      "gameName": "Transrapid 09",
+      "realReference": "Transrapid 09",
+      "origin": "Allemagne",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2007,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 350,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": 350
+      },
+      "gameplay": {
+        "speed": 76,
+        "tractionPower": 80,
+        "range": 80,
+        "efficiency": 82,
+        "reliability": 58,
+        "maintenanceCost": 86,
+        "purchaseCost": 88,
+        "prestige": 78,
+        "unlockLevel": 3
+      },
+      "notes": "Prototype plus récent, moins orienté record que le Transrapid 08."
+    },
+    {
+      "id": "maglev_006_linimo",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 6,
+      "gameName": "Linimo HSST-100L",
+      "realReference": "Linimo HSST-100L",
+      "origin": "Japon",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2005,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 30,
+        "tractionPower": 42,
+        "range": 58,
+        "efficiency": 86,
+        "reliability": 78,
+        "maintenanceCost": 62,
+        "purchaseCost": 58,
+        "prestige": 64,
+        "unlockLevel": 1
+      },
+      "notes": "Maglev urbain automatique, lent mais réellement exploité."
+    },
+    {
+      "id": "maglev_007_incheon",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 7,
+      "gameName": "Incheon Airport Maglev",
+      "realReference": "Incheon Airport Maglev",
+      "origin": "Corée du Sud",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2016,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 110,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 32,
+        "tractionPower": 40,
+        "range": 58,
+        "efficiency": 84,
+        "reliability": 72,
+        "maintenanceCost": 60,
+        "purchaseCost": 56,
+        "prestige": 60,
+        "unlockLevel": 1
+      },
+      "notes": "Maglev aéroportuaire urbain."
+    },
+    {
+      "id": "maglev_008_changsha",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 8,
+      "gameName": "Changsha Maglev Express",
+      "realReference": "Changsha Maglev Express",
+      "origin": "Chine",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2016,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 30,
+        "tractionPower": 42,
+        "range": 60,
+        "efficiency": 84,
+        "reliability": 74,
+        "maintenanceCost": 62,
+        "purchaseCost": 58,
+        "prestige": 58,
+        "unlockLevel": 1
+      },
+      "notes": "Maglev urbain/aéroportuaire chinois."
+    },
+    {
+      "id": "maglev_009_beijing_s1",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 9,
+      "gameName": "Beijing S1 Maglev",
+      "realReference": "Beijing Subway Line S1 Maglev",
+      "origin": "Chine",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 2017,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 100,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 30,
+        "tractionPower": 42,
+        "range": 62,
+        "efficiency": 84,
+        "reliability": 74,
+        "maintenanceCost": 60,
+        "purchaseCost": 58,
+        "prestige": 56,
+        "unlockLevel": 1
+      },
+      "notes": "Maglev urbain de banlieue."
+    },
+    {
+      "id": "maglev_010_birmingham",
+      "era": "maglev",
+      "eraLabel": "Ère de la sustentation magnétique",
+      "priority": 10,
+      "gameName": "Birmingham Maglev",
+      "realReference": "Birmingham Airport Maglev",
+      "origin": "Royaume-Uni",
+      "isFrenchOrFrenchLinked": false,
+      "category": "rame maglev",
+      "traction": "sustentation magnétique",
+      "role": [
+        "voyageurs spécial"
+      ],
+      "realWorld": {
+        "introducedYearApprox": 1984,
+        "status": "exploité/prototype/historique selon modèle",
+        "maxSpeedKmhApprox": 42,
+        "powerKwApprox": null,
+        "autonomyKmApprox": null,
+        "recordSpeedKmhApprox": null
+      },
+      "gameplay": {
+        "speed": 10,
+        "tractionPower": 18,
+        "range": 20,
+        "efficiency": 70,
+        "reliability": 40,
+        "maintenanceCost": 38,
+        "purchaseCost": 25,
+        "prestige": 50,
+        "unlockLevel": 1
+      },
+      "notes": "Ancien maglev commercial pionnier, très lent mais historiquement important."
+    }
+  ]
+}

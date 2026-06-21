@@ -261,6 +261,174 @@ function formatCycles(value) {
   return cycles <= 1 ? '1 cycle' : `${cycles} cycles`;
 }
 
+function trainCatalogEntries() {
+  const file = path.join(__dirname, 'data', 'sillons_train_catalog_v1.json');
+  const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const trains = Array.isArray(catalog?.trains) ? catalog.trains : [];
+  if (Number(catalog?.schemaVersion) !== 1 || trains.length !== 70) {
+    throw new Error('Catalogue trains invalide : 70 modèles attendus.');
+  }
+  const ids = new Set(trains.map(train => String(train?.id || '')));
+  if (ids.size !== 70 || ids.has('')) throw new Error('Catalogue trains invalide : identifiants uniques requis.');
+  return trains;
+}
+
+function catalogGameplay(entry, key) {
+  return Number(entry?.gameplay?.[key] || 0);
+}
+
+function catalogHasRole(entry, role) {
+  return (entry?.role || []).some(value => String(value).toLowerCase() === role);
+}
+
+function catalogEnergyType(entry) {
+  const era = String(entry?.era || '');
+  if (era === 'steam') return 'coal';
+  if (era === 'diesel') return 'diesel';
+  if (era === 'hydrogen') return 'hydrogen';
+  if (era === 'battery') return 'battery';
+  return 'electricity';
+}
+
+function catalogTrainSpeed(entry) {
+  const score = catalogGameplay(entry, 'speed');
+  const era = entry.era;
+  const formulas = {
+    steam: () => 45 + score * 1.45,
+    diesel: () => 75 + score * 1.65,
+    electric: () => 80 + score * 2.1,
+    high_speed: () => 160 + score * 2,
+    hydrogen: () => 70 + score * 1.7,
+    battery: () => 95 + score * 1.5,
+    maglev: () => 70 + score * 5
+  };
+  return Math.round((formulas[era] || (() => 80 + score * 1.5))());
+}
+
+function catalogTrainRange(entry) {
+  const score = catalogGameplay(entry, 'range');
+  const factor = { steam: 3, diesel: 3.4, electric: 4, high_speed: 6, hydrogen: 4.5, battery: 3.8, maglev: 13 }[entry.era] || 4;
+  return Math.max(30, Math.round(score * factor));
+}
+
+function catalogTrainPrice(entry) {
+  const score = catalogGameplay(entry, 'purchaseCost');
+  switch (entry.era) {
+    case 'steam': return Math.round(30000 + score * 5000);
+    case 'diesel': return Math.round(180000 + score * 20000);
+    case 'electric': return Math.round(300000 + score * score * 650);
+    case 'high_speed': return Math.round(500000 + Math.pow(Math.max(0, score - 60), 2) * 12000);
+    case 'hydrogen': return Math.round(1000000 + Math.max(0, score - 45) * 180000);
+    case 'battery': return Math.round(1500000 + score * 120000);
+    case 'maglev': return Math.round(10000000 + score * 800000);
+    default: return Math.round(250000 + score * 50000);
+  }
+}
+
+function catalogTrainEnergy(entry) {
+  const efficiency = catalogGameplay(entry, 'efficiency');
+  const baseline = { steam: 18, diesel: 10, electric: 9.5, high_speed: 16, hydrogen: 6, battery: 6, maglev: 15 }[entry.era] || 9;
+  const factor = { steam: 0.3, diesel: 0.1, electric: 0.05, high_speed: 0.05, hydrogen: 0.03, battery: 0.03, maglev: 0.05 }[entry.era] || 0.05;
+  return round2(Math.max(0.1, baseline - efficiency * factor));
+}
+
+function catalogTrainMaintenance(entry) {
+  const score = catalogGameplay(entry, 'maintenanceCost');
+  const factor = { steam: 0.95, diesel: 0.65, electric: 0.6, high_speed: 0.95, hydrogen: 0.5, battery: 0.4, maglev: 0.9 }[entry.era] || 0.6;
+  return round2(0.16 + score / 100 * factor);
+}
+
+function catalogTrainRequiredTech(entry) {
+  const freightOnly = catalogHasRole(entry, 'fret') && !(catalogHasRole(entry, 'voyageurs') || catalogHasRole(entry, 'voyageurs régional'));
+  const level = Math.max(1, Math.floor(catalogGameplay(entry, 'unlockLevel')));
+  if (entry.era === 'steam') {
+    if (freightOnly) return level <= 2 ? 'steam_freight_locomotives' : 'steam_articulated_locomotives';
+    return level <= 1 ? 'steam_first_locomotives' : level <= 2 ? 'steam_passenger_locomotives' : level <= 3 ? 'steam_reinforced_brakes' : 'steam_articulated_locomotives';
+  }
+  if (entry.era === 'diesel') {
+    if (freightOnly) return level <= 1 ? 'diesel_shunters' : 'diesel_freight_locomotives';
+    if (entry.category === 'autorail') return level <= 1 ? 'diesel_light_railcars' : 'diesel_mechanical';
+    return level <= 1 ? 'diesel_first_engines' : 'diesel_passenger_locomotives';
+  }
+  if (entry.era === 'electric') {
+    if (entry.category === 'automotrice') return level <= 1 ? 'electric_third_rail' : level <= 2 ? 'electric_dc_catenary' : 'electric_emus';
+    return level <= 1 ? 'electric_first_trains' : level <= 2 ? 'electric_locomotives' : 'electric_dual_current_trains';
+  }
+  if (entry.era === 'high_speed') return level <= 1 ? 'hsv_first_fast_trains' : level <= 2 ? 'hsv_trainsets' : level <= 4 ? 'hsv_distributed_traction' : 'hsv_premium_long_distance';
+  if (entry.era === 'hydrogen') return level <= 1 ? 'hydrogen_first_trains' : level <= 2 ? 'hydrogen_regional_trains' : level <= 4 ? 'hydrogen_rural_lines' : 'hydrogen_next_generation';
+  if (entry.era === 'battery') return level <= 1 ? 'battery_first_trains' : level <= 2 ? 'battery_suburban_trains' : level <= 3 ? 'battery_regional_trains' : 'battery_high_density';
+  if (entry.era === 'maglev') return level <= 1 ? 'maglev_levitation' : level <= 3 ? 'maglev_guidance' : level <= 4 ? 'maglev_linear_propulsion' : 'maglev_next_generation';
+  return '';
+}
+
+function catalogTrainModel(entry) {
+  const power = catalogGameplay(entry, 'tractionPower');
+  const freightOnly = catalogHasRole(entry, 'fret') && !(catalogHasRole(entry, 'voyageurs') || catalogHasRole(entry, 'voyageurs régional'));
+  const maneuver = catalogHasRole(entry, 'manœuvre');
+  const locomotive = entry.category === 'locomotive';
+  let capacity = 0;
+  let freight = 0;
+  if (locomotive) {
+    capacity = freightOnly || maneuver ? 0 : Math.round(150 + power * 3.8);
+    freight = maneuver ? Math.round(180 + power * 8) : freightOnly ? Math.round(250 + power * 9) : Math.round(80 + power * 5.3);
+  } else if (entry.era === 'high_speed') {
+    capacity = Math.round(600 + power * 5.2);
+  } else if (entry.era === 'maglev') {
+    capacity = Math.round(450 + power * 5);
+  } else if (entry.era === 'electric') {
+    capacity = Math.round(440 + power * 4);
+  } else if (entry.era === 'diesel') {
+    capacity = Math.round(300 + power * 6);
+  } else {
+    capacity = Math.round(380 + power * 5);
+  }
+
+  const type = locomotive
+    ? `Locomotive ${entry.traction}`
+    : entry.category === 'rame grande vitesse'
+      ? 'Rame grande vitesse'
+      : entry.category === 'rame maglev'
+        ? 'Rame maglev'
+        : 'Automotrice';
+  return {
+    id: entry.id,
+    name: entry.gameName,
+    type,
+    unlockEpoch: { steam: 0, diesel: 1, electric: 2, high_speed: 3, hydrogen: 4, battery: 5, maglev: 6 }[entry.era],
+    speed: catalogTrainSpeed(entry),
+    capacity,
+    freight,
+    energyType: catalogEnergyType(entry),
+    energy: catalogTrainEnergy(entry),
+    maintenance: catalogTrainMaintenance(entry),
+    price: catalogTrainPrice(entry),
+    reliability: round2(clamp(0.35 + catalogGameplay(entry, 'reliability') * 0.0065, 0.45, 0.97)),
+    comfort: round2(clamp(0.2 + catalogGameplay(entry, 'prestige') * 0.007, 0.2, 0.95)),
+    range: catalogTrainRange(entry),
+    description: `${entry.notes} Référence réelle : ${entry.realReference}.`,
+    requiredTech: catalogTrainRequiredTech(entry),
+    requiredTechLevel: Math.max(1, Math.floor(catalogGameplay(entry, 'unlockLevel'))),
+    catalog: {
+      era: entry.era,
+      priority: entry.priority,
+      category: entry.category,
+      traction: entry.traction,
+      role: entry.role,
+      origin: entry.origin,
+      realReference: entry.realReference,
+      realWorld: entry.realWorld,
+      gameplay: entry.gameplay
+    }
+  };
+}
+
+function buildTrainCatalogModels() {
+  const models = {};
+  for (const entry of trainCatalogEntries()) models[entry.id] = catalogTrainModel(entry);
+  normalizeTrainModelCompositionFlags(models);
+  return models;
+}
+
 function buildBalance() {
   const epochs = [
     { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0 },
@@ -271,7 +439,7 @@ function buildBalance() {
     { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 42, requiredTraffic: 4000000000 },
     { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 58, requiredTraffic: 12000000000 }
   ];
-  const trains = {
+  /* Catalogue historique retiré en v69.8.13 :
     steam_030_mixte: { id: 'steam_030_mixte', name: 'Locomotive vapeur 030 mixte', unlockEpoch: 0, type: 'Vapeur mixte', speed: 55, capacity: 140, freight: 120, energyType: 'coal', energy: 9.5, maintenance: 0.62, price: 95000, reliability: 0.78, comfort: 0.32, range: 50, description: 'Modèle de départ polyvalent, lent mais économique pour ouvrir les premières lignes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 1 },
     steam_120_omnibus: { id: 'steam_120_omnibus', name: 'Locomotive vapeur 120 omnibus', unlockEpoch: 0, type: 'Vapeur voyageurs', speed: 70, capacity: 210, freight: 60, energyType: 'coal', energy: 10.8, maintenance: 0.66, price: 135000, reliability: 0.75, comfort: 0.38, range: 75, description: 'Vapeur de desserte voyageurs, adaptée aux lignes régionales naissantes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 3 },
     steam_040_freight: { id: 'steam_040_freight', name: 'Locomotive vapeur 040 marchandises', unlockEpoch: 0, type: 'Vapeur fret', speed: 45, capacity: 40, freight: 360, energyType: 'coal', energy: 13.2, maintenance: 0.74, price: 155000, reliability: 0.8, comfort: 0.22, range: 90, description: 'Machine lente et tractrice pour les premiers trafics de marchandises.', requiredTech: 'steam_freight_locomotives', requiredTechLevel: 4 },
@@ -314,6 +482,8 @@ function buildBalance() {
     maglev_metropolitan_express: { id: 'maglev_metropolitan_express', name: 'Maglev express métropolitain', unlockEpoch: 6, type: 'Maglev métropolitain', speed: 520, capacity: 900, freight: 0, energyType: 'electricity', energy: 12.4, maintenance: 0.92, price: 68000000, reliability: 0.95, comfort: 0.91, range: 1250, description: 'Très forte capacité pour liaisons express entre métropoles.', requiredTech: 'maglev_metro_express_links', requiredTechLevel: 6 },
     maglev_next_gen_unit: { id: 'maglev_next_gen_unit', name: 'Maglev nouvelle génération', unlockEpoch: 6, type: 'Maglev nouvelle génération', speed: 600, capacity: 980, freight: 0, energyType: 'electricity', energy: 10.9, maintenance: 0.78, price: 92000000, reliability: 0.97, comfort: 0.95, range: 1500, description: 'Matériel ultime de très late game : vitesse extrême, confort et fiabilité.', requiredTech: 'maglev_next_generation', requiredTechLevel: 8 }
   };
+  */
+  const trains = buildTrainCatalogModels();
   const staff = {
     drivers: { label: 'Conducteur', salary: 4300, hireCost: 9000 },
     controllers: { label: 'Contrôleur', salary: 3300, hireCost: 6500 },
@@ -572,7 +742,54 @@ function buildTechTree() {
   add('social', 'talent_retention', 'Fidélisation des talents', 'Stabilise les équipes qualifiées sur le long terme.', 3, ['social_dialogue', 'apprenticeship_tracks'], [], ['Coûts RH et qualité de service améliorés']);
   add('social', 'research_campus', 'Campus R&D ferroviaire', 'Accélère les recherches avancées sans achat instantané.', 4, ['engineering_office', 'knowledge_management'], [], ['Vitesse laboratoire par niveau']);
 
+  synchronizeTechTreeWithTrainCatalog(groups);
   return finalizeTechTree(groups);
+}
+
+function synchronizeTechTreeWithTrainCatalog(tree) {
+  const nodes = new Map(Object.values(tree || {}).flatMap(group => group.nodes || []).map(node => [node.id, node]));
+  const looksLikeLegacyRollingStock = value => /locomotive|rame|train|autorail|automotrice|maglev|navette|tgv|duplex/i.test(String(value || ''));
+
+  for (const node of nodes.values()) {
+    // Les mentions de matériels génériques de l'ancien catalogue ne doivent
+    // plus apparaître dans les récompenses de recherche.
+    node.unlocks = (node.unlocks || []).filter(unlock => !looksLikeLegacyRollingStock(unlock));
+    node.catalogTrainIds = [];
+  }
+
+  for (const entry of trainCatalogEntries()) {
+    const node = nodes.get(catalogTrainRequiredTech(entry));
+    if (!node) throw new Error(`Recherche manquante pour le train ${entry.id}.`);
+    node.unlocks.push(entry.gameName);
+    node.catalogTrainIds.push(entry.id);
+  }
+
+  const realTechnologyContext = {
+    steam_first_locomotives: ['Standardisation des locomotives vapeur SNCF', 'Chaudières timbrées, distribution Walschaerts et normalisation de l’exploitation des 141 R.'],
+    diesel_first_engines: ['Traction diesel-électrique', 'Moteur diesel, génératrice/alternateur et traction électrique embarquée des locomotives de ligne.'],
+    electric_first_trains: ['Électrification 1,5 kV / 25 kV', 'Caténaires, sous-stations et moteurs de traction pour les grandes séries électriques françaises.'],
+    hsv_first_fast_trains: ['LGV et signalisation en cabine', 'Infrastructure dédiée, TVM et freinage dimensionné pour les premières rames TGV.'],
+    hsv_trainsets: ['Rames TGV articulées', 'Architecture articulée, bogies partagés et motrices d’extrémité des TGV Sud-Est et Atlantique.'],
+    hsv_distributed_traction: ['Traction répartie IGBT', 'Électronique de puissance et traction répartie des Euroduplex et rames modernes.'],
+    hsv_premium_long_distance: ['Plateforme Avelia Horizon', 'Architecture modulable et capacitaire inspirée du TGV M pour les liaisons longue distance.'],
+    hydrogen_first_trains: ['Chaîne hydrogène ferroviaire', 'Pile à combustible, batteries tampon et stockage gazeux pour les automotrices hydrogène.'],
+    hydrogen_regional_trains: ['Automotrices hydrogène régionales', 'Industrialisation des architectures Coradia iLint, Régiolis H2 et Mireo Plus H.'],
+    hydrogen_next_generation: ['Hydrogène haute autonomie', 'Réservoirs composites, supervision énergétique et chaînes de traction de nouvelle génération.'],
+    battery_first_trains: ['Batteries lithium-ion ferroviaires', 'Modules de traction batterie et recharge sous caténaire pour les premiers BEMU.'],
+    battery_regional_trains: ['Automotrices BEMU régionales', 'Gestion énergétique, recharge opportuniste et autonomie renforcée pour les dessertes régionales.'],
+    battery_high_density: ['Batteries haute densité', 'Cellules à haute énergie, refroidissement actif et systèmes de gestion batterie avancés.'],
+    maglev_levitation: ['Sustentation électrodynamique supraconductrice', 'Guidage sans contact et aimants supraconducteurs inspirés des prototypes SCMaglev.'],
+    maglev_guidance: ['Guidage magnétique actif', 'Contrôle de stabilité et positionnement actif à grande vitesse.'],
+    maglev_linear_propulsion: ['Moteur linéaire synchrone', 'Propulsion linéaire, alimentation segmentée et contrôle précis de la vitesse.'],
+    maglev_next_generation: ['Maglev grande vitesse de nouvelle génération', 'Chaîne de traction et sécurité système pour les plateformes MLX01 et L0 Series.']
+  };
+  for (const [id, [title, description]] of Object.entries(realTechnologyContext)) {
+    const node = nodes.get(id);
+    if (!node) continue;
+    node.title = title;
+    node.description = description;
+  }
+  return tree;
 }
 
 function researchNodePrereqWeight(node) {

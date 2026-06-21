@@ -12,11 +12,11 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const SAVE_DB_FILE = path.join(ROOT, 'data', 'save.sqlite');
+const SAVE_DB_FILE = process.env.SILLONS_SAVE_DB_FILE || path.join(ROOT, 'data', 'save.sqlite');
 const LEGACY_SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v69.8.12';
-const STATE_SCHEMA_VERSION = 176;
+const PROJECT_VERSION = 'v69.8.14';
+const STATE_SCHEMA_VERSION = 177;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,
