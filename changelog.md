@@ -1,3 +1,28 @@
+# v69.16.1 — correction de l’angle du premier visuel maglev
+
+- Remplacement du visuel `L0 Series SCMaglev` pour corriger l’angle de vue et l’aligner sur celui des autres trains de l’ère de la sustentation magnétique.
+- Conservation de la même DA : scène nocturne pluvieuse, rendu cinématique, format uniforme `13:8`, sans liseré décoratif.
+- Mise à jour de l’asset intégré dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Schéma save : `189`.
+
+# v69.16.0 — intégration des 10 visuels de l’ère de la sustentation magnétique
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `L0 Series SCMaglev`, `MLX01`, `Shanghai Transrapid`, `Transrapid 08`, `Transrapid 09`, `Linimo HSST-100L`, `Incheon Airport Maglev`, `Changsha Maglev Express`, `Beijing S1 Maglev` et `Birmingham Maglev`.
+- Ajout des assets dédiés dans `public/assets/trains/maglev/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `188`.
+
+# v69.15.0 — intégration des 10 visuels de l’ère de la batterie
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `AGC Batteries`, `Régiolis Hybride`, `Coradia Continental BEMU`, `FLIRT Akku`, `Mireo Plus B`, `Cityjet Eco`, `Talent 3 BEMU`, `Class 230 Battery`, `Hitachi Blues` et `EV-E301 ACCUM`.
+- Ajout des assets dédiés dans `public/assets/trains/battery/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `187`.
+
 # v69.13.1 — correction d’intégration des visuels grande vitesse
 
 - Correction de l’intégration des visuels `Train à grande vitesse` dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.

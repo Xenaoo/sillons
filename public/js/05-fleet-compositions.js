@@ -97,7 +97,17 @@ const TRAIN_ART_BY_MODEL_ID = Object.freeze({
   battery_007_talent_3_bemu: '/assets/trains/battery/battery_007_talent_3_bemu.png',
   battery_008_class_230_battery: '/assets/trains/battery/battery_008_class_230_battery.png',
   battery_009_hitachi_blues: '/assets/trains/battery/battery_009_hitachi_blues.png',
-  battery_010_ev_e301_accum: '/assets/trains/battery/battery_010_ev_e301_accum.png'
+  battery_010_ev_e301_accum: '/assets/trains/battery/battery_010_ev_e301_accum.png',
+  maglev_001_l0_series: '/assets/trains/maglev/maglev_001_l0_series.png',
+  maglev_002_mlx01: '/assets/trains/maglev/maglev_002_mlx01.png',
+  maglev_003_shanghai_transrapid: '/assets/trains/maglev/maglev_003_shanghai_transrapid.png',
+  maglev_004_transrapid_08: '/assets/trains/maglev/maglev_004_transrapid_08.png',
+  maglev_005_transrapid_09: '/assets/trains/maglev/maglev_005_transrapid_09.png',
+  maglev_006_linimo: '/assets/trains/maglev/maglev_006_linimo.png',
+  maglev_007_incheon: '/assets/trains/maglev/maglev_007_incheon.png',
+  maglev_008_changsha: '/assets/trains/maglev/maglev_008_changsha.png',
+  maglev_009_beijing_s1: '/assets/trains/maglev/maglev_009_beijing_s1.png',
+  maglev_010_birmingham: '/assets/trains/maglev/maglev_010_birmingham.png'
 });
 
 function trainArtUrl(model) {
