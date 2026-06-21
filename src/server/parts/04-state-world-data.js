@@ -1742,13 +1742,22 @@ function searchCommuneStations(query, limit = 30) {
     .map(s => {
       const name = normalizeStationSearchText(s.name);
       const postal = (s.codesPostaux || []).join(' ');
-      const starts = name.startsWith(q) ? 1000 : 0;
-      const includes = name.includes(q) ? 300 : 0;
-      const postalScore = postal.includes(q) ? 400 : 0;
-      return { s, score: starts + includes + postalScore + Math.log10((s.population || 5000)) * 10 };
+      const exact = name === q;
+      const starts = name.startsWith(q);
+      const includes = name.includes(q);
+      const postalMatch = postal.includes(q);
+      // Les correspondances de nom sont groupées avant les correspondances
+      // secondaires afin que « droite » retrouve Versailles-Rive-Droite.
+      const rank = exact ? 0 : starts ? 1 : includes ? 2 : postalMatch ? 3 : 4;
+      return {
+        s,
+        rank,
+        score: Math.log10((s.population || 5000)) * 10,
+        matches: exact || starts || includes || postalMatch
+      };
     })
-    .filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .filter(x => x.matches)
+    .sort((a, b) => a.rank - b.rank || b.score - a.score || String(a.s.name || '').localeCompare(String(b.s.name || ''), 'fr'))
     .slice(0, limit)
     .map(x => x.s);
 }

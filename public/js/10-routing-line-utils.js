@@ -1428,19 +1428,27 @@ function findStationMatches(query, limit = 12, sortMode = '') {
     .map(s => {
       const name = normalizeStationSearchText(s.name);
       const postal = (s.codesPostaux || []).join(' ');
-      const starts = name.startsWith(q) ? 1200 : 0;
-      const exact = name === q ? 3000 : 0;
-      const includes = name.includes(q) ? 450 : 0;
-      const postalScore = postal.includes(q) ? 800 : 0;
+      // Le rang est volontairement distinct du score : une gare dont le nom
+      // commence par la saisie doit toujours précéder une simple occurrence.
+      const exact = name === q;
+      const starts = name.startsWith(q);
+      const includes = name.includes(q);
+      const postalMatch = postal.includes(q);
+      const rank = exact ? 0 : starts ? 1 : includes ? 2 : postalMatch ? 3 : 4;
       const owned = app.state.me?.stations?.[s.id] ? 500 : 0;
       const pop = Number(s.population || s.baseDemand * 450 || 10000);
-      return { s, score: exact + starts + includes + postalScore + owned + Math.log10(pop) * 12 };
+      return {
+        s,
+        rank,
+        score: owned + Math.log10(pop) * 12,
+        matches: exact || starts || includes || postalMatch
+      };
     })
-    .filter(x => x.score > 0);
+    .filter(x => x.matches);
 
   const collator = new Intl.Collator('fr', { sensitivity: 'base' });
   const ordered = matches
-    .sort((a, b) => b.score - a.score || collator.compare(a.s.name || '', b.s.name || ''))
+    .sort((a, b) => a.rank - b.rank || b.score - a.score || collator.compare(a.s.name || '', b.s.name || ''))
     .map(x => x.s);
 
   return ordered.slice(0, limit);
