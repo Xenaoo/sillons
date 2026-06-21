@@ -15,8 +15,8 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_DB_FILE = process.env.SILLONS_SAVE_DB_FILE || path.join(ROOT, 'data', 'save.sqlite');
 const LEGACY_SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v69.13.0';
-const STATE_SCHEMA_VERSION = 184;
+const PROJECT_VERSION = 'v69.13.1';
+const STATE_SCHEMA_VERSION = 185;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
   1: 3 * HOUR_MS,

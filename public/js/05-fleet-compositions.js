@@ -85,10 +85,17 @@ function trainArtUrl(model) {
   return src ? `${src}?v=${encodeURIComponent(PROJECT_VERSION)}` : '';
 }
 
+function trainArtClass(model) {
+  const classes = ['train-art'];
+  if (model?.era) classes.push(`train-art-${String(model.era).replace(/[^a-z0-9_-]/gi, '-')}`);
+  if (model?.id?.startsWith('high_speed_')) classes.push('train-art-high-speed');
+  return classes.join(' ');
+}
+
 function renderTrainArt(model) {
   const artUrl = trainArtUrl(model);
   if (artUrl) {
-    return `<div class="train-art" aria-label="Visuel de ${escapeAttr(model.name)}"><img src="${escapeAttr(artUrl)}" alt="Illustration du train ${escapeAttr(model.name)}" loading="lazy" decoding="async"></div>`;
+    return `<div class="${escapeAttr(trainArtClass(model))}" data-train-art-id="${escapeAttr(model.id)}" aria-label="Visuel de ${escapeAttr(model.name)}"><img src="${escapeAttr(artUrl)}" alt="Illustration du train ${escapeAttr(model.name)}" loading="lazy" decoding="async"></div>`;
   }
   return `<div class="train-art train-art-placeholder" aria-label="Visuel à refaire pour ${escapeAttr(model.name)}"><span>Visuel matériel</span><b>À refaire</b></div>`;
 }

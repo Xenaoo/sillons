@@ -1552,3 +1552,32 @@
   padding: 0;
   box-sizing: border-box;
 }
+
+/* ===== v69.13.1 — intégration renforcée des visuels grande vitesse ===== */
+.train-catalog-card .train-art-high-speed,
+.fleet-maintenance-grid .maintenance-train-card .train-art-high-speed,
+.composition-vignette-media .train-art-high-speed {
+  width: 100%;
+  height: auto;
+  min-height: 0 !important;
+  aspect-ratio: 13 / 8;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+  border-radius: 15px;
+  border: 1px solid rgba(217,168,82,.13);
+  background: rgba(2,6,23,.38);
+}
+
+.train-catalog-card .train-art-high-speed img,
+.fleet-maintenance-grid .maintenance-train-card .train-art-high-speed img,
+.composition-vignette-media .train-art-high-speed img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  object-fit: cover !important;
+  object-position: center center;
+  padding: 0 !important;
+  box-sizing: border-box;
+}

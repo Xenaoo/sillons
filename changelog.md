@@ -1,3 +1,11 @@
+# v69.13.1 — correction d’intégration des visuels grande vitesse
+
+- Correction de l’intégration des visuels `Train à grande vitesse` dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Ajout d’une classe dédiée `train-art-high-speed` côté rendu client afin que les TGV utilisent explicitement le même ratio, le même remplissage et le même cadrage que les vignettes déjà validées.
+- Renforcement CSS du rendu grande vitesse : ratio `13:8`, image pleine largeur/hauteur, suppression des marges internes et centrage strict dans les trois menus du parc.
+- Maintien des assets grande vitesse dans `public/assets/trains/high_speed/` et du mapping client associé.
+- Schéma save : `185`.
+
 # v69.13.0 — intégration des 10 visuels grande vitesse suivants
 
 - Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
@@ -6,6 +14,54 @@
 - Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
 - Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
 - Schéma save : `184`.
+
+# v69.12.0 — intégration des 10 visuels électriques suivants
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `CC 6500`, `BB 26000 Sybic`, `BB 22200`, `BB 15000`, `BB 7200`, `Z 5600 / Z2N`, `Z 20500`, `Z 50000 Francilien`, `Z 21500 / Z TER` et `Regio 2N`.
+- Ajout des assets dédiés dans `public/assets/trains/electric/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `183`.
+
+# v69.11.0 — intégration des 10 visuels diesel suivants
+
+- Génération et intégration des 10 visuels suivants du catalogue roulant, sans liseré décoratif, dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Trains ajoutés : `CC 72000`, `BB 67400`, `X 2800`, `X 72500`, `X 73500`, `X 4300 Caravelle`, `BB 67000`, `A1A-A1A 68000`, `BB 66000` et `BB 75000`.
+- Ajout des assets dédiés dans `public/assets/trains/diesel/`.
+- Extension du mapping client des illustrations pour afficher automatiquement ces 10 nouveaux visuels dans le parc.
+- Conservation du format uniforme `13:8` et du cadrage harmonisé déjà en place sur les vignettes du parc.
+- Schéma save : `182`.
+
+# v69.10.0 — refonte des 10 premiers visuels vapeur sans liseré
+
+- Regénération des 10 premiers visuels vapeur du catalogue roulant pour supprimer le liseré / cadre doré autour des illustrations.
+- Remplacement des assets intégrés dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions` par les nouvelles versions sans bordure décorative.
+- Conservation du format uniforme `13:8` afin de rester compatible avec les vignettes déjà harmonisées dans le parc.
+- Schéma save : `181`.
+
+# v69.9.2 — harmonisation du rendu Catalogue / Maintenance
+
+- `Parc > Catalogue` : adaptation du rendu visuel pour reprendre le même cadrage perçu comme correct dans `Parc > Compositions`.
+- `Parc > Maintenance` : alignement du conteneur image et du comportement de cadrage sur le même modèle que `Parc > Compositions`.
+- Uniformisation finale des visuels `Catalogue`, `Maintenance` et `Compositions` sur une même logique de vignette : ratio `13:8`, remplissage plein, cadrage centré et suppression des marges internes parasites.
+- Schéma save : `180`.
+
+# v69.9.1 — ajustement du cadrage des visuels du parc
+
+- Reprise du cadrage des 10 premiers visuels vapeur intégrés dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Uniformisation explicite des zones de visuel sur un ratio commun `13:8`, aligné sur le format de référence du catalogue.
+- `Parc > Compositions` : la vignette média n’utilise plus une bande trop basse ; elle adopte désormais le bon ratio pour supprimer l’effet d’image tassée ou flottante dans un grand espace vide.
+- `Parc > Catalogue` et `Parc > Maintenance` : suppression des paddings internes et passage à un remplissage plein de la vignette pour un rendu plus propre et homogène.
+- Schéma save : `179`.
+
+# v69.9.0 — premiers visuels du catalogue roulant dans le parc
+
+- Intégration des 10 premiers visuels du catalogue (141 R, 231 K, 241 P, 141 P, 150 P, 140 C, 231 G, 241 A, 232 U 1 et 030 TU) dans `Parc > Catalogue`, `Parc > Maintenance` et `Parc > Compositions`.
+- Ajout d’un mapping d’illustrations côté client pour afficher automatiquement ces visuels à la place du placeholder `À refaire`.
+- Uniformisation du rendu sur la base du format du catalogue : les cartes de maintenance et les vignettes de composition affichent maintenant les images en `contain`, sans rognage.
+- Ajout des assets dédiés dans `public/assets/trains/steam/` avec normalisation du format des 10 images.
+- Schéma save : `178`.
 
 # v69.8.3 — Persistance SQLite relationnelle
 
