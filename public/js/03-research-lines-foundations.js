@@ -209,27 +209,26 @@ function closeResearchDetails() {
 }
 
 function bindResearchDetailDrag() {
-  document.addEventListener('pointerdown', event => {
+  const startDrag = (event, id) => {
     const panel = event.target.closest?.('[data-research-detail-drag]');
     if (!panel) return;
     if (event.target.closest('button, a, input, select, textarea, [data-action]')) return;
     const offset = app.researchDetailOffset || { x: 0, y: 0 };
     app.researchDetailDrag = {
-      pointerId: event.pointerId,
+      pointerId: id,
       panel,
       x: Number(offset.x || 0),
       y: Number(offset.y || 0),
       lastX: event.clientX,
       lastY: event.clientY
     };
-    panel.setPointerCapture?.(event.pointerId);
     panel.classList.add('is-dragging');
     event.preventDefault();
-  }, true);
+  };
 
-  document.addEventListener('pointermove', event => {
+  const moveDrag = (event, id) => {
     const drag = app.researchDetailDrag;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== id) return;
     let dx = event.clientX - drag.lastX;
     let dy = event.clientY - drag.lastY;
     const rect = drag.panel.getBoundingClientRect();
@@ -246,17 +245,37 @@ function bindResearchDetailDrag() {
     drag.panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
     drag.panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
     event.preventDefault();
-  }, true);
+  };
 
-  const finishDrag = event => {
+  const finishDrag = id => {
     const drag = app.researchDetailDrag;
-    if (!drag || (event?.pointerId != null && drag.pointerId !== event.pointerId)) return;
+    if (!drag || drag.pointerId !== id) return;
     drag.panel.classList.remove('is-dragging');
     localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset || { x: 0, y: 0 }));
     app.researchDetailDrag = null;
   };
-  document.addEventListener('pointerup', finishDrag, true);
-  document.addEventListener('pointercancel', finishDrag, true);
+
+  // Souris : clic gauche maintenu, indépendamment du comportement PointerEvent
+  // que certains navigateurs réservent au bouton du milieu dans ce contexte.
+  document.addEventListener('mousedown', event => {
+    if (event.button !== 0) return;
+    startDrag(event, 'mouse-left');
+  }, true);
+  document.addEventListener('mousemove', event => moveDrag(event, 'mouse-left'), true);
+  document.addEventListener('mouseup', event => {
+    if (event.button === 0) finishDrag('mouse-left');
+  }, true);
+
+  // Tactile et stylet conservent PointerEvent.
+  document.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse') return;
+    startDrag(event, `pointer-${event.pointerId}`);
+  }, true);
+  document.addEventListener('pointermove', event => {
+    if (event.pointerType !== 'mouse') moveDrag(event, `pointer-${event.pointerId}`);
+  }, true);
+  document.addEventListener('pointerup', event => finishDrag(`pointer-${event.pointerId}`), true);
+  document.addEventListener('pointercancel', event => finishDrag(`pointer-${event.pointerId}`), true);
 }
 
 function constrainResearchDetailPanel() {

@@ -366,7 +366,17 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     if (!(await gameConfirm('Lancer le passage d’époque', `Lancer le passage vers ${nextName} ? La R&D sera indisponible jusqu’à la fin et aucune recherche ne doit être en cours.`, { confirmLabel: 'Lancer' }))) return;
     return doAction('startEpochTransition', {});
   }
-  if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; app.selectedResearchId = ''; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'research-tab') {
+    app.activeResearchTab = button.dataset.id;
+    app.selectedResearchId = '';
+    localStorage.setItem('sillons.researchTab', app.activeResearchTab);
+    renderAll();
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`.research-map-row-label[data-id="${CSS.escape(app.activeResearchTab)}"]`);
+      if (row) row.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    });
+    return;
+  }
   if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
   if (action === 'toggle-research-queue') { toggleResearchQueue(); return; }
   if (action === 'submit-bug-report') {

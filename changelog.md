@@ -1,3 +1,11 @@
+# v70.0.0 — refonte visuelle de l’arbre de recherche
+
+- Remplacement de l’affichage R&D par un arbre global inspiré du visuel fourni : panneau latéral Branches/Légende/Ères/Progression, carte centrale sombre, nœuds par branche et colonnes d’ères.
+- L’arbre utilise les recherches réelles du projet au lieu d’un visuel figé : total dynamique, compteurs par branche, compteurs par ère, états disponible/débloqué/en cours/verrouillé.
+- Les liens de prérequis sont dessinés à partir des dépendances réelles de chaque recherche, avec affichage du niveau requis sur les connexions.
+- Les nœuds restent entièrement fonctionnels : clic pour ouvrir la fiche, lancement depuis la fiche, prérequis consultables, recherche rapide et focus depuis le catalogue conservés.
+- Mise à jour des versions client/serveur/package/badge/cache-busting en `v70.0.0`.
+
 # v69.16.1 — correction de l’angle du premier visuel maglev
 
 - Remplacement du visuel `L0 Series SCMaglev` pour corriger l’angle de vue et l’aligner sur celui des autres trains de l’ère de la sustentation magnétique.

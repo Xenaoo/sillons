@@ -789,6 +789,371 @@ function refreshResearchSearchResults() {
   if (results) results.innerHTML = renderResearchSearchResults(app.researchSearchQuery);
 }
 
+
+const RESEARCH_VISUAL_ERA_META = Object.freeze([
+  null,
+  { index: 1, label: 'Vapeur', years: '1850 · 1930', icon: '♨' },
+  { index: 2, label: 'Diesel', years: '1930 · 1950', icon: '◆' },
+  { index: 3, label: 'Électrique', years: '1950 · 1980', icon: '⚡' },
+  { index: 4, label: 'Grande vitesse', years: '1980 · 2025', icon: '◇' },
+  { index: 5, label: 'Hydrogène', years: '2025 · 2035', icon: 'H₂' },
+  { index: 6, label: 'Batterie', years: '2035 · 2050', icon: '▣' },
+  { index: 7, label: 'Maglev', years: '2050+', icon: '⌁' }
+]);
+
+const RESEARCH_VISUAL_GROUP_META = Object.freeze({
+  traction: { icon: '▰', accent: 'blue', short: 'TRC' },
+  energy: { icon: '⚡', accent: 'gold', short: 'ENR' },
+  maintenance: { icon: '◆', accent: 'green', short: 'MNT' },
+  operations: { icon: '⟲', accent: 'violet', short: 'EXP' },
+  stations: { icon: '⌂', accent: 'cyan', short: 'GAR' },
+  social: { icon: '●', accent: 'red', short: 'RH' }
+});
+
+function researchVisualEraNumber(node) {
+  return Math.max(1, Math.min(7, Number(node?.era || Number(node?.requiredEpoch || 0) + 1 || 1)));
+}
+
+function researchVisualEraMeta(era) {
+  return RESEARCH_VISUAL_ERA_META[Math.max(1, Math.min(7, Number(era || 1)))] || RESEARCH_VISUAL_ERA_META[1];
+}
+
+function researchVisualGroupMeta(groupId) {
+  return RESEARCH_VISUAL_GROUP_META[groupId] || { icon: '◇', accent: 'blue', short: String(groupId || 'R&D').slice(0, 3).toUpperCase() };
+}
+
+function researchVisualAllEntries(tree = app.state?.balance?.techTree || {}) {
+  const entries = [];
+  for (const group of Object.values(tree || {})) {
+    for (const node of group.nodes || []) entries.push({ group, node });
+  }
+  return entries;
+}
+
+function researchVisualProgressStats(entries) {
+  let unlocked = 0;
+  let planned = 0;
+  let ready = 0;
+  let locked = 0;
+  for (const { node } of entries) {
+    const state = researchVisualNodeState(node);
+    if (state.acquired > 0 || state.complete) unlocked += 1;
+    if (state.planned > state.acquired) planned += 1;
+    if (state.lockedReason || state.eraBlocked) locked += 1;
+    else if (!state.complete && state.acquired <= 0) ready += 1;
+  }
+  return { total: entries.length, unlocked, planned, ready, locked, percent: Math.round(unlocked / Math.max(1, entries.length) * 100) };
+}
+
+function researchVisualNodeState(node) {
+  const acquired = techLevel(node.id);
+  const planned = plannedTechLevel(node.id);
+  const maxLevel = techMaxLevel(node);
+  const complete = Number.isFinite(maxLevel) && planned >= maxLevel;
+  const targetLevel = complete ? maxLevel : (Number.isFinite(maxLevel) ? Math.min(maxLevel, planned + 1) : planned + 1);
+  const lockedReason = complete ? '' : techLockedReason(node, targetLevel);
+  const costMoney = complete ? 0 : researchCostMoneyClient(node, targetLevel);
+  const affordable = app.state.me.cash >= costMoney;
+  const eraBlocked = researchBlockedByEraTransition();
+  return {
+    acquired,
+    planned,
+    maxLevel,
+    complete,
+    targetLevel,
+    lockedReason,
+    costMoney,
+    durationMs: complete ? 0 : researchDurationClient(node, targetLevel),
+    affordable,
+    eraBlocked,
+    ready: !complete && !lockedReason && !eraBlocked && affordable
+  };
+}
+
+function researchVisualStatusText(state) {
+  if (state.complete) return 'Max';
+  if (state.planned > state.acquired) return `Prévu ${state.planned}`;
+  if (state.eraBlocked) return 'Ère en cours';
+  if (state.lockedReason) return 'Verrouillé';
+  if (!state.affordable) return 'Budget';
+  if (state.acquired > 0) return `Niv. ${state.acquired}`;
+  return 'Disponible';
+}
+
+function researchVisualNodeMainEffect(node) {
+  const effects = [...(node.unlocks || []), ...(node.improves || [])]
+    .filter(effect => effect && !String(effect).toLowerCase().includes('niveaux suivants'));
+  return effects[0] || node.description || 'Amélioration ferroviaire';
+}
+
+function researchVisualNodeSort(a, b, nodeById) {
+  const eraA = researchVisualEraNumber(a);
+  const eraB = researchVisualEraNumber(b);
+  const parentScore = node => {
+    const parents = researchPrereqsForLevelClient(node, 1)
+      .flatMap(req => req.anyOf || [req])
+      .map(req => nodeById.get(req.id))
+      .filter(Boolean)
+      .map(parent => researchVisualEraNumber(parent));
+    return parents.length ? parents.reduce((sum, era) => sum + era, 0) / parents.length : -1;
+  };
+  const subtreeA = a.subtree || (a.branch === 'freight' ? 'freight' : 'passengers');
+  const subtreeB = b.subtree || (b.branch === 'freight' ? 'freight' : 'passengers');
+  return eraA - eraB
+    || parentScore(a) - parentScore(b)
+    || (subtreeA === 'freight' ? 1 : 0) - (subtreeB === 'freight' ? 1 : 0)
+    || String(a.title || '').localeCompare(String(b.title || ''), 'fr');
+}
+
+function renderResearchVisualMiniProgress(stats) {
+  const dash = Math.max(0, Math.min(100, stats.percent));
+  return `
+    <div class="research-visual-progress">
+      <div class="research-visual-progress__ring" style="--progress:${dash}"><span>${dash}%</span></div>
+      <div class="research-visual-progress__text">
+        <b>${stats.unlocked}</b><span>débloquées</span>
+        <b>${stats.planned}</b><span>en file/en cours</span>
+        <b>${stats.locked}</b><span>verrouillées</span>
+      </div>
+    </div>`;
+}
+
+function renderResearchVisualSidebar(groups, entries, stats, activeGroupId) {
+  const currentEpoch = Number(app.state?.me?.epoch || 0);
+  const branchButtons = groups.map(group => {
+    const meta = researchVisualGroupMeta(group.id);
+    const count = (group.nodes || []).length;
+    const done = (group.nodes || []).filter(node => techLevel(node.id) > 0).length;
+    return `
+      <button type="button" class="research-visual-branch ${group.id === activeGroupId ? 'active' : ''}" data-action="research-tab" data-id="${escapeAttr(group.id)}">
+        <span class="research-visual-branch__icon ${meta.accent}">${escapeHtml(meta.icon)}</span>
+        <span><b>${escapeHtml(group.label || group.id)}</b><small>${done}/${count} engagées</small></span>
+        <i>${count}</i>
+      </button>`;
+  }).join('');
+  const eraItems = [1, 2, 3, 4, 5, 6, 7].map(era => {
+    const meta = researchVisualEraMeta(era);
+    const eraNodes = entries.filter(entry => researchVisualEraNumber(entry.node) === era);
+    const done = eraNodes.filter(entry => techLevel(entry.node.id) > 0).length;
+    const unlocked = currentEpoch >= era - 1;
+    return `
+      <div class="research-visual-era ${unlocked ? 'unlocked' : ''}">
+        <span>${meta.index}</span>
+        <div><b>${escapeHtml(meta.label)}</b><small>${done}/${eraNodes.length} recherches · ${escapeHtml(meta.years)}</small></div>
+      </div>`;
+  }).join('');
+  return `
+    <aside class="research-visual-sidebar">
+      <div class="research-visual-logo">
+        <strong>SILLONS</strong>
+        <span>Réseau ferroviaire français</span>
+      </div>
+      <section>
+        <h3>Branches</h3>
+        <div class="research-visual-branches">${branchButtons}</div>
+      </section>
+      <section>
+        <h3>Légende</h3>
+        <div class="research-visual-legend">
+          <span><i class="available"></i> Disponible</span>
+          <span><i class="owned"></i> Débloquée</span>
+          <span><i class="planned"></i> En cours / file</span>
+          <span><i class="locked"></i> Verrouillée</span>
+        </div>
+      </section>
+      <section>
+        <h3>Ères</h3>
+        <div class="research-visual-eras">${eraItems}</div>
+      </section>
+      <section>
+        <h3>Progression</h3>
+        ${renderResearchVisualMiniProgress(stats)}
+      </section>
+    </aside>`;
+}
+
+function renderResearchVisualTopbar(stats, me, next, totalTech, trafficTotal) {
+  return `
+    <div class="research-map-topbar">
+      <div>
+        <span class="research-map-kicker">Arbre global · ${stats.total} recherches réelles</span>
+        <h3>Arbre de recherche</h3>
+        <p>Chaque nœud ci-dessous provient de l’arbre R&D du projet. Les traits affichent les prérequis réels et le niveau requis.</p>
+      </div>
+      <div class="research-map-topbar__metrics">
+        <span><b>${escapeHtml(me.eraName || 'Ère actuelle')}</b><small>Ère actuelle</small></span>
+        <span><b>${round(researchWorkRateClient(me))}x</b><small>Capacité R&D</small></span>
+        <span><b>${formatInt(totalTech)}</b><small>Niveaux cumulés</small></span>
+        <span><b>${next ? `${round(Math.min(100, trafficTotal / Math.max(1, next.requiredTraffic) * 100))}%` : '100%'}</b><small>Trafic vers ère</small></span>
+      </div>
+    </div>`;
+}
+
+function renderResearchVisualNode(entry, position) {
+  const { group, node } = entry;
+  const state = researchVisualNodeState(node);
+  const groupMeta = researchVisualGroupMeta(group.id);
+  const eraMeta = researchVisualEraMeta(researchVisualEraNumber(node));
+  const classes = [
+    'research-map-node',
+    'tech-node',
+    `branch-${group.id}`,
+    state.complete ? 'is-complete' : '',
+    state.acquired > 0 ? 'is-owned' : '',
+    state.planned > state.acquired ? 'is-planned' : '',
+    state.lockedReason || state.eraBlocked ? 'is-locked' : '',
+    state.ready ? 'is-ready' : '',
+    app.selectedResearchId === node.id ? 'selected' : '',
+    app.highlightResearchId === node.id ? 'research-glow' : ''
+  ].filter(Boolean).join(' ');
+  const prereqs = researchPrereqsForLevelClient(node, state.targetLevel).map(researchPrereqLabelClient).join(', ') || 'Aucun';
+  const effect = researchVisualNodeMainEffect(node);
+  const tip = app.selectedResearchId ? '' : tooltipAttr(`${node.title}\nBranche : ${group.label}\nÈre : ${node.eraLabel || eraMeta.label}\nEffet : ${effect}\nProchain niveau : ${state.complete ? 'Max' : state.targetLevel}\nPrérequis : ${prereqs}`);
+  return `
+    <article class="${classes}" data-node-id="${escapeAttr(node.id)}" style="left:${position.x}px;top:${position.y}px" ${tip}>
+      <button type="button" class="research-map-node__button" data-action="select-research-node" data-id="${escapeAttr(node.id)}" ${tip}>
+        <span class="research-map-node__orb ${groupMeta.accent}"><b>${escapeHtml(groupMeta.icon)}</b></span>
+        <span class="research-map-node__content">
+          <small>${escapeHtml(eraMeta.label)} · ${escapeHtml(groupMeta.short)}</small>
+          <strong>${escapeHtml(node.title)}</strong>
+          <em>${escapeHtml(researchVisualStatusText(state))}</em>
+        </span>
+        <span class="research-map-node__level">${state.complete ? '✓' : state.acquired}</span>
+      </button>
+    </article>`;
+}
+
+function renderResearchVisualBoard(tree, activeGroupId, me, next, totalTech, trafficTotal) {
+  const groups = Object.values(tree || {});
+  const entries = researchVisualAllEntries(tree);
+  const stats = researchVisualProgressStats(entries);
+  if (!entries.length) return '<p class="muted">Aucune recherche disponible.</p>';
+
+  const rowLabelWidth = 230;
+  const eraWidth = 245;
+  const nodeWidth = 178;
+  const nodeHeight = 72;
+  const laneHeight = 86;
+  const rowGap = 30;
+  const topPad = 118;
+  const bottomPad = 52;
+  const stageWidth = rowLabelWidth + eraWidth * 7 + 90;
+  const nodeById = new Map(entries.map(entry => [entry.node.id, entry.node]));
+  const entryById = new Map(entries.map(entry => [entry.node.id, entry]));
+  const positions = new Map();
+  const rows = [];
+  let cursorY = topPad;
+
+  for (const group of groups) {
+    const byEra = new Map();
+    const groupNodes = [...(group.nodes || [])].sort((a, b) => researchVisualNodeSort(a, b, nodeById));
+    for (const node of groupNodes) {
+      const era = researchVisualEraNumber(node);
+      if (!byEra.has(era)) byEra.set(era, []);
+      byEra.get(era).push(node);
+    }
+    const laneCount = Math.max(1, ...Array.from(byEra.values()).map(list => list.length));
+    const rowHeight = Math.max(154, 72 + laneCount * laneHeight);
+    const rowTop = cursorY;
+    for (const [era, eraNodes] of byEra) {
+      eraNodes.forEach((node, index) => {
+        positions.set(node.id, {
+          x: rowLabelWidth + (era - 1) * eraWidth + 34,
+          y: rowTop + 58 + index * laneHeight,
+          cx: rowLabelWidth + (era - 1) * eraWidth + 34 + nodeWidth / 2,
+          cy: rowTop + 58 + index * laneHeight + nodeHeight / 2,
+          groupId: group.id,
+          era
+        });
+      });
+    }
+    rows.push({ group, rowTop, rowHeight, laneCount });
+    cursorY += rowHeight + rowGap;
+  }
+
+  const stageHeight = cursorY + bottomPad;
+  const eraHeaders = [1, 2, 3, 4, 5, 6, 7].map(era => {
+    const meta = researchVisualEraMeta(era);
+    const x = rowLabelWidth + (era - 1) * eraWidth;
+    const unlocked = Number(me?.epoch || 0) >= era - 1;
+    return `
+      <div class="research-map-era-head ${unlocked ? 'unlocked' : ''}" style="left:${x}px;width:${eraWidth - 10}px">
+        <span>${meta.icon}</span><b>${meta.index}. ${escapeHtml(meta.label)}</b><small>${escapeHtml(meta.years)}</small>
+      </div>
+      <div class="research-map-era-band" style="left:${x}px;width:${eraWidth - 10}px;height:${stageHeight - 34}px"></div>`;
+  }).join('');
+
+  const rowBands = rows.map(row => {
+    const meta = researchVisualGroupMeta(row.group.id);
+    const count = (row.group.nodes || []).length;
+    const done = (row.group.nodes || []).filter(node => techLevel(node.id) > 0).length;
+    return `
+      <div class="research-map-row-band ${row.group.id === activeGroupId ? 'active' : ''}" style="top:${row.rowTop}px;height:${row.rowHeight}px"></div>
+      <button type="button" class="research-map-row-label ${meta.accent} ${row.group.id === activeGroupId ? 'active' : ''}" style="top:${row.rowTop + 22}px" data-action="research-tab" data-id="${escapeAttr(row.group.id)}">
+        <span>${escapeHtml(meta.icon)}</span>
+        <b>${escapeHtml(row.group.label || row.group.id)}</b>
+        <small>${done}/${count} engagées · ${row.laneCount} ligne${row.laneCount > 1 ? 's' : ''}</small>
+      </button>`;
+  }).join('');
+
+  const links = [];
+  const linkLabels = [];
+  let linkIndex = 0;
+  for (const { node } of entries) {
+    const target = positions.get(node.id);
+    if (!target) continue;
+    for (const req of researchPrereqsForLevelClient(node, 1)) {
+      const alternatives = req.anyOf || [req];
+      alternatives.forEach((item, altIndex) => {
+        const source = positions.get(item.id);
+        if (!source || !entryById.has(item.id)) return;
+        const met = researchPrereqSatisfiedClient(item);
+        const selected = app.selectedResearchId === node.id || app.selectedResearchId === item.id;
+        const anyOf = Boolean(req.anyOf);
+        const startX = source.cx + (source.x <= target.x ? nodeWidth / 2 : -nodeWidth / 2);
+        const endX = target.cx + (source.x <= target.x ? -nodeWidth / 2 : nodeWidth / 2);
+        const startY = source.cy;
+        const endY = target.cy;
+        const sameColumn = Math.abs(source.x - target.x) < 4;
+        const bend = Math.max(58, Math.abs(endX - startX) * 0.42);
+        const route = sameColumn
+          ? `M ${source.cx} ${source.cy + nodeHeight / 2} V ${(source.cy + target.cy) / 2} H ${target.cx} V ${target.cy - nodeHeight / 2}`
+          : `M ${startX} ${startY} C ${startX + (source.x <= target.x ? bend : -bend)} ${startY}, ${endX - (source.x <= target.x ? bend : -bend)} ${endY}, ${endX} ${endY}`;
+        const klass = ['research-map-link-group', met ? 'met' : '', selected ? 'selected' : '', anyOf ? 'anyof' : ''].filter(Boolean).join(' ');
+        links.push(`<g class="${klass}" data-link-index="${linkIndex++}"><path class="research-map-link-shadow" d="${route}"></path><path class="research-map-link" d="${route}"></path></g>`);
+        if (Number(item.level || 1) > 1) {
+          const labelX = Math.round((source.cx + target.cx) / 2 + (anyOf ? (altIndex - 0.5) * 18 : 0));
+          const labelY = Math.round((source.cy + target.cy) / 2 - 8);
+          linkLabels.push(`<g class="research-map-link-label ${met ? 'met' : ''} ${selected ? 'selected' : ''}" transform="translate(${labelX} ${labelY})"><rect x="-13" y="-10" width="26" height="20" rx="10"></rect><text y="4">${Number(item.level || 1)}</text></g>`);
+        }
+      });
+    }
+  }
+
+  const nodesHtml = entries.map(entry => {
+    const position = positions.get(entry.node.id);
+    return position ? renderResearchVisualNode(entry, position) : '';
+  }).join('');
+
+  return `
+    <div class="research-visual-board">
+      ${renderResearchVisualSidebar(groups, entries, stats, activeGroupId)}
+      <section class="research-visual-main">
+        ${renderResearchVisualTopbar(stats, me, next, totalTech, trafficTotal)}
+        <div class="research-map-scroll">
+          <div class="research-map-stage ${app.selectedResearchId ? 'has-selection' : ''}" style="width:${stageWidth}px;height:${stageHeight}px">
+            ${eraHeaders}
+            ${rowBands}
+            <svg class="research-map-links" viewBox="0 0 ${stageWidth} ${stageHeight}" aria-hidden="true">${links.join('')}${linkLabels.join('')}</svg>
+            ${nodesHtml}
+            <div class="research-map-footer-note" style="top:${stageHeight - 42}px">Clique un nœud pour ouvrir sa fiche, lancer la recherche ou consulter ses prérequis.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+    ${renderResearchDetailOverlay()}`;
+}
+
 function renderResearch() {
   const me = app.state.me;
   const next = app.state.balance.epochs[me.epoch + 1];
@@ -863,11 +1228,7 @@ function renderResearch() {
       <h2>Arbre technologique</h2>
       <p class="small muted">Les hexagones sont les recherches. Les traits indiquent les prérequis et leur niveau requis ; les séparateurs rouges correspondent aux passages d’époque. Survole un hexagone pour lire son effet, puis clique-le pour lancer ou planifier la recherche.</p>
       ${renderResearchSearchPanel()}
-      <div class="research-tabs">
-        ${tabs.map(group => `<button data-action="research-tab" data-id="${group.id}" class="${group.id === active.id ? 'active' : ''}">${escapeHtml(group.label)}</button>`).join('')}
-      </div>
-      <p class="small muted">${escapeHtml(active.description || '')}</p>
-      ${renderResearchNodeGrid(active)}
+      ${renderResearchVisualBoard(tree, active?.id || app.activeResearchTab, me, next, totalTech, trafficTotal)}
     </div>
   `;
 }
