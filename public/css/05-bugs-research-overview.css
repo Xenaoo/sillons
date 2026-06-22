@@ -723,21 +723,20 @@ button, input, select, textarea { max-width: 100%; }
   overflow: auto;
   max-height: min(72vh, 1280px);
   margin: 16px -2px 0;
-  border: 1px solid rgba(219, 193, 128, .22);
-  border-radius: 16px;
+  border: 1px solid rgba(219, 193, 128, .30);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at 16% 9%, rgba(232, 190, 102, .12), transparent 31%),
-    radial-gradient(circle at 85% 83%, rgba(73, 160, 133, .10), transparent 36%),
+    radial-gradient(circle at 16% 9%, rgba(232, 190, 102, .16), transparent 31%),
+    radial-gradient(circle at 85% 83%, rgba(73, 160, 133, .13), transparent 36%),
     linear-gradient(135deg, rgba(9, 23, 35, .98), rgba(5, 14, 23, .98));
-  box-shadow: inset 0 0 42px rgba(0, 0, 0, .26);
+  box-shadow: inset 0 0 42px rgba(0, 0, 0, .26), 0 14px 38px rgba(2, 8, 14, .18);
 }
 
 .research-skilltree {
   position: relative;
-  min-width: 720px;
+  min-width: 780px;
   background-image:
-    linear-gradient(rgba(235, 213, 159, .027) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(235, 213, 159, .027) 1px, transparent 1px);
+    radial-gradient(circle at 1px 1px, rgba(235, 213, 159, .095) 1px, transparent 0);
   background-size: 28px 28px;
 }
 
@@ -752,61 +751,77 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-tree-link {
   fill: none;
-  stroke: rgba(176, 196, 197, .3);
-  stroke-width: 2.2;
+  stroke: rgba(151, 180, 185, .58);
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke .18s ease, opacity .18s ease;
+}
+
+.research-tree-link-shadow {
+  fill: none;
+  stroke: rgba(0, 5, 10, .72);
+  stroke-width: 6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
-.research-tree-link.met {
+.research-tree-link-group.met .research-tree-link {
   stroke: rgba(111, 218, 158, .68);
   filter: drop-shadow(0 0 3px rgba(88, 214, 145, .28));
 }
 
-.research-tree-link-level {
-  fill: #f7dc9a;
-  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-anchor: middle;
-  paint-order: stroke;
-  stroke: #07101a;
-  stroke-width: 4px;
-  stroke-linejoin: round;
-}
+.research-tree-link-group.met .research-tree-link-label rect { fill: #225d4a; stroke: rgba(112, 227, 160, .88); }
+.research-tree-link-label rect { fill: #132938; stroke: rgba(197, 216, 205, .62); stroke-width: 1.2; }
+.research-tree-link-label text { fill: #f8df9f; font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-anchor: middle; }
+.research-skilltree marker path { fill: rgba(151, 180, 185, .8); }
+.research-tree-link-group.met marker path { fill: rgba(111, 218, 158, .9); }
+
+.research-skilltree__links:hover .research-tree-link-group { opacity: .48; }
+.research-skilltree__links:hover .research-tree-link-group:hover { opacity: 1; }
 
 .research-era-gate {
   position: absolute;
   z-index: 1;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, transparent, rgba(224, 76, 70, .92) 5%, rgba(224, 76, 70, .44) 94%, transparent);
-  box-shadow: 0 0 13px rgba(227, 70, 65, .26);
+  top: 44px;
+  bottom: 26px;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(224, 76, 70, .96) 5%, rgba(224, 76, 70, .35) 94%, transparent);
+  box-shadow: 0 0 13px rgba(227, 70, 65, .24);
 }
 
 .research-era-gate.unlocked {
-  background: linear-gradient(to bottom, transparent, rgba(220, 182, 100, .84) 5%, rgba(220, 182, 100, .34) 94%, transparent);
-  box-shadow: 0 0 13px rgba(220, 182, 100, .2);
+  background: linear-gradient(to bottom, transparent, rgba(220, 182, 100, .92) 5%, rgba(220, 182, 100, .36) 94%, transparent);
+  box-shadow: 0 0 13px rgba(220, 182, 100, .26);
 }
 
 .research-era-gate span {
   position: sticky;
   top: 8px;
   display: block;
-  width: 210px;
+  width: 248px;
   margin-left: 9px;
-  color: #e9c469;
-  font-size: 10px;
+  padding: 6px 8px;
+  color: #f1d487;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
   white-space: nowrap;
   text-shadow: 0 2px 7px #04090e;
+  border: 1px solid rgba(226, 192, 117, .22);
+  border-radius: 999px;
+  background: rgba(7, 19, 29, .80);
+  box-shadow: 0 4px 13px rgba(0,0,0,.24);
 }
 
 .research-hex-node {
   position: absolute;
   z-index: 2;
-  width: 190px;
-  min-height: 137px;
+  width: 206px;
+  min-height: 150px;
   display: grid;
   justify-items: center;
   align-content: start;
@@ -822,18 +837,18 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-hex {
   position: relative;
-  width: 116px;
-  height: 100px;
+  width: 126px;
+  height: 110px;
   display: grid;
   place-content: center;
   gap: 2px;
   padding: 0 18px;
   color: #f7edcf;
   border: 2px solid rgba(229, 199, 128, .78);
-  border-radius: 17px;
+  border-radius: 19px;
   clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   background: linear-gradient(145deg, rgba(34, 75, 82, .98), rgba(11, 31, 40, .98));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 16px rgba(0,0,0,.38), 0 0 14px rgba(92, 188, 175, .15);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 9px 20px rgba(0,0,0,.44), 0 0 17px rgba(92, 188, 175, .17);
   cursor: pointer;
   transition: transform .16s ease, filter .16s ease, box-shadow .16s ease;
 }
@@ -852,9 +867,9 @@ button, input, select, textarea { max-width: 100%; }
 .research-hex-node.freight .research-hex { border-color: rgba(206, 143, 82, .84); background: linear-gradient(145deg, rgba(92, 57, 41, .98), rgba(39, 33, 34, .98)); }
 .research-hex-node.freight.unlocked .research-hex { border-color: rgba(239, 181, 93, .95); background: linear-gradient(145deg, rgba(111, 75, 37, .98), rgba(47, 55, 39, .98)); }
 
-.research-hex__level { font: 900 25px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.research-hex__level { font: 900 27px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .research-hex__state { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
-.research-hex__title { max-width: 186px; color: #f0e1b3; font-size: 11px; line-height: 1.15; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
+.research-hex__title { max-width: 198px; color: #f4e4ba; font-size: 11px; line-height: 1.18; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
 .research-hex__branch { color: #e6b86f; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 
 @media (max-width: 700px) {

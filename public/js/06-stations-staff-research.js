@@ -962,30 +962,70 @@ function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
-  const columnWidth = 270;
-  const rowHeight = 150;
-  const nodeCenterX = 112;
-  const nodeCenterY = 65;
+  const columnWidth = 320;
+  // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
+  // y compris pour les intitulés longs sur trois lignes.
+  const rowHeight = 186;
+  const nodeWidth = 206;
+  const hexCenterX = Math.round(nodeWidth / 2);
+  const hexCenterY = 56;
+  const hexLeftEdge = 43;
+  const hexRightEdge = 163;
   const byEra = new Map();
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
   for (const node of nodes) {
     const era = Math.max(1, Math.min(7, Number(node.era || node.requiredEpoch + 1 || 1)));
     if (!byEra.has(era)) byEra.set(era, []);
     byEra.get(era).push(node);
   }
+
+  const internalParents = node => researchPrereqsForLevelClient(node, 1)
+    .flatMap(req => req.anyOf || [req])
+    .map(req => nodeById.get(req.id))
+    .filter(Boolean);
+  const depthCache = new Map();
+  const branchDepth = (node, path = new Set()) => {
+    if (depthCache.has(node.id)) return depthCache.get(node.id);
+    if (path.has(node.id)) return 0;
+    const nextPath = new Set(path).add(node.id);
+    const depth = internalParents(node).reduce((max, parent) => Math.max(max, branchDepth(parent, nextPath) + 1), 0);
+    depthCache.set(node.id, depth);
+    return depth;
+  };
+
   const positions = new Map();
   let maxRows = 1;
   for (const [era, eraNodes] of byEra) {
+    const initialOrder = new Map(eraNodes.map((node, index) => [node.id, index]));
     eraNodes.sort((a, b) => {
       const subtreeA = a.subtree || (a.branch === 'freight' ? 'freight' : 'passengers');
       const subtreeB = b.subtree || (b.branch === 'freight' ? 'freight' : 'passengers');
-      return subtreeA.localeCompare(subtreeB) || a.title.localeCompare(b.title);
+      const parentScore = node => {
+        const parentRows = internalParents(node)
+          .map(parent => positions.get(parent.id)?.row)
+          .filter(Number.isFinite);
+        return parentRows.length ? parentRows.reduce((sum, row) => sum + row, 0) / parentRows.length : -1;
+      };
+      const laneA = subtreeA === 'freight' ? 1 : 0;
+      const laneB = subtreeB === 'freight' ? 1 : 0;
+      return laneA - laneB
+        || parentScore(a) - parentScore(b)
+        || branchDepth(a) - branchDepth(b)
+        || initialOrder.get(a.id) - initialOrder.get(b.id);
     });
     maxRows = Math.max(maxRows, eraNodes.length);
-    eraNodes.forEach((node, index) => positions.set(node.id, { x: (era - 1) * columnWidth + 18, y: 66 + index * rowHeight, era, index }));
+    eraNodes.forEach((node, index) => {
+      const stagger = index % 2 ? 22 : 0;
+      positions.set(node.id, {
+        x: (era - 1) * columnWidth + 50 + stagger,
+        y: 76 + index * rowHeight,
+        era,
+        row: index
+      });
+    });
   }
-  const treeWidth = 7 * columnWidth;
-  const treeHeight = Math.max(330, 110 + maxRows * rowHeight);
-  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const treeWidth = 7 * columnWidth + 20;
+  const treeHeight = Math.max(390, 132 + maxRows * rowHeight);
   const links = [];
   for (const node of nodes) {
     const target = positions.get(node.id);
@@ -993,13 +1033,22 @@ function renderResearchNodeGrid(group) {
       const requirements = req.anyOf || [req];
       const source = requirements.map(item => ({ item, position: positions.get(item.id), node: nodeById.get(item.id) })).find(item => item.position && item.node);
       if (!source || !target) continue;
-      const x1 = source.position.x + nodeCenterX;
-      const y1 = source.position.y + nodeCenterY;
-      const x2 = target.x + nodeCenterX;
-      const y2 = target.y + nodeCenterY;
+      const sameEra = source.position.era === target.era;
+      const flowsDown = source.position.y <= target.y;
+      const x1 = sameEra ? source.position.x + hexCenterX : source.position.x + hexRightEdge;
+      const y1 = sameEra ? source.position.y + (flowsDown ? 108 : 10) : source.position.y + hexCenterY;
+      const x2 = sameEra ? target.x + hexCenterX : target.x + hexLeftEdge;
+      const y2 = sameEra ? target.y + (flowsDown ? 10 : 108) : target.y + hexCenterY;
       const level = source.item.level || 1;
       const met = researchPrereqSatisfiedClient(source.item);
-      links.push(`<path class="research-tree-link ${met ? 'met' : ''}" d="M ${x1} ${y1} C ${x1 + 72} ${y1}, ${x2 - 72} ${y2}, ${x2} ${y2}"></path><text class="research-tree-link-level" x="${Math.round((x1 + x2) / 2)}" y="${Math.round((y1 + y2) / 2 - 7)}">${level}</text>`);
+      const direction = x2 >= x1 ? 1 : -1;
+      const bend = Math.max(62, Math.abs(x2 - x1) * 0.44);
+      const curve = sameEra
+        ? `M ${x1} ${y1} C ${x1 + 52} ${y1 + 30}, ${x2 - 52} ${y2 - 30}, ${x2} ${y2}`
+        : `M ${x1} ${y1} C ${x1 + bend * direction} ${y1}, ${x2 - bend * direction} ${y2}, ${x2} ${y2}`;
+      const labelX = Math.round((x1 + x2) / 2);
+      const labelY = Math.round((y1 + y2) / 2 - (sameEra ? 4 : 12));
+      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''}"><path class="research-tree-link-shadow" d="${curve}"></path><path class="research-tree-link" d="${curve}" marker-end="url(#researchTreeArrow)"></path><g class="research-tree-link-label" transform="translate(${labelX} ${labelY})"><rect x="-11" y="-10" width="22" height="18" rx="9"></rect><text y="3">${level}</text></g></g>`);
     }
   }
   const eras = [1, 2, 3, 4, 5, 6, 7].map(era => {
@@ -1031,7 +1080,7 @@ function renderResearchNodeGrid(group) {
         ${subtree === 'freight' ? '<span class="research-hex__branch">Fret</span>' : group?.id === 'operations' ? '<span class="research-hex__branch">Voyageurs</span>' : ''}
       </article>`;
   }).join('');
-  return `<div class="research-skilltree-scroll"><div class="research-skilltree" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true">${links.join('')}</svg>${eras}${hexes}</div></div>`;
+  return `<div class="research-skilltree-scroll"><div class="research-skilltree" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z"></path></marker></defs>${links.join('')}</svg>${eras}${hexes}</div></div>`;
 }
 
 function isResearchQueueCollapsed() {
