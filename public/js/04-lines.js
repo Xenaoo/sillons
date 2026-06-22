@@ -193,7 +193,7 @@ function renderManageLinesPanel() {
         ${metric('Lignes actives', `${activeLines}/${me.lines.length}`)}
         ${metric('Recettes lignes /h', moneyPerHour(totalRevenue))}
         ${metric('Net estimé /h', moneyPerHour(totalProfit), totalProfit >= 0 ? 'good-text' : 'bad-text')}
-        ${metric('Voyageurs J-1', formatInt(totalPassengers))}
+        ${metric('Voyageurs prévus / an', formatInt(totalPassengers))}
       </div>
 
       <div class="card">
@@ -319,12 +319,16 @@ function renderLineInsightPanels(line) {
       <section class="line-insight-panel">
         <h4>Demande & capacite</h4>
         <div class="line-kv">
-          <span>Demande voy.</span><b>${formatInt(market.passengerDemand || 0)}</b>
-          <span>Transportes</span><b>${formatInt(stats.passengers || 0)}</b>
-          <span>Demande fret</span><b>${formatInt(market.freightDemand || 0)} t</b>
-          <span>Transporte</span><b>${formatInt(stats.freightTons || 0)} t</b>
+          <span>Demande voy. / an</span><b>${formatInt(market.passengerDemand || 0)} voy.</b>
+          <span>Transportés / an</span><b>${formatInt(stats.passengers || 0)} voy.</b>
+          <span>Demande fret / an</span><b>${formatInt(market.freightDemand || 0)} t</b>
+          <span>Transporté / an</span><b>${formatInt(stats.freightTons || 0)} t</b>
+          <span>Capacité voy. / an</span><b>${formatInt(capacity.passengers || 0)} voy.</b>
+          <span>Capacité fret / an</span><b>${formatInt(capacity.freightTons || 0)} t</b>
           <span>Charge voy.</span><b>${linePercent(capacity.passengerLoad)}</b>
           <span>Charge fret</span><b>${linePercent(capacity.freightLoad)}</b>
+          <span>Trains en circulation</span><b>${Number.isFinite(capacity.activeTrainCount) ? `${round(capacity.activeTrainCount)} / ${round(capacity.availableTrainCount || 0)}` : '—'}</b>
+          <span>Allers simples / an</span><b>${formatInt(capacity.annualOneWayTrips || 0)}</b>
           <span>Cadence exploitée</span><b>${lineCadenceLabel(line)}</b>
           <span>Cycle aller-retour</span><b>${formatCadenceMinutes(cadence.roundTripMinutes)}</b>
           <span>Sillons actifs</span><b>${Number.isFinite(capacity.effectiveFrequency) ? round(capacity.effectiveFrequency) : round(lineSlotDemandClient(line))}</b>

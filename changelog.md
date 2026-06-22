@@ -1,3 +1,11 @@
+# v0.70.10 — indicateurs annuels des lignes
+
+- Les panneaux de ligne affichent désormais demande, trafic transporté et capacités en unités annuelles explicites.
+- La capacité annuelle dépend du nombre de trains réellement disponibles, de leur capacité, de leur vitesse, du cycle aller-retour et de la plage d’exploitation quotidienne.
+- La demande voyageurs d’un axe est reconstruite à partir des fréquentations annuelles SNCF de ses gares ; le trafic estimé est plafonné par la capacité annuelle calculée.
+- Une ligne suspendue conserve sa demande annuelle, mais n’affiche aucun transport avant le rétablissement de ses sillons, de ses trains ou de son personnel.
+- Incrément de version : interface et serveur v0.70.10, package npm 0.70.10.
+
 # v0.70.09 — trafic voyageurs SNCF et arrêts simulés
 
 - Le cache des gares associe désormais les codes UIC à la fréquentation officielle SNCF « Fréquentation des gares » 2024 ; cette valeur est affichée comme demande voyageurs et sert de base au potentiel des lignes.

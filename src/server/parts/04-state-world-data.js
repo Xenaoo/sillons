@@ -1925,6 +1925,14 @@ function effectiveStationPassengerDemand(station) {
   return clamp(Number(station.baseDemand || 80), 60, 1600);
 }
 
+function stationAnnualPassengerDemand(station) {
+  const annualPassengers = Math.max(0, Number(station?.annualPassengers || 0));
+  if (Number.isFinite(annualPassengers) && annualPassengers > 0) return annualPassengers;
+  // Les rares gares absentes du jeu de fréquentation SNCF conservent une
+  // estimation annuelle dérivée de leur bassin de population.
+  return Math.max(0, effectiveStationPassengerDemand(station) * 1000);
+}
+
 function communeToStation(commune) {
   const population = Number(commune.population || 0);
   if (population < MIN_COMMUNE_POPULATION) return null;
