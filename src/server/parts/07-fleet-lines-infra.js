@@ -254,6 +254,24 @@ function normalizeTrain(raw, ownerId) {
     cost: Math.round(Number(m.cost || 0)),
     lastServiceDay: m.lastServiceDay || raw.acquiredDay
   };
+  const passengerRun = raw.passengerRun && typeof raw.passengerRun === 'object' ? raw.passengerRun : null;
+  raw.passengerRun = passengerRun ? {
+    lineId: typeof passengerRun.lineId === 'string' ? passengerRun.lineId : null,
+    stopIndex: Math.max(0, Math.floor(Number(passengerRun.stopIndex || 0))),
+    direction: Number(passengerRun.direction) < 0 ? -1 : 1,
+    nextStopAt: Math.max(0, Number(passengerRun.nextStopAt || 0)),
+    load: Math.max(0, Math.floor(Number(passengerRun.load || 0))),
+    cohorts: Array.isArray(passengerRun.cohorts) ? passengerRun.cohorts
+      .map(cohort => ({
+        originIndex: Math.max(0, Math.floor(Number(cohort?.originIndex || 0))),
+        destinationIndex: Math.max(0, Math.floor(Number(cohort?.destinationIndex || 0))),
+        count: Math.max(0, Math.floor(Number(cohort?.count || 0)))
+      }))
+      .filter(cohort => cohort.count > 0 && cohort.originIndex !== cohort.destinationIndex) : [],
+    lastBoarded: Math.max(0, Math.floor(Number(passengerRun.lastBoarded || 0))),
+    lastAlighted: Math.max(0, Math.floor(Number(passengerRun.lastAlighted || 0))),
+    lastRevenue: Math.max(0, Number(passengerRun.lastRevenue || 0))
+  } : null;
   const model = BALANCE.trains[raw.modelId];
   if (model) ensureTrainComposition(raw, model);
   if (raw.maintenance.active && raw.maintenance.daysLeft <= 0) raw.maintenance.active = false;

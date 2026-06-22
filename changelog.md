@@ -1,3 +1,10 @@
+# v0.70.07 — recettes voyageurs aux arrêts
+
+- Les voyageurs sont désormais embarqués dans chaque train, avec des destinations par arrêt ; les recettes sont créditées lorsqu’ils descendent à destination, et non plus à chaque tick serveur.
+- Chaque train voyageurs affiche dans Parc sa jauge de remplissage, le nombre de voyageurs à bord et le dernier encaissement à un arrêt.
+- L’état des passagers à bord est sauvegardé avec le train, sans modification du schéma de sauvegarde.
+- Incrément de version : interface et serveur v0.70.07, package npm 0.70.7.
+
 # v0.70.06 — précision des bonus de recherche
 
 - Les statistiques de fiabilité et de confort affichent une décimale sur la valeur améliorée lorsque cela évite de masquer un bonus réel.

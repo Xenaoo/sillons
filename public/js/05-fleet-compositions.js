@@ -1986,6 +1986,10 @@ function renderOwnedTrain(train) {
   const condition = Math.round((train.condition || 0) * 100);
   const conditionClass = condition > 70 ? 'good' : condition > 40 ? 'warn' : 'bad';
   const profile = previewOperatingProfile(train, model);
+  const passengerRun = train.passengerRun || {};
+  const passengerCapacity = Math.max(0, Number(profile.capacity || 0));
+  const passengerLoad = Math.max(0, Math.round(Number(passengerRun.load || 0)));
+  const passengerLoadPercent = passengerCapacity > 0 ? clamp(Math.round(passengerLoad / passengerCapacity * 100), 0, 100) : 0;
   const sellTip = line
     ? 'Impossible de vendre : Ce train est affecté à une ligne active.'
     : inMaint
@@ -2020,6 +2024,13 @@ function renderOwnedTrain(train) {
           <div><span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b></div>
           <div><span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b></div>
         </div>
+        ${passengerCapacity > 0 ? `
+          <div class="train-passenger-load" title="Voyageurs actuellement à bord de ce train">
+            <div><span>Remplissage</span><b>${passengerLoadPercent}% · ${formatInt(passengerLoad)} / ${formatInt(passengerCapacity)} voyageurs</b></div>
+            <div class="progress train-passenger-load-bar"><i style="width:${passengerLoadPercent}%"></i></div>
+            ${passengerRun.lastAlighted > 0 ? `<small>${formatInt(passengerRun.lastAlighted)} descente(s) au dernier arrêt · ${formatSignedMoney(passengerRun.lastRevenue || 0)}</small>` : ''}
+          </div>
+        ` : ''}
         ${inMaint ? `
           <p class="small muted">Le train est immobilisé. Toute ligne qui l’utilise reste ouverte mais ne produit rien jusqu’à la fin de l’intervention.</p>
         ` : `
