@@ -1,3 +1,12 @@
+# v69.21.0 — nettoyage visuel des nœuds et liaisons R&D
+
+- Suppression des mentions `Voyageurs` et `Fret` sous les hexagones de l’arbre technologique pour alléger la lecture.
+- Les hexagones n’affichent désormais plus le niveau suivant : seul le niveau actuel est conservé visuellement.
+- Mise en place d’un traitement des liaisons sous les titres de recherche : les segments qui passent dans la zone de texte deviennent pointillés afin d’éviter une lecture confuse des noms.
+- Conservation du compactage horizontal introduit précédemment.
+- Incrément de version : badge interface `v69.21.0`, version serveur/client `v69.21.0`, package `69.21.0`.
+- Schéma save : `189`.
+
 # v69.20.0 — compactage extrême horizontal de l’arbre R&D
 
 - Resserrement supplémentaire des recherches dans `R&D > Arbre technologique` pour permettre l’affichage d’environ 10 colonnes sans déplacement latéral sur une largeur d’écran standard.

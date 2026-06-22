@@ -1282,7 +1282,7 @@ function renderResearchNodeGrid(group) {
       if (level > 1) linkLabels.push(`<g class="research-tree-link-label ${met ? 'met' : ''} ${selected ? 'selected' : ''}" transform="translate(${labelX} ${labelY})"><rect x="-14" y="-11" width="28" height="21" rx="10.5"></rect><text y="3">${level}</text></g>`);
       const marker = selected ? 'researchTreeArrowSelected' : met ? 'researchTreeArrowMet' : 'researchTreeArrow';
       linkNodes.push(`<g class="research-tree-link-node ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><circle cx="${x1}" cy="${y1}" r="4.8"></circle><circle cx="${x2}" cy="${y2}" r="4.8"></circle></g>`);
-      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})"></path></g>`);
+      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}" mask="url(#researchTreeTextMask)"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})" mask="url(#researchTreeTextMask)"></path><path class="research-tree-link-shadow research-tree-link-shadow-dotted" d="${route}" clip-path="url(#researchTreeTextClip)"></path><path class="research-tree-link research-tree-link-dotted" d="${route}" clip-path="url(#researchTreeTextClip)"></path></g>`);
     }
   }
   const eras = [1, 2, 3, 4, 5, 6, 7].map(era => {
@@ -1291,6 +1291,15 @@ function renderResearchNodeGrid(group) {
     const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
     return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 104}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
   }).join('');
+  const titleZones = nodes.map(node => {
+    const pos = positions.get(node.id);
+    return {
+      x: pos.x + 2,
+      y: pos.y + 86,
+      width: 124,
+      height: 30
+    };
+  });
   const hexes = nodes.map(node => {
     const pos = positions.get(node.id);
     const level = plannedTechLevel(node.id);
@@ -1312,15 +1321,15 @@ function renderResearchNodeGrid(group) {
     return `
       <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'} ${app.selectedResearchId === node.id ? 'selected' : ''}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltip}>
         <button type="button" class="research-hex" data-action="select-research-node" data-id="${escapeAttr(node.id)}" ${tooltip}>
-          <span class="research-hex__level">${complete ? '✓' : acquired}</span>
-          <span class="research-hex__state">${complete ? 'Acquis' : locked ? 'Verrouillé' : `Niv. ${target}`}</span>
+          <span class="research-hex__level">${acquired}</span>
+          <span class="research-hex__state">${locked ? 'Verrouillé' : complete ? 'Max atteint' : 'Niveau actuel'}</span>
         </button>
         <strong class="research-hex__title">${escapeHtml(node.title)}</strong>
-        ${subtree === 'freight' ? '<span class="research-hex__branch">Fret</span>' : group?.id === 'operations' ? '<span class="research-hex__branch">Voyageurs</span>' : ''}
       </article>`;
   }).join('');
   const selectedClass = app.selectedResearchId ? 'has-selection' : '';
-  return `<div class="research-skilltree-scroll"><div class="research-skilltree ${selectedClass}" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#a4c1c5" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowMet" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#6fda9e" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowSelected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path fill="#f4cb72" d="M 0 0 L 8 4 L 0 8 z"></path></marker></defs>${links.join('')}${linkNodes.join('')}${linkLabels.join('')}</svg>${eras}${hexes}</div></div>${renderResearchDetailOverlay()}`;
+  const titleMaskRects = titleZones.map(zone => `<rect x="${zone.x}" y="${zone.y}" width="${zone.width}" height="${zone.height}" rx="8"></rect>`).join('');
+  return `<div class="research-skilltree-scroll"><div class="research-skilltree ${selectedClass}" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#a4c1c5" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowMet" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#6fda9e" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowSelected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path fill="#f4cb72" d="M 0 0 L 8 4 L 0 8 z"></path></marker><mask id="researchTreeTextMask"><rect x="0" y="0" width="${treeWidth}" height="${treeHeight}" fill="white"></rect>${titleMaskRects.replace(/<rect/g, '<rect fill="black"')}</mask><clipPath id="researchTreeTextClip">${titleMaskRects}</clipPath></defs>${links.join('')}${linkNodes.join('')}${linkLabels.join('')}</svg>${eras}${hexes}</div></div>${renderResearchDetailOverlay()}`;
 }
 
 function isResearchQueueCollapsed() {

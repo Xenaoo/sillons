@@ -1119,6 +1119,8 @@ button, input, select, textarea { max-width: 100%; }
   filter: drop-shadow(0 0 5px rgba(244, 203, 114, .58));
 }
 .research-tree-link-group.selected .research-tree-link-shadow { stroke-width: 7px; }
+.research-tree-link-dotted { stroke-dasharray: 1 10; stroke-linecap: round; }
+.research-tree-link-shadow-dotted { stroke-dasharray: 1 10; stroke-linecap: round; opacity: .96; }
 .research-tree-link-node circle { fill: #d1e3ea; stroke: rgba(7, 18, 27, .96); stroke-width: 2px; }
 .research-tree-link-node.met circle { fill: #7ae3a9; }
 .research-tree-link-node.selected circle { fill: #f4cb72; stroke: #402910; }
