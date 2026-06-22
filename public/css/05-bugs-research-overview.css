@@ -751,8 +751,8 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-tree-link {
   fill: none;
-  stroke: rgba(151, 180, 185, .58);
-  stroke-width: 2.4;
+  stroke: rgba(164, 193, 197, .46);
+  stroke-width: 2;
   vector-effect: non-scaling-stroke;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -761,8 +761,8 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-tree-link-shadow {
   fill: none;
-  stroke: rgba(0, 5, 10, .72);
-  stroke-width: 6px;
+  stroke: rgba(1, 8, 13, .82);
+  stroke-width: 4.8px;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -776,12 +776,6 @@ button, input, select, textarea { max-width: 100%; }
 .research-tree-link-group.met .research-tree-link-label rect { fill: #225d4a; stroke: rgba(112, 227, 160, .88); }
 .research-tree-link-label rect { fill: #132938; stroke: rgba(197, 216, 205, .62); stroke-width: 1.2; }
 .research-tree-link-label text { fill: #f8df9f; font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-anchor: middle; }
-.research-skilltree marker path { fill: rgba(151, 180, 185, .8); }
-.research-tree-link-group.met marker path { fill: rgba(111, 218, 158, .9); }
-
-.research-skilltree__links:hover .research-tree-link-group { opacity: .48; }
-.research-skilltree__links:hover .research-tree-link-group:hover { opacity: 1; }
-
 .research-era-gate {
   position: absolute;
   z-index: 1;
@@ -825,7 +819,7 @@ button, input, select, textarea { max-width: 100%; }
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 4px;
+  gap: 0;
 }
 
 .research-hex-node.tech-node {
@@ -869,8 +863,8 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-hex__level { font: 900 27px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .research-hex__state { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
-.research-hex__title { max-width: 198px; color: #f4e4ba; font-size: 11px; line-height: 1.18; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
-.research-hex__branch { color: #e6b86f; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.research-hex__title { display: block; max-width: 198px; min-height: 27px; margin-top: 8px; color: #f4e4ba; font-size: 11px; line-height: 1.18; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
+.research-hex__branch { display: block; margin-top: 3px; color: #e6b86f; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 
 @media (max-width: 700px) {
   .research-skilltree-scroll { max-height: 66vh; margin-inline: -8px; border-radius: 10px; }
