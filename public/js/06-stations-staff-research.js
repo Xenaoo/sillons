@@ -1144,8 +1144,13 @@ function renderResearchDetailOverlay() {
     <div class="research-detail-overlay" role="presentation">
       <section class="research-detail-panel" data-research-detail-drag role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}" style="--research-detail-x:${offsetX}px;--research-detail-y:${offsetY}px">
         <div class="research-detail-heading">
-          <span class="research-detail-kicker">${escapeHtml(node.eraLabel || 'Recherche ferroviaire')}</span>
-          <strong>${escapeHtml(node.title)}</strong>
+          <div class="research-detail-heading-main">
+            <div>
+              <span class="research-detail-kicker">${escapeHtml(node.eraLabel || 'Recherche ferroviaire')}</span>
+              <strong>${escapeHtml(node.title)}</strong>
+            </div>
+            <button type="button" class="ghost research-detail-close" data-action="close-research-detail" aria-label="Fermer la fiche de recherche">×</button>
+          </div>
           <span class="tag ${complete ? 'good' : locked ? 'bad' : 'warn'}">${complete ? 'Acquise' : `Niv. ${acquired} → ${targetLevel}`}</span>
         </div>
         <p>${escapeHtml(node.description || '')}</p>

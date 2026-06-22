@@ -1,19 +1,10 @@
-# v69.21.0 — nettoyage visuel des nœuds et liaisons R&D
+# v69.21.1 — correction du scroll avec une recherche sélectionnée
 
-- Suppression des mentions `Voyageurs` et `Fret` sous les hexagones de l’arbre technologique pour alléger la lecture.
-- Les hexagones n’affichent désormais plus le niveau suivant : seul le niveau actuel est conservé visuellement.
-- Mise en place d’un traitement des liaisons sous les titres de recherche : les segments qui passent dans la zone de texte deviennent pointillés afin d’éviter une lecture confuse des noms.
-- Conservation du compactage horizontal introduit précédemment.
-- Incrément de version : badge interface `v69.21.0`, version serveur/client `v69.21.0`, package `69.21.0`.
-- Schéma save : `189`.
-
-# v69.20.0 — compactage extrême horizontal de l’arbre R&D
-
-- Resserrement supplémentaire des recherches dans `R&D > Arbre technologique` pour permettre l’affichage d’environ 10 colonnes sans déplacement latéral sur une largeur d’écran standard.
-- Réduction du pas horizontal entre les nœuds, de la largeur des conteneurs et du gabarit visuel des hexagones.
-- Compactage complémentaire des libellés et des ancres de liaison pour conserver une lecture correcte malgré la densité accrue.
-- Ajustement du message d’aide au-dessus de l’arbre pour refléter cette nouvelle contrainte d’affichage.
-- Incrément de version : badge interface `v69.20.0`, version serveur/client `v69.20.0`, package `69.20.0`.
+- Correction du blocage du scroll de l’arbre R&D lorsqu’une fiche de recherche est ouverte.
+- La couche transparente de la fiche ne capte plus les événements de souris/molette en dehors du panneau, ce qui permet de continuer à se déplacer dans l’arbre pour suivre les liaisons.
+- Le panneau de détail reste interactif et scrollable indépendamment.
+- Ajout d’un bouton de fermeture `×` dans la fiche de recherche, puisque le clic dans le vide laisse désormais l’arbre manipulable.
+- Incrément de version : badge interface `v69.21.1`, version serveur/client `v69.21.1`, package `69.21.1`.
 - Schéma save : `189`.
 
 # v69.19.0 — resserrement horizontal de l’arbre R&D

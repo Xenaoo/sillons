@@ -359,6 +359,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     const count = Math.max(1, Math.floor(Number(input?.value || button.dataset.count || 1)));
     return doAction('fireStaff', { role: button.dataset.role, count });
   }
+  if (action === 'close-research-detail') { closeResearchDetails(); return; }
   if (action === 'cancel-research') return doAction('cancelResearch', { source: button.dataset.source, index: Number(button.dataset.index), nodeId: button.dataset.id, targetLevel: Number(button.dataset.level) });
   if (action === 'research-node') return doAction('research', { nodeId: button.dataset.id });
   if (action === 'start-epoch-transition') {

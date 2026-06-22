@@ -1245,13 +1245,14 @@ button, input, select, textarea { max-width: 100%; }
   z-index: 1200;
   inset: 0;
   display: block;
-  pointer-events: auto;
+  pointer-events: none;
   background: transparent;
   backdrop-filter: none;
 }
 
 .research-detail-panel {
   position: fixed;
+  pointer-events: auto;
   top: 18px;
   right: 18px;
   width: min(430px, 100%);
@@ -1279,6 +1280,8 @@ button, input, select, textarea { max-width: 100%; }
 .research-detail-panel textarea { cursor: pointer; }
 
 .research-detail-heading { display: grid; gap: 6px; margin-bottom: 12px; }
+.research-detail-heading-main { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.research-detail-close { min-width: 34px; height: 34px; padding: 0 10px; border-radius: 999px; font-weight: 900; line-height: 1; }
 .research-detail-heading strong { color: #f5e4b6; font-size: 21px; line-height: 1.12; }
 .research-detail-heading .tag { justify-self: start; }
 .research-detail-kicker { color: #e3b967; font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
