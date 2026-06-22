@@ -1,3 +1,11 @@
+# v69.19.0 — resserrement horizontal de l’arbre R&D
+
+- Réduction de l’espacement horizontal entre les recherches dans `R&D > Arbre technologique` afin que davantage de nœuds tiennent dans la largeur disponible.
+- Ajustement de la largeur utile des conteneurs de nœuds et léger compactage des libellés pour limiter le débordement horizontal sur les branches les plus chargées.
+- Mise à jour du texte d’accompagnement de l’arbre pour refléter ce resserrement horizontal.
+- Incrément de version : badge interface `v69.19.0`, version serveur/client `v69.19.0`, package `69.19.0`.
+- Schéma save : `189`.
+
 # v69.18.0 — seconde passe visuelle sur l’arbre R&D
 
 - Refonte purement visuelle de la zone supérieure de `R&D > Arbre technologique` pour réduire fortement l’encombrement vertical.

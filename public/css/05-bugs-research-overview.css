@@ -1166,7 +1166,7 @@ button, input, select, textarea { max-width: 100%; }
 .research-hex-node {
   position: absolute;
   z-index: 2;
-  width: 206px;
+  width: 194px;
   min-height: 150px;
   display: grid;
   justify-items: center;
@@ -1235,7 +1235,7 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-hex__level { font: 900 27px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .research-hex__state { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
-.research-hex__title { display: block; max-width: 198px; min-height: 27px; margin-top: 8px; color: #f4e4ba; font-size: 11px; line-height: 1.18; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
+.research-hex__title { display: block; max-width: 186px; min-height: 27px; margin-top: 8px; color: #f4e4ba; font-size: 10.5px; line-height: 1.16; text-align: center; text-wrap: balance; text-shadow: 0 2px 5px #02070c; }
 .research-hex__branch { display: block; margin-top: 3px; color: #e6b86f; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 
 .research-detail-overlay {

@@ -1015,7 +1015,7 @@ function renderResearch() {
       <div class="research-tree-header">
         <div>
           <h2>Arbre technologique</h2>
-          <p class="small muted">Les liens ont été renforcés pour rendre les prérequis plus lisibles. Le panneau de navigation a été déplacé en haut afin de consacrer plus de place à l’arbre lui-même.</p>
+          <p class="small muted">Les liens ont été renforcés pour rendre les prérequis plus lisibles. L’espacement horizontal a aussi été resserré pour faire tenir davantage de recherches dans la largeur disponible.</p>
         </div>
         <span class="tag">${(active?.nodes || []).length} recherches · ${escapeHtml(active?.label || 'Branche')}</span>
       </div>
@@ -1167,13 +1167,13 @@ function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
-  const nodePitch = 248;
+  const nodePitch = 206;
   const eraHeight = 430;
   const trackGap = 38;
   const connectorStub = 16;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
-  const nodeWidth = 214;
+  const nodeWidth = 194;
   const hexCenterX = Math.round(nodeWidth / 2);
   const byEra = new Map();
   const nodeById = new Map(nodes.map(node => [node.id, node]));
@@ -1229,7 +1229,7 @@ function renderResearchNodeGrid(group) {
       previousColumn = column;
       positions.set(node.id, {
         // Une même génération partage une ligne parfaitement horizontale.
-        x: 64 + column * nodePitch,
+        x: 48 + column * nodePitch,
         y: 250 + (era - 1) * eraHeight,
         era,
         column
@@ -1237,7 +1237,7 @@ function renderResearchNodeGrid(group) {
     });
     maxColumns = Math.max(maxColumns, previousColumn + 1);
   }
-  const treeWidth = Math.max(1240, 160 + maxColumns * nodePitch);
+  const treeWidth = Math.max(1080, 120 + maxColumns * nodePitch);
   const treeHeight = 250 + 7 * eraHeight;
   const links = [];
   const linkLabels = [];
