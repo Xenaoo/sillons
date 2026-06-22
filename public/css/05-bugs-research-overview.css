@@ -924,6 +924,7 @@ button, input, select, textarea { max-width: 100%; }
   transform: translate(var(--research-detail-x, 0px), var(--research-detail-y, 0px));
   will-change: transform;
   cursor: grab;
+  touch-action: none;
 }
 
 .research-detail-panel.is-dragging { user-select: none; cursor: grabbing; box-shadow: 0 30px 82px rgba(0, 0, 0, .78), 0 0 0 2px rgba(244, 203, 114, .3); }

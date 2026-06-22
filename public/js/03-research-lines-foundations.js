@@ -225,7 +225,7 @@ function bindResearchDetailDrag() {
     panel.setPointerCapture?.(event.pointerId);
     panel.classList.add('is-dragging');
     event.preventDefault();
-  });
+  }, true);
 
   document.addEventListener('pointermove', event => {
     const drag = app.researchDetailDrag;
@@ -245,7 +245,8 @@ function bindResearchDetailDrag() {
     app.researchDetailOffset = { x: Math.round(drag.x), y: Math.round(drag.y) };
     drag.panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
     drag.panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
-  });
+    event.preventDefault();
+  }, true);
 
   const finishDrag = event => {
     const drag = app.researchDetailDrag;
@@ -254,8 +255,8 @@ function bindResearchDetailDrag() {
     localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset || { x: 0, y: 0 }));
     app.researchDetailDrag = null;
   };
-  document.addEventListener('pointerup', finishDrag);
-  document.addEventListener('pointercancel', finishDrag);
+  document.addEventListener('pointerup', finishDrag, true);
+  document.addEventListener('pointercancel', finishDrag, true);
 }
 
 function constrainResearchDetailPanel() {
