@@ -958,6 +958,52 @@ function researchEraBucketsForGroup(group) {
   return buckets;
 }
 
+function renderResearchDetailPrereq(req) {
+  if (req.anyOf) {
+    return `<div class="research-detail-prereq-group"><span>Un des prérequis suivants :</span>${req.anyOf.map(renderResearchDetailPrereq).join('')}</div>`;
+  }
+  const ready = researchPrereqSatisfiedClient(req);
+  return `<button type="button" class="research-detail-prereq ${ready ? 'met' : ''}" data-action="research-detail-prereq" data-id="${escapeAttr(req.id)}"><span>${escapeHtml(techNodeTitle(req.id))}</span><b>niv. ${Number(req.level || 1)}</b></button>`;
+}
+
+function renderResearchDetailOverlay() {
+  const nodeId = app.selectedResearchId || '';
+  const node = techNodeById(nodeId);
+  if (!node) return '';
+  const level = plannedTechLevel(node.id);
+  const acquired = techLevel(node.id);
+  const max = techMaxLevel(node);
+  const complete = Number.isFinite(max) && level >= max;
+  const targetLevel = complete ? max : level + 1;
+  const locked = complete ? '' : techLockedReason(node, targetLevel);
+  const affordable = app.state.me.cash >= researchCostMoneyClient(node, targetLevel);
+  const prereqs = researchPrereqsForLevelClient(node, targetLevel);
+  const effects = (node.improves || node.effects || []).filter(effect => effect && !String(effect).toLowerCase().includes('niveaux suivants')).slice(0, 4);
+  const unlocks = (node.unlocks || []).slice(0, 4);
+  const launchable = !complete && !locked && affordable && !researchBlockedByEraTransition();
+  return `
+    <div class="research-detail-overlay" role="presentation">
+      <section class="research-detail-panel" role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}">
+        <div class="research-detail-heading">
+          <span class="research-detail-kicker">${escapeHtml(node.eraLabel || 'Recherche ferroviaire')}</span>
+          <strong>${escapeHtml(node.title)}</strong>
+          <span class="tag ${complete ? 'good' : locked ? 'bad' : 'warn'}">${complete ? 'Acquise' : `Niv. ${acquired} → ${targetLevel}`}</span>
+        </div>
+        <p>${escapeHtml(node.description || '')}</p>
+        ${effects.length ? `<div class="research-detail-section"><small>Effets</small>${effects.map(effect => `<span>${escapeHtml(effect)}</span>`).join('')}</div>` : ''}
+        ${unlocks.length ? `<div class="research-detail-section"><small>Débloque</small>${unlocks.map(unlock => `<span>${escapeHtml(unlock)}</span>`).join('')}</div>` : ''}
+        <div class="research-detail-section research-detail-section--prereqs">
+          <small>Prérequis</small>
+          ${prereqs.length ? prereqs.map(renderResearchDetailPrereq).join('') : '<span class="research-detail-ready">Aucun prérequis</span>'}
+        </div>
+        <div class="research-detail-footer">
+          <span>${complete ? 'Recherche terminée' : `${money(researchCostMoneyClient(node, targetLevel))} · ${formatResearchTime(researchDurationClient(node, targetLevel))}`}</span>
+          <button type="button" class="primary" data-action="research-node" data-id="${escapeAttr(node.id)}" ${launchable ? '' : 'disabled'}>${complete ? 'Acquise' : locked ? 'Prérequis requis' : affordable ? `Lancer niv. ${targetLevel}` : 'Budget insuffisant'}</button>
+        </div>
+      </section>
+    </div>`;
+}
+
 function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
@@ -1042,6 +1088,7 @@ function renderResearchNodeGrid(group) {
       const y2 = sameEra ? target.y + (flowsDown ? 10 : 108) : target.y + hexCenterY;
       const level = source.item.level || 1;
       const met = researchPrereqSatisfiedClient(source.item);
+      const selected = app.selectedResearchId === node.id;
       const index = incomingLinkIndex.get(node.id) || 0;
       incomingLinkIndex.set(node.id, index + 1);
       // Chaque lien emprunte un couloir distinct proche de sa cible. Cela évite
@@ -1054,7 +1101,8 @@ function renderResearchNodeGrid(group) {
       const levelLabel = level > 1
         ? `<g class="research-tree-link-label" transform="translate(${laneX} ${labelY})"><rect x="-10" y="-9" width="20" height="17" rx="8.5"></rect><text y="3">${level}</text></g>`
         : '';
-      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}"></path>${levelLabel}</g>`);
+      const marker = selected ? 'researchTreeArrowSelected' : met ? 'researchTreeArrowMet' : 'researchTreeArrow';
+      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})"></path>${levelLabel}</g>`);
     }
   }
   const eras = [1, 2, 3, 4, 5, 6, 7].map(era => {
@@ -1081,8 +1129,8 @@ function renderResearchNodeGrid(group) {
     const prereqs = researchPrereqsForLevelClient(node, target).map(researchPrereqLabelClient).join(', ') || 'Aucun';
     const details = `${node.title}\nEffet : ${effects}${prereqs !== 'Aucun' ? `\nPrérequis : ${prereqs}` : ''}`;
     return `
-      <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltipAttr(details)}>
-        <button type="button" class="research-hex" data-action="research-node" data-id="${escapeAttr(node.id)}" ${tooltipAttr(details)} ${complete || locked || !affordable || researchBlockedByEraTransition() ? 'disabled' : ''}>
+      <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'} ${app.selectedResearchId === node.id ? 'selected' : ''}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltipAttr(details)}>
+        <button type="button" class="research-hex" data-action="select-research-node" data-id="${escapeAttr(node.id)}" ${tooltipAttr(details)}>
           <span class="research-hex__level">${complete ? '✓' : acquired}</span>
           <span class="research-hex__state">${complete ? 'Acquis' : locked ? 'Verrouillé' : `Niv. ${target}`}</span>
         </button>
@@ -1090,7 +1138,8 @@ function renderResearchNodeGrid(group) {
         ${subtree === 'freight' ? '<span class="research-hex__branch">Fret</span>' : group?.id === 'operations' ? '<span class="research-hex__branch">Voyageurs</span>' : ''}
       </article>`;
   }).join('');
-  return `<div class="research-skilltree-scroll"><div class="research-skilltree" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true">${links.join('')}</svg>${eras}${hexes}</div></div>`;
+  const selectedClass = app.selectedResearchId ? 'has-selection' : '';
+  return `<div class="research-skilltree-scroll"><div class="research-skilltree ${selectedClass}" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#a4c1c5" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowMet" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#6fda9e" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowSelected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path fill="#f4cb72" d="M 0 0 L 8 4 L 0 8 z"></path></marker></defs>${links.join('')}</svg>${eras}${hexes}</div></div>${renderResearchDetailOverlay()}`;
 }
 
 function isResearchQueueCollapsed() {

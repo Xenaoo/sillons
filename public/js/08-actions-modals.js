@@ -10,6 +10,11 @@ function energyStrategyDescription(id) {
 
 async function onTabContentClick(event) {
   markUiInteraction();
+  const researchDetailOverlay = event.target.closest('.research-detail-overlay');
+  if (researchDetailOverlay && event.target === researchDetailOverlay) {
+    closeResearchDetails();
+    return;
+  }
   const suggestion = event.target.closest('[data-station-choice]');
   if (suggestion) {
     chooseStationSuggestion(suggestion.dataset.role, suggestion.dataset.stationChoice);
@@ -120,6 +125,8 @@ async function onTabContentClick(event) {
     }
   }
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
+  if (action === 'select-research-node') return selectResearchNode(button.dataset.id);
+  if (action === 'research-detail-prereq') return selectResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
 if (action === 'select-composition-train') {
   const trainId = button.dataset.id || '';
@@ -359,7 +366,7 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     if (!(await gameConfirm('Lancer le passage d’époque', `Lancer le passage vers ${nextName} ? La R&D sera indisponible jusqu’à la fin et aucune recherche ne doit être en cours.`, { confirmLabel: 'Lancer' }))) return;
     return doAction('startEpochTransition', {});
   }
-  if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; app.selectedResearchId = ''; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
   if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
   if (action === 'toggle-research-queue') { toggleResearchQueue(); return; }
   if (action === 'submit-bug-report') {

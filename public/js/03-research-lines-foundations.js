@@ -183,6 +183,28 @@ function focusResearchNode(nodeId) {
   }, 2800);
 }
 
+function selectResearchNode(nodeId) {
+  const groupId = researchGroupForNode(nodeId);
+  if (!groupId) return;
+  app.activeTab = 'research';
+  app.activeResearchTab = groupId;
+  app.selectedResearchId = nodeId;
+  app.highlightResearchId = '';
+  localStorage.setItem('sillons.activeTab', app.activeTab);
+  localStorage.setItem('sillons.researchTab', app.activeResearchTab);
+  renderAll();
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`.tech-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    if (el) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  });
+}
+
+function closeResearchDetails() {
+  if (!app.selectedResearchId) return;
+  app.selectedResearchId = '';
+  renderAll();
+}
+
 function researchEffectTarget(effect, node) {
   const text = `${effect || ''} ${node?.title || ''} ${node?.branch || ''}`.toLowerCase();
   if (/rh|équipe|conducteur|agent|formation|salariale|recrutement/.test(text)) return { tab: 'staff', label: 'Ressources humaines' };
@@ -500,5 +522,4 @@ function renderSectionHero(kicker, title, text, image, tags = []) {
     </div>
   `;
 }
-
 
