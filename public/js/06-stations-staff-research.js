@@ -1015,9 +1015,9 @@ function renderResearchNodeGrid(group) {
     });
     maxRows = Math.max(maxRows, eraNodes.length);
     eraNodes.forEach((node, index) => {
-      const stagger = index % 2 ? 22 : 0;
       positions.set(node.id, {
-        x: (era - 1) * columnWidth + 50 + stagger,
+        // Une même génération partage une colonne parfaitement verticale.
+        x: (era - 1) * columnWidth + 50,
         y: 76 + index * rowHeight,
         era,
         row: index
