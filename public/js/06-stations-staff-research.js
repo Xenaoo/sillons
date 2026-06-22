@@ -1008,15 +1008,12 @@ function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
-  const columnWidth = 320;
+  const nodePitch = 230;
+  const eraHeight = 250;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
-  const rowHeight = 186;
   const nodeWidth = 206;
   const hexCenterX = Math.round(nodeWidth / 2);
-  const hexCenterY = 56;
-  const hexLeftEdge = 43;
-  const hexRightEdge = 163;
   const byEra = new Map();
   const nodeById = new Map(nodes.map(node => [node.id, node]));
   for (const node of nodes) {
@@ -1047,10 +1044,10 @@ function renderResearchNodeGrid(group) {
       const subtreeA = a.subtree || (a.branch === 'freight' ? 'freight' : 'passengers');
       const subtreeB = b.subtree || (b.branch === 'freight' ? 'freight' : 'passengers');
       const parentScore = node => {
-        const parentRows = internalParents(node)
-          .map(parent => positions.get(parent.id)?.row)
+        const parentColumns = internalParents(node)
+          .map(parent => positions.get(parent.id)?.column)
           .filter(Number.isFinite);
-        return parentRows.length ? parentRows.reduce((sum, row) => sum + row, 0) / parentRows.length : -1;
+        return parentColumns.length ? parentColumns.reduce((sum, column) => sum + column, 0) / parentColumns.length : -1;
       };
       const laneA = subtreeA === 'freight' ? 1 : 0;
       const laneB = subtreeB === 'freight' ? 1 : 0;
@@ -1063,15 +1060,15 @@ function renderResearchNodeGrid(group) {
     eraNodes.forEach((node, index) => {
       positions.set(node.id, {
         // Une même génération partage une colonne parfaitement verticale.
-        x: (era - 1) * columnWidth + 50,
-        y: 76 + index * rowHeight,
+        x: 50 + index * nodePitch,
+        y: 86 + (era - 1) * eraHeight,
         era,
-        row: index
+        column: index
       });
     });
   }
-  const treeWidth = 7 * columnWidth + 20;
-  const treeHeight = Math.max(390, 132 + maxRows * rowHeight);
+  const treeWidth = Math.max(860, 100 + maxRows * nodePitch);
+  const treeHeight = 100 + 7 * eraHeight;
   const links = [];
   const incomingLinkIndex = new Map();
   for (const node of nodes) {
@@ -1081,25 +1078,21 @@ function renderResearchNodeGrid(group) {
       const source = requirements.map(item => ({ item, position: positions.get(item.id), node: nodeById.get(item.id) })).find(item => item.position && item.node);
       if (!source || !target) continue;
       const sameEra = source.position.era === target.era;
-      const flowsDown = source.position.y <= target.y;
-      const x1 = sameEra ? source.position.x + hexCenterX : source.position.x + hexRightEdge;
-      const y1 = sameEra ? source.position.y + (flowsDown ? 108 : 10) : source.position.y + hexCenterY;
-      const x2 = sameEra ? target.x + hexCenterX : target.x + hexLeftEdge;
-      const y2 = sameEra ? target.y + (flowsDown ? 10 : 108) : target.y + hexCenterY;
+      const x1 = source.position.x + hexCenterX;
+      const y1 = sameEra ? source.position.y + 10 : source.position.y + 108;
+      const x2 = target.x + hexCenterX;
+      const y2 = target.y + 10;
       const level = source.item.level || 1;
       const met = researchPrereqSatisfiedClient(source.item);
       const selected = app.selectedResearchId === node.id;
       const index = incomingLinkIndex.get(node.id) || 0;
       incomingLinkIndex.set(node.id, index + 1);
-      // Chaque lien emprunte un couloir distinct proche de sa cible. Cela évite
-      // les diagonales longues qui traversaient les autres prérequis.
-      const laneX = sameEra
-        ? source.position.x + (flowsDown ? nodeWidth + 18 + index * 12 : -18 - index * 12)
-        : x2 - 24 - index * 14;
-      const route = `M ${x1} ${y1} H ${laneX} V ${y2} H ${x2}`;
-      const labelY = Math.round((y1 + y2) / 2);
+      const laneY = sameEra ? y1 - 12 - index * 10 : y2 - 24 - index * 13;
+      const route = `M ${x1} ${y1} V ${laneY} H ${x2} V ${y2}`;
+      const labelX = Math.round((x1 + x2) / 2);
+      const labelY = laneY - 9;
       const levelLabel = level > 1
-        ? `<g class="research-tree-link-label" transform="translate(${laneX} ${labelY})"><rect x="-10" y="-9" width="20" height="17" rx="8.5"></rect><text y="3">${level}</text></g>`
+        ? `<g class="research-tree-link-label" transform="translate(${labelX} ${labelY})"><rect x="-10" y="-9" width="20" height="17" rx="8.5"></rect><text y="3">${level}</text></g>`
         : '';
       const marker = selected ? 'researchTreeArrowSelected' : met ? 'researchTreeArrowMet' : 'researchTreeArrow';
       links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})"></path>${levelLabel}</g>`);
@@ -1109,7 +1102,7 @@ function renderResearchNodeGrid(group) {
     const sample = byEra.get(era)?.[0];
     const label = sample?.eraLabel || `Ère ${era}`;
     const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
-    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="left:${(era - 1) * columnWidth}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
+    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 54}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
   }).join('');
   const hexes = nodes.map(node => {
     const pos = positions.get(node.id);

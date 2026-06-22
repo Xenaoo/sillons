@@ -789,24 +789,25 @@ button, input, select, textarea { max-width: 100%; }
 .research-era-gate {
   position: absolute;
   z-index: 1;
-  top: 44px;
-  bottom: 26px;
-  width: 1px;
-  background: linear-gradient(to bottom, transparent, rgba(224, 76, 70, .96) 5%, rgba(224, 76, 70, .35) 94%, transparent);
+  right: 30px;
+  left: 30px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(224, 76, 70, .96) 5%, rgba(224, 76, 70, .35) 94%, transparent);
   box-shadow: 0 0 13px rgba(227, 70, 65, .24);
 }
 
 .research-era-gate.unlocked {
-  background: linear-gradient(to bottom, transparent, rgba(220, 182, 100, .92) 5%, rgba(220, 182, 100, .36) 94%, transparent);
+  background: linear-gradient(to right, transparent, rgba(220, 182, 100, .92) 5%, rgba(220, 182, 100, .36) 94%, transparent);
   box-shadow: 0 0 13px rgba(220, 182, 100, .26);
 }
 
 .research-era-gate span {
-  position: sticky;
-  top: 8px;
+  position: absolute;
+  top: -14px;
+  left: 0;
   display: block;
-  width: 248px;
-  margin-left: 9px;
+  width: max-content;
+  max-width: calc(100% - 16px);
   padding: 6px 8px;
   color: #f1d487;
   font-size: 9px;
@@ -898,12 +899,11 @@ button, input, select, textarea { max-width: 100%; }
 
 .research-detail-overlay {
   position: fixed;
-  z-index: 50;
+  z-index: 1200;
   inset: 0;
   display: grid;
-  align-items: start;
-  justify-items: end;
-  padding: clamp(16px, 4vw, 54px);
+  place-items: center;
+  padding: 16px;
   pointer-events: auto;
   background: transparent;
   backdrop-filter: none;
@@ -921,6 +921,12 @@ button, input, select, textarea { max-width: 100%; }
     radial-gradient(circle at 100% 0, rgba(240, 190, 88, .14), transparent 42%),
     linear-gradient(145deg, rgba(18, 43, 52, .99), rgba(7, 20, 31, .99));
   box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
+}
+
+/* Sur écran large, le panneau flotte au centre de la carte permanente (à gauche)
+   au lieu de couvrir l'arbre qui occupe le panneau de droite. */
+@media (min-width: 1101px) {
+  .research-detail-panel { transform: translateX(-27vw); }
 }
 
 .research-detail-heading { display: grid; gap: 6px; margin-bottom: 12px; }
@@ -956,7 +962,7 @@ button, input, select, textarea { max-width: 100%; }
 .research-detail-footer > span { color: #c4ccc4; font-size: 12px; }
 
 @media (max-width: 620px) {
-  .research-detail-overlay { place-items: center; padding: 12px; background: rgba(2, 9, 15, .16); }
+  .research-detail-overlay { padding: 12px; background: rgba(2, 9, 15, .16); }
   .research-detail-panel { padding: 16px; }
   .research-detail-footer { align-items: stretch; flex-direction: column; }
 }

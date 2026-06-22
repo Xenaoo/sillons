@@ -675,6 +675,10 @@ function isFleetSubmenuAutoRefreshFrozen() {
   return app.activeTab === 'fleet' && ['catalog', 'composition'].includes(app.activeFleetSubtab || '');
 }
 
+function isResearchTreeAutoRefreshFrozen() {
+  return app.activeTab === 'research' && Boolean(app.selectedResearchId);
+}
+
 async function refreshState(first, { includeAdmin = false } = {}) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
@@ -716,7 +720,7 @@ async function refreshState(first, { includeAdmin = false } = {}) {
     const nextRenderKey = stateRenderSignature(data);
     const shouldRender = first || nextRenderKey !== app.lastRenderKey;
     if (!shouldRender) return;
-    if (!first && isFleetSubmenuAutoRefreshFrozen()) {
+    if (!first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
       // Les sous-menus du Parc ne sont plus reconstruits à chaque tick serveur :
       // les sélections, scrolls, boutons et champs restent stables jusqu'à une action utilisateur.
       renderTopbar();
