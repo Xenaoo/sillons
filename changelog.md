@@ -1,3 +1,12 @@
+# v69.20.0 — compactage extrême horizontal de l’arbre R&D
+
+- Resserrement supplémentaire des recherches dans `R&D > Arbre technologique` pour permettre l’affichage d’environ 10 colonnes sans déplacement latéral sur une largeur d’écran standard.
+- Réduction du pas horizontal entre les nœuds, de la largeur des conteneurs et du gabarit visuel des hexagones.
+- Compactage complémentaire des libellés et des ancres de liaison pour conserver une lecture correcte malgré la densité accrue.
+- Ajustement du message d’aide au-dessus de l’arbre pour refléter cette nouvelle contrainte d’affichage.
+- Incrément de version : badge interface `v69.20.0`, version serveur/client `v69.20.0`, package `69.20.0`.
+- Schéma save : `189`.
+
 # v69.19.0 — resserrement horizontal de l’arbre R&D
 
 - Réduction de l’espacement horizontal entre les recherches dans `R&D > Arbre technologique` afin que davantage de nœuds tiennent dans la largeur disponible.

@@ -1015,7 +1015,7 @@ function renderResearch() {
       <div class="research-tree-header">
         <div>
           <h2>Arbre technologique</h2>
-          <p class="small muted">Les liens ont été renforcés pour rendre les prérequis plus lisibles. L’espacement horizontal a aussi été resserré pour faire tenir davantage de recherches dans la largeur disponible.</p>
+          <p class="small muted">Les recherches sont encore plus resserrées horizontalement pour pouvoir afficher jusqu’à 10 colonnes à l’écran sans déplacement latéral sur une largeur standard.</p>
         </div>
         <span class="tag">${(active?.nodes || []).length} recherches · ${escapeHtml(active?.label || 'Branche')}</span>
       </div>
@@ -1167,13 +1167,13 @@ function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
-  const nodePitch = 206;
-  const eraHeight = 430;
-  const trackGap = 38;
-  const connectorStub = 16;
+  const nodePitch = 128;
+  const eraHeight = 410;
+  const trackGap = 30;
+  const connectorStub = 12;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
-  const nodeWidth = 194;
+  const nodeWidth = 128;
   const hexCenterX = Math.round(nodeWidth / 2);
   const byEra = new Map();
   const nodeById = new Map(nodes.map(node => [node.id, node]));
@@ -1229,16 +1229,16 @@ function renderResearchNodeGrid(group) {
       previousColumn = column;
       positions.set(node.id, {
         // Une même génération partage une ligne parfaitement horizontale.
-        x: 48 + column * nodePitch,
-        y: 250 + (era - 1) * eraHeight,
+        x: 28 + column * nodePitch,
+        y: 238 + (era - 1) * eraHeight,
         era,
         column
       });
     });
     maxColumns = Math.max(maxColumns, previousColumn + 1);
   }
-  const treeWidth = Math.max(1080, 120 + maxColumns * nodePitch);
-  const treeHeight = 250 + 7 * eraHeight;
+  const treeWidth = Math.max(980, 70 + maxColumns * nodePitch);
+  const treeHeight = 230 + 7 * eraHeight;
   const links = [];
   const linkLabels = [];
   const linkNodes = [];
@@ -1265,16 +1265,16 @@ function renderResearchNodeGrid(group) {
       if (!source || !target) continue;
       const sameEra = source.position.era === target.era;
       const x1 = source.position.x + hexCenterX;
-      const y1 = sameEra ? source.position.y + 10 : source.position.y + 108;
+      const y1 = sameEra ? source.position.y + 4 : source.position.y + 84;
       const x2 = target.x + hexCenterX;
-      const y2 = target.y + 10;
+      const y2 = target.y + 4;
       const level = source.item.level || 1;
       const met = researchPrereqSatisfiedClient(source.item);
       const selected = app.selectedResearchId === node.id;
       const track = sameEra
         ? allocateTrack(sameEraTracks, String(source.position.era), x1, x2)
         : allocateTrack(crossEraTracks, `${source.position.era}:${target.era}`, x1, x2);
-      const laneY = sameEra ? y1 - 28 - track * trackGap : y2 - 44 - track * trackGap;
+      const laneY = sameEra ? y1 - 22 - track * trackGap : y2 - 32 - track * trackGap;
       const direction = x2 >= x1 ? 1 : -1;
       const route = `M ${x1} ${y1} V ${laneY} H ${x2 - connectorStub * direction} L ${x2} ${y2}`;
       const labelX = Math.round((x1 + x2) / 2);
