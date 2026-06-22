@@ -116,10 +116,10 @@ function renderSelectedStation(s) {
     <div class="list-item selected-station-card">
       <div class="item-title"><strong>${escapeHtml(s.name)}</strong><span class="tag">${owner ? `Propriétaire : ${escapeHtml(owner.player.name)}` : 'Ville libre'}</span></div>
       <div class="kv">
-        <span>Demande voyageurs</span><b>${formatInt(s.baseDemand)}</b>
+        <span>Demande voyageurs</span><b>${s.annualPassengers ? `${formatInt(s.annualPassengers)} voy./an` : `${formatInt(s.baseDemand)} estimée`}</b>
         <span>Demande fret</span><b>${formatInt(s.freight)}</b>
         <span>Population</span><b>${s.population ? formatInt(s.population) : '—'}</b>
-        ${s.annualPassengers ? `<span>Fréquentation ${s.passengerTrafficYear || 2024}</span><b>${formatInt(s.annualPassengers)} voy./an</b>` : ''}
+        ${s.annualPassengers ? `<span>Source de fréquentation</span><b>SNCF ${s.passengerTrafficYear || 2024}</b>` : ''}
         <span>Mode d’accès</span><b>${asset ? 'Gare exploitée' : 'Sillons sur ligne'}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>

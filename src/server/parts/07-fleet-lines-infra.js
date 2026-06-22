@@ -256,10 +256,12 @@ function normalizeTrain(raw, ownerId) {
   };
   const passengerRun = raw.passengerRun && typeof raw.passengerRun === 'object' ? raw.passengerRun : null;
   raw.passengerRun = passengerRun ? {
+    simulationVersion: Math.max(0, Math.floor(Number(passengerRun.simulationVersion || 0))),
     lineId: typeof passengerRun.lineId === 'string' ? passengerRun.lineId : null,
     stopIndex: Math.max(0, Math.floor(Number(passengerRun.stopIndex || 0))),
     direction: Number(passengerRun.direction) < 0 ? -1 : 1,
     nextStopAt: Math.max(0, Number(passengerRun.nextStopAt || 0)),
+    started: Boolean(passengerRun.started),
     load: Math.max(0, Math.floor(Number(passengerRun.load || 0))),
     cohorts: Array.isArray(passengerRun.cohorts) ? passengerRun.cohorts
       .map(cohort => ({

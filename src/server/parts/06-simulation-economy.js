@@ -265,12 +265,14 @@ function simulateTick() {
 
 function passengerRunForTrain(train, line, stopCount, now) {
   const current = train?.passengerRun;
-  if (current?.lineId === line.id && Array.isArray(current.cohorts)) return current;
+  if (current?.lineId === line.id && current?.simulationVersion === PASSENGER_SIMULATION_VERSION && Array.isArray(current.cohorts)) return current;
   const next = {
+    simulationVersion: PASSENGER_SIMULATION_VERSION,
     lineId: line.id,
     stopIndex: 0,
     direction: 1,
     nextStopAt: now,
+    started: false,
     cohorts: [],
     load: 0,
     lastBoarded: 0,
@@ -297,12 +299,16 @@ function boardPassengersAtStop(run, stopIndex, direction, stopCount, capacity, d
 
 function processPassengerArrivals(player, line, trains, demandPerTick, ticketPrice, now, cadence) {
   const stops = lineStops(line);
-  if (stops.length < 2 || !trains.length || !lineMarketServices(line).includes('passengers')) return { alighted: 0, boarded: 0, revenue: 0, averageLoad: null };
-  const legMs = Math.max(15000, Number(cadence?.oneWayMinutes || 1) * 60000 / Math.max(1, stops.length - 1));
+  if (stops.length < 2 || !trains.length || !lineMarketServices(line).includes('passengers')) return { alighted: 0, boarded: 0, displayedAlighted: 0, revenue: 0, averageLoad: null };
+  const legGameMs = Math.max(60000, Number(cadence?.oneWayMinutes || 1) * 60000 / Math.max(1, stops.length - 1));
+  const gameTimeScale = Math.max(1, PASSENGER_SIMULATION_MINUTES_PER_TICK * 60000 / Math.max(1, TICK_MS));
+  const legMs = Math.max(TICK_MS * 2, Math.round(legGameMs / gameTimeScale));
+  const demandPerStop = Math.max(0, demandPerTick * legMs / Math.max(1, TICK_MS) / Math.max(1, trains.length) / Math.max(1, stops.length - 1));
   let alighted = 0;
   let boarded = 0;
   let revenue = 0;
   let loadTotal = 0;
+  let displayedAlighted = 0;
   for (const train of trains) {
     const model = BALANCE.trains[train.modelId];
     if (!model) continue;
@@ -310,14 +316,26 @@ function processPassengerArrivals(player, line, trains, demandPerTick, ticketPri
     const capacity = Math.max(0, Math.floor(Number(profile.capacity || 0)));
     if (!capacity) continue;
     const run = passengerRunForTrain(train, line, stops.length, now);
-    run.lastBoarded = 0;
-    run.lastAlighted = 0;
-    run.lastRevenue = 0;
+    if (!run.started) {
+      const added = boardPassengersAtStop(run, run.stopIndex, run.direction, stops.length, capacity, demandPerStop);
+      run.lastBoarded = added;
+      run.lastAlighted = 0;
+      run.lastRevenue = 0;
+      run.started = true;
+      run.nextStopAt = now + legMs;
+      boarded += added;
+      loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+      displayedAlighted += run.lastAlighted;
+      continue;
+    }
     let safety = 0;
     while (now >= Number(run.nextStopAt || 0) && safety++ < 4) {
       const arrivingAt = clamp(Number(run.stopIndex || 0) + Number(run.direction || 1), 0, stops.length - 1);
       let exitCount = 0;
       const remaining = [];
+      run.lastBoarded = 0;
+      run.lastAlighted = 0;
+      run.lastRevenue = 0;
       for (const cohort of run.cohorts) {
         if (Number(cohort.destinationIndex) !== arrivingAt) {
           remaining.push(cohort);
@@ -336,22 +354,15 @@ function processPassengerArrivals(player, line, trains, demandPerTick, ticketPri
       run.lastAlighted += exitCount;
       run.stopIndex = arrivingAt;
       if (arrivingAt === stops.length - 1 || arrivingAt === 0) run.direction = -Number(run.direction || 1) || 1;
-      const arrivalDemand = Math.max(0, demandPerTick * legMs / Math.max(1, TICK_MS) / Math.max(1, trains.length) / Math.max(1, stops.length - 1));
-      const added = boardPassengersAtStop(run, arrivingAt, run.direction, stops.length, capacity, arrivalDemand);
+      const added = boardPassengersAtStop(run, arrivingAt, run.direction, stops.length, capacity, demandPerStop);
       boarded += added;
       run.lastBoarded += added;
       run.nextStopAt = Number(run.nextStopAt || now) + legMs;
     }
-    if (!run.cohorts.length && run.load <= 0) {
-      const initialDemand = Math.max(0, demandPerTick * legMs / Math.max(1, TICK_MS) / Math.max(1, trains.length) / Math.max(1, stops.length - 1));
-      const added = boardPassengersAtStop(run, run.stopIndex, run.direction, stops.length, capacity, initialDemand);
-      boarded += added;
-      run.lastBoarded += added;
-      run.nextStopAt = Math.max(Number(run.nextStopAt || 0), now + legMs);
-    }
     loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+    displayedAlighted += Math.max(0, Number(run.lastAlighted || 0));
   }
-  return { alighted, boarded, revenue, averageLoad: trains.length ? round2(loadTotal / trains.length * 100) : null };
+  return { alighted, boarded, displayedAlighted, revenue, averageLoad: trains.length ? round2(loadTotal / trains.length * 100) : null };
 }
 
 function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options = {}) {
@@ -609,7 +620,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
     const passengerArrivals = dryRun
-      ? { alighted: Math.round(linePax), boarded: Math.round(linePax), revenue: linePax * distance * effectiveTariff, averageLoad: maxPax > 0 ? round2(linePax / maxPax * 100) : null }
+      ? { alighted: Math.round(linePax), boarded: Math.round(linePax), displayedAlighted: Math.round(linePax), revenue: linePax * distance * effectiveTariff, averageLoad: maxPax > 0 ? round2(linePax / maxPax * 100) : null }
       : processPassengerArrivals(player, effectiveLine, availableTrains, linePax, effectiveTicketPrice, Date.now(), cadence);
     const baseTicketRevenue = passengerArrivals.revenue * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
     const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
@@ -659,7 +670,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     );
 
     line.stats = {
-      passengers: Math.round(passengerArrivals.alighted),
+      passengers: Math.round(passengerArrivals.displayedAlighted),
       freightTons: Math.round(lineFreight),
       revenue: Math.round(lineRevenue),
       expenses: Math.round(variableExpenses),
@@ -703,7 +714,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         freightTons: Math.round(maxFreight),
         passengerLoad: passengerArrivals.averageLoad,
         passengerBoarded: Math.round(passengerArrivals.boarded),
-        passengerAlighted: Math.round(passengerArrivals.alighted),
+        passengerAlighted: Math.round(passengerArrivals.displayedAlighted),
         freightLoad: maxFreight > 0 ? round2(lineFreight / maxFreight * 100) : null,
         crewFactor: round2(crewFactor * 100),
         stationFactor: round2(stationFactor * 100),

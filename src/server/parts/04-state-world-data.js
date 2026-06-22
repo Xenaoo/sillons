@@ -1250,6 +1250,40 @@ async function fetchSncfRailwayStations() {
   return pages.flatMap(sncfRecordsFromPayload).map(normalizeSncfRailwayStation).filter(Boolean);
 }
 
+function normalizeSncfUic(value) {
+  const match = String(value || '').match(/\d{8}/);
+  return match ? match[0] : '';
+}
+
+async function fetchSncfPassengerTraffic() {
+  const exported = await fetchJsonWithTimeout(SNCF_PASSENGER_TRAFFIC_EXPORT_URL, 90000);
+  const byUic = new Map();
+  for (const record of sncfRecordsFromPayload(exported)) {
+    const uic = normalizeSncfUic(record.code_uic_complet || record.code_uic || record.uic);
+    const annualPassengers = Math.max(0, Math.round(Number(record.total_voyageurs_2024 || 0)));
+    if (!uic || !annualPassengers) continue;
+    const previous = byUic.get(uic);
+    if (!previous || annualPassengers > previous.annualPassengers) {
+      byUic.set(uic, { annualPassengers, year: 2024 });
+    }
+  }
+  if (byUic.size < 2500) throw new Error(`Fréquentation SNCF incomplète: ${byUic.size}/2500`);
+  return byUic;
+}
+
+function applySncfPassengerTraffic(byId, trafficByUic) {
+  let matched = 0;
+  for (const station of Object.values(byId || {})) {
+    const traffic = trafficByUic?.get(normalizeSncfUic(station.stationUic));
+    if (!traffic) continue;
+    station.annualPassengers = traffic.annualPassengers;
+    station.passengerTrafficYear = traffic.year;
+    station.passengerTrafficSource = 'SNCF fréquentation des gares';
+    matched += 1;
+  }
+  return matched;
+}
+
 function sncfRecordsFromPayload(payload) {
   if (Array.isArray(payload)) return payload.map(flattenSncfRecord);
   if (Array.isArray(payload?.results)) return payload.results.map(flattenSncfRecord);
@@ -1812,15 +1846,17 @@ async function refreshCommuneCache(force = false) {
 
   communeCache.status = 'loading';
   try {
-    const [populationIndex, sncfStations] = await Promise.all([
+    const [populationIndex, sncfStations, passengerTraffic] = await Promise.all([
       fetchPopulationMunicipaleIndex(),
-      fetchSncfRailwayStations()
+      fetchSncfRailwayStations(),
+      fetchSncfPassengerTraffic()
     ]);
     const built = buildStationsFromSncfList(sncfStations, populationIndex);
     const byId = {};
     for (const station of built.stations) byId[station.id] = station;
     applyMissingSncfStationFallbacks(byId);
     applyParisInterchangeStations(byId);
+    const passengerTrafficMatched = applySncfPassengerTraffic(byId, passengerTraffic);
     const coverageCount = Object.keys(byId).length;
     if (coverageCount < COMMUNE_CACHE_MIN_READY_COUNT) {
       throw new Error(`Couverture gares SNCF incomplete: ${coverageCount}/${COMMUNE_CACHE_MIN_READY_COUNT}`);
@@ -1830,6 +1866,10 @@ async function refreshCommuneCache(force = false) {
       totalStations: coverageCount,
       matched: built.stats.populationMatched,
       source: SNCF_STATION_DATASET,
+      passengerTrafficDataset: SNCF_PASSENGER_TRAFFIC_DATASET,
+      passengerTrafficYear: 2024,
+      passengerTrafficRecords: passengerTraffic.size,
+      passengerTrafficMatched,
       populationSource: built.stats.populationSource || 'population-municipale-des-communes-france-entiere',
       populationResourceId: POPULATION_TABULAR_RESOURCE_ID
     };
@@ -1843,7 +1883,7 @@ async function refreshCommuneCache(force = false) {
       updatedAt: communeCache.updatedAt,
       minPopulation: MIN_COMMUNE_POPULATION,
       sourceVersion: COMMUNE_CACHE_SOURCE_VERSION,
-      source: 'SNCF liste-des-gares + data.gouv.fr population municipale des communes',
+      source: 'SNCF liste-des-gares + fréquentation-gares 2024 + data.gouv.fr population municipale des communes',
       sncfStats,
       stations: Object.values(byId)
     }, null, 2));
@@ -1865,8 +1905,19 @@ function passengerDemandFromPopulation(population) {
   return Math.round(clamp(35 + Math.pow(pop / 1000, 0.70) * 24, 70, 1600));
 }
 
+function passengerDemandFromSncfTraffic(annualPassengers) {
+  const traffic = Math.max(0, Number(annualPassengers || 0));
+  if (!Number.isFinite(traffic) || traffic <= 0) return 0;
+  // Conversion de la fréquentation annuelle réelle en potentiel jouable :
+  // elle conserve l'ordre des gares SNCF sans injecter des millions de
+  // voyageurs dans un seul tick serveur.
+  return Math.round(clamp(70 + Math.pow(traffic / 1000, 0.62) * 20, 70, 1600));
+}
+
 function effectiveStationPassengerDemand(station) {
   if (!station) return 80;
+  const annualPassengers = Number(station.annualPassengers || 0);
+  if (Number.isFinite(annualPassengers) && annualPassengers > 0) return passengerDemandFromSncfTraffic(annualPassengers);
   const population = Number(station.population || 0);
   if (Number.isFinite(population) && population > 0) return passengerDemandFromPopulation(population);
   const commune = closestCommuneForStation(station);

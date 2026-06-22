@@ -23,7 +23,7 @@ function formatTrainStatModifier(baseDisplay, modifiedDisplay) {
   const next = String(modifiedDisplay).trim();
   return !next || base === next
     ? ''
-    : `<span class="train-stat-modifier">${escapeHtml(base)} <span aria-hidden="true">→</span> ${escapeHtml(next)}</span>`;
+    : `<span class="train-stat-modifier"><span class="train-stat-modifier-base">${escapeHtml(base)}</span> <span aria-hidden="true">→</span> <span class="train-stat-modifier-after">${escapeHtml(next)}</span></span>`;
 }
 
 function trainResearchPercentValues(baseValue, modifiedValue) {

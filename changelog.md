@@ -1,3 +1,15 @@
+# v0.70.09 — trafic voyageurs SNCF et arrêts simulés
+
+- Le cache des gares associe désormais les codes UIC à la fréquentation officielle SNCF « Fréquentation des gares » 2024 ; cette valeur est affichée comme demande voyageurs et sert de base au potentiel des lignes.
+- Le cache gare est automatiquement régénéré à la prochaine actualisation afin d’intégrer ces données, sans modifier les sauvegardes des joueurs.
+- Les trains voyageurs utilisent un temps de circulation accéléré, embarquent au départ puis débarquent aux arrêts ; « Transportés » conserve le dernier volume débarqué au lieu de retomber à zéro entre deux arrêts.
+- Incrément de version : interface et serveur v0.70.09, package npm 0.70.9.
+
+# v0.70.08 — valeur améliorée des trains
+
+- Dans Parc, seule la valeur après une amélioration de recherche est désormais affichée en vert ; la valeur de base et la flèche restent neutres.
+- Incrément de version : interface et serveur v0.70.08, package npm 0.70.8.
+
 # v0.70.07 — recettes voyageurs aux arrêts
 
 - Les voyageurs sont désormais embarqués dans chaque train, avec des destinations par arrêt ; les recettes sont créditées lorsqu’ils descendent à destination, et non plus à chaque tick serveur.

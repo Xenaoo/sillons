@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.70.07` (package npm : `0.70.7`).
+- Version de code actuelle : `v0.70.09` (package npm : `0.70.9`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -95,7 +95,7 @@ Ne pas supprimer `data/save.sqlite` pour tester une migration. Utiliser `SILLONS
 
 ### Données RFN
 
-Les gares et géométries proviennent de caches locaux et, si nécessaire, de SNCF Open Data / data.gouv.fr. Les lignes jouables doivent suivre des segments RFN validés ; le jeu refuse un itinéraire sans géométrie exploitable plutôt que de générer une voie fictive.
+Les gares et géométries proviennent de caches locaux et, si nécessaire, de SNCF Open Data / data.gouv.fr. La fréquentation voyageurs SNCF 2024 est rapprochée par code UIC et alimente le potentiel voyageurs des lignes ; une hausse de `COMMUNE_CACHE_SOURCE_VERSION` force son actualisation. Les lignes jouables doivent suivre des segments RFN validés ; le jeu refuse un itinéraire sans géométrie exploitable plutôt que de générer une voie fictive.
 
 Fichiers de cache principaux :
 

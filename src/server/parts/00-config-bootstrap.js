@@ -15,7 +15,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_DB_FILE = process.env.SILLONS_SAVE_DB_FILE || path.join(ROOT, 'data', 'save.sqlite');
 const LEGACY_SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v0.70.07';
+const PROJECT_VERSION = 'v0.70.09';
 const STATE_SCHEMA_VERSION = 190;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
@@ -29,12 +29,14 @@ const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;
 const COMMUNE_CACHE_MIN_READY_COUNT = 3000;
-const COMMUNE_CACHE_SOURCE_VERSION = 9;
+const COMMUNE_CACHE_SOURCE_VERSION = 10;
 const COMMUNE_API_URL = 'https://geo.api.gouv.fr/communes?fields=nom,code,codesPostaux,codeDepartement,population,centre&geometry=centre&format=json';
 const SNCF_STATION_DATASET = 'liste-des-gares';
 const SNCF_STATION_API_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/records`;
 const SNCF_STATION_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_STATION_DATASET}/exports/json`;
 const SNCF_STATION_PAGE_SIZE = 100;
+const SNCF_PASSENGER_TRAFFIC_DATASET = 'frequentation-gares';
+const SNCF_PASSENGER_TRAFFIC_EXPORT_URL = `https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/${SNCF_PASSENGER_TRAFFIC_DATASET}/exports/json`;
 const SNCF_RFN_GEOJSON_URL = 'https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/formes-des-lignes-du-rfn/exports/geojson';
 const SNCF_RFN_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-lines-cache.json');
 const SNCF_RFN_ROUTE_CACHE_FILE = path.join(ROOT, 'data', 'sncf-rfn-route-cache.json');
@@ -74,6 +76,10 @@ const COMMUNE_DEPARTMENTS = [
   '80','81','82','83','84','85','86','87','88','89','90','91','92','93','94','95'
 ];
 const TICK_MS = 2000;
+// Cinq minutes d'exploitation sont simulées à chaque tick : les arrêts restent
+// visibles dans le jeu sans imposer une attente réelle de plusieurs heures.
+const PASSENGER_SIMULATION_MINUTES_PER_TICK = 5;
+const PASSENGER_SIMULATION_VERSION = 2;
 const SAVE_EVERY_TICKS = 15;
 const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;
