@@ -1013,7 +1013,7 @@ function renderResearchNodeGrid(group) {
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
   const nodePitch = 230;
-  const eraHeight = 250;
+  const eraHeight = 280;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
   const nodeWidth = 206;
@@ -1065,20 +1065,19 @@ function renderResearchNodeGrid(group) {
       positions.set(node.id, {
         // Une même génération partage une ligne parfaitement horizontale.
         x: 50 + index * nodePitch,
-        y: 86 + (era - 1) * eraHeight,
+        y: 148 + (era - 1) * eraHeight,
         era,
         column: index
       });
     });
   }
   const treeWidth = Math.max(860, 100 + maxRows * nodePitch);
-  const treeHeight = 100 + 7 * eraHeight;
+  const treeHeight = 120 + 7 * eraHeight;
   const links = [];
-  const incomingLinkIndex = new Map();
+  const sameEraTracks = new Map();
   const crossEraTracks = new Map();
-  const crossEraTrackIndex = (sourcePosition, targetPosition, x1, x2) => {
-    const key = `${sourcePosition.era}:${targetPosition.era}`;
-    const tracks = crossEraTracks.get(key) || [];
+  const allocateTrack = (store, key, x1, x2) => {
+    const tracks = store.get(key) || [];
     const start = Math.min(x1, x2) - 8;
     const end = Math.max(x1, x2) + 8;
     let index = tracks.findIndex(ranges => ranges.every(range => end < range.start || start > range.end));
@@ -1087,7 +1086,7 @@ function renderResearchNodeGrid(group) {
       tracks.push([]);
     }
     tracks[index].push({ start, end });
-    crossEraTracks.set(key, tracks);
+    store.set(key, tracks);
     return index;
   };
   for (const node of nodes) {
@@ -1104,10 +1103,10 @@ function renderResearchNodeGrid(group) {
       const level = source.item.level || 1;
       const met = researchPrereqSatisfiedClient(source.item);
       const selected = app.selectedResearchId === node.id;
-      const index = incomingLinkIndex.get(node.id) || 0;
-      incomingLinkIndex.set(node.id, index + 1);
-      const track = sameEra ? index : crossEraTrackIndex(source.position, target, x1, x2);
-      const laneY = sameEra ? y1 - 12 - track * 10 : y2 - 24 - track * 10;
+      const track = sameEra
+        ? allocateTrack(sameEraTracks, String(source.position.era), x1, x2)
+        : allocateTrack(crossEraTracks, `${source.position.era}:${target.era}`, x1, x2);
+      const laneY = sameEra ? y1 - 22 - track * 12 : y2 - 28 - track * 12;
       const route = `M ${x1} ${y1} V ${laneY} H ${x2} V ${y2}`;
       const labelX = Math.round((x1 + x2) / 2);
       const labelY = laneY - 9;
@@ -1122,7 +1121,7 @@ function renderResearchNodeGrid(group) {
     const sample = byEra.get(era)?.[0];
     const label = sample?.eraLabel || `Ère ${era}`;
     const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
-    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 54}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
+    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 62}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
   }).join('');
   const hexes = nodes.map(node => {
     const pos = positions.get(node.id);

@@ -197,6 +197,7 @@ function selectResearchNode(nodeId) {
   requestAnimationFrame(() => {
     const el = document.querySelector(`.tech-node[data-node-id="${CSS.escape(nodeId)}"]`);
     if (el) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    constrainResearchDetailPanel();
   });
 }
 
@@ -256,6 +257,25 @@ function bindResearchDetailDrag() {
   };
   document.addEventListener('pointerup', finishDrag);
   document.addEventListener('pointercancel', finishDrag);
+}
+
+function constrainResearchDetailPanel() {
+  const panel = document.querySelector('.research-detail-panel');
+  if (!panel) return;
+  const rect = panel.getBoundingClientRect();
+  const margin = 10;
+  let dx = 0;
+  let dy = 0;
+  if (rect.left < margin) dx = margin - rect.left;
+  if (rect.right + dx > window.innerWidth - margin) dx += window.innerWidth - margin - (rect.right + dx);
+  if (rect.top < margin) dy = margin - rect.top;
+  if (rect.bottom + dy > window.innerHeight - margin) dy += window.innerHeight - margin - (rect.bottom + dy);
+  if (!dx && !dy) return;
+  const offset = app.researchDetailOffset || { x: 0, y: 0 };
+  app.researchDetailOffset = { x: Math.round(Number(offset.x || 0) + dx), y: Math.round(Number(offset.y || 0) + dy) };
+  panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
+  panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
+  localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset));
 }
 
 function researchEffectTarget(effect, node) {

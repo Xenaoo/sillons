@@ -232,6 +232,10 @@ function positionTutorialElements(target, card, step) {
 function renderAll() {
   if (!app.state) return;
   const compositionScrollKey = currentCompositionScrollKey();
+  const researchTreeScroll = app.activeTab === 'research' ? (() => {
+    const tree = document.querySelector('.research-skilltree-scroll');
+    return tree ? { left: tree.scrollLeft, top: tree.scrollTop } : null;
+  })() : null;
   captureCompositionScrollPosition();
   renderTopbar();
   renderTabs();
@@ -242,6 +246,13 @@ function renderAll() {
   scheduleMobileMapViewportFix();
   requestAnimationFrame(() => {
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
+    if (researchTreeScroll) {
+      const tree = document.querySelector('.research-skilltree-scroll');
+      if (tree) {
+        tree.scrollLeft = researchTreeScroll.left;
+        tree.scrollTop = researchTreeScroll.top;
+      }
+    }
   });
   app.lastRenderKey = stateRenderSignature();
 }

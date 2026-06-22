@@ -923,9 +923,10 @@ button, input, select, textarea { max-width: 100%; }
     linear-gradient(145deg, rgba(18, 43, 52, .99), rgba(7, 20, 31, .99));
   box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
   transform: translate(var(--research-detail-x, 0px), var(--research-detail-y, 0px));
+  will-change: transform;
 }
 
-.research-detail-panel.is-dragging { user-select: none; cursor: grabbing; }
+.research-detail-panel.is-dragging { user-select: none; cursor: grabbing; box-shadow: 0 30px 82px rgba(0, 0, 0, .78), 0 0 0 2px rgba(244, 203, 114, .3); }
 .research-detail-drag-handle {
   display: inline-flex;
   align-items: center;

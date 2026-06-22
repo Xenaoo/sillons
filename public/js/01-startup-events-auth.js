@@ -303,7 +303,7 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); hideGlobalTooltip(); constrainResearchDetailPanel(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
   window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
   window.visualViewport?.addEventListener('scroll', () => { scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(30, { scroll: false }); });
   window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
