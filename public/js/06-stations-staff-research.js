@@ -809,9 +809,11 @@ function renderResearchToolbarSearch() {
       <label class="research-toolbar-search__input">
         <input id="researchSearchInput" value="${escapeAttr(query)}" placeholder="Ex : TGV, diesel, signalisation, confort, fret..." autocomplete="off">
       </label>
-      ${query
-        ? `<div id="researchSearchResults" class="research-toolbar-search__results">${renderResearchSearchResults(query)}</div>`
-        : '<p class="research-toolbar-search__hint">Saisis un nom de recherche, de train, de bonus ou d’époque pour retrouver instantanément le bon nœud.</p>'}
+      <div id="researchSearchResults" class="research-toolbar-search__results">
+        ${query
+          ? renderResearchSearchResults(query)
+          : '<p class="research-toolbar-search__hint">Saisis un nom de recherche, de train, de bonus ou d’époque pour retrouver instantanément le bon nœud.</p>'}
+      </div>
     </div>
   `;
 }

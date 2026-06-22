@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v70.0.0`.
+- Version de code actuelle : `v0.70.01` (package npm : `0.70.1`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -186,7 +186,7 @@ Utiliser `v0.XX.YY` dans l’interface, l’API et le changelog.
 
 Attention : `package.json` doit rester valide pour npm et SemVer, qui n’accepte pas les zéros non significatifs. Pour une version affichée `v0.01.00`, utiliser `0.1.0` dans `package.json` et `package-lock.json`, tout en conservant l’affichage `v0.01.00` dans le projet.
 
-La version actuelle `v70.0.0` précède cette convention. La prochaine version doit adopter le nouveau format.
+La première version appliquant cette convention est `v0.70.01`.
 
 Toute version doit être mise à jour de façon cohérente dans :
 
@@ -224,4 +224,3 @@ Toute version doit être mise à jour de façon cohérente dans :
 - [ ] Catalogue, compositions et sauvegardes existantes vérifiés si une recherche est renommée ou supprimée.
 - [ ] `npm.cmd run check` exécuté.
 - [ ] Test de démarrage avec une base temporaire effectué pour les changements de serveur ou de migration.
-

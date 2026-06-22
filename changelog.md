@@ -1,3 +1,9 @@
+# v0.70.01 — correction de la recherche rapide R&D
+
+- Correction de la recherche rapide : le conteneur de résultats est maintenant toujours rendu, afin que la toute première saisie affiche les résultats sans rechargement.
+- Incrément de version : badge interface et version serveur/client `v0.70.01`, package `0.70.1`.
+- Schéma save inchangé : `190`.
+
 # v70.0.0 — arbre R&D à déblocages
 
 - Remplacement de l’arbre R&D actif par 118 recherches à cinq niveaux, avec coûts et durées exponentiels.
