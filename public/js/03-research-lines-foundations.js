@@ -210,10 +210,9 @@ function closeResearchDetails() {
 
 function bindResearchDetailDrag() {
   document.addEventListener('pointerdown', event => {
-    const handle = event.target.closest?.('[data-research-detail-drag]');
-    if (!handle) return;
-    const panel = handle.closest('.research-detail-panel');
+    const panel = event.target.closest?.('[data-research-detail-drag]');
     if (!panel) return;
+    if (event.target.closest('button, a, input, select, textarea, [data-action]')) return;
     const offset = app.researchDetailOffset || { x: 0, y: 0 };
     app.researchDetailDrag = {
       pointerId: event.pointerId,
@@ -223,7 +222,7 @@ function bindResearchDetailDrag() {
       lastX: event.clientX,
       lastY: event.clientY
     };
-    handle.setPointerCapture?.(event.pointerId);
+    panel.setPointerCapture?.(event.pointerId);
     panel.classList.add('is-dragging');
     event.preventDefault();
   });

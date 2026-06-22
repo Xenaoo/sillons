@@ -986,8 +986,7 @@ function renderResearchDetailOverlay() {
   const offsetY = Number.isFinite(Number(savedOffset.y)) ? Math.round(Number(savedOffset.y)) : 0;
   return `
     <div class="research-detail-overlay" role="presentation">
-      <section class="research-detail-panel" role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}" style="--research-detail-x:${offsetX}px;--research-detail-y:${offsetY}px">
-        <div class="research-detail-drag-handle" data-research-detail-drag title="Déplacer le panneau">⠿ <span>Déplacer</span></div>
+      <section class="research-detail-panel" data-research-detail-drag role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}" style="--research-detail-x:${offsetX}px;--research-detail-y:${offsetY}px">
         <div class="research-detail-heading">
           <span class="research-detail-kicker">${escapeHtml(node.eraLabel || 'Recherche ferroviaire')}</span>
           <strong>${escapeHtml(node.title)}</strong>

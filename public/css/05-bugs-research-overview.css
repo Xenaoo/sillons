@@ -923,25 +923,15 @@ button, input, select, textarea { max-width: 100%; }
   box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
   transform: translate(var(--research-detail-x, 0px), var(--research-detail-y, 0px));
   will-change: transform;
+  cursor: grab;
 }
 
 .research-detail-panel.is-dragging { user-select: none; cursor: grabbing; box-shadow: 0 30px 82px rgba(0, 0, 0, .78), 0 0 0 2px rgba(244, 203, 114, .3); }
-.research-detail-drag-handle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: -4px 0 12px;
-  padding: 5px 7px;
-  color: #c5d0ca;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  border-radius: 7px;
-  cursor: grab;
-  touch-action: none;
-}
-.research-detail-drag-handle:hover { color: #f3d589; background: rgba(255,255,255,.06); }
+.research-detail-panel button,
+.research-detail-panel a,
+.research-detail-panel input,
+.research-detail-panel select,
+.research-detail-panel textarea { cursor: pointer; }
 
 .research-detail-heading { display: grid; gap: 6px; margin-bottom: 12px; }
 .research-detail-heading strong { color: #f5e4b6; font-size: 21px; line-height: 1.12; }
