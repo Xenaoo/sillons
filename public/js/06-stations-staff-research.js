@@ -784,6 +784,28 @@ function renderResearchSearchPanel() {
   `;
 }
 
+
+function renderResearchToolbarSearch() {
+  const query = app.researchSearchQuery || '';
+  return `
+    <div class="research-toolbar-search">
+      <div class="research-toolbar-search__header">
+        <div>
+          <strong>Recherche rapide</strong>
+          <span>Un accès direct à toute la R&D.</span>
+        </div>
+        ${query ? `<button type="button" class="ghost" data-action="clear-research-search">Effacer</button>` : ''}
+      </div>
+      <label class="research-toolbar-search__input">
+        <input id="researchSearchInput" value="${escapeAttr(query)}" placeholder="Ex : TGV, diesel, signalisation, confort, fret..." autocomplete="off">
+      </label>
+      ${query
+        ? `<div id="researchSearchResults" class="research-toolbar-search__results">${renderResearchSearchResults(query)}</div>`
+        : '<p class="research-toolbar-search__hint">Saisis un nom de recherche, de train, de bonus ou d’époque pour retrouver instantanément le bon nœud.</p>'}
+    </div>
+  `;
+}
+
 function refreshResearchSearchResults() {
   const results = $('#researchSearchResults');
   if (results) results.innerHTML = renderResearchSearchResults(app.researchSearchQuery);
@@ -838,66 +860,47 @@ function renderResearchBoardMenu(tabs, active, me, next, progress) {
   const overview = collectResearchOverview(tabs, me);
   const currentEraIndex = Math.max(0, Number(me.epoch || 0));
   return `
-    <div class="research-board-menu">
-      <section class="research-board-block research-board-block--branches">
-        <div class="research-board-heading">
+    <div class="research-board-menu research-board-menu--compact">
+      <section class="research-board-block research-board-block--summary">
+        <div class="research-board-heading research-board-heading--compact">
           <div>
-            <h3>Branches R&D</h3>
-            <p class="small muted">Sélectionne une branche sans perdre toute la largeur de l’arbre.</p>
+            <h3>Navigation R&D</h3>
+            <p class="small muted">Branches, états et raccourcis regroupés dans une zone compacte.</p>
           </div>
           <span class="tag">${overview.total} recherches</span>
         </div>
-        <div class="research-branch-strip">
-          ${overview.branchCounts.map(group => `
-            <button data-action="research-tab" data-id="${group.id}" class="research-branch-pill ${group.id === active.id ? 'active' : ''}" ${tooltipAttr(`${group.label} · ${group.count} recherches`)}>
-              <span>${escapeHtml(group.label)}</span>
-              <b>${group.count}</b>
-            </button>
-          `).join('')}
-        </div>
-      </section>
-
-      <section class="research-board-block research-board-block--legend">
-        <div class="research-board-heading">
-          <div>
-            <h3>Légende</h3>
-            <p class="small muted">Lecture rapide des statuts de recherche.</p>
+        <div class="research-summary-grid">
+          <div class="research-summary-section">
+            <span class="research-summary-label">Branches</span>
+            <div class="research-branch-strip research-branch-strip--compact">
+              ${overview.branchCounts.map(group => `
+                <button data-action="research-tab" data-id="${group.id}" class="research-branch-pill ${group.id === active.id ? 'active' : ''}" ${tooltipAttr(`${group.label} · ${group.count} recherches`)}>
+                  <span>${escapeHtml(group.label)}</span>
+                  <b>${group.count}</b>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="research-summary-section research-summary-section--legend">
+            <span class="research-summary-label">Légende</span>
+            <div class="research-legend-strip research-legend-strip--compact">
+              <span class="research-legend-pill research-legend-pill--unlocked">Débloquée · ${overview.unlocked}</span>
+              <span class="research-legend-pill research-legend-pill--available">Disponible · ${overview.available}</span>
+              <span class="research-legend-pill research-legend-pill--locked">Verrouillée · ${overview.locked}</span>
+            </div>
           </div>
         </div>
-        <div class="research-legend-strip">
-          <span class="research-legend-pill research-legend-pill--unlocked">Débloquée · ${overview.unlocked}</span>
-          <span class="research-legend-pill research-legend-pill--available">Disponible · ${overview.available}</span>
-          <span class="research-legend-pill research-legend-pill--locked">Verrouillée · ${overview.locked}</span>
-        </div>
       </section>
 
-      <section class="research-board-block research-board-block--eras">
-        <div class="research-board-heading">
+      <section class="research-board-block research-board-block--overview">
+        <div class="research-board-heading research-board-heading--compact">
           <div>
-            <h3>Ères du projet</h3>
-            <p class="small muted">Répartition réelle des recherches par époque.</p>
-          </div>
-        </div>
-        <div class="research-era-strip">
-          ${overview.eraCounts.map(item => `
-            <span class="research-era-pill ${item.era - 1 <= currentEraIndex ? 'current' : ''}">
-              <b>${item.era}</b>
-              <span>${escapeHtml(String(item.label || '').replace(/^Train à /, ''))}</span>
-              <small>${item.count}</small>
-            </span>
-          `).join('')}
-        </div>
-      </section>
-
-      <section class="research-board-block research-board-block--progress">
-        <div class="research-board-heading">
-          <div>
-            <h3>Progression</h3>
-            <p class="small muted">État de l’époque courante et préparation de la suivante.</p>
+            <h3>État du programme</h3>
+            <p class="small muted">Synthèse de l’époque et de la suite.</p>
           </div>
           <span class="tag ${progress >= 100 ? 'good' : 'warn'}">${round(progress)}%</span>
         </div>
-        <div class="research-progress-strip">
+        <div class="research-progress-strip research-progress-strip--compact">
           <div class="research-progress-pill">
             <span>Époque actuelle</span>
             <b>${escapeHtml(me.eraName)}</b>
@@ -913,8 +916,26 @@ function renderResearchBoardMenu(tabs, active, me, next, progress) {
         </div>
       </section>
 
-      <section class="research-board-block research-board-block--search">
-        ${renderResearchSearchPanel()}
+      <section class="research-board-block research-board-block--eras-compact">
+        <div class="research-board-heading research-board-heading--compact">
+          <div>
+            <h3>Ères du projet</h3>
+            <p class="small muted">Répartition réelle des recherches par époque.</p>
+          </div>
+        </div>
+        <div class="research-era-strip research-era-strip--compact">
+          ${overview.eraCounts.map(item => `
+            <span class="research-era-pill ${item.era - 1 <= currentEraIndex ? 'current' : ''}">
+              <b>${item.era}</b>
+              <span>${escapeHtml(String(item.label || '').replace(/^Train à /, ''))}</span>
+              <small>${item.count}</small>
+            </span>
+          `).join('')}
+        </div>
+      </section>
+
+      <section class="research-board-block research-board-block--search-compact">
+        ${renderResearchToolbarSearch()}
       </section>
     </div>
   `;
@@ -1000,7 +1021,7 @@ function renderResearch() {
       </div>
       ${renderResearchBoardMenu(tabs, active, me, next, progress)}
       <div class="research-tree-stage">
-        <p class="small muted">Branche affichée : <b>${escapeHtml(active?.label || '')}</b>. Clique sur un nœud pour ouvrir sa fiche détaillée, lancer la recherche ou suivre ses prérequis.</p>
+        <p class="small muted">Branche affichée : <b>${escapeHtml(active?.label || '')}</b> · clique sur un nœud pour ses détails et ses prérequis.</p>
         ${renderResearchNodeGrid(active)}
       </div>
     </div>

@@ -1,11 +1,11 @@
-# v69.17.0 — lisibilité et stabilité de l’arbre de recherche
+# v69.18.0 — seconde passe visuelle sur l’arbre R&D
 
-- Renforcement visuel des liaisons de prérequis dans `R&D > Arbre technologique` : traits plus contrastés et plus épais, points d’ancrage visibles sur les nœuds, espacements augmentés et étiquettes de niveau mieux lisibles.
-- Déplacement du panneau de navigation/contextualisation de l’arbre en haut de la page pour libérer davantage de largeur utile pour la zone de recherche.
-- Ajout d’un bandeau supérieur R&D regroupant les branches, une légende compacte, la répartition par ères, la progression et la recherche rapide.
-- Élargissement du canvas de l’arbre technologique et augmentation des espacements horizontaux entre nœuds pour rendre les dépendances plus compréhensibles.
-- Gel de la reconstruction automatique de l’onglet `R&D` à chaque tick serveur afin de conserver un arbre stable pendant la consultation ; les mises à jour complètes se font désormais sur action utilisateur.
-- Incrément de version : badge interface `v69.17.0`, version serveur/client `v69.17.0`, package `69.17.0`.
+- Refonte purement visuelle de la zone supérieure de `R&D > Arbre technologique` pour réduire fortement l’encombrement vertical.
+- Regroupement des menus en une barre compacte sur deux niveaux : navigation R&D, légende, synthèse de progression, ères du projet et recherche rapide.
+- Compression visuelle des blocs : paddings réduits, cartes plus denses, pills plus homogènes et hiérarchie visuelle renforcée.
+- Transformation de la recherche rapide en module compact avec champ direct et résultats scrollables, afin d’éviter qu’elle n’accapare une grande hauteur quand aucun filtre n’est saisi.
+- Amélioration esthétique générale : rendu plus premium, plus cohérent et plus lisible au-dessus de l’arbre tout en conservant toutes les fonctionnalités précédentes.
+- Incrément de version : badge interface `v69.18.0`, version serveur/client `v69.18.0`, package `69.18.0`.
 - Schéma save : `189`.
 
 # v69.16.1 — correction de l’angle du premier visuel maglev

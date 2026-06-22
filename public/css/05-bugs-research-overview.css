@@ -219,19 +219,33 @@
 
 
 @media (max-width: 1180px) {
-  .research-board-block--branches,
-  .research-board-block--search,
-  .research-board-block--legend,
-  .research-board-block--eras,
-  .research-board-block--progress { grid-column: span 12; }
+  .research-board-menu {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-board-block--summary,
+  .research-board-block--overview,
+  .research-board-block--eras-compact,
+  .research-board-block--search-compact {
+    grid-column: 1;
+  }
+  .research-summary-grid,
+  .research-progress-strip--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
-  .research-tree-header { flex-direction: column; }
-  .research-board-menu { grid-template-columns: minmax(0, 1fr); }
-  .research-branch-pill,
+  .research-tree-header { flex-direction: column; align-items: flex-start; }
+  .research-era-strip--compact,
+  .research-progress-strip--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-branch-strip--compact .research-branch-pill,
+  .research-legend-pill,
   .research-era-pill,
-  .research-progress-pill { min-width: 0; width: 100%; }
+  .research-progress-pill {
+    width: 100%;
+  }
 }
 
 @media (max-width: 700px) {
@@ -737,54 +751,94 @@ button, input, select, textarea { max-width: 100%; }
 
 
 .card--research-tree {
-  padding-bottom: 18px;
+  padding-bottom: 14px;
 }
 
 .research-tree-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+}
+
+.research-tree-header h2 {
+  margin: 0 0 4px;
+}
+
+.research-tree-header > .tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .research-board-menu {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 14px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, .95fr);
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .research-board-block {
   min-width: 0;
-  padding: 14px;
+  padding: 11px 12px;
   border: 1px solid rgba(214, 186, 123, .18);
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(145deg, rgba(10, 23, 35, .94), rgba(6, 16, 26, .94));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
 }
 
-.research-board-block--branches,
-.research-board-block--search { grid-column: span 6; }
-.research-board-block--legend,
-.research-board-block--eras,
-.research-board-block--progress { grid-column: span 4; }
+.research-board-block--summary,
+.research-board-block--eras-compact {
+  grid-column: 1;
+}
+
+.research-board-block--overview,
+.research-board-block--search-compact {
+  grid-column: 2;
+}
 
 .research-board-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.research-board-heading--compact {
+  margin-bottom: 8px;
 }
 
 .research-board-heading h3 {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   color: #f2d696;
-  font-size: 15px;
+  font-size: 14px;
 }
 
-.research-board-heading p { margin: 0; }
+.research-board-heading p {
+  margin: 0;
+  line-height: 1.25;
+}
+
+.research-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, .9fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.research-summary-section {
+  display: grid;
+  gap: 7px;
+}
+
+.research-summary-label {
+  color: #97abb4;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
 
 .research-branch-strip,
 .research-legend-strip,
@@ -792,7 +846,7 @@ button, input, select, textarea { max-width: 100%; }
 .research-progress-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .research-branch-pill,
@@ -802,22 +856,27 @@ button, input, select, textarea { max-width: 100%; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 8px 10px;
+  border-radius: 13px;
   border: 1px solid rgba(216, 192, 126, .22);
   background: rgba(255,255,255,.04);
 }
 
+.research-branch-strip--compact .research-branch-pill {
+  min-width: 112px;
+  padding: 8px 10px;
+}
+
 .research-branch-pill {
   justify-content: space-between;
-  min-width: 158px;
   color: #e6dcc0;
 }
 
 .research-branch-pill b {
-  min-width: 28px;
-  padding: 4px 7px;
+  min-width: 24px;
+  padding: 3px 6px;
   color: #f8e5b0;
+  font-size: 12px;
   text-align: center;
   border-radius: 999px;
   background: rgba(232, 188, 85, .14);
@@ -826,27 +885,43 @@ button, input, select, textarea { max-width: 100%; }
 .research-branch-pill.active {
   border-color: rgba(244, 203, 114, .64);
   background: linear-gradient(145deg, rgba(92, 67, 32, .68), rgba(21, 46, 50, .88));
-  box-shadow: 0 0 0 1px rgba(244, 203, 114, .16), 0 10px 22px rgba(0,0,0,.16);
+  box-shadow: 0 0 0 1px rgba(244, 203, 114, .16), 0 8px 18px rgba(0,0,0,.16);
+}
+
+.research-legend-strip--compact {
+  align-content: flex-start;
+}
+
+.research-legend-pill {
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .research-legend-pill--unlocked { color: #8be1a8; }
 .research-legend-pill--available { color: #f3d58c; }
 .research-legend-pill--locked { color: #b7c0c6; }
 
+.research-era-strip--compact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .research-era-pill {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
-  min-width: 148px;
+  min-width: 0;
 }
 
 .research-era-pill b {
   display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   color: #f6df9b;
+  font-size: 12px;
   border-radius: 999px;
   background: rgba(216, 181, 95, .16);
 }
@@ -856,27 +931,129 @@ button, input, select, textarea { max-width: 100%; }
   background: linear-gradient(145deg, rgba(24, 73, 55, .56), rgba(11, 29, 33, .9));
 }
 
-.research-era-pill small { color: #f3d58c; font-weight: 800; }
+.research-era-pill > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-era-pill small {
+  color: #f3d58c;
+  font-weight: 800;
+}
+
+.research-progress-strip--compact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
 
 .research-progress-pill {
   display: grid;
-  gap: 4px;
-  min-width: 150px;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
 }
 
-.research-progress-pill span { color: #9fb0b4; font-size: 11px; }
-.research-progress-pill b { color: #f0e0b3; }
+.research-progress-pill span {
+  color: #9fb0b4;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 
-.research-board-block--search .research-search-panel {
+.research-progress-pill b {
+  color: #f0e0b3;
+  line-height: 1.2;
+}
+
+.research-toolbar-search {
+  display: grid;
+  gap: 8px;
+}
+
+.research-toolbar-search__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.research-toolbar-search__header strong {
+  display: block;
+  color: #f2d696;
+  font-size: 14px;
+}
+
+.research-toolbar-search__header span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.research-toolbar-search__input input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(2, 6, 15, 0.55);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.research-toolbar-search__input input:focus {
+  outline: 2px solid rgba(215, 183, 109, 0.35);
+  border-color: rgba(215, 183, 109, 0.6);
+}
+
+.research-toolbar-search__hint {
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.research-toolbar-search__results {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  padding-right: 2px;
+  overflow: auto;
+}
+
+.research-board-block--search-compact .research-search-summary {
+  font-size: 10px;
+}
+
+.research-board-block--search-compact .research-search-list {
+  gap: 8px;
+}
+
+.research-board-block--search-compact .research-search-result {
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 14px;
+}
+
+.research-board-block--search-compact .research-search-thumb {
+  min-height: 58px;
+}
+
+.research-board-block--search-compact .research-search-result h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.research-board-block--search-compact .research-search-result p,
+.research-board-block--search-compact .research-search-result .small {
+  font-size: 11px;
 }
 
 .research-tree-stage {
-  padding: 2px 2px 0;
+  padding: 0;
 }
 
 /* ===== Arbre R&D : constellation hexagonale ===== */
