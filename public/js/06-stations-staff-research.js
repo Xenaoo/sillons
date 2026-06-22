@@ -981,9 +981,13 @@ function renderResearchDetailOverlay() {
   const effects = (node.improves || node.effects || []).filter(effect => effect && !String(effect).toLowerCase().includes('niveaux suivants')).slice(0, 4);
   const unlocks = (node.unlocks || []).slice(0, 4);
   const launchable = !complete && !locked && affordable && !researchBlockedByEraTransition();
+  const savedOffset = app.researchDetailOffset || {};
+  const offsetX = Number.isFinite(Number(savedOffset.x)) ? Math.round(Number(savedOffset.x)) : 0;
+  const offsetY = Number.isFinite(Number(savedOffset.y)) ? Math.round(Number(savedOffset.y)) : 0;
   return `
     <div class="research-detail-overlay" role="presentation">
-      <section class="research-detail-panel" role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}">
+      <section class="research-detail-panel" role="dialog" aria-modal="true" aria-label="Détail de la recherche ${escapeAttr(node.title)}" style="--research-detail-x:${offsetX}px;--research-detail-y:${offsetY}px">
+        <div class="research-detail-drag-handle" data-research-detail-drag title="Déplacer le panneau">⠿ <span>Déplacer</span></div>
         <div class="research-detail-heading">
           <span class="research-detail-kicker">${escapeHtml(node.eraLabel || 'Recherche ferroviaire')}</span>
           <strong>${escapeHtml(node.title)}</strong>
@@ -1059,7 +1063,7 @@ function renderResearchNodeGrid(group) {
     maxRows = Math.max(maxRows, eraNodes.length);
     eraNodes.forEach((node, index) => {
       positions.set(node.id, {
-        // Une même génération partage une colonne parfaitement verticale.
+        // Une même génération partage une ligne parfaitement horizontale.
         x: 50 + index * nodePitch,
         y: 86 + (era - 1) * eraHeight,
         era,
@@ -1071,6 +1075,21 @@ function renderResearchNodeGrid(group) {
   const treeHeight = 100 + 7 * eraHeight;
   const links = [];
   const incomingLinkIndex = new Map();
+  const crossEraTracks = new Map();
+  const crossEraTrackIndex = (sourcePosition, targetPosition, x1, x2) => {
+    const key = `${sourcePosition.era}:${targetPosition.era}`;
+    const tracks = crossEraTracks.get(key) || [];
+    const start = Math.min(x1, x2) - 8;
+    const end = Math.max(x1, x2) + 8;
+    let index = tracks.findIndex(ranges => ranges.every(range => end < range.start || start > range.end));
+    if (index < 0) {
+      index = tracks.length;
+      tracks.push([]);
+    }
+    tracks[index].push({ start, end });
+    crossEraTracks.set(key, tracks);
+    return index;
+  };
   for (const node of nodes) {
     const target = positions.get(node.id);
     for (const req of researchPrereqsForLevelClient(node, 1)) {
@@ -1087,7 +1106,8 @@ function renderResearchNodeGrid(group) {
       const selected = app.selectedResearchId === node.id;
       const index = incomingLinkIndex.get(node.id) || 0;
       incomingLinkIndex.set(node.id, index + 1);
-      const laneY = sameEra ? y1 - 12 - index * 10 : y2 - 24 - index * 13;
+      const track = sameEra ? index : crossEraTrackIndex(source.position, target, x1, x2);
+      const laneY = sameEra ? y1 - 12 - track * 10 : y2 - 24 - track * 10;
       const route = `M ${x1} ${y1} V ${laneY} H ${x2} V ${y2}`;
       const labelX = Math.round((x1 + x2) / 2);
       const labelY = laneY - 9;

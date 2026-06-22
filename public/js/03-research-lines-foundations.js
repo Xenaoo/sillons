@@ -207,6 +207,57 @@ function closeResearchDetails() {
   renderAll();
 }
 
+function bindResearchDetailDrag() {
+  document.addEventListener('pointerdown', event => {
+    const handle = event.target.closest?.('[data-research-detail-drag]');
+    if (!handle) return;
+    const panel = handle.closest('.research-detail-panel');
+    if (!panel) return;
+    const offset = app.researchDetailOffset || { x: 0, y: 0 };
+    app.researchDetailDrag = {
+      pointerId: event.pointerId,
+      panel,
+      x: Number(offset.x || 0),
+      y: Number(offset.y || 0),
+      lastX: event.clientX,
+      lastY: event.clientY
+    };
+    handle.setPointerCapture?.(event.pointerId);
+    panel.classList.add('is-dragging');
+    event.preventDefault();
+  });
+
+  document.addEventListener('pointermove', event => {
+    const drag = app.researchDetailDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    let dx = event.clientX - drag.lastX;
+    let dy = event.clientY - drag.lastY;
+    const rect = drag.panel.getBoundingClientRect();
+    const margin = 10;
+    if (rect.left + dx < margin) dx += margin - (rect.left + dx);
+    if (rect.right + dx > window.innerWidth - margin) dx -= rect.right + dx - (window.innerWidth - margin);
+    if (rect.top + dy < margin) dy += margin - (rect.top + dy);
+    if (rect.bottom + dy > window.innerHeight - margin) dy -= rect.bottom + dy - (window.innerHeight - margin);
+    drag.x += dx;
+    drag.y += dy;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    app.researchDetailOffset = { x: Math.round(drag.x), y: Math.round(drag.y) };
+    drag.panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
+    drag.panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
+  });
+
+  const finishDrag = event => {
+    const drag = app.researchDetailDrag;
+    if (!drag || (event?.pointerId != null && drag.pointerId !== event.pointerId)) return;
+    drag.panel.classList.remove('is-dragging');
+    localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset || { x: 0, y: 0 }));
+    app.researchDetailDrag = null;
+  };
+  document.addEventListener('pointerup', finishDrag);
+  document.addEventListener('pointercancel', finishDrag);
+}
+
 function researchEffectTarget(effect, node) {
   const text = `${effect || ''} ${node?.title || ''} ${node?.branch || ''}`.toLowerCase();
   if (/rh|équipe|conducteur|agent|formation|salariale|recrutement/.test(text)) return { tab: 'staff', label: 'Ressources humaines' };

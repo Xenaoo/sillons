@@ -283,6 +283,7 @@ function bindStaticEvents() {
   const tabContent = $('#tabContent');
   tabContent.addEventListener('click', onTabContentClick);
   tabContent.addEventListener('change', onTabContentChange);
+  bindResearchDetailDrag();
   bindCompositionIndependentScroll(tabContent);
   tabContent.addEventListener('input', event => {
     if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {

@@ -901,15 +901,16 @@ button, input, select, textarea { max-width: 100%; }
   position: fixed;
   z-index: 1200;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
+  display: block;
   pointer-events: auto;
   background: transparent;
   backdrop-filter: none;
 }
 
 .research-detail-panel {
+  position: fixed;
+  top: 18px;
+  right: 18px;
   width: min(430px, 100%);
   max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
@@ -921,13 +922,26 @@ button, input, select, textarea { max-width: 100%; }
     radial-gradient(circle at 100% 0, rgba(240, 190, 88, .14), transparent 42%),
     linear-gradient(145deg, rgba(18, 43, 52, .99), rgba(7, 20, 31, .99));
   box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
+  transform: translate(var(--research-detail-x, 0px), var(--research-detail-y, 0px));
 }
 
-/* Sur écran large, le panneau flotte au centre de la carte permanente (à gauche)
-   au lieu de couvrir l'arbre qui occupe le panneau de droite. */
-@media (min-width: 1101px) {
-  .research-detail-panel { transform: translateX(-27vw); }
+.research-detail-panel.is-dragging { user-select: none; cursor: grabbing; }
+.research-detail-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 12px;
+  padding: 5px 7px;
+  color: #c5d0ca;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border-radius: 7px;
+  cursor: grab;
+  touch-action: none;
 }
+.research-detail-drag-handle:hover { color: #f3d589; background: rgba(255,255,255,.06); }
 
 .research-detail-heading { display: grid; gap: 6px; margin-bottom: 12px; }
 .research-detail-heading strong { color: #f5e4b6; font-size: 21px; line-height: 1.12; }
@@ -962,8 +976,7 @@ button, input, select, textarea { max-width: 100%; }
 .research-detail-footer > span { color: #c4ccc4; font-size: 12px; }
 
 @media (max-width: 620px) {
-  .research-detail-overlay { padding: 12px; background: rgba(2, 9, 15, .16); }
-  .research-detail-panel { padding: 16px; }
+  .research-detail-panel { top: 10px; right: 10px; width: min(430px, calc(100vw - 20px)); padding: 16px; }
   .research-detail-footer { align-items: stretch; flex-direction: column; }
 }
 

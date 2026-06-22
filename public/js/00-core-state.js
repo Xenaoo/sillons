@@ -113,6 +113,8 @@ const app = {
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
   activeResearchTab: localStorage.getItem('sillons.researchTab') || 'traction',
   selectedResearchId: '',
+  researchDetailOffset: loadJson('sillons.researchDetailOffset', { x: 0, y: 0 }),
+  researchDetailDrag: null,
   researchSearchQuery: localStorage.getItem('sillons.researchSearchQuery') || '',
   researchQueueCollapsed: localStorage.getItem('sillons.researchQueueCollapsed') !== '0',
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
