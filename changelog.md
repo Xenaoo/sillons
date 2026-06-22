@@ -1,10 +1,12 @@
-# v70.0.0 — refonte visuelle de l’arbre de recherche
+# v69.17.0 — lisibilité et stabilité de l’arbre de recherche
 
-- Remplacement de l’affichage R&D par un arbre global inspiré du visuel fourni : panneau latéral Branches/Légende/Ères/Progression, carte centrale sombre, nœuds par branche et colonnes d’ères.
-- L’arbre utilise les recherches réelles du projet au lieu d’un visuel figé : total dynamique, compteurs par branche, compteurs par ère, états disponible/débloqué/en cours/verrouillé.
-- Les liens de prérequis sont dessinés à partir des dépendances réelles de chaque recherche, avec affichage du niveau requis sur les connexions.
-- Les nœuds restent entièrement fonctionnels : clic pour ouvrir la fiche, lancement depuis la fiche, prérequis consultables, recherche rapide et focus depuis le catalogue conservés.
-- Mise à jour des versions client/serveur/package/badge/cache-busting en `v70.0.0`.
+- Renforcement visuel des liaisons de prérequis dans `R&D > Arbre technologique` : traits plus contrastés et plus épais, points d’ancrage visibles sur les nœuds, espacements augmentés et étiquettes de niveau mieux lisibles.
+- Déplacement du panneau de navigation/contextualisation de l’arbre en haut de la page pour libérer davantage de largeur utile pour la zone de recherche.
+- Ajout d’un bandeau supérieur R&D regroupant les branches, une légende compacte, la répartition par ères, la progression et la recherche rapide.
+- Élargissement du canvas de l’arbre technologique et augmentation des espacements horizontaux entre nœuds pour rendre les dépendances plus compréhensibles.
+- Gel de la reconstruction automatique de l’onglet `R&D` à chaque tick serveur afin de conserver un arbre stable pendant la consultation ; les mises à jour complètes se font désormais sur action utilisateur.
+- Incrément de version : badge interface `v69.17.0`, version serveur/client `v69.17.0`, package `69.17.0`.
+- Schéma save : `189`.
 
 # v69.16.1 — correction de l’angle du premier visuel maglev
 

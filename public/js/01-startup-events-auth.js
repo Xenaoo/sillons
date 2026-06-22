@@ -677,7 +677,10 @@ function isFleetSubmenuAutoRefreshFrozen() {
 }
 
 function isResearchTreeAutoRefreshFrozen() {
-  return app.activeTab === 'research' && Boolean(app.selectedResearchId);
+  // L’arbre R&D est lourd et doit rester parfaitement stable pendant la
+  // consultation. On gèle donc sa reconstruction automatique entre deux ticks
+  // serveur ; seules les actions utilisateur déclenchent un rendu complet.
+  return app.activeTab === 'research';
 }
 
 async function refreshState(first, { includeAdmin = false } = {}) {
