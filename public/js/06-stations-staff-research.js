@@ -1013,7 +1013,8 @@ function renderResearchNodeGrid(group) {
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
   const nodePitch = 230;
-  const eraHeight = 280;
+  const eraHeight = 360;
+  const trackGap = 18;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
   const nodeWidth = 206;
@@ -1065,15 +1066,16 @@ function renderResearchNodeGrid(group) {
       positions.set(node.id, {
         // Une même génération partage une ligne parfaitement horizontale.
         x: 50 + index * nodePitch,
-        y: 148 + (era - 1) * eraHeight,
+        y: 190 + (era - 1) * eraHeight,
         era,
         column: index
       });
     });
   }
   const treeWidth = Math.max(860, 100 + maxRows * nodePitch);
-  const treeHeight = 120 + 7 * eraHeight;
+  const treeHeight = 160 + 7 * eraHeight;
   const links = [];
+  const linkLabels = [];
   const sameEraTracks = new Map();
   const crossEraTracks = new Map();
   const allocateTrack = (store, key, x1, x2) => {
@@ -1106,22 +1108,20 @@ function renderResearchNodeGrid(group) {
       const track = sameEra
         ? allocateTrack(sameEraTracks, String(source.position.era), x1, x2)
         : allocateTrack(crossEraTracks, `${source.position.era}:${target.era}`, x1, x2);
-      const laneY = sameEra ? y1 - 22 - track * 12 : y2 - 28 - track * 12;
+      const laneY = sameEra ? y1 - 22 - track * trackGap : y2 - 32 - track * trackGap;
       const route = `M ${x1} ${y1} V ${laneY} H ${x2} V ${y2}`;
       const labelX = Math.round((x1 + x2) / 2);
       const labelY = laneY - 9;
-      const levelLabel = level > 1
-        ? `<g class="research-tree-link-label" transform="translate(${labelX} ${labelY})"><rect x="-10" y="-9" width="20" height="17" rx="8.5"></rect><text y="3">${level}</text></g>`
-        : '';
+      if (level > 1) linkLabels.push(`<g class="research-tree-link-label ${met ? 'met' : ''} ${selected ? 'selected' : ''}" transform="translate(${labelX} ${labelY})"><rect x="-12" y="-10" width="24" height="19" rx="9.5"></rect><text y="3">${level}</text></g>`);
       const marker = selected ? 'researchTreeArrowSelected' : met ? 'researchTreeArrowMet' : 'researchTreeArrow';
-      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})"></path>${levelLabel}</g>`);
+      links.push(`<g class="research-tree-link-group ${met ? 'met' : ''} ${selected ? 'selected' : ''}"><path class="research-tree-link-shadow" d="${route}"></path><path class="research-tree-link" d="${route}" marker-end="url(#${marker})"></path></g>`);
     }
   }
   const eras = [1, 2, 3, 4, 5, 6, 7].map(era => {
     const sample = byEra.get(era)?.[0];
     const label = sample?.eraLabel || `Ère ${era}`;
     const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
-    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 62}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
+    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 72}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
   }).join('');
   const hexes = nodes.map(node => {
     const pos = positions.get(node.id);
@@ -1152,7 +1152,7 @@ function renderResearchNodeGrid(group) {
       </article>`;
   }).join('');
   const selectedClass = app.selectedResearchId ? 'has-selection' : '';
-  return `<div class="research-skilltree-scroll"><div class="research-skilltree ${selectedClass}" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#a4c1c5" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowMet" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#6fda9e" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowSelected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path fill="#f4cb72" d="M 0 0 L 8 4 L 0 8 z"></path></marker></defs>${links.join('')}</svg>${eras}${hexes}</div></div>${renderResearchDetailOverlay()}`;
+  return `<div class="research-skilltree-scroll"><div class="research-skilltree ${selectedClass}" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true"><defs><marker id="researchTreeArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#a4c1c5" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowMet" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path fill="#6fda9e" d="M 0 0 L 8 4 L 0 8 z"></path></marker><marker id="researchTreeArrowSelected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path fill="#f4cb72" d="M 0 0 L 8 4 L 0 8 z"></path></marker></defs>${links.join('')}${linkLabels.join('')}</svg>${eras}${hexes}</div></div>${renderResearchDetailOverlay()}`;
 }
 
 function isResearchQueueCollapsed() {

@@ -781,11 +781,10 @@ button, input, select, textarea { max-width: 100%; }
   filter: drop-shadow(0 0 5px rgba(244, 203, 114, .58));
 }
 .research-tree-link-group.selected .research-tree-link-shadow { stroke-width: 7px; }
-.research-tree-link-group.selected .research-tree-link-label rect { fill: #6f4c1d; stroke: #f4cb72; }
-
-.research-tree-link-group.met .research-tree-link-label rect { fill: #225d4a; stroke: rgba(112, 227, 160, .88); }
-.research-tree-link-label rect { fill: #132938; stroke: rgba(197, 216, 205, .62); stroke-width: 1.2; }
-.research-tree-link-label text { fill: #f8df9f; font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-anchor: middle; }
+.research-tree-link-label rect { fill: #102635; stroke: rgba(218, 231, 218, .92); stroke-width: 1.6; }
+.research-tree-link-label text { fill: #fff0bd; font: 900 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-anchor: middle; paint-order: stroke; stroke: #061018; stroke-width: 2px; stroke-linejoin: round; }
+.research-tree-link-label.met rect { fill: #225d4a; stroke: rgba(112, 227, 160, .96); }
+.research-tree-link-label.selected rect { fill: #6f4c1d; stroke: #f4cb72; stroke-width: 2px; }
 .research-era-gate {
   position: absolute;
   z-index: 1;
