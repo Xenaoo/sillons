@@ -1013,8 +1013,8 @@ function renderResearchNodeGrid(group) {
   if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
 
   const nodePitch = 230;
-  const eraHeight = 360;
-  const trackGap = 18;
+  const eraHeight = 440;
+  const trackGap = 28;
   // Laisse une vraie respiration entre le libellé d’un hexagone et le suivant,
   // y compris pour les intitulés longs sur trois lignes.
   const nodeWidth = 206;
@@ -1042,7 +1042,7 @@ function renderResearchNodeGrid(group) {
   };
 
   const positions = new Map();
-  let maxRows = 1;
+  let maxColumns = 1;
   for (const [era, eraNodes] of byEra) {
     const initialOrder = new Map(eraNodes.map((node, index) => [node.id, index]));
     eraNodes.sort((a, b) => {
@@ -1061,19 +1061,28 @@ function renderResearchNodeGrid(group) {
         || branchDepth(a) - branchDepth(b)
         || initialOrder.get(a.id) - initialOrder.get(b.id);
     });
-    maxRows = Math.max(maxRows, eraNodes.length);
+    let previousColumn = -1;
     eraNodes.forEach((node, index) => {
+      const parentColumns = internalParents(node)
+        .map(parent => positions.get(parent.id)?.column)
+        .filter(Number.isFinite);
+      const desiredColumn = parentColumns.length
+        ? Math.round(parentColumns.reduce((sum, column) => sum + column, 0) / parentColumns.length)
+        : index;
+      const column = Math.max(previousColumn + 1, desiredColumn);
+      previousColumn = column;
       positions.set(node.id, {
         // Une même génération partage une ligne parfaitement horizontale.
-        x: 50 + index * nodePitch,
-        y: 190 + (era - 1) * eraHeight,
+        x: 50 + column * nodePitch,
+        y: 250 + (era - 1) * eraHeight,
         era,
-        column: index
+        column
       });
     });
+    maxColumns = Math.max(maxColumns, previousColumn + 1);
   }
-  const treeWidth = Math.max(860, 100 + maxRows * nodePitch);
-  const treeHeight = 160 + 7 * eraHeight;
+  const treeWidth = Math.max(860, 100 + maxColumns * nodePitch);
+  const treeHeight = 240 + 7 * eraHeight;
   const links = [];
   const linkLabels = [];
   const sameEraTracks = new Map();
@@ -1121,7 +1130,7 @@ function renderResearchNodeGrid(group) {
     const sample = byEra.get(era)?.[0];
     const label = sample?.eraLabel || `Ère ${era}`;
     const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
-    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 72}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
+    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="top:${(era - 1) * eraHeight + 104}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
   }).join('');
   const hexes = nodes.map(node => {
     const pos = positions.get(node.id);

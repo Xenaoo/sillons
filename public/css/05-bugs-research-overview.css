@@ -769,8 +769,8 @@ button, input, select, textarea { max-width: 100%; }
 }
 
 .research-tree-link-group.met .research-tree-link {
-  stroke: rgba(111, 218, 158, .68);
-  filter: drop-shadow(0 0 3px rgba(88, 214, 145, .28));
+  stroke: rgba(111, 218, 158, .46);
+  filter: none;
 }
 
 .research-skilltree.has-selection .research-tree-link-group:not(.selected) { opacity: .16; }
