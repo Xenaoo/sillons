@@ -1128,9 +1128,10 @@ function renderResearchNodeGrid(group) {
       .join(' · ') || 'Amélioration de la branche';
     const prereqs = researchPrereqsForLevelClient(node, target).map(researchPrereqLabelClient).join(', ') || 'Aucun';
     const details = `${node.title}\nEffet : ${effects}${prereqs !== 'Aucun' ? `\nPrérequis : ${prereqs}` : ''}`;
+    const tooltip = app.selectedResearchId ? '' : tooltipAttr(details);
     return `
-      <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'} ${app.selectedResearchId === node.id ? 'selected' : ''}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltipAttr(details)}>
-        <button type="button" class="research-hex" data-action="select-research-node" data-id="${escapeAttr(node.id)}" ${tooltipAttr(details)}>
+      <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'} ${app.selectedResearchId === node.id ? 'selected' : ''}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltip}>
+        <button type="button" class="research-hex" data-action="select-research-node" data-id="${escapeAttr(node.id)}" ${tooltip}>
           <span class="research-hex__level">${complete ? '✓' : acquired}</span>
           <span class="research-hex__state">${complete ? 'Acquis' : locked ? 'Verrouillé' : `Niv. ${target}`}</span>
         </button>

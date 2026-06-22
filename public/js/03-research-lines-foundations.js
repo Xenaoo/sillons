@@ -186,6 +186,7 @@ function focusResearchNode(nodeId) {
 function selectResearchNode(nodeId) {
   const groupId = researchGroupForNode(nodeId);
   if (!groupId) return;
+  if (typeof hideGlobalTooltip === 'function') hideGlobalTooltip();
   app.activeTab = 'research';
   app.activeResearchTab = groupId;
   app.selectedResearchId = nodeId;
@@ -201,6 +202,7 @@ function selectResearchNode(nodeId) {
 
 function closeResearchDetails() {
   if (!app.selectedResearchId) return;
+  if (typeof hideGlobalTooltip === 'function') hideGlobalTooltip();
   app.selectedResearchId = '';
   renderAll();
 }
@@ -522,4 +524,3 @@ function renderSectionHero(kicker, title, text, image, tags = []) {
     </div>
   `;
 }
-

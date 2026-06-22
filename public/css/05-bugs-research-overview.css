@@ -901,15 +901,17 @@ button, input, select, textarea { max-width: 100%; }
   z-index: 50;
   inset: 0;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(2, 9, 15, .48);
-  backdrop-filter: blur(3px);
+  align-items: start;
+  justify-items: end;
+  padding: clamp(16px, 4vw, 54px);
+  pointer-events: auto;
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .research-detail-panel {
-  width: min(510px, 100%);
-  max-height: min(720px, calc(100dvh - 48px));
+  width: min(430px, 100%);
+  max-height: min(720px, calc(100dvh - 32px));
   overflow: auto;
   padding: 20px;
   border: 1px solid rgba(235, 202, 122, .46);
@@ -954,7 +956,7 @@ button, input, select, textarea { max-width: 100%; }
 .research-detail-footer > span { color: #c4ccc4; font-size: 12px; }
 
 @media (max-width: 620px) {
-  .research-detail-overlay { padding: 12px; }
+  .research-detail-overlay { place-items: center; padding: 12px; background: rgba(2, 9, 15, .16); }
   .research-detail-panel { padding: 16px; }
   .research-detail-footer { align-items: stretch; flex-direction: column; }
 }
