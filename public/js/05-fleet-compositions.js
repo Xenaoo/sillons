@@ -21,19 +21,33 @@ function formatTrainStatModifier(baseDisplay, modifiedDisplay) {
   if (baseDisplay == null || modifiedDisplay == null || modifiedDisplay === '') return '';
   const base = String(baseDisplay).trim();
   const next = String(modifiedDisplay).trim();
-  return !next || base === next ? '' : `<small class="train-stat-modifier good-text">→ ${escapeHtml(next)}</small>`;
+  return !next || base === next
+    ? ''
+    : `<span class="train-stat-modifier">${escapeHtml(base)} <span aria-hidden="true">→</span> ${escapeHtml(next)}</span>`;
+}
+
+function trainResearchPercentValues(baseValue, modifiedValue) {
+  const base = `${Math.round(Number(baseValue || 0) * 100)}%`;
+  if (Math.abs(Number(modifiedValue || 0) - Number(baseValue || 0)) < 0.00001) return { base, modified: base };
+  const adjusted = Math.round(Number(modifiedValue || 0) * 1000) / 10;
+  return {
+    base,
+    modified: `${adjusted.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}%`
+  };
 }
 
 function renderTrainStat(label, value, ratio, cls = '', modifiedValue = '', modifiedRatio = null) {
   const pct = Math.max(4, Math.min(100, Math.round(ratio * 100)));
   const extraPct = modifiedRatio == null ? pct : Math.max(pct, Math.min(100, Math.round(modifiedRatio * 100)));
-  const addPct = Math.max(0, extraPct - pct);
-  const hasModifier = modifiedValue !== '' && modifiedValue != null && String(modifiedValue) !== String(value) && addPct > 0;
+  const hasModifier = modifiedValue !== '' && modifiedValue != null && String(modifiedValue) !== String(value);
+  const improvesBar = hasModifier && modifiedRatio != null && Number(modifiedRatio) > Number(ratio);
+  const addPct = improvesBar ? Math.min(100 - pct, Math.max(2, extraPct - pct)) : 0;
+  const hasBarBonus = improvesBar && addPct > 0;
   return `
     <div class="train-stat ${cls} ${hasModifier ? 'has-modifier' : ''}">
       <span>${escapeHtml(label)}</span>
-      <b>${escapeHtml(String(value))}${hasModifier ? formatTrainStatModifier(value, modifiedValue) : ''}</b>
-      <i><em style="width:${pct}%"></em>${hasModifier ? `<strong style="left:${pct}%; width:${addPct}%"></strong>` : ''}</i>
+      <b>${hasModifier ? formatTrainStatModifier(value, modifiedValue) : escapeHtml(String(value))}</b>
+      <i><em style="width:${pct}%"></em>${hasBarBonus ? `<strong style="left:${pct}%; width:${addPct}%"></strong>` : ''}</i>
     </div>`;
 }
 
@@ -1901,6 +1915,12 @@ function estimateTrainPowerKw(model) {
 function renderTrainCatalogItem(model, buyable) {
   const effective = effectiveModelWithResearchClient(model);
   const effectiveRange = effective.range;
+  const reliabilityValues = trainResearchPercentValues(model.reliability, effective.reliability);
+  const comfortValues = trainResearchPercentValues(model.comfort, effective.comfort);
+  const baseMaintenanceHourly = maintenanceHourlyRange(model);
+  const effectiveMaintenanceHourly = maintenanceHourlyRange(effective);
+  const baseMaintenanceRatio = 1 - Math.min(1, Number(model.maintenance || 0) / 1.3);
+  const effectiveMaintenanceRatio = 1 - Math.min(1, Number(effective.maintenance || 0) / 1.3);
   const unitPrice = trainPurchaseUnitPriceClient(model);
   const powerKw = estimateTrainPowerKw(model);
   const multipleUnit = isMultipleUnitModelClient(model);
@@ -1920,9 +1940,9 @@ function renderTrainCatalogItem(model, buyable) {
           ${renderTrainStat('Puissance', `${formatInt(powerKw)} kW`, powerKw / 20000, powerKw >= 8000 ? 'good' : '')}
           ${multipleUnit ? renderTrainStat('Capacité rame', `${formatInt(model.capacity)} voy.`, Math.min(1, (model.capacity || 0) / 1100), model.capacity >= 650 ? 'good' : '') : ''}
           ${multipleUnit ? renderTrainStat('UM max', `${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}`, muSpec.powerUnits.max / 3, muSpec.powerUnits.max >= 3 ? 'good' : '') : ''}
-          ${renderTrainStat('Fiabilité', `${Math.round(model.reliability * 100)}%`, model.reliability, effective.reliability >= 0.92 ? 'good' : '', `${Math.round(effective.reliability * 100)}%`, effective.reliability)}
-          ${renderTrainStat('Confort', `${Math.round(model.comfort * 100)}%`, model.comfort, model.comfort >= 0.8 ? 'good' : '')}
-          ${renderTrainStat('Maint./h', maintenanceHourlyRange(model), 1 - Math.min(1, model.maintenance / 1.3), model.maintenance <= 0.45 ? 'good' : 'warn')}
+          ${renderTrainStat('Fiabilité', reliabilityValues.base, model.reliability, effective.reliability >= 0.92 ? 'good' : '', reliabilityValues.modified, effective.reliability)}
+          ${renderTrainStat('Confort', comfortValues.base, model.comfort, model.comfort >= 0.8 ? 'good' : '', comfortValues.modified, effective.comfort)}
+          ${renderTrainStat('Maint./h', baseMaintenanceHourly, baseMaintenanceRatio, model.maintenance <= 0.45 ? 'good' : 'warn', effectiveMaintenanceHourly, effectiveMaintenanceRatio)}
         </div>
         ${renderTrainRequirementPills(model)}
         ${renderTrainInheritedResearchBonuses(model)}

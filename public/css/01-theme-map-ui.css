@@ -1789,7 +1789,7 @@ button[data-tooltip]:focus-visible::before {
   background: linear-gradient(90deg, #8b5b29, #d9a852);
 }
 .train-stat.good i em {
-  background: linear-gradient(90deg, #3f8d60, #6ac58f);
+  background: linear-gradient(90deg, #9b6b30, #e0b34f);
 }
 .train-stat.warn i em {
   background: linear-gradient(90deg, #a06a2e, #e0b34f);
@@ -1798,8 +1798,11 @@ button[data-tooltip]:focus-visible::before {
   background: linear-gradient(90deg, rgba(111,225,150,.32), #6fe196);
 }
 .train-stat-modifier {
-  display: block;
-  margin-top: 2px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  color: inherit;
   font-size: 11px;
   font-weight: 800;
 }
@@ -2209,4 +2212,3 @@ button[data-tooltip]:focus-visible::before {
   border-color: rgba(217,168,82,.42);
   box-shadow: 0 14px 28px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.03);
 }
-

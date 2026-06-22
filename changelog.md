@@ -1,3 +1,29 @@
+# v0.70.06 — précision des bonus de recherche
+
+- Les statistiques de fiabilité et de confort affichent une décimale sur la valeur améliorée lorsque cela évite de masquer un bonus réel.
+- Incrément de version : interface et serveur v0.70.06, package npm 0.70.6.
+
+# v0.70.05 — invalidation du cache des modules client
+
+- Le chargeur client utilise désormais la même version que l’interface ; les correctifs JavaScript du catalogue Parc sont donc chargés immédiatement.
+- Incrément de version : badge interface et version serveur/client `v0.70.05`, package `0.70.5`.
+- Schéma save inchangé : `190`.
+
+# v0.70.04 — visibilité des bonus sur les statistiques de train
+
+- Un bonus de recherche affiche toujours un segment vert visible sur la barre de statistique associée, y compris lorsque le gain est inférieur à un point de pourcentage.
+- Le chargeur des modules client est aligné sur la version de l’application afin que le navigateur reçoive immédiatement ce correctif.
+- Incrément de version : badge interface et version serveur/client `v0.70.04`, package `0.70.4`.
+- Schéma save inchangé : `190`.
+
+# v0.70.03 — lisibilité des statistiques de train
+
+- Les barres de statistiques du catalogue Parc utilisent désormais une palette ambrée neutre, sans vert pour les valeurs de base.
+- Les bonus de recherche affichent désormais la valeur de base et la valeur améliorée sous la forme `valeur → valeur`.
+- Le surplus apporté par la recherche est matérialisé par le seul segment vert de la barre concernée, y compris pour le confort et le coût de maintenance/h.
+- Incrément de version : badge interface et version serveur/client `v0.70.03`, package `0.70.3`.
+- Schéma save inchangé : `190`.
+
 # v0.70.02 — progression R&D sans plafond et spécialisation des trains
 
 - Les 118 recherches R&D sont désormais sans niveau maximum affiché : chaque niveau supplémentaire reste disponible et devient plus long et coûteux.
