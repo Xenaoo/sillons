@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.70.11` (package npm : `0.70.11`).
+- Version de code actuelle : `v0.70.12` (package npm : `0.70.12`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -44,6 +44,13 @@ Variables utiles :
 - `HOST` : hôte d’écoute, par défaut `127.0.0.1`.
 - `SILLONS_SAVE_DB_FILE` : chemin alternatif de base SQLite, indispensable pour tester une migration sans toucher à `data/save.sqlite`.
 - `SILLONS_RFN_WORKERS` : nombre de workers de routage RFN.
+
+
+### Notes récentes v0.70.12
+
+- `Demande voy. / an` et `Demande fret / an` affichent désormais la demande structurelle stable de l’axe.
+- Les facteurs dynamiques `state.market.demand`, `state.market.freight` et événements temporaires restent utilisés pour le calcul économique effectif, mais ne modifient plus les champs affichés `market.passengerDemand` et `market.freightDemand`.
+- `handoff.md` doit rester dans l’archive de travail actuelle.
 
 ## 4. Architecture
 

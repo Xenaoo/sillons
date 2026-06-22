@@ -1,9 +1,15 @@
-# v0.70.11 — correction des sillons exploités
+# v0.70.12 — demande annuelle stable au refresh serveur
 
-- Correction du calcul de limitation des sillons : la limite R&D d’une ligne ne réduit plus la capacité physique partagée du tronçon RFN.
-- Les sillons utilisés par les autres lignes sont toujours déduits, mais la ligne courante conserve correctement ses propres sillons déjà affectés.
-- La ligne `St-Martin-d'Étampes → St-Quentin-en-Yvelines` repasse ainsi en cadence active lorsque la capacité RFN restante couvre ses trains ; le trafic voyageurs annuel n’est plus bloqué à 0.
-- Le tooltip des sillons utilise maintenant la capacité joueur renvoyée par le serveur et affiche la limite R&D uniquement quand elle est réellement inférieure à la capacité du tronçon.
+- Correction de l’affichage `Demande voy. / an` dans les panneaux de ligne : la valeur affichée utilise désormais le potentiel structurel de l’axe, basé sur les gares et les arrêts, et ne varie plus à chaque tick serveur.
+- Les fluctuations temporaires du marché et des événements continuent d’alimenter le calcul économique interne, mais elles ne sont plus mélangées avec la demande annuelle affichée.
+- Même séparation appliquée à la demande fret affichée pour éviter le même effet visuel.
+- Incrément de version : interface et serveur v0.70.12, package npm 0.70.12.
+
+# v0.70.11 — correctif sillons et voyageurs transportés
+
+- Correction du calcul des sillons exploités : la limite R&D ne réduit plus à tort la capacité physique RFN du tronçon.
+- Une ligne conserve correctement ses propres sillons déjà affectés lors du calcul des contraintes.
+- Correction du cas où une ligne avec des trains affectés pouvait afficher 0 voyageur transporté à cause d’une fréquence effective tombée à zéro.
 - Incrément de version : interface et serveur v0.70.11, package npm 0.70.11.
 
 # v0.70.10 — indicateurs annuels des lignes

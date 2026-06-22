@@ -479,7 +479,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         status: stoppedForCondition ? 'train-out-of-service' : 'maintenance',
         cadence,
         staffing: lineStaffingStats,
-        market: { passengerDemand: Math.round(routeDemand.passengers), freightDemand: Math.round(routeDemand.freight) },
+        market: routeDemandMarketPayload(routeDemand),
         capacity: {
           passengers: 0,
           freightTons: 0,
@@ -534,7 +534,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         status: 'driver-shortage',
         cadence,
         staffing: lineStaffingStats,
-        market: { passengerDemand: Math.round(routeDemand.passengers), freightDemand: Math.round(routeDemand.freight) },
+        market: routeDemandMarketPayload(routeDemand),
         capacity: {
           passengers: 0,
           freightTons: 0,
@@ -567,7 +567,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         status: 'resource-shortage',
         cadence,
         staffing: lineStaffingStats,
-        market: { passengerDemand: Math.round(routeDemand.passengers), freightDemand: Math.round(routeDemand.freight) },
+        market: routeDemandMarketPayload(routeDemand),
         capacity: {
           passengers: 0,
           freightTons: 0,
@@ -717,8 +717,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       cadence,
       staffing: lineStaffingStats,
       market: {
-        passengerDemand: Math.round(routeDemand.passengers),
-        freightDemand: Math.round(routeDemand.freight),
+        ...routeDemandMarketPayload(routeDemand),
         passengerAnnualPotential: Math.round(passengerAnnualPotential),
         freightAnnualPotential: Math.round(freightAnnualPotential),
         passengerShare: passengerMarket ? round2(passengerMarket.share * 100) : null,
@@ -1055,6 +1054,20 @@ function computeLineAttractivenessDetails(player, line, model, train, distance, 
 }
 
 
+function routeDemandMarketPayload(routeDemand) {
+  // La valeur affichée comme « demande / an » doit décrire le potentiel
+  // structurel de l'axe. Elle ne doit pas bouger à chaque tick avec les
+  // événements temporaires ou le marché global, sinon un simple refresh serveur
+  // donne l'impression que les données SNCF de base changent.
+  const passengers = Number.isFinite(routeDemand?.basePassengers) ? routeDemand.basePassengers : routeDemand?.passengers;
+  const freight = Number.isFinite(routeDemand?.baseFreight) ? routeDemand.baseFreight : routeDemand?.freight;
+  return {
+    passengerDemand: Math.round(Math.max(0, Number(passengers || 0))),
+    freightDemand: Math.round(Math.max(0, Number(freight || 0)))
+  };
+}
+
+
 function computeRouteDemand(from, to, line, player, eventFactor) {
   const stops = lineStops(line);
   const distance = lineDistance(line);
@@ -1070,12 +1083,19 @@ function computeRouteDemand(from, to, line, player, eventFactor) {
   const tourism = 1 + (from.tourism + to.tourism + tourismMid * 0.5) / 220;
   const distanceFactor = clamp(1.25 - distance / 900, 0.25, 1.2);
   const stopBonus = 1 + Math.max(0, stops.length - 2) * 0.07;
-  const passengerDemand = demandBase * tourism * distanceFactor * state.market.demand * eventFactor.passenger * stopBonus;
+  const basePassengerDemand = demandBase * tourism * distanceFactor * stopBonus;
+  const passengerDemand = basePassengerDemand * state.market.demand * eventFactor.passenger;
   const freightMid = mids.reduce((sum, s) => sum + s.freight, 0);
   const freightBase = Math.sqrt((from.freight + 18) * (to.freight + 18)) * 5.5 + freightMid * 1.8;
   const freightTech = (1 + Math.min(0.15, techLevel(player, 'specialized_wagons') * 0.03)) * (1 + Math.min(0.2, techLevel(player, 'container_hubs') * 0.04));
-  const freightDemand = freightBase * clamp(distance / 180, 0.5, 2.2) * state.market.freight * eventFactor.freight * (0.75 + player.tech.freight * 0.08) * freightTech * Math.max(1, 1 + Math.max(0, stops.length - 2) * 0.05) * ECONOMY.freightDemandMultiplier;
-  return { passengers: passengerDemand, freight: freightDemand };
+  const baseFreightDemand = freightBase * clamp(distance / 180, 0.5, 2.2) * (0.75 + player.tech.freight * 0.08) * freightTech * Math.max(1, 1 + Math.max(0, stops.length - 2) * 0.05) * ECONOMY.freightDemandMultiplier;
+  const freightDemand = baseFreightDemand * state.market.freight * eventFactor.freight;
+  return {
+    passengers: passengerDemand,
+    freight: freightDemand,
+    basePassengers: basePassengerDemand,
+    baseFreight: baseFreightDemand
+  };
 }
 
 
