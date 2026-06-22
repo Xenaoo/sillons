@@ -1679,7 +1679,7 @@ function normalizeResearchEffectTextClient(text) {
 function parseResearchNumericEffectsClient(effectText) {
   const text = normalizeResearchEffectTextClient(effectText);
   if (!text || text.includes('niveaux suivants') || text.includes('aucune fonctionnalite')) return [];
-  const regex = /([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(portee|autonomie|vitesse max|fiabilite|consommation|impact environnemental|rentabilite)/g;
+  const regex = /([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?(portee|autonomie|vitesse(?: max)?|fiabilite|confort|cout de maintenance\/h|cout maintenance\/h|consommation|impact environnemental|rentabilite)/g;
   const effects = [];
   let match;
   while ((match = regex.exec(text))) {
@@ -1687,8 +1687,10 @@ function parseResearchNumericEffectsClient(effectText) {
     const rawValue = Number(String(match[2]).replace(',', '.')) / 100;
     const label = match[3];
     const kind = (
-      label === 'vitesse max' ? 'speed' :
+      label === 'vitesse max' || label === 'vitesse' ? 'speed' :
       label === 'fiabilite' ? 'reliability' :
+      label === 'confort' ? 'comfort' :
+      label === 'cout de maintenance/h' || label === 'cout maintenance/h' ? 'maintenance' :
       label === 'consommation' ? 'energy' :
       label === 'impact environnemental' ? 'environment' :
       label === 'rentabilite' ? 'profitability' :
@@ -1710,8 +1712,30 @@ function researchNodesForEraClient(era) {
   return nodes;
 }
 
+function researchEffectAppliesToModelClient(effect, model) {
+  const target = effect?.target || {};
+  if (Number(target.era || 0) > 0 && Number(target.era) !== trainResearchEra(model)) return false;
+  const energyTypes = Array.isArray(target.energyTypes) ? target.energyTypes.filter(Boolean) : [];
+  if (energyTypes.length && !energyTypes.includes(model?.energyType)) return false;
+  if (target.service === 'passenger' && Number(model?.capacity || 0) <= 0) return false;
+  if (target.service === 'freight' && Number(model?.freight || 0) <= 0) return false;
+  return true;
+}
+
+function nodeTrainEffectsClient(node) {
+  const allowedKinds = new Set(['speed', 'range', 'autonomy', 'reliability', 'comfort', 'maintenance', 'energy', 'environment', 'profitability']);
+  const structured = Array.isArray(node?.trainEffects)
+    ? node.trainEffects
+      .filter(effect => allowedKinds.has(effect?.kind) && Number.isFinite(Number(effect?.value)))
+      .map(effect => ({ kind: effect.kind, value: Number(effect.value), target: effect.target || {} }))
+    : [];
+  return structured.length
+    ? structured
+    : (node?.improves || []).flatMap(parseResearchNumericEffectsClient);
+}
+
 function trainInheritedResearchBonus(model) {
-  const modifiers = { speed: 1, range: 1, autonomy: 1, reliability: 1, energy: 1, environment: 1, profitability: 1 };
+  const modifiers = { speed: 1, range: 1, autonomy: 1, reliability: 1, comfort: 1, maintenance: 1, energy: 1, environment: 1, profitability: 1 };
   const sources = [];
   const effects = [];
   for (const node of researchNodesForEraClient(trainResearchEra(model))) {
@@ -1719,18 +1743,17 @@ function trainInheritedResearchBonus(model) {
     if (level <= 0) continue;
     const units = researchLevelEffectUnitsClient(level);
     const nodeEffects = [];
-    for (const effectText of node.improves || []) {
-      for (const effect of parseResearchNumericEffectsClient(effectText)) {
-        const multiplier = Math.max(0.08, 1 + effect.value * units);
-        modifiers[effect.kind] *= multiplier;
-        nodeEffects.push({
-          kind: effect.kind,
-          rawValue: effect.value,
-          units,
-          multiplier,
-          signedPercent: signedPercentFromMultiplier(multiplier, effect.kind === 'energy' || effect.kind === 'environment')
-        });
-      }
+    for (const effect of nodeTrainEffectsClient(node)) {
+      if (!researchEffectAppliesToModelClient(effect, model)) continue;
+      const multiplier = Math.max(0.08, 1 + effect.value * units);
+      modifiers[effect.kind] *= multiplier;
+      nodeEffects.push({
+        kind: effect.kind,
+        rawValue: effect.value,
+        units,
+        multiplier,
+        signedPercent: signedPercentFromMultiplier(multiplier, effect.kind === 'energy' || effect.kind === 'environment' || effect.kind === 'maintenance')
+      });
     }
     if (nodeEffects.length) {
       const source = { title: node.title, level, effects: nodeEffects };
@@ -1758,6 +1781,8 @@ function effectiveModelWithResearchClient(model) {
     speed: Math.max(20, Math.round(Number(model?.speed || 0) * modifiers.speed)),
     range: Math.max(1, Math.round(Number(model?.range || 0) * rangeMultiplier)),
     reliability: clamp(Number(model?.reliability || 0) * modifiers.reliability, 0.18, 0.995),
+    comfort: clamp(Number(model?.comfort || 0) * modifiers.comfort, 0.05, 1),
+    maintenance: Math.max(0.01, round(Number(model?.maintenance || 0) * modifiers.maintenance)),
     energy: Math.max(0.01, round(Number(model?.energy || 0) * modifiers.energy)),
     researchModifiers: modifiers
   };
@@ -1776,6 +1801,8 @@ function renderTrainInheritedResearchBonuses(model) {
     autonomyOrRange,
     ['Vitesse max', modifiers.speed, false],
     ['Fiabilité', modifiers.reliability, false],
+    ['Confort', modifiers.comfort, false],
+    ['Coût maintenance/h', modifiers.maintenance, true],
     ['Consommation', modifiers.energy, true],
     ['Impact env.', modifiers.environment, true],
     ['Rentabilité', modifiers.profitability, false]

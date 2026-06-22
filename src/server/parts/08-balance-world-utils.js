@@ -586,7 +586,8 @@ function buildTechTree() {
         unlocks,
         improves: options.improves || [],
         effects: [...unlocks, ...(options.improves || [])],
-        maxLevel: 5,
+        maxLevel: null,
+        unlimited: true,
         baseCostMoney: options.baseCostMoney || pacing.cost,
         baseDurationSeconds: options.baseDurationSeconds || pacing.duration,
         costGrowth: 1.72,
@@ -1052,13 +1053,80 @@ function computedResearchBaseDurationSeconds(node) {
   return Math.round(30 * Math.pow(2.05, epoch) + prereqWeight * 14 + branchExtra);
 }
 
+function researchTrainScope(node) {
+  const era = clamp(Math.floor(Number(node?.era || Number(node?.requiredEpoch || 0) + 1)), 1, 7);
+  const text = (String(node?.id || '') + ' ' + String(node?.title || '') + ' ' + String(node?.description || '')).toLowerCase();
+  const mentionsFreight = /fret|wagon|triage|marchandise|logistique|conteneur/.test(text);
+  const mentionsPassenger = /voyageur|confort|gare|correspondance|intermodal/.test(text);
+  let service = 'all';
+  if (node?.branch === 'freight' || node?.subtree === 'freight' || (mentionsFreight && !mentionsPassenger)) service = 'freight';
+  else if (node?.branch === 'stations' || node?.subtree === 'passengers' || (mentionsPassenger && !mentionsFreight)) service = 'passenger';
+  const energyType = ['coal', 'diesel', 'electricity', 'electricity', 'hydrogen', 'battery', 'electricity'][era - 1];
+  const eraLabel = ['vapeur', 'diesel', 'électriques', 'grande vitesse', 'hydrogène', 'batterie', 'maglev'][era - 1];
+  const serviceLabel = service === 'freight' ? 'fret' : service === 'passenger' ? 'voyageurs' : 'tous services';
+  return { era, service, energyTypes: energyType ? [energyType] : [], label: eraLabel + ' · ' + serviceLabel };
+}
+
+function researchTrainEffectsForNode(node) {
+  const scope = researchTrainScope(node);
+  const text = (String(node.id || '') + ' ' + String(node.title || '') + ' ' + String(node.description || '')).toLowerCase();
+  const effects = [];
+  const add = (kind, value) => effects.push({ kind, value, target: scope });
+
+  if (node.branch === 'maintenance' || /maintenance|atelier|frein|sécurité|lubrification|révision|dépôt/.test(text)) {
+    add('reliability', 0.008);
+    add('maintenance', -0.012);
+  } else if (node.branch === 'stations' || /confort|gare|correspondance|intermodal|voyageur/.test(text)) {
+    add('comfort', 0.01);
+    add('reliability', 0.004);
+  } else if (node.branch === 'social' || /équipage|conducteur|certification|formation|rh/.test(text)) {
+    add('reliability', 0.007);
+    add('maintenance', -0.006);
+  } else if (node.branch === 'energy' || /énergie|caténaire|réservoir|recharge|batterie|carburant|hydrogène|alimentation/.test(text)) {
+    add('range', 0.011);
+    add('maintenance', -0.006);
+  } else if (node.branch === 'freight' || scope.service === 'freight') {
+    add('speed', 0.007);
+    add('maintenance', -0.007);
+  } else if (node.branch === 'operations' || /signalisation|horaire|régulation|sillon|cadencement|dispatch|circulation/.test(text)) {
+    add('speed', 0.006);
+    add('reliability', 0.006);
+  } else if (/portée|autonomie|longue distance|réservoir/.test(text)) {
+    add('range', 0.012);
+    add('reliability', 0.004);
+  } else if (/stabilité|guidage|sécurité/.test(text)) {
+    add('reliability', 0.01);
+    add('speed', 0.005);
+  } else if (/confort|premium|couchette/.test(text)) {
+    add('comfort', 0.012);
+    add('reliability', 0.004);
+  } else {
+    add('speed', 0.01);
+    add('reliability', 0.004);
+  }
+  return effects;
+}
+
+function researchTrainEffectText(effect) {
+  const labels = {
+    speed: 'vitesse',
+    range: 'portée',
+    reliability: 'fiabilité',
+    comfort: 'confort',
+    maintenance: 'coût de maintenance/h'
+  };
+  const pct = Math.abs(Number(effect?.value || 0) * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+  const sign = Number(effect?.value || 0) >= 0 ? '+' : '-';
+  return 'Trains concernés (' + (effect?.target?.label || 'matériels de l’époque') + ') : ' + sign + pct + ' % de ' + (labels[effect?.kind] || 'performance') + ' par niveau.';
+}
+
 function finalizeTechTree(tree) {
   for (const group of Object.values(tree)) {
     for (const node of group.nodes || []) {
-      // Chaque axe R&D comporte cinq niveaux : le premier déverrouille une
-      // action visible et les suivants professionnalisent son exploitation.
-      node.maxLevel = Math.max(1, Math.floor(Number(node.maxLevel || 5)));
-      node.unlimited = false;
+      // Les déblocages arrivent tôt, puis la spécialisation reste disponible
+      // sans niveau maximum affiché.
+      node.maxLevel = null;
+      node.unlimited = true;
       node.baseCostMoney ??= node.costMoney ?? 50000;
       node.baseDurationSeconds ??= node.baseDuration ?? node.duration ?? computedResearchBaseDurationSeconds(node);
       node.costGrowth ??= 1.72;
@@ -1066,6 +1134,10 @@ function finalizeTechTree(tree) {
       node.levelValue ??= 1;
       node.unlocks ||= [];
       node.improves ||= node.effects || [];
+      node.trainEffects = researchTrainEffectsForNode(node);
+      const trainEffectTexts = node.trainEffects.map(researchTrainEffectText);
+      node.improves = (node.improves || []).filter(effect => !String(effect || '').startsWith('Trains concernés ('));
+      node.improves.unshift(...trainEffectTexts);
       const levelEffect = node.disableAutoLevelEffect ? '' : researchLevelEffectText(node);
       if (levelEffect && !node.improves.includes(levelEffect)) node.improves.push(levelEffect);
       node.effects = [...node.unlocks, ...node.improves];

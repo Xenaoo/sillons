@@ -23,7 +23,7 @@ function normalizeEffectText(text) {
 function parseResearchNumericEffects(effectText) {
   const text = normalizeEffectText(effectText);
   if (!text || text.includes('niveaux suivants') || text.includes('aucune fonctionnalite')) return [];
-  const regex = /([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(portee|autonomie|vitesse max|fiabilite|consommation|impact environnemental|rentabilite)/g;
+  const regex = /([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?(portee|autonomie|vitesse(?: max)?|fiabilite|confort|cout de maintenance\/h|cout maintenance\/h|consommation|impact environnemental|rentabilite)/g;
   const effects = [];
   let match;
   while ((match = regex.exec(text))) {
@@ -31,8 +31,10 @@ function parseResearchNumericEffects(effectText) {
     const rawValue = Number(String(match[2]).replace(',', '.')) / 100;
     const label = match[3];
     const kind = (
-      label === 'vitesse max' ? 'speed' :
+      label === 'vitesse max' || label === 'vitesse' ? 'speed' :
       label === 'fiabilite' ? 'reliability' :
+      label === 'confort' ? 'comfort' :
+      label === 'cout de maintenance/h' || label === 'cout maintenance/h' ? 'maintenance' :
       label === 'consommation' ? 'energy' :
       label === 'impact environnemental' ? 'environment' :
       label === 'rentabilite' ? 'profitability' :
@@ -46,8 +48,15 @@ function parseResearchNumericEffects(effectText) {
 function nodeNumericEffects(node) {
   if (!node?.id) return [];
   if (_researchEffectCache.has(node.id)) return _researchEffectCache.get(node.id);
-  const parsed = [];
-  for (const effect of node.improves || []) parsed.push(...parseResearchNumericEffects(effect));
+  const allowedKinds = new Set(['speed', 'range', 'reliability', 'comfort', 'maintenance', 'energy', 'environment', 'profitability']);
+  const structured = Array.isArray(node.trainEffects)
+    ? node.trainEffects
+      .filter(effect => allowedKinds.has(effect?.kind) && Number.isFinite(Number(effect?.value)))
+      .map(effect => ({ kind: effect.kind, value: Number(effect.value), target: effect.target || {} }))
+    : [];
+  const parsed = structured.length
+    ? structured
+    : (node.improves || []).flatMap(parseResearchNumericEffects);
   _researchEffectCache.set(node.id, parsed);
   return parsed;
 }
@@ -60,18 +69,30 @@ function modelResearchEra(model) {
 function researchLevelEffectUnits(level) {
   const n = Math.max(0, Math.floor(Number(level || 0)));
   if (n <= 5) return n;
-  return 5 + 2 * (1 - Math.pow(0.75, n - 5));
+  // Les niveaux restent utiles après 5, tout en évitant une croissance
+  // disproportionnée sur les parties de très longue durée.
+  return 5 + 1.5 * Math.log1p(n - 5);
 }
 
-function eraResearchModifiers(player, era) {
-  const modifiers = { speed: 1, range: 1, reliability: 1, energy: 1, environment: 1, profitability: 1 };
-  if (!player || !era) return modifiers;
+function researchEffectAppliesToModel(effect, model) {
+  const target = effect?.target || {};
+  if (Number(target.era || 0) > 0 && Number(target.era) !== modelResearchEra(model)) return false;
+  const energyTypes = Array.isArray(target.energyTypes) ? target.energyTypes.filter(Boolean) : [];
+  if (energyTypes.length && !energyTypes.includes(model?.energyType)) return false;
+  if (target.service === 'passenger' && Number(model?.capacity || 0) <= 0) return false;
+  if (target.service === 'freight' && Number(model?.freight || 0) <= 0) return false;
+  return true;
+}
+
+function researchModifiersForModel(player, model) {
+  const modifiers = { speed: 1, range: 1, reliability: 1, comfort: 1, maintenance: 1, energy: 1, environment: 1, profitability: 1 };
+  if (!player || !model) return modifiers;
   for (const node of allTechNodes()) {
-    if (Number(node.era || 0) !== Number(era)) continue;
     const level = techLevel(player, node.id);
     if (level <= 0) continue;
     const units = researchLevelEffectUnits(level);
     for (const effect of nodeNumericEffects(node)) {
+      if (!researchEffectAppliesToModel(effect, model)) continue;
       const adjusted = effect.value * units;
       modifiers[effect.kind] *= Math.max(0.08, 1 + adjusted);
     }
@@ -81,12 +102,14 @@ function eraResearchModifiers(player, era) {
 
 function modelWithEraResearch(player, model) {
   if (!player || !model) return { ...model, profitabilityMultiplier: 1, co2Multiplier: 1 };
-  const modifiers = eraResearchModifiers(player, modelResearchEra(model));
+  const modifiers = researchModifiersForModel(player, model);
   return {
     ...model,
     speed: Math.max(20, round2((model.speed || 0) * modifiers.speed)),
     range: Math.max(1, round2((model.range || 0) * modifiers.range)),
     reliability: clamp((model.reliability || 0) * modifiers.reliability, 0.18, 0.995),
+    comfort: clamp((model.comfort || 0) * modifiers.comfort, 0.05, 1),
+    maintenance: Math.max(0.01, round2((model.maintenance || 0) * modifiers.maintenance)),
     energy: Math.max(0.01, round2((model.energy || 0) * modifiers.energy)),
     profitabilityMultiplier: round2(modifiers.profitability),
     co2Multiplier: round2(modifiers.environment)

@@ -1,3 +1,11 @@
+# v0.70.02 — progression R&D sans plafond et spécialisation des trains
+
+- Les 118 recherches R&D sont désormais sans niveau maximum affiché : chaque niveau supplémentaire reste disponible et devient plus long et coûteux.
+- Chaque recherche attribue maintenant des bonus explicites aux trains concernés par son époque, son énergie et son service : vitesse, portée, fiabilité, confort ou coût de maintenance/h.
+- Les effets sont calculés dans le catalogue, les profils des trains possédés, l’exploitation et les coûts réels de maintenance.
+- Incrément de version : badge interface et version serveur/client `v0.70.02`, package `0.70.2`.
+- Schéma save inchangé : `190`.
+
 # v0.70.01 — correction de la recherche rapide R&D
 
 - Correction de la recherche rapide : le conteneur de résultats est maintenant toujours rendu, afin que la toute première saisie affiche les résultats sans rechargement.

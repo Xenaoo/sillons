@@ -710,11 +710,12 @@ function renderResearchSearchStatus(node) {
   const acquiredLevel = techLevel(node.id);
   const plannedLevel = plannedTechLevel(node.id);
   const maxLevel = techMaxLevel(node);
+  const unlimited = !Number.isFinite(maxLevel);
   const complete = Number.isFinite(maxLevel) && plannedLevel >= maxLevel;
   if (complete) return `<span class="tag good">Niveau max</span>`;
-  if (plannedLevel > acquiredLevel) return `<span class="tag warn">Niv. ${acquiredLevel} · prévu ${plannedLevel}</span>`;
-  if (acquiredLevel > 0) return `<span class="tag good">Niv. ${acquiredLevel}</span>`;
-  return '<span class="tag">Non lancé</span>';
+  if (plannedLevel > acquiredLevel) return `<span class="tag warn">Niv. ${acquiredLevel} · prévu ${plannedLevel}${unlimited ? ' · ∞' : ''}</span>`;
+  if (acquiredLevel > 0) return `<span class="tag good">Niv. ${acquiredLevel}${unlimited ? ' · ∞' : ''}</span>`;
+  return unlimited ? '<span class="tag">Sans plafond · ∞</span>' : '<span class="tag">Non lancé</span>';
 }
 
 function renderResearchSearchResult(entry) {
@@ -1088,11 +1089,12 @@ function renderTechNode(node) {
         <div class="item-title">
           <strong>${escapeHtml(node.title)}</strong>
           <span class="tag ${complete ? 'good' : locked ? 'bad' : affordable ? 'warn' : ''}">
-            ${complete ? 'Max' : `Niv. ${acquiredLevel}${level > acquiredLevel ? ` · prévu ${level}` : ''}`}
+            ${complete ? 'Max' : `Niv. ${acquiredLevel}${level > acquiredLevel ? ` · prévu ${level}` : ''}${unlimited ? ' · ∞' : ''}`}
           </span>
         </div>
         <div class="kv">
           <span>Prochain niveau</span><b>${complete ? 'Terminé' : `Niv. ${targetLevel}`}</b>
+          ${unlimited ? '<span>Plafond</span><b>∞</b>' : ''}
           <span>Coût</span><b>${complete ? '-' : money(costMoney)}</b>
           <span>Durée estimée</span><b>${complete ? '-' : formatResearchTime(durationMs)}</b>
         </div>
@@ -1172,7 +1174,7 @@ function renderResearchDetailOverlay() {
             </div>
             <button type="button" class="ghost research-detail-close" data-action="close-research-detail" aria-label="Fermer la fiche de recherche">×</button>
           </div>
-          <span class="tag ${complete ? 'good' : locked ? 'bad' : 'warn'}">${complete ? 'Acquise' : `Niv. ${acquired} → ${targetLevel}`}</span>
+          <span class="tag ${complete ? 'good' : locked ? 'bad' : 'warn'}">${complete ? 'Acquise' : `Niv. ${acquired} → ${targetLevel}${Number.isFinite(max) ? '' : ' · ∞'}`}</span>
         </div>
         <p>${escapeHtml(node.description || '')}</p>
         ${effects.length ? `<div class="research-detail-section"><small>Effets</small>${effects.map(effect => `<span>${escapeHtml(effect)}</span>`).join('')}</div>` : ''}
@@ -1435,7 +1437,7 @@ function renderResearchQueue(me) {
 function researchLevelEffectUnitsClient(level) {
   const n = Math.max(0, Math.floor(Number(level || 0)));
   if (n <= 5) return n;
-  return 5 + 2 * (1 - Math.pow(0.75, n - 5));
+  return 5 + 1.5 * Math.log1p(n - 5);
 }
 
 function researchLevelNextIncrementUnitsClient(currentLevel) {
@@ -1453,6 +1455,8 @@ function researchEffectLabelClient(kind) {
   return {
     speed: 'Vitesse max',
     reliability: 'Fiabilité',
+    comfort: 'Confort',
+    maintenance: 'Coût maintenance/h',
     energy: 'Consommation',
     environment: 'Impact env.',
     profitability: 'Rentabilité',
