@@ -861,6 +861,7 @@ function renderResearch() {
 
     <div class="card">
       <h2>Arbre technologique</h2>
+      <p class="small muted">Les hexagones sont les recherches. Les traits indiquent les prérequis et leur niveau requis ; les séparateurs rouges correspondent aux passages d’époque. Survole un hexagone pour lire son effet, puis clique-le pour lancer ou planifier la recherche.</p>
       ${renderResearchSearchPanel()}
       <div class="research-tabs">
         ${tabs.map(group => `<button data-action="research-tab" data-id="${group.id}" class="${group.id === active.id ? 'active' : ''}">${escapeHtml(group.label)}</button>`).join('')}
@@ -959,28 +960,78 @@ function researchEraBucketsForGroup(group) {
 
 function renderResearchNodeGrid(group) {
   const nodes = group?.nodes || [];
-  const hasEraBuckets = nodes.some(node => node.era || node.eraLabel);
-  if (!hasEraBuckets) {
-    return `<div class="tech-tree">${nodes.map(node => renderTechNode(node)).join('')}</div>`;
+  if (!nodes.length) return '<p class="muted">Aucune recherche disponible.</p>';
+
+  const columnWidth = 270;
+  const rowHeight = 150;
+  const nodeCenterX = 112;
+  const nodeCenterY = 65;
+  const byEra = new Map();
+  for (const node of nodes) {
+    const era = Math.max(1, Math.min(7, Number(node.era || node.requiredEpoch + 1 || 1)));
+    if (!byEra.has(era)) byEra.set(era, []);
+    byEra.get(era).push(node);
   }
-  const buckets = researchEraBucketsForGroup(group);
-  return `<div class="research-era-list">${buckets.map(bucket => {
-    const collapsed = isResearchEraCollapsed(group.id, bucket);
-    const title = `${bucket.era ? `${bucket.era}. ` : ''}${escapeHtml(bucket.label)}`;
-    const buttonLabel = collapsed ? 'Déplier' : 'Réduire';
+  const positions = new Map();
+  let maxRows = 1;
+  for (const [era, eraNodes] of byEra) {
+    eraNodes.sort((a, b) => {
+      const subtreeA = a.subtree || (a.branch === 'freight' ? 'freight' : 'passengers');
+      const subtreeB = b.subtree || (b.branch === 'freight' ? 'freight' : 'passengers');
+      return subtreeA.localeCompare(subtreeB) || a.title.localeCompare(b.title);
+    });
+    maxRows = Math.max(maxRows, eraNodes.length);
+    eraNodes.forEach((node, index) => positions.set(node.id, { x: (era - 1) * columnWidth + 18, y: 66 + index * rowHeight, era, index }));
+  }
+  const treeWidth = 7 * columnWidth;
+  const treeHeight = Math.max(330, 110 + maxRows * rowHeight);
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const links = [];
+  for (const node of nodes) {
+    const target = positions.get(node.id);
+    for (const req of researchPrereqsForLevelClient(node, 1)) {
+      const requirements = req.anyOf || [req];
+      const source = requirements.map(item => ({ item, position: positions.get(item.id), node: nodeById.get(item.id) })).find(item => item.position && item.node);
+      if (!source || !target) continue;
+      const x1 = source.position.x + nodeCenterX;
+      const y1 = source.position.y + nodeCenterY;
+      const x2 = target.x + nodeCenterX;
+      const y2 = target.y + nodeCenterY;
+      const level = source.item.level || 1;
+      const met = researchPrereqSatisfiedClient(source.item);
+      links.push(`<path class="research-tree-link ${met ? 'met' : ''}" d="M ${x1} ${y1} C ${x1 + 72} ${y1}, ${x2 - 72} ${y2}, ${x2} ${y2}"></path><text class="research-tree-link-level" x="${Math.round((x1 + x2) / 2)}" y="${Math.round((y1 + y2) / 2 - 7)}">${level}</text>`);
+    }
+  }
+  const eras = [1, 2, 3, 4, 5, 6, 7].map(era => {
+    const sample = byEra.get(era)?.[0];
+    const label = sample?.eraLabel || `Ère ${era}`;
+    const unlocked = Number(app.state?.me?.epoch || 0) >= era - 1;
+    return `<div class="research-era-gate ${unlocked ? 'unlocked' : ''}" style="left:${(era - 1) * columnWidth}px" ${tooltipAttr(`${label}. ${unlocked ? 'Ère disponible.' : 'Passage d’époque requis : atteignez les objectifs de technologie et de trafic dans le panneau supérieur.'}`)}><span>${era}. ${escapeHtml(label.replace(/^Train à /, ''))}</span></div>`;
+  }).join('');
+  const hexes = nodes.map(node => {
+    const pos = positions.get(node.id);
+    const level = plannedTechLevel(node.id);
+    const acquired = techLevel(node.id);
+    const max = techMaxLevel(node);
+    const complete = Number.isFinite(max) && level >= max;
+    const target = complete ? max : level + 1;
+    const locked = complete ? '' : techLockedReason(node, target);
+    const affordable = app.state.me.cash >= researchCostMoneyClient(node, target);
+    const subtree = node.subtree || (node.branch === 'freight' ? 'freight' : 'passengers');
+    const effects = (node.effects || []).filter(Boolean).join(' · ') || 'Amélioration de la branche';
+    const prereqs = researchPrereqsForLevelClient(node, target).map(researchPrereqLabelClient).join(', ') || 'Aucun';
+    const details = `${node.description}\n\nNiveau : ${acquired}${Number.isFinite(max) ? ` / ${max}` : ''}\nEffets : ${effects}\nPrérequis : ${prereqs}${complete ? '\nRecherche terminée.' : `\nProchain niveau : ${money(researchCostMoneyClient(node, target))} · ${formatResearchTime(researchDurationClient(node, target))}`}`;
     return `
-      <section class="research-era-section ${collapsed ? 'collapsed' : ''}">
-        <button type="button" class="research-era-heading" data-action="toggle-research-era" data-group="${escapeAttr(group.id)}" data-bucket="${escapeAttr(bucket.key)}" aria-expanded="${collapsed ? 'false' : 'true'}">
-          <span class="research-era-title">
-            <span class="research-era-chevron" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
-            <span>${title}</span>
-          </span>
-          <span class="research-era-meta">${bucket.nodes.length} recherches · ${buttonLabel}</span>
+      <article class="research-hex-node tech-node ${complete ? 'unlocked' : locked ? 'locked' : ''} ${subtree === 'freight' ? 'freight' : 'passengers'}" data-node-id="${escapeAttr(node.id)}" style="left:${pos.x}px;top:${pos.y}px" ${tooltipAttr(details)}>
+        <button type="button" class="research-hex" data-action="research-node" data-id="${escapeAttr(node.id)}" ${tooltipAttr(details)} ${complete || locked || !affordable || researchBlockedByEraTransition() ? 'disabled' : ''}>
+          <span class="research-hex__level">${complete ? '✓' : acquired}</span>
+          <span class="research-hex__state">${complete ? 'Acquis' : locked ? 'Verrouillé' : `Niv. ${target}`}</span>
         </button>
-        ${collapsed ? '' : `<div class="tech-tree">${bucket.nodes.map(node => renderTechNode(node)).join('')}</div>`}
-      </section>
-    `;
-  }).join('')}</div>`;
+        <strong class="research-hex__title">${escapeHtml(node.title)}</strong>
+        ${subtree === 'freight' ? '<span class="research-hex__branch">Fret</span>' : group?.id === 'operations' ? '<span class="research-hex__branch">Voyageurs</span>' : ''}
+      </article>`;
+  }).join('');
+  return `<div class="research-skilltree-scroll"><div class="research-skilltree" style="width:${treeWidth}px;height:${treeHeight}px"><svg class="research-skilltree__links" viewBox="0 0 ${treeWidth} ${treeHeight}" aria-hidden="true">${links.join('')}</svg>${eras}${hexes}</div></div>`;
 }
 
 function isResearchQueueCollapsed() {

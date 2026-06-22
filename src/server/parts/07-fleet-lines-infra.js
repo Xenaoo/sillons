@@ -958,6 +958,20 @@ function buildSillonUsage() {
   return usage;
 }
 
+function researchedSillonCapacity(player, line) {
+  const slots = { passengers: 1, freight: 1 };
+  for (const node of allTechNodes()) {
+    const bonus = node?.sillonSlots;
+    const level = techLevel(player, node?.id);
+    if (!bonus || level <= 0) continue;
+    slots.passengers += Math.max(0, Number(bonus.passengers || 0)) * level;
+    slots.freight += Math.max(0, Number(bonus.freight || 0)) * level;
+  }
+  if (line?.service === 'freight') return slots.freight;
+  if (line?.service === 'mixed') return Math.min(slots.passengers, slots.freight);
+  return slots.passengers;
+}
+
 function computeLineSillonLimit(player, line, usage = null) {
   const requested = lineSlotDemand(player, line);
   const sillonUsage = usage || buildSillonUsage();
@@ -980,7 +994,10 @@ function computeLineSillonLimit(player, line, usage = null) {
   const details = [];
   for (const segment of segments) {
     const model = segmentSillonCapacityModel(segment);
-    const capacity = model.playerCapacity;
+    // La capacité RFN est un plafond physique partagé. La compagnie ne peut
+    // toutefois exploiter qu'un sillon au départ, puis débloque sa capacité
+    // commerciale par les deux sous-arbres d'Exploitation.
+    const capacity = Math.min(model.playerCapacity, researchedSillonCapacity(player, line));
     const entry = sillonUsage.get(segment.key);
     const ownRequested = (entry?.entries || [])
       .filter(item => item.playerId === player.id && item.lineId === line.id)

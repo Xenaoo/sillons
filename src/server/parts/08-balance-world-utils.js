@@ -559,14 +559,17 @@ function buildTechTree() {
     traction: { id: 'traction', label: 'Traction', description: 'Matériels roulants, chaînes de traction, vitesse et types de trains.', nodes: [] },
     energy: { id: 'energy', label: 'Énergie', description: 'Alimentation, carburants, stockage, recharge, autonomie et consommation.', nodes: [] },
     maintenance: { id: 'maintenance', label: 'Maintenance', description: 'Dépôts, ateliers, freinage, fiabilité, sécurité et standardisation.', nodes: [] },
-    operations: { id: 'operations', label: 'Exploitation', description: 'Signalisation, régulation, débit et ponctualité.', nodes: [] },
+    operations: { id: 'operations', label: 'Exploitation', description: 'Deux sous-arbres complémentaires : voyageurs et fret. Ils organisent les sillons, la portée commerciale et le débit réellement utilisable sur le RFN.', nodes: [] },
     stations: { id: 'stations', label: 'Gares', description: 'Capacité, services voyageurs, hubs et immobilier ferroviaire.', nodes: [] },
-    freight: { id: 'freight', label: 'Fret', description: 'Wagons, contrats, terminaux et corridors logistiques.', nodes: [] },
     social: { id: 'social', label: 'RH', description: 'Formation, sécurité, productivité et organisation humaine.', nodes: [] }
   };
 
+  const eraLabels = ['Train à vapeur', 'Train diesel', 'Train électrique', 'Train à grande vitesse', 'Train à hydrogène', 'Train à batterie', 'Train à sustentation magnétique'];
   const add = (group, id, title, description, requiredEpoch, prereq, unlocks, improves, options = {}) => {
-    groups[group].nodes.push({
+    // Le fret reste une branche économique distincte pour les calculs existants,
+    // mais il est présenté dans le sous-arbre Exploitation demandé par le jeu.
+    const displayGroup = group === 'freight' ? 'operations' : group;
+    groups[displayGroup].nodes.push({
       id,
       branch: options.branch || group,
       title,
@@ -583,10 +586,12 @@ function buildTechTree() {
       durationGrowth: options.durationGrowth || 1.48,
       levelValue: options.levelValue || 1,
       levelPrereq: options.levelPrereq || [],
-      era: options.era || null,
-      eraLabel: options.eraLabel || '',
+      era: options.era || Math.min(7, Number(requiredEpoch || 0) + 1),
+      eraLabel: options.eraLabel || eraLabels[Math.min(6, Math.max(0, Number(requiredEpoch || 0)))],
       infiniteScaling: options.infiniteScaling ?? null,
-      disableAutoLevelEffect: Boolean(options.disableAutoLevelEffect)
+      disableAutoLevelEffect: Boolean(options.disableAutoLevelEffect),
+      subtree: options.subtree || (group === 'freight' ? 'freight' : options.branch === 'freight' ? 'freight' : ''),
+      sillonSlots: options.sillonSlots || null
     });
   };
 
@@ -742,6 +747,38 @@ function buildTechTree() {
   add('social', 'talent_retention', 'Fidélisation des talents', 'Stabilise les équipes qualifiées sur le long terme.', 3, ['social_dialogue', 'apprenticeship_tracks'], [], ['Coûts RH et qualité de service améliorés']);
   add('social', 'research_campus', 'Campus R&D ferroviaire', 'Accélère les recherches avancées sans achat instantané.', 4, ['engineering_office', 'knowledge_management'], [], ['Vitesse laboratoire par niveau']);
 
+  // Les trois branches de support gardent un jalon technique à chaque ère.
+  add('maintenance', 'diesel_lubrication_program', 'Programme de lubrification diesel', 'Normalise l’analyse des huiles et le remplacement préventif des organes mécaniques diesel.', 1, [{ id: 'diesel_first_engines', level: 3 }], [], ['Usure réduite et coût atelier abaissé']);
+  add('stations', 'maglev_interchange_hubs', 'Pôles d’échanges maglev', 'Organise les correspondances avec les réseaux classiques autour des terminaux de très haute vitesse.', 6, [{ id: 'maglev_stations', level: 3 }, { id: 'intermodal_hubs', level: 5 }], [], ['Revenus gares et flux voyageurs accrus']);
+  add('social', 'maglev_operations_certification', 'Certification exploitation maglev', 'Forme les équipes aux procédures de supervision et d’évacuation des systèmes à sustentation magnétique.', 6, [{ id: 'autonomous_supervision', level: 3 }, { id: 'maglev_guidance', level: 3 }], [], ['Besoin RH et coût salarial réduits']);
+
+  // Débit commercial : chaque ligne débute à un seul sillon. Ces jalons ouvrent
+  // progressivement des sillons supplémentaires, sans jamais dépasser la
+  // capacité physique calculée pour le segment RFN le plus contraignant.
+  const capacityEras = [
+    { key: 'steam', epoch: 0, label: 'Train à vapeur', passenger: 'steam_passenger_locomotives', freight: 'steam_freight_locomotives', passengerTitle: 'Horaires voyageurs coordonnés', freightTitle: 'Marches marchandises organisées' },
+    { key: 'diesel', epoch: 1, label: 'Train diesel', passenger: 'diesel_multiple_units', freight: 'diesel_freight_locomotives', passengerTitle: 'Cadencement régional diesel', freightTitle: 'Triage et acheminement diesel' },
+    { key: 'electric', epoch: 2, label: 'Train électrique', passenger: 'electric_emus', freight: 'electric_locomotives', passengerTitle: 'Grille horaire électrifiée', freightTitle: 'Corridors fret électrifiés' },
+    { key: 'high_speed', epoch: 3, label: 'Train à grande vitesse', passenger: 'hsv_signaling', freight: 'traffic_simulation', passengerTitle: 'Sillons grande vitesse cadencés', freightTitle: 'Plan de transport fret optimisé' },
+    { key: 'hydrogen', epoch: 4, label: 'Train à hydrogène', passenger: 'hydrogen_regional_trains', freight: 'premium_logistics', passengerTitle: 'Dessertes régionales à autonomie étendue', freightTitle: 'Corridors logistiques à autonomie étendue' },
+    { key: 'battery', epoch: 5, label: 'Train à batterie', passenger: 'battery_regional_trains', freight: 'driverless_corridors', passengerTitle: 'Roulements batterie interurbains', freightTitle: 'Fret cadencé sous supervision' },
+    { key: 'maglev', epoch: 6, label: 'Train à sustentation magnétique', passenger: 'maglev_very_high_speed', freight: 'ai_timetable_planner', passengerTitle: 'Régulation très haute capacité', freightTitle: 'Logistique temps réel intégrée' }
+  ];
+  const slotIncrements = [1, 2, 3, 5, 7, 10, 20];
+  for (const [index, era] of capacityEras.entries()) {
+    const slots = slotIncrements[index];
+    const previousPassenger = index ? [{ id: `passenger_slots_${capacityEras[index - 1].key}`, level: 1 }] : [];
+    const previousFreight = index ? [{ id: `freight_slots_${capacityEras[index - 1].key}`, level: 1 }] : [];
+    add('operations', `passenger_slots_${era.key}`, era.passengerTitle,
+      `Augmente de ${slots} le nombre de sillons voyageurs utilisables par ligne, dans la limite de la capacité RFN. Les roulements plus réguliers étendent aussi la portée commerciale des dessertes.`,
+      era.epoch, [...previousPassenger, { id: era.passenger, level: 1 }], [], [`+${slots} sillon${slots > 1 ? 's' : ''} voyageurs par ligne`, '+3% portée commerciale voyageurs'],
+      { era: index + 1, eraLabel: era.label, maxLevel: 1, subtree: 'passengers', sillonSlots: { passengers: slots }, baseCostMoney: 62000 + index * 98000, baseDurationSeconds: 55 + index * 50 });
+    add('freight', `freight_slots_${era.key}`, era.freightTitle,
+      `Augmente de ${slots} le nombre de sillons fret utilisables par ligne, dans la limite de la capacité RFN. La planification des marches allonge la portée commerciale des trains de marchandises.`,
+      era.epoch, [...previousFreight, { id: era.freight, level: 1 }], [], [`+${slots} sillon${slots > 1 ? 's' : ''} fret par ligne`, '+3% portée commerciale fret'],
+      { era: index + 1, eraLabel: era.label, maxLevel: 1, subtree: 'freight', sillonSlots: { freight: slots }, baseCostMoney: 62000 + index * 98000, baseDurationSeconds: 55 + index * 50 });
+  }
+
   synchronizeTechTreeWithTrainCatalog(groups);
   return finalizeTechTree(groups);
 }
@@ -814,9 +851,10 @@ function computedResearchBaseDurationSeconds(node) {
 function finalizeTechTree(tree) {
   for (const group of Object.values(tree)) {
     for (const node of group.nodes || []) {
-      // 0/null/undefined = illimité côté jeu. Les anciens plafonds ne sont plus utilisés.
-      node.maxLevel = 0;
-      node.unlimited = true;
+      // Les recherches classiques restent progressives et illimitées. Les
+      // jalons de capacité de sillons sont en revanche des déblocages uniques.
+      if (!node.sillonSlots) node.maxLevel = 0;
+      node.unlimited = !(Number(node.maxLevel) > 0);
       node.baseCostMoney ??= node.costMoney ?? 50000;
       node.baseDurationSeconds ??= node.baseDuration ?? node.duration ?? computedResearchBaseDurationSeconds(node);
       node.costGrowth ??= node.unlockOnly ? 1.35 : 1.62;

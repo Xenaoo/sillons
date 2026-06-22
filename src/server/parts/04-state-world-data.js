@@ -271,7 +271,7 @@ function migrateLegacyStationReferences(player) {
 
 function migratePlayer(player, fallbackId) {
   const p = player && typeof player === 'object' ? player : {};
-  const techDefaults = { traction: 0, energy: 0, operations: 0, stations: 0, social: 0, freight: 0 };
+  const techDefaults = { traction: 0, energy: 0, maintenance: 0, operations: 0, stations: 0, social: 0, freight: 0 };
   const staffDefaults = { drivers: 0, controllers: 0, stationAgents: 0, mechanics: 0, dispatchers: 0, engineers: 0 };
   const statsDefaults = {
     passengers: 0,

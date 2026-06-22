@@ -193,13 +193,15 @@ function hasMaintenanceWorkshop(player) {
 function maintenanceActionCost(player, train, model, mode) {
   const missing = Math.max(0.02, 1 - train.condition);
   const workshopDiscount = Math.min(0.18, totalMaintenance(player) * 0.025);
-  const techDiscount = (hasTech(player, 'steam_workshops') ? 0.92 : 1) * (hasTech(player, 'electric_standardized_maintenance') ? 0.94 : 1);
+  const branchDiscount = 1 - Math.min(0.24, Number(player.tech?.maintenance || 0) * 0.006);
+  const techDiscount = branchDiscount * (hasTech(player, 'steam_workshops') ? 0.92 : 1) * (hasTech(player, 'electric_standardized_maintenance') ? 0.94 : 1);
   return Math.round((mode.baseCost + model.price * mode.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
 }
 
 function maintenanceDuration(player, mode) {
   const workshopBonus = Math.min(0.35, totalMaintenance(player) * 0.035 + (player.staff.mechanics || 0) * 0.012);
-  const techBonus = Math.min(0.24, techLevel(player, 'steam_workshops') * 0.045) + Math.min(0.1, techLevel(player, 'electric_standardized_maintenance') * 0.02);
+  const branchBonus = Math.min(0.18, Number(player.tech?.maintenance || 0) * 0.004);
+  const techBonus = branchBonus + Math.min(0.24, techLevel(player, 'steam_workshops') * 0.045) + Math.min(0.1, techLevel(player, 'electric_standardized_maintenance') * 0.02);
   return Math.max(1, Math.ceil(mode.days * (1 - workshopBonus - techBonus)));
 }
 
@@ -520,7 +522,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
     const lineRevenue = serviceRevenue * dispatchRevenueFactor;
     const energyCost = computeEnergyCost(player, operatingModel, distance, serviceFactor, line.electrified);
-    const maintenanceCost = operatingModel.maintenance * distance * serviceFactor * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
+    const maintenanceResearchDiscount = 1 - Math.min(0.26, Number(player.tech.maintenance || 0) * 0.006);
+    const maintenanceCost = operatingModel.maintenance * distance * serviceFactor * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * maintenanceResearchDiscount * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
     const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance, infrastructureUsage);
     const accessCost = passageRights.total;
     if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
@@ -1074,7 +1077,8 @@ function computeOwnedStationRevenue(player, passengers, freightTons) {
     + (asset.depot ? 24 : 0)
   ), 0);
   const trafficIncome = passengers * 0.18 + freightTons * 0.032;
-  const flowBonus = 1 + Math.min(0.18, techLevel(player, 'passenger_flow') * 0.025 + techLevel(player, 'intermodal_hubs') * 0.035);
+  const branchBonus = 1 + Math.min(0.20, Number(player.tech.stations || 0) * 0.004);
+  const flowBonus = branchBonus * (1 + Math.min(0.18, techLevel(player, 'passenger_flow') * 0.025 + techLevel(player, 'intermodal_hubs') * 0.035));
   return (stationBase + trafficIncome) * flowBonus;
 }
 
@@ -1112,7 +1116,8 @@ function computeTrainWearPerTick(player, train, model, line, profile = null, sta
   const distanceFactor = clamp(lineDistance(line) / 26, 0.8, 1.35);
   const maintenanceLoad = clamp(Number(activeProfile.maintenance || model.maintenance || 0.5) / Math.max(0.25, Number(model.maintenance || 0.5)), 0.85, 1.22);
   const mechanicFactor = clamp(1.1 - Number(activeStaffing.mechanics || 0) * 0.1, 0.82, 1.12);
-  const techWear = (1 - Math.min(0.12, techLevel(player, 'electric_standardized_maintenance') * 0.02)) * (1 - Math.min(0.08, techLevel(player, 'steam_workshops') * 0.014));
+  const maintenanceBranchWear = 1 - Math.min(0.30, Number(player.tech.maintenance || 0) * 0.008);
+  const techWear = maintenanceBranchWear * (1 - Math.min(0.12, techLevel(player, 'electric_standardized_maintenance') * 0.02)) * (1 - Math.min(0.08, techLevel(player, 'steam_workshops') * 0.014));
   const intensity = frequencyFactor * distanceFactor * maintenanceLoad * mechanicFactor * (activePolicy.wearMultiplier || 1) * techWear;
   const effectiveHours = clamp(baseHours / Math.max(0.1, intensity), 12, 36);
   return (TICK_MS / 3600000) / effectiveHours;
@@ -1196,13 +1201,15 @@ function computeStaffNeeds(player) {
     stationWork += Math.max(0, lineStops(line).length - 2);
   }
 
+  const workforceMultiplier = 1 - Math.min(0.20, Number(player.tech.social || 0) * 0.004);
+  const required = value => Math.max(1, Math.ceil(value * workforceMultiplier));
   return {
-    drivers: activeLines.length ? Math.max(1, needs.drivers) : 0,
-    controllers: needs.controllers > 0 ? Math.max(1, needs.controllers) : 0,
-    stationAgents: stationCount || activeLines.length ? Math.max(1, Math.ceil(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16)) : 0,
-    mechanics: trains ? Math.max(1, Math.ceil(trains * 0.55 + dailyKm / 1800)) : 0,
-    dispatchers: activeLines.length ? Math.max(1, needs.dispatchers) : 0,
-    engineers: needs.engineers > 0 ? Math.max(1, needs.engineers) : 0
+    drivers: activeLines.length ? required(needs.drivers) : 0,
+    controllers: needs.controllers > 0 ? required(needs.controllers) : 0,
+    stationAgents: stationCount || activeLines.length ? required(stationCount * 0.65 + activeLines.length * 0.12 + stationWork * 0.16) : 0,
+    mechanics: trains ? required(trains * 0.55 + dailyKm / 1800) : 0,
+    dispatchers: activeLines.length ? required(needs.dispatchers) : 0,
+    engineers: needs.engineers > 0 ? required(needs.engineers) : 0
   };
 }
 
