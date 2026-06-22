@@ -407,7 +407,7 @@ function catalogTrainModel(entry) {
     range: catalogTrainRange(entry),
     description: entry.notes,
     requiredTech: catalogTrainRequiredTech(entry),
-    requiredTechLevel: Math.max(1, Math.floor(catalogGameplay(entry, 'unlockLevel'))),
+    requiredTechLevel: Math.min(5, Math.max(1, Math.floor(catalogGameplay(entry, 'unlockLevel')))),
     catalog: {
       era: entry.era,
       priority: entry.priority,
@@ -431,13 +431,13 @@ function buildTrainCatalogModels() {
 
 function buildBalance() {
   const epochs = [
-    { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0 },
-    { id: 1, name: 'Ère du diesel', year: 1930, requiredTech: 4, requiredTraffic: 15000000 },
-    { id: 2, name: 'Ère de l’électrique', year: 1950, requiredTech: 9, requiredTraffic: 75000000 },
-    { id: 3, name: 'Ère de la grande vitesse', year: 1980, requiredTech: 17, requiredTraffic: 300000000 },
-    { id: 4, name: 'Ère de l’hydrogène', year: 2025, requiredTech: 28, requiredTraffic: 1200000000 },
-    { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 42, requiredTraffic: 4000000000 },
-    { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 58, requiredTraffic: 12000000000 }
+    { id: 0, name: 'Ère de la vapeur', year: 1850, requiredTech: 0, requiredTraffic: 0, requiredResearch: [] },
+    { id: 1, name: 'Ère du diesel', year: 1930, requiredTech: 20, requiredTraffic: 25000000, requiredResearch: [{ id: 'steam_network_standards', level: 4 }, { id: 'passenger_slots_steam', level: 2 }, { id: 'freight_slots_steam', level: 2 }] },
+    { id: 2, name: 'Ère de l’électrique', year: 1950, requiredTech: 50, requiredTraffic: 125000000, requiredResearch: [{ id: 'diesel_electric', level: 4 }, { id: 'block_signaling', level: 4 }, { id: 'passenger_slots_diesel', level: 2 }] },
+    { id: 3, name: 'Ère de la grande vitesse', year: 1980, requiredTech: 90, requiredTraffic: 600000000, requiredResearch: [{ id: 'electric_locomotives', level: 4 }, { id: 'electric_energy_recovery', level: 3 }, { id: 'freight_slots_electric', level: 2 }] },
+    { id: 4, name: 'Ère de l’hydrogène', year: 2025, requiredTech: 145, requiredTraffic: 2500000000, requiredResearch: [{ id: 'hsv_trainsets', level: 4 }, { id: 'hsv_signaling', level: 4 }, { id: 'traffic_simulation', level: 3 }] },
+    { id: 5, name: 'Ère de la batterie', year: 2035, requiredTech: 205, requiredTraffic: 8000000000, requiredResearch: [{ id: 'hydrogen_regional_trains', level: 4 }, { id: 'hydrogen_refueling_stations', level: 3 }, { id: 'dynamic_pricing', level: 3 }] },
+    { id: 6, name: 'Ère de la sustentation magnétique', year: 2050, requiredTech: 275, requiredTraffic: 24000000000, requiredResearch: [{ id: 'battery_regional_trains', level: 4 }, { id: 'battery_auto_charge_optimization', level: 3 }, { id: 'driverless_corridors', level: 3 }] }
   ];
   /* Catalogue historique retiré en v69.8.13 :
     steam_030_mixte: { id: 'steam_030_mixte', name: 'Locomotive vapeur 030 mixte', unlockEpoch: 0, type: 'Vapeur mixte', speed: 55, capacity: 140, freight: 120, energyType: 'coal', energy: 9.5, maintenance: 0.62, price: 95000, reliability: 0.78, comfort: 0.32, range: 50, description: 'Modèle de départ polyvalent, lent mais économique pour ouvrir les premières lignes.', requiredTech: 'steam_first_locomotives', requiredTechLevel: 1 },
@@ -555,6 +555,203 @@ function buildBalance() {
 
 
 function buildTechTree() {
+  // Arbre R&D v2 : la progression est d'abord faite de déblocages jouables.
+  // Les identifiants historiques encore utilisés par le catalogue sont conservés
+  // pour permettre une migration sans priver les compagnies de leur parc.
+  {
+    const groups = {
+      traction: { id: 'traction', label: 'Traction', description: 'Matériels roulants, compositions et nouvelles dessertes.', nodes: [] },
+      energy: { id: 'energy', label: 'Énergie', description: 'Carburants, électrification, recharge et autonomie.', nodes: [] },
+      maintenance: { id: 'maintenance', label: 'Maintenance', description: 'Dépôts, ateliers, interventions et fiabilité du parc.', nodes: [] },
+      operations: { id: 'operations', label: 'Exploitation', description: 'Lignes, sillons, fret, régulation et capacité du réseau.', nodes: [] },
+      stations: { id: 'stations', label: 'Gares', description: 'Services voyageurs, capacité et correspondances.', nodes: [] },
+      social: { id: 'social', label: 'Équipes', description: 'Formation des conducteurs, mainteneurs et régulateurs.', nodes: [] }
+    };
+    const eraLabels = ['Train à vapeur', 'Train diesel', 'Train électrique', 'Train à grande vitesse', 'Train à hydrogène', 'Train à batterie', 'Train à sustentation magnétique'];
+    const eraBalance = [
+      { cost: 15000, duration: 35 }, { cost: 85000, duration: 300 }, { cost: 260000, duration: 1100 },
+      { cost: 750000, duration: 3600 }, { cost: 1800000, duration: 10800 }, { cost: 3600000, duration: 25200 },
+      { cost: 7000000, duration: 57600 }
+    ];
+    const addV2 = (era, group, id, title, description, prereq = [], unlocks = [], options = {}) => {
+      const displayGroup = group === 'freight' ? 'operations' : group;
+      const pacing = eraBalance[era];
+      groups[displayGroup].nodes.push({
+        id,
+        branch: options.branch || group,
+        title,
+        description,
+        requiredEpoch: era,
+        prereq,
+        unlocks,
+        improves: options.improves || [],
+        effects: [...unlocks, ...(options.improves || [])],
+        maxLevel: 5,
+        baseCostMoney: options.baseCostMoney || pacing.cost,
+        baseDurationSeconds: options.baseDurationSeconds || pacing.duration,
+        costGrowth: 1.72,
+        durationGrowth: 1.54,
+        levelValue: 1,
+        levelPrereq: options.levelPrereq || [],
+        era: era + 1,
+        eraLabel: eraLabels[era],
+        subtree: options.subtree || (group === 'freight' ? 'freight' : ''),
+        sillonSlots: options.sillonSlots || null
+      });
+    };
+    const req = (id, level = 1) => ({ id, level });
+    const any = (...entries) => ({ anyOf: entries });
+
+    // Le niveau 1 offre rapidement une première action. Les niveaux 2 à 5
+    // professionnalisent l'usage et sont requis par les jalons suivants.
+    const tree = [
+      [0, [
+        ['traction', 'steam_first_locomotives', 'Première locomotive à vapeur', 'Débloque l’achat du premier matériel roulant et lance la compagnie.', [], ['Acheter les locomotives vapeur de départ']],
+        ['operations', 'steam_passenger_locomotives', 'Haltes et service voyageurs', 'Débloque la création de lignes voyageurs et les voitures voyageurs.', [req('steam_first_locomotives')], ['Créer des lignes voyageurs']],
+        ['freight', 'steam_freight_locomotives', 'Wagons marchandises', 'Débloque les lignes fret et les premières compositions marchandises.', [req('steam_first_locomotives')], ['Créer des lignes fret']],
+        ['maintenance', 'steam_depots', 'Dépôts charbon et eau', 'Débloque la construction de dépôts dans les gares possédées.', [req('steam_first_locomotives')], ['Construire un dépôt']],
+        ['operations', 'manual_dispatch', 'Aiguillages et régulation manuelle', 'Débloque les lignes à plus de deux arrêts.', [req('steam_passenger_locomotives')], ['Créer des lignes avec arrêts intermédiaires']],
+        ['operations', 'passenger_slots_steam', 'Horaires voyageurs coordonnés', 'Débloque davantage de sillons voyageurs par ligne.', [req('manual_dispatch', 2)], ['+2 sillons voyageurs par ligne'], { sillonSlots: { passengers: 2 } }],
+        ['freight', 'freight_slots_steam', 'Marches marchandises organisées', 'Débloque davantage de sillons fret par ligne.', [req('steam_freight_locomotives', 2)], ['+2 sillons fret par ligne'], { sillonSlots: { freight: 2 }, subtree: 'freight' }],
+        ['stations', 'passenger_flow', 'Accès voyageurs en gare', 'Débloque la montée en niveau des gares.', [req('steam_passenger_locomotives')], ['Améliorer le niveau d’une gare']],
+        ['stations', 'ticket_halls', 'Guichets et salles d’attente', 'Débloque les commerces de gare.', [req('passenger_flow', 2)], ['Développer les commerces de gare']],
+        ['social', 'crew_training', 'Formation des équipages', 'Débloque les premiers gains de productivité des conducteurs.', [req('steam_passenger_locomotives')], ['Réduire les besoins d’équipage']],
+        ['energy', 'steam_improved_boilers', 'Chaudières améliorées', 'Débloque les locomotives vapeur plus puissantes.', [req('steam_first_locomotives', 2)], ['Acheter des locomotives vapeur intermédiaires']],
+        ['maintenance', 'steam_reinforced_brakes', 'Frein continu automatique', 'Débloque les compositions voyageurs express et les trains plus longs.', [req('steam_passenger_locomotives', 2), req('steam_freight_locomotives', 2)], ['Utiliser des compositions express']],
+        ['maintenance', 'steam_workshops', 'Ateliers vapeur', 'Débloque les ateliers de gare et la grande révision.', [req('steam_depots', 2), req('steam_improved_boilers', 2)], ['Construire un atelier', 'Débloquer la grande révision']],
+        ['freight', 'basic_freight_yards', 'Triages locaux', 'Débloque les wagons spécialisés et les flux de fret plus rentables.', [req('steam_freight_locomotives', 2)], ['Débloquer les wagons spécialisés'], { subtree: 'freight' }],
+        ['operations', 'steam_network_standards', 'Normes de réseau vapeur', 'Jalon de maturité requis pour préparer l’ère diesel.', [req('steam_improved_boilers', 3), req('manual_dispatch', 3), req('steam_workshops', 2)], ['Jalon vers l’ère diesel']]
+      ]],
+      [1, [
+        ['traction', 'diesel_first_engines', 'Moteurs diesel ferroviaires', 'Débloque les premiers matériels diesel.', [req('steam_network_standards', 3), req('steam_workshops', 2)], ['Acheter les premiers trains diesel']],
+        ['traction', 'diesel_light_railcars', 'Autorails légers', 'Débloque des rames économiques pour les lignes secondaires.', [req('diesel_first_engines', 2)], ['Acheter des autorails diesel']],
+        ['traction', 'diesel_shunters', 'Locotracteurs de manœuvre', 'Débloque des locomotives fret courtes et maniables.', [req('diesel_first_engines', 2)], ['Acheter des locotracteurs diesel']],
+        ['energy', 'diesel_long_range_tanks', 'Réservoirs grande autonomie', 'Débloque des lignes diesel plus longues.', [req('diesel_first_engines', 3)], ['Étendre la portée diesel']],
+        ['energy', 'diesel_fuel_depots', 'Dépôts carburant', 'Améliore le ravitaillement des trains diesel.', [req('diesel_long_range_tanks', 2), req('steam_depots', 3)], ['Réduire les coûts de ravitaillement diesel']],
+        ['traction', 'diesel_mechanical', 'Transmission diesel mécanique', 'Débloque les automotrices régionales diesel.', [req('diesel_first_engines', 3)], ['Acheter des automotrices diesel régionales']],
+        ['traction', 'diesel_electric', 'Transmission diesel-électrique', 'Débloque une traction diesel plus puissante et fiable.', [req('diesel_mechanical', 3), req('diesel_shunters', 2)], ['Acheter des locomotives diesel-électriques']],
+        ['traction', 'diesel_passenger_locomotives', 'Services diesel express', 'Débloque les locomotives diesel voyageurs et les voitures Midi.', [any(req('diesel_mechanical', 3), req('diesel_electric', 3))], ['Acheter des locomotives diesel voyageurs', 'Utiliser les voitures Midi']],
+        ['traction', 'diesel_freight_locomotives', 'Diesel fret lourd', 'Débloque les locomotives diesel fret et les grands trains de marchandises.', [req('diesel_electric', 3), req('basic_freight_yards', 3)], ['Acheter des locomotives diesel fret']],
+        ['traction', 'diesel_multiple_units', 'Unités multiples diesel', 'Débloque des dessertes régionales plus fréquentes.', [req('diesel_passenger_locomotives', 3)], ['Exploiter plusieurs autorails ensemble']],
+        ['maintenance', 'diesel_lubrication_program', 'Entretien diesel préventif', 'Réduit l’usure et prépare la maintenance moderne.', [req('diesel_electric', 2), req('steam_workshops', 3)], ['Réduire l’usure diesel']],
+        ['operations', 'block_signaling', 'Block automatique lumineux', 'Débloque une circulation plus dense et plus régulière.', [req('manual_dispatch', 3), req('steam_network_standards', 2)], ['Augmenter la capacité des lignes']],
+        ['operations', 'passing_loops', 'Évitements cadencés', 'Débloque davantage de capacité sur les lignes secondaires.', [req('block_signaling', 2), req('diesel_light_railcars', 2)], ['Augmenter la fréquence des lignes secondaires']],
+        ['freight', 'specialized_wagons', 'Wagons spécialisés', 'Débloque citernes, trémies, plats et frigorifiques.', [req('basic_freight_yards', 3)], ['Choisir des wagons spécialisés'], { subtree: 'freight' }],
+        ['operations', 'passenger_slots_diesel', 'Cadencement régional diesel', 'Débloque des sillons voyageurs supplémentaires.', [req('diesel_multiple_units', 3), req('block_signaling', 3)], ['+3 sillons voyageurs par ligne'], { sillonSlots: { passengers: 3 } }],
+        ['freight', 'freight_slots_diesel', 'Acheminement diesel organisé', 'Débloque des sillons fret supplémentaires.', [req('diesel_freight_locomotives', 3), req('passing_loops', 2)], ['+3 sillons fret par ligne'], { sillonSlots: { freight: 3 }, subtree: 'freight' }]
+      ]],
+      [2, [
+        ['traction', 'electric_first_trains', 'Premiers trains électriques', 'Débloque le matériel électrique pionnier.', [req('diesel_electric', 4), req('block_signaling', 3)], ['Acheter les premiers trains électriques']],
+        ['energy', 'electric_third_rail', 'Troisième rail urbain', 'Débloque les automotrices électriques urbaines.', [req('electric_first_trains', 2)], ['Acheter des automotrices urbaines']],
+        ['energy', 'electric_dc_catenary', 'Caténaire courant continu', 'Débloque l’électrification des lignes et les rames régionales électriques.', [req('electric_third_rail', 2)], ['Électrifier une ligne', 'Acheter des rames régionales électriques']],
+        ['energy', 'electric_ac_catenary', 'Caténaire 25 kV', 'Débloque des corridors électrifiés plus performants.', [req('electric_dc_catenary', 3)], ['Réduire le coût d’électrification']],
+        ['energy', 'electric_substations', 'Sous-stations électriques', 'Débloque l’électrification réellement exploitable des lignes.', [req('electric_dc_catenary', 2)], ['Électrifier des lignes'], { improves: ['-2% coût d’électrification par niveau'] }],
+        ['traction', 'electric_improved_motors', 'Moteurs électriques performants', 'Débloque les rames électriques plus rapides.', [req('electric_first_trains', 3)], ['Acheter des trains électriques intermédiaires']],
+        ['traction', 'electric_emus', 'Automotrices électriques', 'Débloque les dessertes électriques fréquentes.', [req('electric_third_rail', 3), req('electric_improved_motors', 2)], ['Acheter des automotrices électriques']],
+        ['traction', 'electric_locomotives', 'Locomotives électriques', 'Débloque le fret lourd et les locomotives multicourants.', [req('electric_dc_catenary', 3), req('electric_substations', 2)], ['Acheter des locomotives électriques']],
+        ['traction', 'electric_electronic_control', 'Commande électronique de traction', 'Débloque une exploitation électrique plus efficace.', [req('electric_improved_motors', 3)], ['Améliorer l’efficacité des trains électriques']],
+        ['maintenance', 'electric_braking', 'Freinage électrique', 'Débloque le freinage régénératif et améliore la fiabilité.', [req('electric_electronic_control', 2)], ['Réduire les coûts énergétiques électriques']],
+        ['energy', 'electric_energy_recovery', 'Récupération d’énergie', 'Débloque une consommation réduite sur les lignes électrifiées.', [req('electric_braking', 3), req('electric_substations', 3)], ['Réduire la consommation électrique']],
+        ['traction', 'electric_dual_current_trains', 'Trains bicourants', 'Débloque des matériels voyageurs et fret polyvalents.', [req('electric_dc_catenary', 4), req('electric_ac_catenary', 2)], ['Acheter des trains bicourants']],
+        ['traction', 'electric_multi_current_trains', 'Trains multicourants', 'Débloque les matériels électriques de haut niveau.', [req('electric_dual_current_trains', 3)], ['Acheter des trains multicourants']],
+        ['maintenance', 'electric_standardized_maintenance', 'Maintenance électrique standardisée', 'Débloque la rénovation complète des trains.', [req('electric_locomotives', 3), req('electric_emus', 3)], ['Débloquer la rénovation complète']],
+        ['operations', 'passenger_slots_electric', 'Grille horaire électrifiée', 'Débloque des sillons voyageurs supplémentaires.', [req('electric_emus', 3), req('block_signaling', 4)], ['+5 sillons voyageurs par ligne'], { sillonSlots: { passengers: 5 } }],
+        ['freight', 'freight_slots_electric', 'Corridors fret électrifiés', 'Débloque des sillons fret supplémentaires.', [req('electric_locomotives', 3), req('specialized_wagons', 3)], ['+5 sillons fret par ligne'], { sillonSlots: { freight: 5 }, subtree: 'freight' }]
+      ]],
+      [3, [
+        ['traction', 'hsv_first_fast_trains', 'Services rapides', 'Débloque les premiers trains rapides Intercités.', [req('electric_locomotives', 4), req('electric_multi_current_trains', 2)], ['Acheter des trains rapides']],
+        ['traction', 'hsv_aerodynamics', 'Aérodynamique ferroviaire', 'Prépare les rames rapides et limite leur consommation.', [req('hsv_first_fast_trains', 2)], ['Améliorer la vitesse des trains rapides']],
+        ['traction', 'hsv_lightweight_materials', 'Matériel allégé', 'Débloque des rames plus légères et plus capacitaires.', [req('hsv_first_fast_trains', 2)], ['Améliorer capacité et vitesse']],
+        ['maintenance', 'hsv_high_speed_braking', 'Freinage haute vitesse', 'Débloque les rames grande vitesse en toute sécurité.', [req('hsv_aerodynamics', 2), req('electric_braking', 3)], ['Acheter des rames grande vitesse']],
+        ['operations', 'hsv_adapted_tracks', 'Infrastructure grande vitesse', 'Débloque l’usage commercial des lignes à grande vitesse.', [req('electric_ac_catenary', 3), req('electric_energy_recovery', 2)], ['Ouvrir des services grande vitesse']],
+        ['energy', 'hsv_catenary', 'Alimentation grande vitesse', 'Prépare la puissance nécessaire aux rames rapides.', [req('hsv_adapted_tracks', 2), req('electric_substations', 3)], ['Réduire les coûts énergétiques grande vitesse']],
+        ['traction', 'hsv_trainsets', 'Rames grande vitesse articulées', 'Débloque les rames TGV de première génération et Duplex.', [req('hsv_catenary', 2), req('hsv_high_speed_braking', 2)], ['Acheter des rames TGV']],
+        ['energy', 'hsv_high_power_onboard', 'Puissance embarquée élevée', 'Débloque les rames rapides les plus performantes.', [req('hsv_trainsets', 2)], ['Acheter des rames grande vitesse avancées']],
+        ['traction', 'hsv_stability', 'Stabilité à haute vitesse', 'Débloque des circulations rapides plus fiables.', [req('hsv_trainsets', 2), req('hsv_lightweight_materials', 2)], ['Améliorer la fiabilité grande vitesse']],
+        ['operations', 'centralized_control', 'Commande centralisée', 'Débloque l’exploitation d’un réseau dense depuis un poste unique.', [req('block_signaling', 4), req('electric_electronic_control', 3)], ['Débloquer la régulation centralisée']],
+        ['operations', 'hsv_signaling', 'Signalisation en cabine', 'Débloque les sillons grande vitesse et les rames rapides.', [req('centralized_control', 2), req('hsv_stability', 2)], ['Débloquer les services grande vitesse']],
+        ['traction', 'hsv_distributed_traction', 'Traction répartie', 'Débloque les rames grande vitesse modernes.', [req('hsv_signaling', 3), req('hsv_high_power_onboard', 3)], ['Acheter des rames grande vitesse modernes']],
+        ['stations', 'intermodal_hubs', 'Pôles de correspondance', 'Débloque des gares intermodales et une demande voyageurs accrue.', [req('passenger_flow', 3), req('centralized_control', 2)], ['Développer des correspondances en gare']],
+        ['operations', 'traffic_simulation', 'Simulation de trafic', 'Débloque l’anticipation des saturations et les réseaux denses.', [req('centralized_control', 3), req('passenger_slots_electric', 2)], ['Augmenter la capacité réseau']],
+        ['operations', 'passenger_slots_high_speed', 'Sillons grande vitesse cadencés', 'Débloque des sillons voyageurs supplémentaires.', [req('hsv_signaling', 3), req('traffic_simulation', 2)], ['+8 sillons voyageurs par ligne'], { sillonSlots: { passengers: 8 } }],
+        ['freight', 'freight_slots_high_speed', 'Plan de transport fret optimisé', 'Débloque des sillons fret supplémentaires.', [req('traffic_simulation', 3), req('freight_slots_electric', 2)], ['+8 sillons fret par ligne'], { sillonSlots: { freight: 8 }, subtree: 'freight' }]
+      ]],
+      [4, [
+        ['traction', 'hydrogen_first_trains', 'Prototype hydrogène', 'Débloque les premiers trains à hydrogène.', [req('hsv_trainsets', 3), req('electric_energy_recovery', 3)], ['Acheter les premiers trains à hydrogène']],
+        ['energy', 'hydrogen_fuel_cell', 'Pile à combustible ferroviaire', 'Débloque des rames hydrogène plus efficaces.', [req('hydrogen_first_trains', 2)], ['Acheter des rames hydrogène optimisées']],
+        ['energy', 'hydrogen_secure_tanks', 'Réservoirs hydrogène sécurisés', 'Débloque une autonomie hydrogène exploitable.', [req('hydrogen_first_trains', 2)], ['Étendre la portée hydrogène']],
+        ['energy', 'hydrogen_refueling_stations', 'Stations hydrogène', 'Débloque l’installation de ravitaillement hydrogène en gare.', [req('hydrogen_secure_tanks', 3), req('steam_depots', 4)], ['Construire une station hydrogène']],
+        ['energy', 'hydrogen_green', 'Hydrogène bas carbone', 'Débloque la stratégie d’énergie hydrogène propre.', [req('hydrogen_refueling_stations', 2)], ['Réduire l’impact carbone hydrogène']],
+        ['maintenance', 'hydrogen_specialized_maintenance', 'Maintenance hydrogène', 'Débloque l’entretien spécialisé des rames hydrogène.', [req('hydrogen_fuel_cell', 2), req('electric_standardized_maintenance', 3)], ['Réduire l’usure hydrogène']],
+        ['traction', 'hydrogen_regional_trains', 'Rames hydrogène régionales', 'Débloque les rames hydrogène pour les lignes secondaires.', [req('hydrogen_fuel_cell', 2), req('hydrogen_secure_tanks', 2)], ['Acheter des rames hydrogène régionales']],
+        ['energy', 'hydrogen_optimized_energy_recharge', 'Gestion énergétique hydrogène', 'Améliore l’autonomie et les coûts des rames hydrogène.', [req('hydrogen_fuel_cell', 3), req('hydrogen_specialized_maintenance', 2)], ['Réduire la consommation hydrogène']],
+        ['maintenance', 'hydrogen_enhanced_safety', 'Sécurité hydrogène renforcée', 'Débloque les rames hydrogène à forte autonomie.', [req('hydrogen_secure_tanks', 3), req('hydrogen_specialized_maintenance', 2)], ['Acheter des rames hydrogène longue distance']],
+        ['energy', 'hydrogen_long_distance_tanks', 'Réservoirs longue distance', 'Débloque les relations hydrogène plus longues.', [req('hydrogen_enhanced_safety', 3), req('hydrogen_optimized_energy_recharge', 2)], ['Acheter des rames hydrogène longue distance']],
+        ['traction', 'hydrogen_rural_lines', 'Desserte rurale hydrogène', 'Débloque un matériel sobre pour les lignes peu denses.', [req('hydrogen_regional_trains', 3), req('hydrogen_long_distance_tanks', 2)], ['Acheter des rames hydrogène rurales']],
+        ['traction', 'hydrogen_next_generation', 'Hydrogène nouvelle génération', 'Débloque les rames hydrogène les plus abouties.', [req('hydrogen_green', 3), req('hydrogen_long_distance_tanks', 3)], ['Acheter des rames hydrogène avancées']],
+        ['operations', 'night_services', 'Services de nuit', 'Débloque l’exploitation nocturne et les compositions couchettes.', [req('centralized_control', 3), req('hsv_trainsets', 3)], ['Créer des services de nuit', 'Utiliser des voitures couchettes']],
+        ['operations', 'dynamic_pricing', 'Tarification dynamique', 'Débloque les réglages tarifaires avancés des lignes.', [req('traffic_simulation', 3), req('night_services', 2)], ['Optimiser les tarifs des lignes']],
+        ['operations', 'passenger_slots_hydrogen', 'Dessertes à autonomie étendue', 'Débloque des sillons voyageurs supplémentaires.', [req('hydrogen_regional_trains', 3), req('dynamic_pricing', 2)], ['+11 sillons voyageurs par ligne'], { sillonSlots: { passengers: 11 } }],
+        ['freight', 'freight_slots_hydrogen', 'Corridors logistiques étendus', 'Débloque des sillons fret supplémentaires.', [req('hydrogen_long_distance_tanks', 3), req('freight_slots_high_speed', 2)], ['+11 sillons fret par ligne'], { sillonSlots: { freight: 11 }, subtree: 'freight' }]
+      ]],
+      [5, [
+        ['traction', 'battery_first_trains', 'Premiers trains à batterie', 'Débloque les premiers matériels à batterie.', [req('hydrogen_regional_trains', 3), req('electric_energy_recovery', 4)], ['Acheter les premiers trains à batterie']],
+        ['energy', 'battery_railway_batteries', 'Batteries ferroviaires', 'Débloque l’autonomie de base des rames à batterie.', [req('battery_first_trains', 2)], ['Étendre la portée batterie']],
+        ['energy', 'battery_catenary_charging', 'Recharge sous caténaire', 'Débloque l’exploitation sur lignes partiellement électrifiées.', [req('battery_railway_batteries', 2), req('electric_ac_catenary', 3)], ['Recharger une rame batterie sous caténaire']],
+        ['energy', 'battery_fast_station_charging', 'Recharge rapide en gare', 'Débloque la recharge rapide dans les gares équipées.', [req('battery_railway_batteries', 3), req('electric_substations', 4)], ['Installer une recharge rapide en gare']],
+        ['energy', 'battery_long_range', 'Batteries longue autonomie', 'Débloque des relations batterie plus longues.', [req('battery_railway_batteries', 3), req('battery_catenary_charging', 2)], ['Acheter des rames batterie longue autonomie']],
+        ['maintenance', 'battery_thermal_management', 'Gestion thermique des batteries', 'Débloque une maintenance batterie fiable.', [req('battery_railway_batteries', 3), req('electric_standardized_maintenance', 4)], ['Réduire l’usure des batteries']],
+        ['energy', 'battery_brake_energy_recovery', 'Récupération au freinage', 'Améliore l’autonomie des rames à batterie.', [req('battery_railway_batteries', 3), req('electric_energy_recovery', 4)], ['Réduire la consommation batterie']],
+        ['traction', 'battery_suburban_trains', 'Rames batterie périurbaines', 'Débloque les dessertes périurbaines à batterie.', [req('battery_catenary_charging', 2)], ['Acheter des rames batterie périurbaines']],
+        ['traction', 'battery_regional_trains', 'Rames batterie régionales', 'Débloque les services régionaux à batterie.', [req('battery_long_range', 2), req('battery_thermal_management', 2)], ['Acheter des rames batterie régionales']],
+        ['maintenance', 'battery_modular', 'Batteries modulaires', 'Débloque les rames batterie modulaires et leur rénovation.', [req('battery_thermal_management', 3), req('battery_regional_trains', 2)], ['Acheter des rames batterie modulaires']],
+        ['energy', 'battery_auto_charge_optimization', 'Planification de recharge', 'Débloque une recharge batterie automatisée plus efficace.', [req('battery_modular', 2), req('traffic_simulation', 4)], ['Améliorer l’autonomie batterie']],
+        ['energy', 'battery_high_density', 'Batteries haute densité', 'Débloque les rames batterie les plus autonomes.', [req('battery_long_range', 3), req('battery_thermal_management', 3)], ['Acheter des rames batterie haute densité']],
+        ['operations', 'automated_dispatch', 'Régulation automatisée', 'Débloque une exploitation à très forte fréquence.', [req('traffic_simulation', 4), req('electric_electronic_control', 4)], ['Augmenter la ponctualité réseau']],
+        ['operations', 'driverless_corridors', 'Corridors supervisés', 'Débloque le fret automatique sous supervision.', [req('automated_dispatch', 3), req('battery_auto_charge_optimization', 2)], ['Débloquer le fret supervisé']],
+        ['operations', 'passenger_slots_battery', 'Roulements batterie interurbains', 'Débloque des sillons voyageurs supplémentaires.', [req('battery_regional_trains', 3), req('automated_dispatch', 2)], ['+15 sillons voyageurs par ligne'], { sillonSlots: { passengers: 15 } }],
+        ['freight', 'freight_slots_battery', 'Fret cadencé sous supervision', 'Débloque des sillons fret supplémentaires.', [req('driverless_corridors', 2), req('freight_slots_hydrogen', 2)], ['+15 sillons fret par ligne'], { sillonSlots: { freight: 15 }, subtree: 'freight' }]
+      ]],
+      [6, [
+        ['traction', 'maglev_levitation', 'Sustentation magnétique', 'Débloque la première navette maglev.', [req('battery_high_density', 3), req('automated_dispatch', 3)], ['Acheter une navette maglev']],
+        ['traction', 'maglev_guidance', 'Guidage magnétique actif', 'Débloque les rames maglev guidées.', [req('maglev_levitation', 2)], ['Acheter des rames maglev guidées']],
+        ['traction', 'maglev_linear_propulsion', 'Propulsion linéaire', 'Débloque les maglev express.', [req('maglev_guidance', 2)], ['Acheter des maglev express']],
+        ['operations', 'maglev_special_tracks', 'Corridors maglev dédiés', 'Débloque l’exploitation commerciale des lignes maglev.', [req('maglev_linear_propulsion', 2), req('hsv_adapted_tracks', 4)], ['Ouvrir des corridors maglev']],
+        ['stations', 'maglev_stations', 'Terminaux maglev', 'Débloque les gares adaptées aux correspondances maglev.', [req('maglev_special_tracks', 2), req('intermodal_hubs', 3)], ['Développer un terminal maglev']],
+        ['traction', 'maglev_very_high_speed', 'Très haute vitesse', 'Débloque les maglev très rapides.', [req('maglev_special_tracks', 3), req('maglev_guidance', 3)], ['Acheter des maglev très haute vitesse']],
+        ['stations', 'maglev_silence_comfort', 'Confort maglev avancé', 'Débloque un gain d’attractivité pour les liaisons maglev.', [req('maglev_very_high_speed', 2), req('maglev_stations', 2)], ['Améliorer l’attractivité maglev']],
+        ['maintenance', 'maglev_contactless_maintenance', 'Maintenance sans contact', 'Débloque une maintenance maglev plus légère.', [req('maglev_guidance', 3), req('electric_standardized_maintenance', 5)], ['Réduire la maintenance maglev']],
+        ['maintenance', 'maglev_advanced_high_speed_safety', 'Sécurité très haute vitesse', 'Débloque les services maglev avancés.', [req('maglev_very_high_speed', 3), req('maglev_stations', 3)], ['Débloquer les services maglev avancés']],
+        ['energy', 'maglev_high_power_energy', 'Alimentation haute puissance', 'Prépare les liaisons maglev métropolitaines.', [req('maglev_linear_propulsion', 3), req('battery_auto_charge_optimization', 3)], ['Améliorer l’efficacité maglev']],
+        ['traction', 'maglev_metro_express_links', 'Liaisons maglev métropolitaines', 'Débloque les maglev de grande capacité.', [req('maglev_very_high_speed', 3), req('maglev_stations', 3)], ['Acheter des maglev métropolitains']],
+        ['traction', 'maglev_next_generation', 'Maglev nouvelle génération', 'Débloque le matériel maglev le plus performant.', [req('maglev_advanced_high_speed_safety', 3), req('maglev_contactless_maintenance', 3), req('maglev_high_power_energy', 3)], ['Acheter des maglev nouvelle génération']],
+        ['operations', 'ai_timetable_planner', 'Planificateur horaire assisté', 'Débloque une gestion de capacité en temps réel.', [req('automated_dispatch', 4), req('maglev_special_tracks', 2)], ['Augmenter la capacité réseau avancée']],
+        ['stations', 'maglev_interchange_hubs', 'Pôles d’échanges maglev', 'Débloque des correspondances maglev avec le réseau classique.', [req('maglev_stations', 3), req('intermodal_hubs', 4)], ['Développer des correspondances maglev']],
+        ['social', 'maglev_operations_certification', 'Certification exploitation maglev', 'Débloque la conduite et l’exploitation maglev avancées.', [req('maglev_guidance', 3), req('driverless_corridors', 3)], ['Réduire les besoins RH maglev']],
+        ['operations', 'passenger_slots_maglev', 'Régulation très haute capacité', 'Débloque des sillons voyageurs supplémentaires.', [req('maglev_very_high_speed', 3), req('ai_timetable_planner', 2)], ['+25 sillons voyageurs par ligne'], { sillonSlots: { passengers: 25 } }],
+        ['freight', 'freight_slots_maglev', 'Logistique temps réel intégrée', 'Débloque des sillons fret supplémentaires.', [req('ai_timetable_planner', 3), req('freight_slots_battery', 3)], ['+25 sillons fret par ligne'], { sillonSlots: { freight: 25 }, subtree: 'freight' }]
+      ]]
+    ];
+    for (const [era, nodes] of tree) {
+      for (const [group, id, title, description, prereq, unlocks, options] of nodes) addV2(era, group, id, title, description, prereq, unlocks, options || {});
+    }
+    addV2(1, 'freight', 'midi_freight_stock', 'Wagons Midi métalliques', 'Débloque les variantes de wagons Midi déjà présentes dans l’atelier de compositions.', [req('specialized_wagons', 2), req('diesel_freight_locomotives', 2)], ['Utiliser les wagons Midi dans les compositions'], { subtree: 'freight' });
+    addV2(0, 'traction', 'steam_articulated_locomotives', 'Locomotives vapeur articulées', 'Débloque les locomotives vapeur lourdes de fin d’ère.', [req('steam_improved_boilers', 4), req('steam_reinforced_brakes', 3), req('steam_workshops', 3)], ['Acheter des locomotives vapeur lourdes']);
+    addV2(3, 'traction', 'hsv_premium_long_distance', 'Grande vitesse longue distance', 'Débloque les rames grande vitesse premium pour les relations les plus rentables.', [req('hsv_trainsets', 3), req('hsv_stability', 3), req('traffic_simulation', 2)], ['Acheter des rames grande vitesse premium']);
+    addV2(1, 'social', 'safety_training', 'Culture sécurité', 'Débloque un bonus de fiabilité pour toutes les équipes.', [req('crew_training', 2), req('block_signaling', 2)], ['Améliorer la fiabilité des lignes']);
+    addV2(1, 'social', 'mechanic_certification', 'Certification mainteneurs', 'Débloque une maintenance diesel plus efficace.', [req('steam_workshops', 3), req('diesel_lubrication_program', 2)], ['Réduire la durée des maintenances']);
+    addV2(3, 'freight', 'container_hubs', 'Terminaux conteneurs', 'Débloque les compositions porte-conteneurs et le fret intermodal longue distance.', [req('specialized_wagons', 4), req('traffic_simulation', 2)], ['Utiliser des porte-conteneurs'], { subtree: 'freight' });
+    const totalNodes = Object.values(groups).reduce((sum, group) => sum + group.nodes.length, 0);
+    if (totalNodes < 100) throw new Error(`Arbre R&D incomplet : ${totalNodes} recherches.`);
+    synchronizeTechTreeWithTrainCatalog(groups);
+    return finalizeTechTree(groups);
+  }
+  /*
+   * Arbre v1 conservé temporairement dans l'historique du fichier : il ne fait
+   * plus partie du programme et pourra être retiré lors du prochain nettoyage
+   * de versions anciennes.
+   */
+  /*
   const groups = {
     traction: { id: 'traction', label: 'Traction', description: 'Matériels roulants, chaînes de traction, vitesse et types de trains.', nodes: [] },
     energy: { id: 'energy', label: 'Énergie', description: 'Alimentation, carburants, stockage, recharge, autonomie et consommation.', nodes: [] },
@@ -782,6 +979,8 @@ function buildTechTree() {
   synchronizeTechTreeWithTrainCatalog(groups);
   return finalizeTechTree(groups);
 }
+  */
+}
 
 function synchronizeTechTreeWithTrainCatalog(tree) {
   const nodes = new Map(Object.values(tree || {}).flatMap(group => group.nodes || []).map(node => [node.id, node]));
@@ -800,6 +999,11 @@ function synchronizeTechTreeWithTrainCatalog(tree) {
     node.unlocks.push(entry.gameName);
     node.catalogTrainIds.push(entry.id);
   }
+
+  // Les intitulés de l'arbre v2 sont déjà formulés pour expliquer les
+  // déblocages jouables. Les anciens remplacements de libellés ne s'appliquent
+  // donc plus.
+  return tree;
 
   const realTechnologyContext = {
     steam_first_locomotives: ['Standardisation des locomotives vapeur SNCF', 'Chaudières timbrées, distribution Walschaerts et normalisation de l’exploitation des 141 R.'],
@@ -851,14 +1055,14 @@ function computedResearchBaseDurationSeconds(node) {
 function finalizeTechTree(tree) {
   for (const group of Object.values(tree)) {
     for (const node of group.nodes || []) {
-      // Les recherches classiques restent progressives et illimitées. Les
-      // jalons de capacité de sillons sont en revanche des déblocages uniques.
-      if (!node.sillonSlots) node.maxLevel = 0;
-      node.unlimited = !(Number(node.maxLevel) > 0);
+      // Chaque axe R&D comporte cinq niveaux : le premier déverrouille une
+      // action visible et les suivants professionnalisent son exploitation.
+      node.maxLevel = Math.max(1, Math.floor(Number(node.maxLevel || 5)));
+      node.unlimited = false;
       node.baseCostMoney ??= node.costMoney ?? 50000;
       node.baseDurationSeconds ??= node.baseDuration ?? node.duration ?? computedResearchBaseDurationSeconds(node);
-      node.costGrowth ??= node.unlockOnly ? 1.35 : 1.62;
-      node.durationGrowth ??= node.unlockOnly ? 1.34 : 1.50;
+      node.costGrowth ??= 1.72;
+      node.durationGrowth ??= 1.54;
       node.levelValue ??= 1;
       node.unlocks ||= [];
       node.improves ||= node.effects || [];

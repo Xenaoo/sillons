@@ -15,16 +15,16 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_DB_FILE = process.env.SILLONS_SAVE_DB_FILE || path.join(ROOT, 'data', 'save.sqlite');
 const LEGACY_SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v69.21.3';
-const STATE_SCHEMA_VERSION = 189;
+const PROJECT_VERSION = 'v70.0.0';
+const STATE_SCHEMA_VERSION = 190;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
-  1: 3 * HOUR_MS,
-  2: 6 * HOUR_MS,
-  3: 12 * HOUR_MS,
-  4: 24 * HOUR_MS,
-  5: 36 * HOUR_MS,
-  6: 48 * HOUR_MS
+  1: 5 * 24 * HOUR_MS,
+  2: 10 * 24 * HOUR_MS,
+  3: 15 * 24 * HOUR_MS,
+  4: 21 * 24 * HOUR_MS,
+  5: 30 * 24 * HOUR_MS,
+  6: 45 * 24 * HOUR_MS
 });
 const COMMUNE_CACHE_FILE = path.join(ROOT, 'data', 'communes-5000-population.json');
 const MIN_COMMUNE_POPULATION = 0;

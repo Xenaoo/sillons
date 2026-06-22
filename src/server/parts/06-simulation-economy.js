@@ -183,7 +183,9 @@ function recomputeBranchLevel(player, branch) {
       if (node.branch === branch) total += techLevel(player, node.id) * (node.levelValue || 1);
     }
   }
-  return total;
+  // Les compagnies existantes conservent au moins leur niveau de branche
+  // antérieur lors du remplacement de l'arbre R&D.
+  return Math.max(total, Math.max(0, Number(player?.legacyTechFloor?.[branch] || 0)));
 }
 
 function hasMaintenanceWorkshop(player) {

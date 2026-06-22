@@ -587,8 +587,9 @@ function epochTrafficTotalClient(me = app.state?.me) {
 
 function eraTransitionDurationMsClient(targetEpoch) {
   const hour = 60 * 60 * 1000;
-  const durations = { 1: 3 * hour, 2: 6 * hour, 3: 12 * hour, 4: 24 * hour, 5: 36 * hour, 6: 48 * hour };
-  return durations[Math.max(1, Math.floor(Number(targetEpoch || 1)))] || 48 * hour;
+  const day = 24 * hour;
+  const durations = { 1: 5 * day, 2: 10 * day, 3: 15 * day, 4: 21 * day, 5: 30 * day, 6: 45 * day };
+  return durations[Math.max(1, Math.floor(Number(targetEpoch || 1)))] || 45 * day;
 }
 
 function eraTransitionProgressPercent(transition) {
@@ -598,7 +599,13 @@ function eraTransitionProgressPercent(transition) {
 
 function epochRequirementsMetClient(me, next, totalTech, trafficTotal) {
   if (!me || !next) return false;
-  return Number(totalTech || 0) >= Number(next.requiredTech || 0) && Number(trafficTotal || 0) >= Number(next.requiredTraffic || 0);
+  const milestones = next.requiredResearch || [];
+  const milestonesMet = milestones.every(req => techLevel(req.id) >= Number(req.level || 1));
+  return Number(totalTech || 0) >= Number(next.requiredTech || 0) && Number(trafficTotal || 0) >= Number(next.requiredTraffic || 0) && milestonesMet;
+}
+
+function missingEpochMilestonesClient(next) {
+  return (next?.requiredResearch || []).filter(req => techLevel(req.id) < Number(req.level || 1));
 }
 
 function renderEraTransitionPanel(me, next, totalTech, trafficTotal) {
@@ -622,7 +629,10 @@ function renderEraTransitionPanel(me, next, totalTech, trafficTotal) {
   const durationMs = eraTransitionDurationMsClient((me?.epoch || 0) + 1);
   let reason = '';
   if (!ready) reason = 'Complète les prérequis de technologie et de trafic cumulé.';
-  else if (blockedByResearch) reason = 'Aucune recherche ne doit être active ou en attente pour lancer le passage d’époque.';
+  if (!ready) {
+    const missing = missingEpochMilestonesClient(next);
+    if (missing.length) reason = `Jalons manquants : ${missing.map(req => `${techNodeTitle(req.id)} niv. ${req.level || 1}`).join(', ')}.`;
+  } else if (blockedByResearch) reason = 'Aucune recherche ne doit être active ou en attente pour lancer le passage d’époque.';
   else reason = `Durée prévue : ${formatResearchTime(durationMs)}. Pendant ce temps, aucune recherche ne sera disponible.`;
   return `
     <div class="era-transition-panel ${ready ? 'ready' : ''}">
@@ -1005,7 +1015,16 @@ function renderResearch() {
             </div>
             <div class="progress epoch-traffic-progress"><i data-epoch-traffic-progress style="width:${displayedTrafficProgress}%"></i></div>
           </div>
-          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Il n’y a plus de délai réel artificiel : la progression dépend de la technologie et d’un volume de trafic beaucoup plus élevé.</p>
+          <p class="small muted">Le trafic cumulé additionne tous les <b>voyageurs transportés</b> et toutes les <b>tonnes de fret livrées</b> depuis la création de ta compagnie. Les jalons structurants, le trafic et une transition longue gardent chaque ère importante sur une partie qui se joue sur plusieurs mois.</p>
+          ${(next.requiredResearch || []).length ? `
+            <div class="epoch-requirement-row epoch-milestones">
+              <div><span>Jalons structurants</span></div>
+              <div class="research-prereq-list">${(next.requiredResearch || []).map(req => {
+                const met = techLevel(req.id) >= Number(req.level || 1);
+                return `<span class="research-prereq ${met ? 'met' : 'missing'}">${escapeHtml(techNodeTitle(req.id))} niv. ${Number(req.level || 1)}</span>`;
+              }).join('')}</div>
+            </div>
+          ` : ''}
           ${renderEraTransitionPanel(me, next, totalTech, trafficTotal)}
         </div>
       ` : '<p class="muted">Toutes les époques sont débloquées.</p>'}

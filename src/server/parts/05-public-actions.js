@@ -196,12 +196,14 @@ function createPlayer(input) {
     tech: {
       traction: 0,
       energy: 0,
+      maintenance: 0,
       operations: 0,
       stations: 0,
       social: 0,
       freight: 0
     },
     techUnlocked: {},
+    researchTreeVersion: 2,
     researchProject: null,
     researchQueue: [],
     eraTransition: null,
@@ -573,6 +575,20 @@ function lineEffectiveTariff(line, distance = lineDistance(line)) {
   return lineTicketPrice(line, routeDistance) / routeDistance;
 }
 
+function lineResearchRequirementProblem(player, service, stops) {
+  const required = [];
+  if (service === 'passengers') required.push({ id: 'steam_passenger_locomotives', level: 1, label: 'service voyageurs' });
+  if (service === 'freight') required.push({ id: 'steam_freight_locomotives', level: 1, label: 'service fret' });
+  if (service === 'mixed') {
+    required.push({ id: 'steam_passenger_locomotives', level: 2, label: 'service voyageurs' });
+    required.push({ id: 'steam_freight_locomotives', level: 2, label: 'service fret' });
+  }
+  if ((stops || []).length > 2) required.push({ id: 'manual_dispatch', level: 2, label: 'arrêts intermédiaires' });
+  const missing = required.filter(item => !hasTech(player, item.id, item.level));
+  if (!missing.length) return '';
+  return `Recherche requise : ${missing.map(item => `${techNodeById(item.id)?.title || item.label} niveau ${item.level}`).join(', ')}.`;
+}
+
 async function actionCreateLine(player, payload) {
   const rawStops = sanitizeStopsPayload(payload.stops, payload.from, payload.to);
   const stops = rawStops;
@@ -582,6 +598,8 @@ async function actionCreateLine(player, payload) {
 
   const invalidReason = validateLineStops(stops);
   if (invalidReason) return fail(invalidReason);
+  const researchProblem = lineResearchRequirementProblem(player, service, stops);
+  if (researchProblem) return fail('Ce type de ligne n’est pas encore débloqué.', researchProblem);
   const serviceStopProblem = validateLineStopService(stops, service);
   if (serviceStopProblem) return fail(serviceStopProblem);
   const train = player.trains.find(t => t.id === trainId);
@@ -790,6 +808,8 @@ async function actionUpdateLine(player, payload) {
 
   const invalidReason = validateLineStops(nextStops);
   if (invalidReason) return fail(invalidReason);
+  const researchProblem = lineResearchRequirementProblem(player, nextService, nextStops);
+  if (researchProblem) return fail('Cette modification de ligne n’est pas encore débloquée.', researchProblem);
   const serviceStopProblem = validateLineStopService(nextStops, nextService);
   if (serviceStopProblem) return fail(serviceStopProblem);
   if (!nextTrainIds.length) return fail('Sélectionne au moins un train pour cette ligne.');
@@ -876,6 +896,9 @@ async function actionUpdateLine(player, payload) {
     changedOperationalData = true;
   }
   if (payload.electrify) {
+    if (!hasTech(player, 'electric_substations', 2)) {
+      return fail('Électrification non débloquée.', 'Recherche requise : Sous-stations électriques niveau 2.');
+    }
     const distance = lineDistance(line);
     const techDiscount = (1 - Math.min(0.2, player.tech.energy * 0.03)) * (hasTech(player, 'electric_substations') ? 0.92 : 1);
     const cost = Math.round(distance * 125000 * techDiscount);
@@ -900,6 +923,17 @@ function actionUpgradeStation(player, payload) {
   const station = stationById(stationId);
   if (!station) return fail('Gare introuvable.');
   if (!['level', 'commerce', 'maintenance', 'depot'].includes(kind)) return fail('Amélioration inconnue.');
+  const researchByUpgrade = {
+    level: { id: 'passenger_flow', level: 1 },
+    commerce: { id: 'ticket_halls', level: 1 },
+    maintenance: { id: 'steam_workshops', level: 1 },
+    depot: { id: 'steam_depots', level: 1 }
+  };
+  const research = researchByUpgrade[kind];
+  if (research && !hasTech(player, research.id, research.level)) {
+    const tech = techNodeById(research.id);
+    return fail('Amélioration non débloquée.', `Recherche requise : ${tech?.title || research.id} niveau ${research.level}.`);
+  }
 
   const currentOwner = stationOwnerInfo(stationId);
   if (currentOwner && currentOwner.player.id !== player.id) {
@@ -1186,7 +1220,8 @@ function epochRequirementsMet(player, targetEpoch = player.epoch + 1) {
   if (!next) return false;
   const totalTech = Object.values(player.tech || {}).reduce((a, b) => a + Number(b || 0), 0);
   const trafficTotal = epochTrafficTotal(player);
-  return totalTech >= Number(next.requiredTech || 0) && trafficTotal >= Number(next.requiredTraffic || 0);
+  const researchReady = (next.requiredResearch || []).every(req => hasTech(player, req.id, req.level || 1));
+  return totalTech >= Number(next.requiredTech || 0) && trafficTotal >= Number(next.requiredTraffic || 0) && researchReady;
 }
 
 function actionStartEpochTransition(player, payload) {
@@ -1202,7 +1237,11 @@ function actionStartEpochTransition(player, payload) {
   if (!epochRequirementsMet(player, targetEpoch)) {
     const totalTech = Object.values(player.tech || {}).reduce((a, b) => a + Number(b || 0), 0);
     const trafficTotal = epochTrafficTotal(player);
-    return fail('Prérequis d’époque incomplets.', `Requis : ${Math.round(totalTech)}/${next.requiredTech} technologie et ${Math.round(trafficTotal)}/${next.requiredTraffic} trafic cumulé.`);
+    const missingMilestones = (next.requiredResearch || []).filter(req => !hasTech(player, req.id, req.level || 1));
+    const milestoneText = missingMilestones.length
+      ? ` Jalons manquants : ${missingMilestones.map(req => `${techNodeById(req.id)?.title || req.id} niv. ${req.level || 1}`).join(', ')}.`
+      : '';
+    return fail('Prérequis d’époque incomplets.', `Requis : ${Math.round(totalTech)}/${next.requiredTech} technologie et ${Math.round(trafficTotal)}/${next.requiredTraffic} trafic cumulé.${milestoneText}`);
   }
   const now = Date.now();
   const durationMs = eraTransitionDurationMs(targetEpoch);

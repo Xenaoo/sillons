@@ -1,3 +1,12 @@
+# v70.0.0 — arbre R&D à déblocages
+
+- Remplacement de l’arbre R&D actif par 118 recherches à cinq niveaux, avec coûts et durées exponentiels.
+- Les premiers jalons débloquent vite le premier train, les lignes voyageurs ou fret, les dépôts et les ateliers.
+- Les recherches avancées ouvrent les trains, compositions, sillons, électrification, maintenance, gares et types d’exploitation supplémentaires.
+- Les passages d’ère demandent désormais trafic, volume de recherche et jalons structurants, puis prennent de 5 à 45 jours réels.
+- Migration des compagnies existantes : droits liés aux trains, compositions, gares, lignes et recherches en cours sont crédités dans le nouvel arbre.
+- Schéma save : `190`.
+
 # v69.21.3 — retour à la ligne des titres de fiche R&D
 
 - Correction de l’affichage des intitulés longs dans la fiche de détail des recherches R&D.

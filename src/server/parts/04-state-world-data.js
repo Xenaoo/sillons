@@ -269,6 +269,98 @@ function migrateLegacyStationReferences(player) {
   return player;
 }
 
+function legacyResearchTreeAliases() {
+  return {
+  steam_coal_water_reserves: 'steam_depots', steam_economized: 'steam_improved_boilers', steam_superheated: 'steam_improved_boilers', steam_oil_fired: 'steam_workshops',
+  diesel_hydraulic: 'diesel_passenger_locomotives', diesel_modern: 'diesel_electric',
+  electric_antislip: 'electric_electronic_control',
+  hsv_premium_long_distance: 'hsv_premium_long_distance', hsv_high_speed_braking: 'hsv_high_speed_braking', hsv_adapted_tracks: 'hsv_adapted_tracks',
+  clockface_timetable: 'traffic_simulation', incident_protocols: 'safety_training', platform_dispatching: 'traffic_simulation', network_revenue_control: 'dynamic_pricing',
+  rail_road_interfaces: 'container_hubs', port_shuttles: 'container_hubs', hazmat_protocols: 'specialized_wagons', last_mile_rail: 'container_hubs', automated_freight_ops: 'driverless_corridors', freight_marketplace: 'container_hubs', premium_logistics: 'container_hubs', cold_chain: 'specialized_wagons', bulk_contracts: 'basic_freight_yards', freight_diesel: 'diesel_freight_locomotives',
+  park_and_ride: 'intermodal_hubs', platform_canopies: 'passenger_flow', station_retail: 'ticket_halls', accessibility_program: 'passenger_flow', major_terminal_design: 'intermodal_hubs', station_hotels: 'intermodal_hubs', real_time_information: 'traffic_simulation', urban_air_rights: 'intermodal_hubs', smart_station_ops: 'intermodal_hubs', station_energy_retrofit: 'electric_substations', crowd_simulation: 'intermodal_hubs',
+  apprenticeship_tracks: 'crew_training', driver_rosters: 'crew_training', controller_service: 'crew_training', dispatcher_school: 'centralized_control', social_dialogue: 'safety_training', engineering_office: 'traffic_simulation', knowledge_management: 'traffic_simulation', digital_training: 'automated_dispatch', autonomous_supervision: 'driverless_corridors', talent_retention: 'crew_training', research_campus: 'traffic_simulation',
+  battery_suburban_trains: 'battery_suburban_trains', battery_regional_trains: 'battery_regional_trains', battery_fast_station_charging: 'battery_fast_station_charging', battery_modular: 'battery_modular', battery_high_density: 'battery_high_density',
+    maglev_interchange_hubs: 'maglev_interchange_hubs', maglev_operations_certification: 'maglev_operations_certification'
+  };
+}
+
+function grantResearchLevel(unlocked, nodeId, level = 1) {
+  const node = techNodeById(nodeId);
+  if (!node) return false;
+  const max = Math.max(1, Number(node.maxLevel || 5));
+  unlocked[nodeId] = Math.max(Number(unlocked[nodeId] || 0), Math.min(max, Math.max(1, Math.floor(Number(level || 1)))));
+  return true;
+}
+
+function grantExistingResearchRights(player, unlocked) {
+  for (const train of player.trains || []) {
+    const model = BALANCE.trains?.[train?.modelId];
+    if (model?.requiredTech) grantResearchLevel(unlocked, model.requiredTech, model.requiredTechLevel || 1);
+    const passengerVariant = train?.composition?.passengerVariant;
+    const freightVariant = train?.composition?.freightVariant;
+    if (passengerVariant) {
+      const variant = compositionVariantForMode('passenger_loco', passengerVariant);
+      if (variant?.requiredTech) grantResearchLevel(unlocked, variant.requiredTech, 1);
+    }
+    if (freightVariant) {
+      const variant = compositionVariantForMode('freight_loco', freightVariant);
+      if (variant?.requiredTech) grantResearchLevel(unlocked, variant.requiredTech, 1);
+    }
+  }
+  for (const line of player.lines || []) {
+    if (line?.service === 'freight') grantResearchLevel(unlocked, 'steam_freight_locomotives', 1);
+    if (line?.service === 'mixed') {
+      grantResearchLevel(unlocked, 'steam_passenger_locomotives', 2);
+      grantResearchLevel(unlocked, 'steam_freight_locomotives', 2);
+    }
+    if (!line?.service || line.service === 'passengers') grantResearchLevel(unlocked, 'steam_passenger_locomotives', 1);
+    const stops = Array.isArray(line?.stops) ? line.stops : [];
+    if (stops.length > 2) grantResearchLevel(unlocked, 'manual_dispatch', 2);
+    if (line?.electrified) grantResearchLevel(unlocked, 'electric_substations', 2);
+  }
+  for (const asset of Object.values(player.stations || {})) {
+    if (!asset) continue;
+    if (Number(asset.level || 1) > 1) grantResearchLevel(unlocked, 'passenger_flow', 1);
+    if (Number(asset.commerce || 0) > 0) grantResearchLevel(unlocked, 'ticket_halls', 1);
+    if (Number(asset.maintenance || 0) > 0) grantResearchLevel(unlocked, 'steam_workshops', 1);
+    if (asset.depot) grantResearchLevel(unlocked, 'steam_depots', 1);
+    if (asset.electrified) grantResearchLevel(unlocked, 'electric_substations', 2);
+  }
+}
+
+function migrateResearchTree(player) {
+  const researchTreeVersion = 2;
+  const aliases = legacyResearchTreeAliases();
+  const wasCurrent = Number(player.researchTreeVersion || 0) >= researchTreeVersion;
+  const unlocked = wasCurrent ? { ...(player.techUnlocked || {}) } : {};
+  const legacyBranchLevels = { ...(player.tech || {}) };
+  const credit = (id, level) => {
+    const target = aliases[id] || id;
+    return grantResearchLevel(unlocked, target, level);
+  };
+
+  if (!wasCurrent) {
+    for (const [id, level] of Object.entries(player.techUnlocked || {})) credit(id, level);
+    const inFlight = [player.researchProject, ...(Array.isArray(player.researchQueue) ? player.researchQueue : [])].filter(Boolean);
+    for (const project of inFlight) credit(project.nodeId, project.targetLevel || 1);
+    player.researchProject = null;
+    player.researchQueue = [];
+    player.legacyTechFloor = Object.fromEntries(Object.entries(legacyBranchLevels).map(([branch, level]) => [branch, Math.max(0, Math.floor(Number(level || 0)))]));
+    player.researchTreeVersion = researchTreeVersion;
+    player.notifications ||= [];
+    player.notifications.push('Arbre R&D migré : les recherches déjà terminées ou en cours ont été créditées dans les nouveaux jalons.');
+  }
+
+  // Une compagnie ne perd jamais l’accès à un train, une gare, une ligne ou un
+  // équipement qu’elle possède déjà.
+  grantExistingResearchRights(player, unlocked);
+  for (let era = 1; era <= Number(player.epoch || 0); era++) {
+    for (const milestone of BALANCE.epochs?.[era]?.requiredResearch || []) grantResearchLevel(unlocked, milestone.id, milestone.level || 1);
+  }
+  player.techUnlocked = unlocked;
+  return player;
+}
+
 function migratePlayer(player, fallbackId) {
   const p = player && typeof player === 'object' ? player : {};
   const techDefaults = { traction: 0, energy: 0, maintenance: 0, operations: 0, stations: 0, social: 0, freight: 0 };
@@ -296,6 +388,7 @@ function migratePlayer(player, fallbackId) {
   p.research = Number.isFinite(Number(p.research)) ? Number(p.research) : 0;
   p.tech = { ...techDefaults, ...(p.tech || {}) };
   p.techUnlocked = normalizeTechUnlocked(p.techUnlocked);
+  migrateResearchTree(p);
   p.researchProject = normalizeResearchProject(p.researchProject);
   p.researchQueue = normalizeResearchQueue(p.researchQueue);
   p.eraTransition = normalizeEraTransition(p.eraTransition, p);
@@ -372,7 +465,7 @@ function normalizeResearchQueue(raw) {
 
 function eraTransitionDurationMs(targetEpoch) {
   const epoch = clamp(Math.floor(Number(targetEpoch || 0)), 1, BALANCE.epochs.length - 1);
-  return ERA_TRANSITION_DURATIONS_MS[epoch] || 48 * HOUR_MS;
+  return ERA_TRANSITION_DURATIONS_MS[epoch] || 45 * 24 * HOUR_MS;
 }
 
 function normalizeEraTransition(raw, player = null) {
