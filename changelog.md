@@ -1,3 +1,13 @@
+# v0.71.0 — calcul cumulatif réseau OD
+
+- Remplacement du marché « terminus à terminus » par un calcul réseau en couples origine/destination commerciaux.
+- Chaque ligne est découpée en marchés OD servis : terminus, arrêts intermédiaires et sous-parcours.
+- Un même couple de gares n’est créé qu’une seule fois au niveau réseau, puis partagé entre toutes les lignes qui le desservent.
+- Les voyageurs et le fret transportés sont maintenant répartis par part de marché sur chaque OD, ce qui évite de doubler le trafic quand plusieurs lignes se superposent partiellement.
+- La demande voyageurs OD est normalisée par budget de gare afin qu’une gare commune ne génère pas une demande illimitée parce qu’elle apparaît dans plusieurs lignes.
+- Les panneaux de ligne affichent désormais une demande structurelle construite comme somme des OD réellement desservis par la ligne, avec des compteurs internes de marchés OD et de marchés partagés.
+- Incrément de version : interface et serveur v0.71.0, package npm 0.71.0.
+
 # v0.70.12 — demande annuelle stable au refresh serveur
 
 - Correction de l’affichage `Demande voy. / an` dans les panneaux de ligne : la valeur affichée utilise désormais le potentiel structurel de l’axe, basé sur les gares et les arrêts, et ne varie plus à chaque tick serveur.

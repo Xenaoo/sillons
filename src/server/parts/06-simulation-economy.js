@@ -445,7 +445,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       };
       continue;
     }
-    const routeDemand = computeRouteDemand(from, to, line, player, eventFactor);
+    const routeDemand = computeLineNetworkRouteDemand(lineMarkets, line, eventFactor);
     const lineNeeds = computeLineStaffNeeds(player, line);
     const lineDriverCoverage = lineNeeds.drivers > 0 ? driverCoverage : 1;
     const allocatedDrivers = lineNeeds.drivers > 0 ? lineNeeds.drivers * lineDriverCoverage : 0;
@@ -604,14 +604,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const freightDetails = lineCanServeMarket(operatingModel, 'freight') && lineMarketServices(line).includes('freight')
       ? computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, distance, staffing, 'freight')
       : null;
-    const passengerMarket = passengerDetails
-      ? marketSnapshot(lineMarkets[routeKey(stops[0], stops[stops.length - 1], 'passengers')] || [], line.id, passengerDetails.score)
-      : null;
-    const freightMarket = freightDetails
-      ? marketSnapshot(lineMarkets[routeKey(stops[0], stops[stops.length - 1], 'freight')] || [], line.id, freightDetails.score)
-      : null;
-    const scoredShares = [passengerMarket?.share, freightMarket?.share].filter(Number.isFinite);
-    if (scoredShares.length) marketScore += scoredShares.reduce((sum, share) => sum + share, 0) / scoredShares.length;
+    let passengerNetwork = null;
+    let freightNetwork = null;
 
     const controllerCoverage = lineNeeds.controllers > 0 ? clamp(Number(player.staff.controllers || 0) / Math.max(1, staffNeeds.controllers || lineNeeds.controllers), 0, 1) : 1;
     const stationAgentCoverage = lineNeeds.stationAgents > 0 ? clamp(Number(player.staff.stationAgents || 0) / Math.max(1, staffNeeds.stationAgents || lineNeeds.stationAgents), 0, 1) : 1;
@@ -622,29 +616,35 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const fareComplianceFactor = 1 + controllerCoverage * 0.15;
     const stationAgentFlowFactor = clamp(0.86 + stationAgentCoverage * 0.14, 0.86, 1);
     const dispatchRevenueFactor = clamp(0.94 + dispatcherCoverage * 0.06, 0.94, 1.03);
+    passengerNetwork = passengerDetails
+      ? computeLineNetworkAllocation(lineMarkets, line.id, 'passengers', state.market.demand * eventFactor.passenger, stationAgentFlowFactor)
+      : null;
+    freightNetwork = freightDetails
+      ? computeLineNetworkAllocation(lineMarkets, line.id, 'freight', state.market.freight * eventFactor.freight, 1)
+      : null;
+    const scoredShares = [passengerNetwork?.share, freightNetwork?.share].filter(Number.isFinite);
+    if (scoredShares.length) marketScore += scoredShares.reduce((sum, share) => sum + share, 0) / scoredShares.length;
     const maxPax = operatingModel.capacity * serviceFactor * capacityFactor;
     const maxFreight = operatingModel.freight * serviceFactor * capacityFactor;
     let linePax = 0;
     let lineFreight = 0;
 
-    const passengerCapture = passengerDetails ? demandCaptureFromAttractiveness(passengerDetails, 'passengers') : 0;
-    const freightCapture = freightDetails ? demandCaptureFromAttractiveness(freightDetails, 'freight') : 0;
+    const passengerCapture = passengerNetwork?.capture || (passengerDetails ? demandCaptureFromAttractiveness(passengerDetails, 'passengers') : 0);
+    const freightCapture = freightNetwork?.capture || (freightDetails ? demandCaptureFromAttractiveness(freightDetails, 'freight') : 0);
 
     if (line.service === 'passengers' || line.service === 'mixed') {
-      const share = passengerMarket?.share || 0;
-      linePax = Math.max(0, Math.min(maxPax, routeDemand.passengers * share * passengerCapture * stationAgentFlowFactor));
+      linePax = Math.max(0, Math.min(maxPax, passengerNetwork?.potential || 0));
     }
     if (line.service === 'freight' || line.service === 'mixed') {
-      const share = freightMarket?.share || 0;
-      lineFreight = Math.max(0, Math.min(maxFreight, routeDemand.freight * share * freightCapture));
+      lineFreight = Math.max(0, Math.min(maxFreight, freightNetwork?.potential || 0));
     }
 
     const annualCapacity = computeAnnualLineCapacity(operatingModel, cadence, line.service, capacityFactor);
     const passengerAnnualPotential = line.service === 'passengers' || line.service === 'mixed'
-      ? Math.max(0, routeDemand.passengers * (passengerMarket?.share || 0) * passengerCapture * stationAgentFlowFactor)
+      ? Math.max(0, passengerNetwork?.potential || 0)
       : 0;
     const freightAnnualPotential = line.service === 'freight' || line.service === 'mixed'
-      ? Math.max(0, routeDemand.freight * (freightMarket?.share || 0) * freightCapture)
+      ? Math.max(0, freightNetwork?.potential || 0)
       : 0;
     const passengerAnnualTransport = Math.min(annualCapacity.passengers, passengerAnnualPotential);
     const freightAnnualTransport = Math.min(annualCapacity.freightTons, freightAnnualPotential);
@@ -720,18 +720,22 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         ...routeDemandMarketPayload(routeDemand),
         passengerAnnualPotential: Math.round(passengerAnnualPotential),
         freightAnnualPotential: Math.round(freightAnnualPotential),
-        passengerShare: passengerMarket ? round2(passengerMarket.share * 100) : null,
-        freightShare: freightMarket ? round2(freightMarket.share * 100) : null,
-        passengerRank: passengerMarket?.rank || null,
-        freightRank: freightMarket?.rank || null,
-        passengerCompetitors: passengerMarket?.competitorCount || 0,
-        freightCompetitors: freightMarket?.competitorCount || 0,
-        passengerLeader: passengerMarket?.leader || null,
-        freightLeader: freightMarket?.leader || null,
-        passengerScore: passengerDetails ? round2(passengerDetails.score) : null,
-        freightScore: freightDetails ? round2(freightDetails.score) : null,
+        passengerShare: passengerNetwork ? round2(passengerNetwork.share * 100) : null,
+        freightShare: freightNetwork ? round2(freightNetwork.share * 100) : null,
+        passengerRank: passengerNetwork?.rank || null,
+        freightRank: freightNetwork?.rank || null,
+        passengerCompetitors: passengerNetwork?.competitorCount || 0,
+        freightCompetitors: freightNetwork?.competitorCount || 0,
+        passengerLeader: passengerNetwork?.leader || null,
+        freightLeader: freightNetwork?.leader || null,
+        passengerScore: passengerNetwork ? round2(passengerNetwork.score) : (passengerDetails ? round2(passengerDetails.score) : null),
+        freightScore: freightNetwork ? round2(freightNetwork.score) : (freightDetails ? round2(freightDetails.score) : null),
         passengerDemandCapture: passengerDetails ? round2(passengerCapture * 100) : null,
-        freightDemandCapture: freightDetails ? round2(freightCapture * 100) : null
+        freightDemandCapture: freightDetails ? round2(freightCapture * 100) : null,
+        passengerOdMarkets: passengerNetwork?.marketCount || 0,
+        freightOdMarkets: freightNetwork?.marketCount || 0,
+        passengerSharedOdMarkets: passengerNetwork?.sharedMarketCount || 0,
+        freightSharedOdMarkets: freightNetwork?.sharedMarketCount || 0
       },
       attractiveness: {
         passenger: passengerDetails,
@@ -935,39 +939,257 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 }
 
 function buildLineMarkets() {
-  const markets = {};
+  const markets = { version: 'od-network-v1', markets: {}, byLine: {} };
+
   for (const player of activePlayers()) {
     const staffing = computeStaffing(player);
     const needs = computeStaffNeeds(player);
     const driverCoverage = driverCoverageForNeed(player, needs.drivers);
-    if (driverCoverage <= 0) continue;
     for (const line of player.lines) {
       if (!line.active) continue;
       normalizeLineTrainIds(line);
+      const stops = lineStops(line);
+      if (stops.length < 2) continue;
+
+      // Les marchés OD sont créés pour toute ligne active afin de conserver une
+      // demande affichable même si la ligne est momentanément arrêtée. Les lignes
+      // sans matériel disponible ne sont simplement pas ajoutées comme concurrentes.
+      const odPairsByMarket = {};
+      for (const market of lineMarketServices(line)) {
+        odPairsByMarket[market] = lineOdMarketPairs(line, market);
+        for (const pair of odPairsByMarket[market]) {
+          const entry = ensureNetworkMarket(markets, pair);
+          rememberLineNetworkMarket(markets, line.id, market, entry.key);
+        }
+      }
+
+      if (driverCoverage <= 0) continue;
       const bundle = combinedOperatingProfile(player, lineAssignedTrains(player, line, { availableOnly: true }));
       if (!bundle) continue;
       const train = bundle.primaryTrain;
       const operatingModel = bundle.profile;
-      const stops = lineStops(line);
-      const distance = lineDistance(line);
       const effectiveLine = lineWithEffectiveFrequency(line, driverCoverage);
+
       for (const market of lineMarketServices(line)) {
         if (!lineCanServeMarket(operatingModel, market)) continue;
-        const key = routeKey(stops[0], stops[stops.length - 1], market);
-        if (!markets[key]) markets[key] = [];
-        const details = computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, distance, staffing, market);
-        markets[key].push({
-          playerId: player.id,
-          companyName: player.name,
-          lineId: line.id,
-          lineCode: lineRouteName(lineStops(line)),
-          market,
-          score: details.score
-        });
+        for (const pair of odPairsByMarket[market] || []) {
+          const entry = ensureNetworkMarket(markets, pair);
+          const details = computeLineAttractivenessDetails(player, effectiveLine, operatingModel, train, pair.distance, staffing, market);
+          const existing = entry.competitors.find(c => c.lineId === line.id);
+          const payload = {
+            playerId: player.id,
+            companyName: player.name,
+            lineId: line.id,
+            lineCode: lineRouteName(lineStops(line)),
+            market,
+            score: details.score
+          };
+          if (existing) Object.assign(existing, payload);
+          else entry.competitors.push(payload);
+        }
       }
     }
   }
+
+  normalizeNetworkPassengerDemand(markets);
   return markets;
+}
+
+function lineOdMarketPairs(line, market) {
+  const stops = lineStops(line).map(currentStationId).filter(Boolean);
+  if (stops.length < 2) return [];
+  const prefixDistances = [0];
+  for (let i = 1; i < stops.length; i++) {
+    const segment = routeBetweenStops([stops[i - 1], stops[i]]);
+    const distance = Math.max(1, Math.round(Number(segment?.distance || distanceBetween(stops[i - 1], stops[i]) || 1)));
+    prefixDistances[i] = prefixDistances[i - 1] + distance;
+  }
+
+  const pairs = [];
+  const seen = new Set();
+  for (let i = 0; i < stops.length - 1; i++) {
+    for (let j = i + 1; j < stops.length; j++) {
+      const fromId = stops[i];
+      const toId = stops[j];
+      if (!fromId || !toId || fromId === toId) continue;
+      const key = routeKey(fromId, toId, market);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const from = stationById(fromId);
+      const to = stationById(toId);
+      if (!from || !to) continue;
+      pairs.push({
+        key,
+        market,
+        fromId,
+        toId,
+        from,
+        to,
+        distance: Math.max(1, Math.round(prefixDistances[j] - prefixDistances[i]))
+      });
+    }
+  }
+  return pairs;
+}
+
+function ensureNetworkMarket(container, pair) {
+  if (!container.markets[pair.key]) {
+    const rawDemand = computeOdBaseDemand(pair.from, pair.to, pair.distance, pair.market);
+    container.markets[pair.key] = {
+      key: pair.key,
+      market: pair.market,
+      fromId: pair.fromId,
+      toId: pair.toId,
+      fromName: pair.from?.name || pair.fromId,
+      toName: pair.to?.name || pair.toId,
+      distance: Math.max(1, Math.round(Number(pair.distance || 0))),
+      rawDemand,
+      baseDemand: rawDemand,
+      competitors: []
+    };
+  }
+  return container.markets[pair.key];
+}
+
+function rememberLineNetworkMarket(container, lineId, market, key) {
+  if (!lineId || !key) return;
+  if (!container.byLine[lineId]) container.byLine[lineId] = { passengers: [], freight: [] };
+  if (!container.byLine[lineId][market]) container.byLine[lineId][market] = [];
+  if (!container.byLine[lineId][market].includes(key)) container.byLine[lineId][market].push(key);
+}
+
+function computeOdBaseDemand(from, to, distance, market) {
+  const km = Math.max(1, Number(distance || 0));
+  if (market === 'freight') {
+    const freightBase = Math.sqrt((Number(from?.freight || 0) + 18) * (Number(to?.freight || 0) + 18)) * 5.5;
+    return Math.max(0, freightBase * clamp(km / 180, 0.5, 2.2) * ECONOMY.freightDemandMultiplier);
+  }
+
+  const fromDemand = stationAnnualPassengerDemand(from);
+  const toDemand = stationAnnualPassengerDemand(to);
+  const demandBase = Math.sqrt(fromDemand * toDemand) * 0.24;
+  const tourism = 1 + (Number(from?.tourism || 0) + Number(to?.tourism || 0)) / 220;
+  const distanceFactor = clamp(1.25 - km / 900, 0.25, 1.2);
+  return Math.max(0, demandBase * tourism * distanceFactor);
+}
+
+function normalizeNetworkPassengerDemand(container) {
+  const stationTotals = {};
+  const stationBudgets = {};
+  for (const entry of Object.values(container.markets || {})) {
+    if (entry.market !== 'passengers') continue;
+    const raw = Math.max(0, Number(entry.rawDemand || 0));
+    if (!raw) continue;
+    stationTotals[entry.fromId] = (stationTotals[entry.fromId] || 0) + raw;
+    stationTotals[entry.toId] = (stationTotals[entry.toId] || 0) + raw;
+  }
+
+  for (const stationId of Object.keys(stationTotals)) {
+    const station = stationById(stationId);
+    stationBudgets[stationId] = Math.max(0, stationAnnualPassengerDemand(station));
+  }
+
+  for (const entry of Object.values(container.markets || {})) {
+    if (entry.market !== 'passengers') continue;
+    const raw = Math.max(0, Number(entry.rawDemand || 0));
+    const fromTotal = Math.max(1, Number(stationTotals[entry.fromId] || 0));
+    const toTotal = Math.max(1, Number(stationTotals[entry.toId] || 0));
+    const fromBudget = Math.max(0, Number(stationBudgets[entry.fromId] || 0));
+    const toBudget = Math.max(0, Number(stationBudgets[entry.toId] || 0));
+    const fromRatio = fromBudget > 0 ? Math.min(1, fromBudget / fromTotal) : 1;
+    const toRatio = toBudget > 0 ? Math.min(1, toBudget / toTotal) : 1;
+    entry.baseDemand = raw * Math.sqrt(fromRatio * toRatio);
+  }
+}
+
+function computeLineNetworkRouteDemand(lineMarkets, line, eventFactor) {
+  const passengerBase = sumLineNetworkBaseDemand(lineMarkets, line, 'passengers');
+  const freightBase = sumLineNetworkBaseDemand(lineMarkets, line, 'freight');
+  return {
+    passengers: passengerBase * state.market.demand * eventFactor.passenger,
+    freight: freightBase * state.market.freight * eventFactor.freight,
+    basePassengers: passengerBase,
+    baseFreight: freightBase
+  };
+}
+
+function sumLineNetworkBaseDemand(lineMarkets, line, market) {
+  const keys = lineMarkets?.byLine?.[line.id]?.[market] || [];
+  if (keys.length) {
+    return keys.reduce((sum, key) => sum + Math.max(0, Number(lineMarkets.markets?.[key]?.baseDemand || 0)), 0);
+  }
+  return lineOdMarketPairs(line, market).reduce((sum, pair) => sum + computeOdBaseDemand(pair.from, pair.to, pair.distance, market), 0);
+}
+
+function computeLineNetworkAllocation(lineMarkets, lineId, market, dynamicFactor, operationalFactor = 1) {
+  const keys = lineMarkets?.byLine?.[lineId]?.[market] || [];
+  if (!keys.length) return null;
+
+  let baseDemand = 0;
+  let effectiveDemand = 0;
+  let potential = 0;
+  let weightedShare = 0;
+  let weightedRank = 0;
+  let weightedScore = 0;
+  let weightedCapture = 0;
+  let totalWeight = 0;
+  let marketCount = 0;
+  let sharedMarketCount = 0;
+  const competitorLines = new Set();
+  let leader = null;
+
+  for (const key of keys) {
+    const entry = lineMarkets.markets?.[key];
+    if (!entry) continue;
+    const demand = Math.max(0, Number(entry.baseDemand || 0));
+    if (demand <= 0) continue;
+    const competitors = Array.isArray(entry.competitors) ? entry.competitors : [];
+    const own = competitors.find(c => c.lineId === lineId);
+    const score = Math.max(0.1, Number(own?.score || 0.1));
+    const snapshot = networkMarketSnapshot(competitors, lineId, score);
+    const capture = demandCaptureFromAttractiveness({ score }, market);
+    const effective = demand * Math.max(0, Number(dynamicFactor || 0));
+    const linePotential = effective * snapshot.share * capture * Math.max(0, Number(operationalFactor || 0));
+
+    baseDemand += demand;
+    effectiveDemand += effective;
+    potential += linePotential;
+    weightedShare += snapshot.share * demand;
+    weightedRank += snapshot.rank * demand;
+    weightedScore += score * demand;
+    weightedCapture += capture * demand;
+    totalWeight += demand;
+    marketCount += 1;
+    if (snapshot.competitorCount > 0) sharedMarketCount += 1;
+    for (const competitor of competitors) {
+      if (competitor.lineId && competitor.lineId !== lineId) competitorLines.add(competitor.lineId);
+    }
+    if (snapshot.leader && (!leader || demand > leader.weight)) {
+      leader = {
+        companyName: snapshot.leader.companyName,
+        lineCode: snapshot.leader.lineCode,
+        score: snapshot.leader.score,
+        od: `${entry.fromName} ↔ ${entry.toName}`,
+        weight: demand
+      };
+    }
+  }
+
+  if (!totalWeight) return null;
+  if (leader) delete leader.weight;
+  return {
+    baseDemand,
+    effectiveDemand,
+    potential,
+    share: weightedShare / totalWeight,
+    rank: Math.max(1, Math.round(weightedRank / totalWeight)),
+    competitorCount: competitorLines.size,
+    leader,
+    score: weightedScore / totalWeight,
+    capture: weightedCapture / totalWeight,
+    marketCount,
+    sharedMarketCount
+  };
 }
 
 function lineMarketServices(line) {
@@ -995,6 +1217,28 @@ function marketSnapshot(competitors, lineId, score) {
     competitorCount: Math.max(0, entries.length - 1),
     leader: leaderEntry ? { companyName: leaderEntry.companyName, lineCode: leaderEntry.lineCode, score: round2(leaderEntry.score) } : null,
     totalScore: round2(totalScore)
+  };
+}
+
+function networkMarketSnapshot(competitors, lineId, score) {
+  const entries = Array.isArray(competitors) ? competitors : [];
+  const scoredEntries = entries.map(entry => ({
+    ...entry,
+    score: Math.max(0.1, Number(entry.score || 0))
+  }));
+  const totalScore = scoredEntries.reduce((sum, entry) => sum + entry.score, 0);
+  const sorted = [...scoredEntries].sort((a, b) => b.score - a.score);
+  const own = scoredEntries.find(entry => entry.lineId === lineId) || null;
+  const rank = Math.max(1, sorted.findIndex(entry => entry.lineId === lineId) + 1 || 1);
+  const leaderEntry = sorted[0] || null;
+  const fallbackScore = Math.max(0.1, Number(score || 0));
+  const share = own && totalScore > 0 ? own.score / totalScore : (!entries.length ? 1 : 0);
+  return {
+    share: clamp(share, 0, 1),
+    rank,
+    competitorCount: scoredEntries.filter(entry => entry.lineId !== lineId).length,
+    leader: leaderEntry ? { companyName: leaderEntry.companyName, lineCode: leaderEntry.lineCode, score: round2(leaderEntry.score) } : null,
+    totalScore: round2(totalScore || fallbackScore)
   };
 }
 

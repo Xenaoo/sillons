@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.70.12` (package npm : `0.70.12`).
+- Version de code actuelle : `v0.71.0` (package npm : `0.71.0`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -46,10 +46,13 @@ Variables utiles :
 - `SILLONS_RFN_WORKERS` : nombre de workers de routage RFN.
 
 
-### Notes récentes v0.70.12
+### Notes récentes v0.71.0
 
-- `Demande voy. / an` et `Demande fret / an` affichent désormais la demande structurelle stable de l’axe.
-- Les facteurs dynamiques `state.market.demand`, `state.market.freight` et événements temporaires restent utilisés pour le calcul économique effectif, mais ne modifient plus les champs affichés `market.passengerDemand` et `market.freightDemand`.
+- Le calcul économique des lignes utilise désormais un modèle réseau cumulatif par couples origine/destination commerciaux.
+- Une ligne avec arrêts intermédiaires est découpée en marchés OD : chaque couple de gares desservi est créé une seule fois au niveau réseau.
+- Toutes les lignes qui desservent le même couple OD se partagent ce marché selon leur attractivité ; les voyageurs et tonnes transportés ne sont plus additionnés plusieurs fois sur les tronçons/gares communs.
+- La demande voyageurs OD est normalisée par budget de gare pour éviter qu’une gare commune génère une demande illimitée quand plusieurs lignes se superposent.
+- `Demande voy. / an` et `Demande fret / an` restent des valeurs structurelles stables : les facteurs dynamiques `state.market.demand`, `state.market.freight` et événements temporaires agissent sur le potentiel économique effectif, pas sur ces champs affichés.
 - `handoff.md` doit rester dans l’archive de travail actuelle.
 
 ## 4. Architecture
