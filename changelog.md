@@ -1,12 +1,9 @@
-# v69.22.0 — implantation DA atelier ferroviaire pour l’arbre R&D
+# v69.21.3 — retour à la ligne des titres de fiche R&D
 
-- Refonte visuelle intégrale de `R&D > Arbre technologique` dans une DA moins moderne et moins lisse, inspirée d’un bureau d’études ferroviaire ancien.
-- Remplacement du rendu lisse par une interface type blueprint industriel : cadres métalliques, laiton vieilli, rivets, plaques mécaniques, grille technique et effets d’usure.
-- Reprise visuelle des blocs supérieurs : branches, légende, ères, progression et recherche rapide sont désormais traités comme des panneaux d’atelier ferroviaire.
-- Refonte visuelle de la zone de l’arbre : fond plan technique, liaisons plus organiques/laiton, séparateurs d’époque vieillis et nœuds transformés en plaques mécaniques octogonales.
-- Refonte de la fiche de détail R&D avec cadre métallique, texture de plan ancien, titre typé bureau d’études et boutons laiton.
-- Conservation du fonctionnement existant : sélection, scroll, liaisons pointillées sur les titres, recherche rapide, lancement et file d’attente R&D.
-- Incrément de version : badge interface `v69.22.0`, version serveur/client `v69.22.0`, package `69.22.0`.
+- Correction de l’affichage des intitulés longs dans la fiche de détail des recherches R&D.
+- Les titres de recherche passent désormais correctement à la ligne au lieu de forcer sur une seule ligne à côté du bouton de fermeture.
+- Ajustement du header de la fiche pour laisser toute la place nécessaire au titre tout en conservant le bouton `×` accessible.
+- Incrément de version : badge interface `v69.21.3`, version serveur/client `v69.21.3`, package `69.21.3`.
 - Schéma save : `189`.
 
 # v69.21.2 — correction du lancement/arrêt des recherches R&D
