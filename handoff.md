@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.70.10` (package npm : `0.70.10`).
+- Version de code actuelle : `v0.70.11` (package npm : `0.70.11`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.

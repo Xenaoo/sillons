@@ -448,8 +448,11 @@ function lineSillonDataClient(line) {
   const bottleneck = sillons.bottleneck || null;
   const fallbackCapacity = Number(sillons.theoreticalCapacity ?? bottleneck?.theoreticalCapacity ?? sillons.lineCapacity ?? sillons.playerCapacity ?? sillons.maxFrequency ?? lineSlotDemandClient(line));
   const theoreticalCapacity = Math.max(0, Math.floor(Number.isFinite(fallbackCapacity) ? fallbackCapacity : 0));
-  const playerCapacity = theoreticalCapacity;
-  const displayCapacity = theoreticalCapacity;
+  const rawPlayerCapacity = Number(sillons.playerCapacity ?? bottleneck?.playerCapacity ?? theoreticalCapacity);
+  const playerCapacity = Math.max(0, Math.floor(Number.isFinite(rawPlayerCapacity) ? rawPlayerCapacity : theoreticalCapacity));
+  const displayCapacity = playerCapacity || theoreticalCapacity;
+  const rawResearchCapacity = Number(sillons.lineResearchCapacity ?? bottleneck?.lineResearchCapacity ?? 0);
+  const lineResearchCapacity = Math.max(0, Math.floor(Number.isFinite(rawResearchCapacity) ? rawResearchCapacity : 0));
   const rawUsedByPlayer = Number(sillons.requestedFrequency ?? lineSlotDemandClient(line));
   const usedByPlayer = Math.max(0, Math.floor(Number.isFinite(rawUsedByPlayer) ? rawUsedByPlayer : 0));
   const backgroundUsed = 0;
@@ -469,6 +472,7 @@ function lineSillonDataClient(line) {
     displayCapacity,
     theoreticalCapacity,
     playerCapacity,
+    lineResearchCapacity,
     backgroundUsed,
     usedByPlayer,
     usedByOthers,
@@ -502,6 +506,7 @@ function lineSillonLabel(line) {
     displayCapacity,
     theoreticalCapacity,
     playerCapacity,
+    lineResearchCapacity,
     usedByPlayer,
     usedByPlayers,
     remainingForLine,
@@ -515,6 +520,7 @@ function lineSillonLabel(line) {
     `Tronçon limitant : ${from} -> ${to}`,
     `Capacité totale RFN : ${round(theoreticalCapacity)} sillon(s)/h`,
     `Capacité possédée par les joueurs : ${round(playerCapacity)} / ${round(theoreticalCapacity)} sillon(s)/h`,
+    lineResearchCapacity && lineResearchCapacity < playerCapacity ? `Limite R&D de cette ligne : ${round(lineResearchCapacity)} sillon(s)/h` : '',
     `Sillons utilisés par cette ligne : ${round(usedByPlayer)} / ${round(displayCapacity)} sillon(s)/h`,
     lineSillonOtherUsageLabel(bottleneck),
     `Occupation joueurs sur le tronçon : ${round(usedByPlayers)} / ${round(playerCapacity)} sillon(s)/h (${round(utilizationPercent)}%)`,

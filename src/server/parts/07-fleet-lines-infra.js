@@ -1017,14 +1017,17 @@ function researchedSillonCapacity(player, line) {
 
 function computeLineSillonLimit(player, line, usage = null) {
   const requested = lineSlotDemand(player, line);
+  const lineResearchCapacity = Math.max(0, Number(researchedSillonCapacity(player, line) || 0));
   const sillonUsage = usage || buildSillonUsage();
   const segments = lineSegments(line);
   if (!segments.length) {
+    const maxFrequency = Math.min(requested, lineResearchCapacity || requested);
     return {
       requestedFrequency: requested,
-      maxFrequency: requested,
-      effectiveFrequency: requested,
-      constrained: false,
+      lineResearchCapacity,
+      maxFrequency,
+      effectiveFrequency: maxFrequency,
+      constrained: maxFrequency + 0.001 < requested,
       bottleneck: null,
       segments: []
     };
@@ -1039,8 +1042,11 @@ function computeLineSillonLimit(player, line, usage = null) {
     const model = segmentSillonCapacityModel(segment);
     // La capacité RFN est un plafond physique partagé. La compagnie ne peut
     // toutefois exploiter qu'un sillon au départ, puis débloque sa capacité
-    // commerciale par les deux sous-arbres d'Exploitation.
-    const capacity = Math.min(model.playerCapacity, researchedSillonCapacity(player, line));
+    // commerciale par les deux sous-arbres d'Exploitation. Cette limite R&D
+    // doit brider uniquement la ligne courante : elle ne doit pas réduire la
+    // capacité physique du tronçon, sinon une autre ligne consommant un seul
+    // sillon peut ramener celle-ci à zéro et suspendre à tort l'exploitation.
+    const capacity = Math.max(0, Number(model.playerCapacity || model.theoreticalCapacity || 0));
     const entry = sillonUsage.get(segment.key);
     const ownRequested = (entry?.entries || [])
       .filter(item => item.playerId === player.id && item.lineId === line.id)
@@ -1069,6 +1075,7 @@ function computeLineSillonLimit(player, line, usage = null) {
     const usedByPlayers = usedByOthers + requested;
     const totalUsed = usedByPlayers;
     const available = Math.max(0, capacity - usedByOthers);
+    const availableForLine = Math.max(0, Math.min(available, lineResearchCapacity || available));
     const utilizationPercent = Number(model.theoreticalCapacity || 0) > 0
       ? clamp(totalUsed / Number(model.theoreticalCapacity || 1) * 100, 0, 200)
       : 0;
@@ -1085,6 +1092,7 @@ function computeLineSillonLimit(player, line, usage = null) {
       tags: model.tags || [],
       theoreticalCapacity: round2(model.theoreticalCapacity || 0),
       backgroundUsed: round2(model.backgroundUsed || 0),
+      lineResearchCapacity: round2(lineResearchCapacity),
       playerCapacity: round2(capacity || 0),
       capacity: round2(capacity || 0),
       usedByOthers: round2(usedByOthers),
@@ -1093,13 +1101,14 @@ function computeLineSillonLimit(player, line, usage = null) {
       totalUsed: round2(totalUsed),
       utilizationPercent: round2(utilizationPercent),
       available: round2(available),
+      availableForLine: round2(availableForLine),
       requested
     };
     details.push(detail);
     if (capacity < lineCapacity) lineCapacity = capacity;
     if (Number(model.theoreticalCapacity || 0) < theoreticalCapacity) theoreticalCapacity = Number(model.theoreticalCapacity || 0);
-    if (available < maxFrequency) {
-      maxFrequency = available;
+    if (availableForLine < maxFrequency) {
+      maxFrequency = availableForLine;
       bottleneck = detail;
     }
   }
@@ -1108,6 +1117,7 @@ function computeLineSillonLimit(player, line, usage = null) {
   if (!Number.isFinite(lineCapacity)) lineCapacity = maxFrequency;
   if (!Number.isFinite(theoreticalCapacity)) theoreticalCapacity = lineCapacity;
   if (bottleneck && Number.isFinite(Number(bottleneck.theoreticalCapacity))) theoreticalCapacity = Number(bottleneck.theoreticalCapacity);
+  if (bottleneck && Number.isFinite(Number(bottleneck.playerCapacity ?? bottleneck.capacity))) lineCapacity = Number(bottleneck.playerCapacity ?? bottleneck.capacity);
   const effectiveFrequency = Math.max(0, Math.min(requested, maxFrequency));
   const totalUsedAtBottleneck = bottleneck ? Number(bottleneck.totalUsed || 0) : requested;
   return {
@@ -1115,6 +1125,7 @@ function computeLineSillonLimit(player, line, usage = null) {
     requestedFrequency: round2(requested),
     theoreticalCapacity: round2(theoreticalCapacity),
     backgroundUsed: 0,
+    lineResearchCapacity: round2(lineResearchCapacity),
     lineCapacity: round2(lineCapacity),
     playerCapacity: round2(lineCapacity),
     maxFrequency: round2(maxFrequency),
@@ -1135,6 +1146,7 @@ function sillonStatsPayload(info) {
     requestedFrequency: round2(info.requestedFrequency || 0),
     theoreticalCapacity: round2(info.theoreticalCapacity ?? info.bottleneck?.theoreticalCapacity ?? 0),
     backgroundUsed: round2(info.backgroundUsed ?? info.bottleneck?.backgroundUsed ?? 0),
+    lineResearchCapacity: round2(info.lineResearchCapacity ?? info.bottleneck?.lineResearchCapacity ?? 0),
     lineCapacity: round2(info.lineCapacity ?? info.maxFrequency ?? 0),
     playerCapacity: round2(info.playerCapacity ?? info.lineCapacity ?? info.maxFrequency ?? 0),
     maxFrequency: round2(info.maxFrequency || 0),
@@ -1156,6 +1168,7 @@ function sillonStatsPayload(info) {
       tags: Array.isArray(info.bottleneck.tags) ? info.bottleneck.tags.map(tag => cleanText(tag, 32)).filter(Boolean).slice(0, 8) : [],
       theoreticalCapacity: round2(info.bottleneck.theoreticalCapacity || 0),
       backgroundUsed: round2(info.bottleneck.backgroundUsed || 0),
+      lineResearchCapacity: round2(info.bottleneck.lineResearchCapacity ?? info.lineResearchCapacity ?? 0),
       playerCapacity: round2(info.bottleneck.playerCapacity ?? info.bottleneck.capacity ?? 0),
       capacity: round2(info.bottleneck.capacity || 0),
       usedByOthers: round2(info.bottleneck.usedByOthers || 0),
@@ -1171,7 +1184,8 @@ function sillonStatsPayload(info) {
       usedByPlayers: round2(info.bottleneck.usedByPlayers || 0),
       totalUsed: round2(info.bottleneck.totalUsed || 0),
       utilizationPercent: round2(info.bottleneck.utilizationPercent || 0),
-      available: round2(info.bottleneck.available || 0)
+      available: round2(info.bottleneck.available || 0),
+      availableForLine: round2(info.bottleneck.availableForLine ?? info.bottleneck.available ?? 0)
     } : null
   };
 }
