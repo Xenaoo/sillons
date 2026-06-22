@@ -2103,6 +2103,10 @@ function stationOptions(selectedId = '') {
 
 
 function station(id) {
-  const found = app.state.world.stationIndex[id] || dedupedStations(app.state.world.stations).find(s => s.id === id);
+  const world = app.state?.world || {};
+  if (!world.stationIndex && Array.isArray(world.stations)) {
+    world.stationIndex = Object.fromEntries(world.stations.map(item => [item.id, item]));
+  }
+  const found = world.stationIndex?.[id] || dedupedStations(world.stations || []).find(s => s.id === id);
   return canonicalizeStationDisplayClient(found);
 }

@@ -447,7 +447,10 @@ async function performAction(type, payload) {
   try {
     const response = await post('/api/action', { playerId: app.playerId, type, payload });
     if (response.state?.serverTime) app.serverClockOffset = Number(response.state.serverTime || Date.now()) - Date.now();
-    app.state = response.state || app.state;
+    if (response.state) {
+      canonicalizeStateStationDisplays(response.state);
+      app.state = response.state;
+    }
     invalidateMapProjection('action');
     if (app.state?.me) ensureSelectedStation();
     if (!response.ok) {

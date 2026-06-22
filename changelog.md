@@ -1,3 +1,12 @@
+# v69.21.2 — correction du lancement/arrêt des recherches R&D
+
+- Correction de l’erreur `app.state.world.stationIndex is undefined` qui pouvait apparaître au lancement ou à l’arrêt d’une recherche.
+- Normalisation complète de l’état renvoyé par `/api/action` avant le rendu client, comme lors des synchronisations serveur classiques.
+- Sécurisation de la résolution des gares côté carte : l’index des gares est reconstruit automatiquement si une action renvoie un état sans `stationIndex`.
+- Correction indirecte de l’affichage de la recherche en cours et de la file R&D après lancement : le rendu ne casse plus avant d’atteindre le panneau R&D.
+- Incrément de version : badge interface `v69.21.2`, version serveur/client `v69.21.2`, package `69.21.2`.
+- Schéma save : `189`.
+
 # v69.21.1 — correction du scroll avec une recherche sélectionnée
 
 - Correction du blocage du scroll de l’arbre R&D lorsqu’une fiche de recherche est ouverte.
