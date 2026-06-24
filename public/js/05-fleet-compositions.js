@@ -1990,8 +1990,9 @@ function renderOwnedTrain(train) {
   const passengerCapacity = Math.max(0, Number(profile.capacity || 0));
   const passengerLoad = Math.max(0, Math.round(Number(passengerRun.load || 0)));
   const passengerLoadPercent = passengerCapacity > 0 ? clamp(Math.round(passengerLoad / passengerCapacity * 100), 0, 100) : 0;
+  const servedStops = line ? lineStopsOf(line) : [];
   const lastServedStation = line && passengerRun.started
-    ? station(lineStops(line)[clamp(Number(passengerRun.stopIndex || 0), 0, Math.max(0, lineStops(line).length - 1))])
+    ? station(servedStops[clamp(Number(passengerRun.stopIndex || 0), 0, Math.max(0, servedStops.length - 1))])
     : null;
   const sellTip = line
     ? 'Impossible de vendre : Ce train est affecté à une ligne active.'
