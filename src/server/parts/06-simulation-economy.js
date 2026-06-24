@@ -272,6 +272,9 @@ function passengerRunForTrain(train, line, stopCount, now) {
     stopIndex: 0,
     direction: 1,
     nextStopAt: now,
+    departedAt: now,
+    lastStopAt: now,
+    legMs: 0,
     started: false,
     cohorts: [],
     load: 0,
@@ -299,37 +302,51 @@ function boardPassengersAtStop(run, stopIndex, direction, stopCount, capacity, d
 
 function processPassengerArrivals(player, line, trains, demandPerTick, ticketPrice, now, cadence) {
   const stops = lineStops(line);
-  if (stops.length < 2 || !trains.length || !lineMarketServices(line).includes('passengers')) return { alighted: 0, boarded: 0, displayedAlighted: 0, revenue: 0, averageLoad: null };
+  if (stops.length < 2 || !trains.length) {
+    return { alighted: 0, boarded: 0, displayedAlighted: 0, revenue: 0, averageLoad: null, serviceCalls: 0, expectedServiceCalls: 0, arrivals: [] };
+  }
   const legGameMs = Math.max(60000, Number(cadence?.oneWayMinutes || 1) * 60000 / Math.max(1, stops.length - 1));
   const gameTimeScale = Math.max(1, PASSENGER_SIMULATION_MINUTES_PER_TICK * 60000 / Math.max(1, TICK_MS));
   const legMs = Math.max(TICK_MS * 2, Math.round(legGameMs / gameTimeScale));
-  const demandPerStop = Math.max(0, demandPerTick * legMs / Math.max(1, TICK_MS) / Math.max(1, trains.length) / Math.max(1, stops.length - 1));
+  const passengerServiceEnabled = lineMarketServices(line).includes('passengers');
+  const demandPerStop = passengerServiceEnabled
+    ? Math.max(0, demandPerTick * legMs / Math.max(1, TICK_MS) / Math.max(1, trains.length) / Math.max(1, stops.length - 1))
+    : 0;
   let alighted = 0;
   let boarded = 0;
   let revenue = 0;
   let loadTotal = 0;
+  let loadTrainCount = 0;
   let displayedAlighted = 0;
+  let serviceCalls = 0;
+  const arrivals = [];
   for (const train of trains) {
     const model = BALANCE.trains[train.modelId];
     if (!model) continue;
     const profile = getTrainOperatingProfile(train, model, player);
     const capacity = Math.max(0, Math.floor(Number(profile.capacity || 0)));
-    if (!capacity) continue;
     const run = passengerRunForTrain(train, line, stops.length, now);
     if (!run.started) {
-      const added = boardPassengersAtStop(run, run.stopIndex, run.direction, stops.length, capacity, demandPerStop);
+      const added = capacity > 0 ? boardPassengersAtStop(run, run.stopIndex, run.direction, stops.length, capacity, demandPerStop) : 0;
       run.lastBoarded = added;
       run.lastAlighted = 0;
       run.lastRevenue = 0;
       run.started = true;
+      run.lastStopAt = now;
+      run.departedAt = now;
+      run.legMs = legMs;
       run.nextStopAt = now + legMs;
       boarded += added;
-      loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+      if (capacity > 0) {
+        loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+        loadTrainCount += 1;
+      }
       displayedAlighted += run.lastAlighted;
       continue;
     }
     let safety = 0;
     while (now >= Number(run.nextStopAt || 0) && safety++ < 4) {
+      const arrivedAt = Number(run.nextStopAt || now);
       const arrivingAt = clamp(Number(run.stopIndex || 0) + Number(run.direction || 1), 0, stops.length - 1);
       let exitCount = 0;
       const remaining = [];
@@ -354,15 +371,64 @@ function processPassengerArrivals(player, line, trains, demandPerTick, ticketPri
       run.lastAlighted += exitCount;
       run.stopIndex = arrivingAt;
       if (arrivingAt === stops.length - 1 || arrivingAt === 0) run.direction = -Number(run.direction || 1) || 1;
-      const added = boardPassengersAtStop(run, arrivingAt, run.direction, stops.length, capacity, demandPerStop);
+      const added = capacity > 0 ? boardPassengersAtStop(run, arrivingAt, run.direction, stops.length, capacity, demandPerStop) : 0;
       boarded += added;
       run.lastBoarded += added;
-      run.nextStopAt = Number(run.nextStopAt || now) + legMs;
+      run.lastStopAt = arrivedAt;
+      run.departedAt = arrivedAt;
+      run.legMs = legMs;
+      run.nextStopAt = arrivedAt + legMs;
+      serviceCalls += 1;
+      arrivals.push({ trainId: train.id, stopIndex: arrivingAt, stationId: stops[arrivingAt] || null, boarded: added, alighted: exitCount });
     }
-    loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+    if (capacity > 0) {
+      loadTotal += Math.min(1, run.load / Math.max(1, capacity));
+      loadTrainCount += 1;
+    }
     displayedAlighted += Math.max(0, Number(run.lastAlighted || 0));
   }
-  return { alighted, boarded, displayedAlighted, revenue, averageLoad: trains.length ? round2(loadTotal / trains.length * 100) : null };
+  return {
+    alighted,
+    boarded,
+    displayedAlighted,
+    revenue,
+    averageLoad: loadTrainCount ? round2(loadTotal / loadTrainCount * 100) : null,
+    serviceCalls,
+    expectedServiceCalls: trains.length * TICK_MS / Math.max(1, legMs),
+    arrivals
+  };
+}
+
+function lineCirculationDemandFactor(cadence) {
+  const speed = Math.max(0, Number(cadence?.operatingSpeedKmh || 0));
+  // La demande produite par tick reflète le débit de la rame : à capacité égale,
+  // un matériel plus rapide dessert davantage de gares sur une heure de jeu.
+  return clamp(speed / 100, 0.45, 2.4);
+}
+
+function averagePassengerTripShare(stopCount) {
+  const legs = Math.max(1, Number(stopCount || 0) - 1);
+  return clamp(0.58 / legs + 0.42 * (legs + 1) / (2 * legs), 0.18, 1);
+}
+
+function expectedServiceCallsForCadence(cadence, stopCount, trainCount) {
+  const legGameMs = Math.max(60000, Number(cadence?.oneWayMinutes || 1) * 60000 / Math.max(1, Number(stopCount || 0) - 1));
+  const gameTimeScale = Math.max(1, PASSENGER_SIMULATION_MINUTES_PER_TICK * 60000 / Math.max(1, TICK_MS));
+  const legMs = Math.max(TICK_MS * 2, Math.round(legGameMs / gameTimeScale));
+  return Math.max(0, Number(trainCount || 0)) * TICK_MS / Math.max(1, legMs);
+}
+
+function scalePassageRights(rights, factor) {
+  const ratio = Math.max(0, Number(factor || 0));
+  return {
+    total: Math.max(0, Number(rights?.total || 0) * ratio),
+    infrastructureTotal: Math.max(0, Number(rights?.infrastructureTotal || 0) * ratio),
+    stationTotal: Math.max(0, Number(rights?.stationTotal || 0) * ratio),
+    allocations: (rights?.allocations || []).map(allocation => ({
+      ...allocation,
+      amount: Math.max(0, Number(allocation?.amount || 0) * ratio)
+    }))
+  };
 }
 
 function computeAnnualLineCapacity(profile, cadence, service, capacityFactor) {
@@ -394,8 +460,14 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   }
   let revenue = 0;
   let expenses = 0;
+  let cashRevenue = 0;
+  let cashExpenses = 0;
   let passengers = 0;
   let freight = 0;
+  let projectedStationPassengers = 0;
+  let projectedStationFreight = 0;
+  let expectedStationServiceCalls = 0;
+  let actualStationServiceCalls = 0;
   let co2 = 0;
   let punctualityWeighted = 0;
   let satisfactionWeighted = 0;
@@ -654,23 +726,55 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const effectiveTicketPrice = lineTicketPrice(line, distance);
     const effectiveTariff = effectiveTicketPrice / Math.max(1, distance);
     const profitabilityMultiplier = operatingModel.profitabilityMultiplier || 1;
+    const circulationFactor = lineCirculationDemandFactor(cadence);
+    const circulatingPax = linePax * circulationFactor;
+    const circulatingFreight = lineFreight * circulationFactor;
+    const legs = Math.max(1, stops.length - 1);
+    const expectedServiceCalls = expectedServiceCallsForCadence(cadence, stops.length, availableTrains.length);
     const passengerArrivals = dryRun
-      ? { alighted: Math.round(linePax), boarded: Math.round(linePax), displayedAlighted: Math.round(linePax), revenue: linePax * distance * effectiveTariff, averageLoad: maxPax > 0 ? round2(linePax / maxPax * 100) : null }
-      : processPassengerArrivals(player, effectiveLine, availableTrains, linePax, effectiveTicketPrice, Date.now(), cadence);
-    const baseTicketRevenue = passengerArrivals.revenue * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
-    const ticketRevenue = baseTicketRevenue * fareComplianceFactor;
-    const ancillaryRevenue = passengerArrivals.alighted * 0.35 * averageCommerce(player, line);
-    const freightRevenue = lineFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * (operatingModel.profitabilityMultiplier || 1) * ECONOMY.freightRevenueMultiplier;
-    const serviceRevenue = ticketRevenue + ancillaryRevenue + freightRevenue;
-    const lineRevenue = serviceRevenue * dispatchRevenueFactor;
+      ? {
+          alighted: Math.round(circulatingPax / legs),
+          boarded: Math.round(circulatingPax / legs),
+          displayedAlighted: Math.round(circulatingPax / legs),
+          revenue: 0,
+          averageLoad: maxPax > 0 ? round2(linePax / maxPax * 100) : null,
+          serviceCalls: expectedServiceCalls,
+          expectedServiceCalls,
+          arrivals: []
+        }
+      : processPassengerArrivals(player, effectiveLine, availableTrains, circulatingPax, effectiveTicketPrice, Date.now(), cadence);
+
+    // Les montants affichés sont une moyenne fixe par tick. Elle dépend du
+    // matériel réellement en circulation, de sa capacité et de sa vitesse
+    // (via `circulationFactor` et la cadence), sans osciller entre deux gares.
+    const projectedBaseTicketRevenue = circulatingPax * effectiveTicketPrice * averagePassengerTripShare(stops.length) / legs * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
+    const projectedTicketRevenue = projectedBaseTicketRevenue * fareComplianceFactor;
+    const projectedAncillaryRevenue = circulatingPax / legs * 0.35 * averageCommerce(player, line);
+    const projectedFreightRevenue = circulatingFreight * distance * (0.045 + player.tech.freight * 0.003) * (operatingModel.freightRevenueMultiplier || 1) * profitabilityMultiplier * ECONOMY.freightRevenueMultiplier;
+    const projectedServiceRevenue = projectedTicketRevenue + projectedAncillaryRevenue + projectedFreightRevenue;
+    const lineRevenue = projectedServiceRevenue * dispatchRevenueFactor;
+
+    // L'argent réel n'est encaissé qu'à une arrivée. Les recettes fret sont
+    // distribuées sur ces mêmes dessertes pour ne plus créditer une rame entre
+    // deux gares. La moyenne des encaissements rejoint la projection ci-dessus.
+    const actualServiceRatio = dryRun ? 1 : passengerArrivals.serviceCalls / Math.max(0.0001, passengerArrivals.expectedServiceCalls || expectedServiceCalls);
+    const actualBaseTicketRevenue = dryRun ? projectedBaseTicketRevenue : passengerArrivals.revenue * profitabilityMultiplier * ECONOMY.passengerRevenueMultiplier;
+    const actualTicketRevenue = actualBaseTicketRevenue * fareComplianceFactor;
+    const actualAncillaryRevenue = dryRun ? projectedAncillaryRevenue : passengerArrivals.alighted * 0.35 * averageCommerce(player, line);
+    const actualFreightRevenue = projectedFreightRevenue * actualServiceRatio;
+    const actualFreightTons = circulatingFreight * actualServiceRatio;
+    const actualServiceRevenue = actualTicketRevenue + actualAncillaryRevenue + actualFreightRevenue;
+    const actualLineRevenue = actualServiceRevenue * dispatchRevenueFactor;
     const energyCost = computeEnergyCost(player, operatingModel, distance, serviceFactor, line.electrified);
     const maintenanceResearchDiscount = 1 - Math.min(0.26, Number(player.tech.maintenance || 0) * 0.006);
     const maintenanceCost = operatingModel.maintenance * distance * serviceFactor * (1 + (1 - train.condition) * 1.5) * (1 - Math.min(0.22, player.tech.operations * 0.025)) * policy.costMultiplier * maintenanceResearchDiscount * (1 - Math.min(0.16, techLevel(player, 'steam_workshops') * 0.025)) * ECONOMY.maintenanceCostMultiplier;
     const passageRights = computePassageRights(player, effectiveLine, operatingModel, distance, infrastructureUsage);
     const accessCost = passageRights.total;
-    if (!dryRun) recordPassageRights(passageRightsLedger, player, line, passageRights);
+    const actualPassageRights = dryRun ? passageRights : scalePassageRights(passageRights, actualServiceRatio);
+    const actualAccessCost = actualPassageRights.total;
+    if (!dryRun) recordPassageRights(passageRightsLedger, player, line, actualPassageRights);
     const lineInfrastructureCost = computeLineInfrastructureCost(player, line, lineInfrastructureMultiplier, infrastructureUsage);
-    const commercialBaseRevenue = baseTicketRevenue + ancillaryRevenue + freightRevenue;
+    const commercialBaseRevenue = projectedBaseTicketRevenue + projectedAncillaryRevenue + projectedFreightRevenue;
     const grossCommercialOperatingCost = Math.max(0, commercialBaseRevenue - ECONOMY.lineCommercialCostThreshold) * ECONOMY.lineCommercialCostRate;
     const commercialSalesCost = grossCommercialOperatingCost * 0.42 * (1 - controllerCoverage * 0.08);
     const commercialControlCost = grossCommercialOperatingCost * 0.28 * (1 - controllerCoverage * 0.22);
@@ -678,9 +782,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const commercialOperatingCost = commercialSalesCost + commercialControlCost + commercialAdministrationCost;
     const variableExpenses = energyCost + maintenanceCost + accessCost + lineInfrastructureCost + commercialOperatingCost;
     const contribution = lineRevenue - variableExpenses;
+    const actualVariableExpenses = energyCost + maintenanceCost + actualAccessCost + lineInfrastructureCost + commercialOperatingCost;
     const lineCo2 = computeCo2(operatingModel, distance, serviceFactor);
     revenue += lineRevenue;
+    cashRevenue += actualLineRevenue;
     expenses += variableExpenses;
+    cashExpenses += actualVariableExpenses;
 
     let reliabilityCondition = 0;
     for (const entry of bundle.entries) {
@@ -755,6 +862,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         passengerLoad: annualPassengerLoad,
         passengerBoarded: Math.round(passengerArrivals.boarded),
         passengerAlighted: Math.round(passengerArrivals.displayedAlighted),
+        serviceCalls: Math.round(passengerArrivals.serviceCalls || 0),
+        expectedServiceCalls: round2(passengerArrivals.expectedServiceCalls || expectedServiceCalls),
         freightLoad: annualFreightLoad,
         availableTrainCount: annualCapacity.availableTrainCount,
         activeTrainCount: annualCapacity.activeTrainCount,
@@ -772,10 +881,14 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
       finance: {
         ticketPrice: Math.round(effectiveTicketPrice),
         farePerKm: round2(effectiveTariff),
-        ticketRevenue: Math.round(ticketRevenue),
-        ancillaryRevenue: Math.round(ancillaryRevenue),
-        freightRevenue: Math.round(freightRevenue),
-        dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - serviceRevenue)),
+        ticketRevenue: Math.round(projectedTicketRevenue),
+        ancillaryRevenue: Math.round(projectedAncillaryRevenue),
+        freightRevenue: Math.round(projectedFreightRevenue),
+        dispatchRevenueBoost: Math.round(Math.max(0, lineRevenue - projectedServiceRevenue)),
+        actualTicketRevenue: Math.round(actualTicketRevenue),
+        actualAncillaryRevenue: Math.round(actualAncillaryRevenue),
+        actualFreightRevenue: Math.round(actualFreightRevenue),
+        actualLineRevenue: Math.round(actualLineRevenue),
         lineInfrastructureCost: Math.round(lineInfrastructureCost),
         commercialOperatingCost: Math.round(commercialOperatingCost),
         commercialSalesCost: Math.round(commercialSalesCost),
@@ -789,7 +902,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         passageRights: Math.round(accessCost),
         infrastructurePassageCost: Math.round(passageRights.infrastructureTotal || 0),
         stationAccessCost: Math.round(passageRights.stationTotal || 0),
+        actualAccessCost: Math.round(actualAccessCost),
         variableExpenses: Math.round(variableExpenses),
+        actualVariableExpenses: Math.round(actualVariableExpenses),
         contribution: Math.round(contribution),
         allocatedOverhead: 0,
         netProfit: Math.round(contribution),
@@ -799,7 +914,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     activeLineStats.push({ line, stats: line.stats, weight: Math.max(1, lineRevenue, distance * Math.max(1, effectiveFrequency)) });
 
     passengers += passengerArrivals.alighted;
-    freight += lineFreight;
+    freight += actualFreightTons;
+    projectedStationPassengers += circulatingPax / legs;
+    projectedStationFreight += circulatingFreight;
+    expectedStationServiceCalls += passengerArrivals.expectedServiceCalls || expectedServiceCalls;
+    actualStationServiceCalls += passengerArrivals.serviceCalls || 0;
     co2 += computeCo2(operatingModel, distance, serviceFactor);
     punctualityWeighted += punctuality * Math.max(1, linePax + lineFreight * 0.5);
     satisfactionWeighted += satisfaction * Math.max(1, linePax + lineFreight * 0.5);
@@ -814,13 +933,17 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const model = BALANCE.trains[train.modelId];
     return sum + (!used && model ? model.price * ECONOMY.idleTrainStorageFactor : 0);
   }, 0);
-  const stationRevenue = computeOwnedStationRevenue(player, passengers, freight);
+  const stationRevenue = computeOwnedStationRevenue(player, projectedStationPassengers, projectedStationFreight, expectedStationServiceCalls);
+  const actualStationRevenue = dryRun
+    ? stationRevenue
+    : stationRevenue * actualStationServiceCalls / Math.max(0.0001, expectedStationServiceCalls);
   const researchCost = researchOperatingCost(player);
   if (!dryRun && player.researchProject && researchCost > 0) {
     const refundableLabCost = Math.max(0, Math.round(ECONOMY.researchLabBaseCost || 0));
     player.researchProject.operatingCostAccrued = Math.max(0, Math.round(Number(player.researchProject.operatingCostAccrued || 0) + refundableLabCost));
   }
   revenue += stationRevenue;
+  cashRevenue += actualStationRevenue;
   const sharedCosts = staffCost + stationCost + debtCost + idleTrainCost + researchCost;
   const allocationWeight = activeLineStats.reduce((sum, item) => sum + item.weight, 0);
   for (const item of activeLineStats) {
@@ -837,9 +960,11 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     item.stats.profit = finance.netProfit;
   }
   expenses += sharedCosts;
+  cashExpenses += sharedCosts;
 
-  const profit = revenue - expenses;
-  if (dryRun) return { revenue, expenses, profit, passengers, freight, co2 };
+  const profit = cashRevenue - cashExpenses;
+  const projectedProfit = revenue - expenses;
+  if (dryRun) return { revenue, expenses, profit: projectedProfit, passengers, freight, co2 };
   player.cash += profit;
   if (player.cash < -100000) {
     player.debt += Math.abs(player.cash) * 1.12;
@@ -856,12 +981,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
 
   player.stats.passengers += Math.round(passengers);
   player.stats.freightTons += Math.round(freight);
-  player.stats.revenue += Math.round(revenue);
-  player.stats.expenses += Math.round(expenses);
+  player.stats.revenue += Math.round(cashRevenue);
+  player.stats.expenses += Math.round(cashExpenses);
   player.stats.profit += Math.round(profit);
   player.stats.lastRevenue = Math.round(revenue);
   player.stats.lastExpenses = Math.round(expenses);
-  player.stats.lastProfit = Math.round(profit);
+  player.stats.lastProfit = Math.round(projectedProfit);
   const lineFinanceTotals = activeLineStats.reduce((acc, item) => {
     const finance = item.stats?.finance || {};
     acc.ticketRevenue += Number(finance.ticketRevenue || 0);
@@ -1481,9 +1606,11 @@ function actionSetElectricityOrder(player, payload) {
 }
 
 
-function computeOwnedStationRevenue(player, passengers, freightTons) {
+function computeOwnedStationRevenue(player, passengers, freightTons, serviceCalls = 0) {
   const assets = Object.values(player.stations || {});
-  if (!assets.length) return 0;
+  // Une gare ne crée plus de revenu passif : ses recettes sont encaissées à
+  // l'occasion d'une desserte effective, jamais pendant la circulation.
+  if (!assets.length || Number(serviceCalls || 0) <= 0) return 0;
   const stationBase = assets.reduce((sum, asset) => (
     sum
     + (asset.level || 1) * ECONOMY.ownedStationIncomeBase

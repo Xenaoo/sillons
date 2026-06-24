@@ -261,6 +261,9 @@ function normalizeTrain(raw, ownerId) {
     stopIndex: Math.max(0, Math.floor(Number(passengerRun.stopIndex || 0))),
     direction: Number(passengerRun.direction) < 0 ? -1 : 1,
     nextStopAt: Math.max(0, Number(passengerRun.nextStopAt || 0)),
+    departedAt: Math.max(0, Number(passengerRun.departedAt || 0)),
+    lastStopAt: Math.max(0, Number(passengerRun.lastStopAt || 0)),
+    legMs: Math.max(0, Number(passengerRun.legMs || 0)),
     started: Boolean(passengerRun.started),
     load: Math.max(0, Math.floor(Number(passengerRun.load || 0))),
     cohorts: Array.isArray(passengerRun.cohorts) ? passengerRun.cohorts
@@ -609,10 +612,8 @@ function applyPassageRightsLedger(ledger) {
     owner.cash += amount;
     owner.stats.revenue += amount;
     owner.stats.profit += amount;
-    owner.stats.lastRevenue += amount;
-    owner.stats.lastProfit += amount;
     owner.stats.lastBreakdown = owner.stats.lastBreakdown || {};
-    owner.stats.lastBreakdown.passageRightsRevenue = Math.round(Number(owner.stats.lastBreakdown.passageRightsRevenue || 0) + amount);
+    owner.stats.lastBreakdown.realizedPassageRightsRevenue = Math.round(Number(owner.stats.lastBreakdown.realizedPassageRightsRevenue || 0) + amount);
   }
 }
 

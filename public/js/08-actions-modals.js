@@ -201,6 +201,10 @@ if (action === 'open-composition') {
   renderAll();
   return;
 }
+if (action === 'follow-train') {
+  followTrainOnMap(button.dataset.id || '', app.state?.me?.id || '');
+  return;
+}
 if (action === 'save-train-composition') {
   const trainId = button.dataset.id;
   const train = app.state.me.trains.find(t => t.id === trainId);

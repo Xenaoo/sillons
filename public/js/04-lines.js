@@ -294,7 +294,7 @@ function renderLineInsightPanels(line) {
   return `
     <div class="line-insight-grid">
       <section class="line-insight-panel">
-        <h4>Finance /h</h4>
+        <h4>Finance /h (moyenne)</h4>
         <div class="line-kv">
           <span>Recettes</span><b>${lineMoney(stats.revenue)}</b>
           <span>Couts variables</span><b>${lineMoney(finance.variableExpenses ?? stats.expenses)}</b>

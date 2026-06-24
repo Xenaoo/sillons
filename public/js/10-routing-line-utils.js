@@ -1736,6 +1736,9 @@ function topResultTooltip(me) {
   const revenues = Number(b.lineRevenue || me.stats.lastRevenue || 0) + Number(b.stationRevenue || 0);
   const expenses = Number(b.variableLineCost || 0) + Number(b.sharedCosts || 0);
   return [
+    'Projection moyenne : capacité, vitesse et trains en circulation.',
+    'Les encaissements réels interviennent uniquement aux gares desservies.',
+    '---------------------------------------------',
     `Revenus totaux : ${moneyPerHour(revenues)}`,
     `Dépenses totales : ${moneyPerHour(expenses)}`,
     `Résultat net : ${moneyPerHour(me.stats.lastProfit)}`,

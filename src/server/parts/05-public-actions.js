@@ -68,6 +68,17 @@ function publicMapTrain(train, player = null) {
     modelId: train?.modelId,
     condition: Number(train?.condition ?? 0.9),
     maintenance: { active: Boolean(train?.maintenance?.active) },
+    passengerRun: train?.passengerRun ? {
+      simulationVersion: Number(train.passengerRun.simulationVersion || 0),
+      lineId: train.passengerRun.lineId || null,
+      stopIndex: Number(train.passengerRun.stopIndex || 0),
+      direction: Number(train.passengerRun.direction || 1) < 0 ? -1 : 1,
+      nextStopAt: Number(train.passengerRun.nextStopAt || 0),
+      departedAt: Number(train.passengerRun.departedAt || 0),
+      lastStopAt: Number(train.passengerRun.lastStopAt || 0),
+      legMs: Number(train.passengerRun.legMs || 0),
+      started: Boolean(train.passengerRun.started)
+    } : null,
     // La vitesse personnalisée est nécessaire à l'animation sur la carte ;
     // les autres propriétés restent dans `me.trains` pour leur propriétaire.
     profile: profile ? { speed: Number(profile.speed || model.speed || 0) } : null

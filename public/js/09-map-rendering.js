@@ -133,6 +133,7 @@ function drawMap(options = {}) {
   const trainDrawQueue = drawAllLines(ctx, lite) || [];
   drawStations(ctx, lite);
   drawTrainMarkersOnCanvas(ctx, trainDrawQueue, lite);
+  updateFollowedTrainPosition();
   if (!lite) drawMapHud(ctx);
   if (!lite) drawTooltip(ctx);
 }
@@ -345,9 +346,11 @@ function drawAllLines(ctx, lite = false) {
         trainDrawQueue.push({
           points: route.points,
           color: player.color,
-          line: { ...visualLine, id: `${player.id}:${line.id}`, visualAverageSpeed: averageSpeed },
+          line: { ...visualLine, id: `${player.id}:${line.id}`, sourceLineId: line.id, visualAverageSpeed: averageSpeed },
           model,
           own,
+          playerId: player.id,
+          playerName: player.name,
           train,
           instanceIndex: index,
           instanceCount: trains.length,
@@ -867,7 +870,71 @@ function trainMotionAtOneWaySecond(plan, second) {
   return { positionKm: Number(plan?.totalKm || 0), speedKmh: 0, dwell: true };
 }
 
+function trainServerMotion(line, train, model, route, points) {
+  const run = train?.passengerRun;
+  const sourceLineId = line?.sourceLineId || line?.id;
+  if (!run?.started || !run.lineId || run.lineId !== sourceLineId) return null;
+
+  const totalKm = trainVisualRouteDistanceKm(line, route);
+  const stops = trainVisualStopPositionsKm(line, route, points, totalKm);
+  if (stops.length < 2 || totalKm <= 0) return null;
+
+  const fromIndex = clamp(Math.floor(Number(run.stopIndex || 0)), 0, stops.length - 1);
+  const direction = Number(run.direction || 1) < 0 ? -1 : 1;
+  const toIndex = clamp(fromIndex + direction, 0, stops.length - 1);
+  const fromKm = Number(stops[fromIndex] || 0);
+  const toKm = Number(stops[toIndex] || fromKm);
+  const now = typeof serverNow === 'function' ? serverNow() : Date.now();
+  const departedAt = Math.max(0, Number(run.departedAt || run.lastStopAt || 0));
+  const nextStopAt = Math.max(0, Number(run.nextStopAt || 0));
+  const legMs = Math.max(0, Number(run.legMs || nextStopAt - departedAt || 0));
+  if (!departedAt || !nextStopAt || nextStopAt <= departedAt || !legMs) return null;
+
+  // Une courte immobilisation rend l'arrivée explicite. Pendant ce créneau,
+  // le remplissage et les recettes affichés correspondent visuellement à la gare.
+  const configuredTickMs = Math.max(250, Number(app.state?.game?.tickMs || 2000));
+  const dwellMs = Math.min(configuredTickMs * 0.72, legMs * 0.2);
+  const departureForMap = Math.min(nextStopAt, departedAt + dwellMs);
+  if (now <= departureForMap) {
+    return {
+      progress: clamp(fromKm / totalKm, 0, 1),
+      reverse: direction < 0,
+      speedKmh: 0,
+      dwell: true,
+      oneWaySeconds: legMs / 1000,
+      stopCount: stops.length,
+      dwellSeconds: dwellMs / 1000
+    };
+  }
+  if (now >= nextStopAt) {
+    return {
+      progress: clamp(toKm / totalKm, 0, 1),
+      reverse: direction < 0,
+      speedKmh: 0,
+      dwell: true,
+      oneWaySeconds: legMs / 1000,
+      stopCount: stops.length,
+      dwellSeconds: dwellMs / 1000
+    };
+  }
+
+  const ratio = clamp((now - departureForMap) / Math.max(1, nextStopAt - departureForMap), 0, 1);
+  const positionKm = fromKm + (toKm - fromKm) * ratio;
+  const speedKmh = Math.abs(toKm - fromKm) / Math.max(0.000001, (nextStopAt - departureForMap) / 3600000);
+  return {
+    progress: clamp(positionKm / totalKm, 0, 1),
+    reverse: direction < 0,
+    speedKmh,
+    dwell: false,
+    oneWaySeconds: legMs / 1000,
+    stopCount: stops.length,
+    dwellSeconds: dwellMs / 1000
+  };
+}
+
 function trainVisualMotion(line, train, model, route, instanceIndex = 0, instanceCount = 1, points = null) {
+  const serverMotion = trainServerMotion(line, train, model, route, points);
+  if (serverMotion) return serverMotion;
   const totalKm = trainVisualRouteDistanceKm(line, route);
   const hasGeoRoute = Array.isArray(route?.coords) && route.coords.length >= 2;
   if (!hasGeoRoute && !points?.length) {
@@ -973,6 +1040,7 @@ function drawTrainMarkerCanvas(ctx, point, job, pose, lite = false) {
 }
 
 function drawTrainMarkersOnCanvas(ctx, jobs = [], lite = false) {
+  app.map.trainHit = [];
   if (!ctx || !Array.isArray(jobs) || !jobs.length) {
     clearTrainMarkerLayer();
     return;
@@ -984,8 +1052,95 @@ function drawTrainMarkersOnCanvas(ctx, jobs = [], lite = false) {
     if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon)) continue;
     const point = project(pose.lon, pose.lat);
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+    registerTrainHitTarget(job, point, pose);
     drawTrainMarkerCanvas(ctx, point, job, pose, lite);
   }
+}
+
+function registerTrainHitTarget(job, point, pose) {
+  if (!job?.train?.id || !point) return;
+  const radius = job.own ? 18 : 15;
+  app.map.trainHit.push({
+    playerId: job.playerId || '',
+    playerName: job.playerName || '',
+    trainId: job.train.id,
+    lineId: job.line?.sourceLineId || job.line?.id || '',
+    trainName: job.model?.name || job.train.modelId || 'Train',
+    own: Boolean(job.own),
+    point,
+    pose,
+    job,
+    radius
+  });
+}
+
+function hitTrainAt(point, maxDistance = null) {
+  const threshold = Number.isFinite(maxDistance) ? maxDistance : 20;
+  return (app.map.trainHit || [])
+    .map((target, index) => ({ ...target, index, d: Math.hypot(Number(target.point?.x || 0) - point.x, Number(target.point?.y || 0) - point.y) }))
+    .filter(target => target.d <= Math.max(threshold, target.radius || 0))
+    .sort((a, b) => {
+      if (a.own !== b.own) return a.own ? -1 : 1;
+      if (a.d !== b.d) return a.d - b.d;
+      return b.index - a.index;
+    })[0] || null;
+}
+
+function findTrainMapJob(trainId, playerId = '') {
+  return (app.map.trainMarkerJobs || []).find(job => (
+    String(job?.train?.id || '') === String(trainId || '')
+    && (!playerId || String(job?.playerId || '') === String(playerId))
+  )) || null;
+}
+
+function updateFollowedTrainPosition(force = false) {
+  const followed = app.map.followedTrain;
+  if (!followed || !app.map.leaflet) return false;
+  const job = findTrainMapJob(followed.trainId, followed.playerId);
+  if (!job) {
+    app.map.followedTrain = null;
+    return false;
+  }
+  const pose = computeTrainMarkerPose(job);
+  if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon)) return false;
+
+  const now = performance.now();
+  if (!force && now - Number(app.map.lastFollowCenterAt || 0) < 260) return true;
+  const map = app.map.leaflet;
+  const target = [pose.lat, pose.lon];
+  const current = map.getCenter?.();
+  const distance = current && typeof map.distance === 'function' ? map.distance(current, target) : Number.POSITIVE_INFINITY;
+  const threshold = Math.max(250, Number(map.getBounds?.()?.getNorthEast?.().distanceTo?.(map.getBounds?.()?.getSouthWest?.()) || 0) * 0.12);
+  if (!force && Number.isFinite(distance) && distance < threshold) return true;
+
+  app.map.lastFollowCenterAt = now;
+  app.map.followingProgrammatically = true;
+  try {
+    const zoom = force ? Math.max(8, Number(map.getZoom?.() || 8)) : Number(map.getZoom?.() || 8);
+    map.setView(target, zoom, { animate: false, noMoveStart: true });
+  } finally {
+    requestAnimationFrame(() => { app.map.followingProgrammatically = false; });
+  }
+  return true;
+}
+
+function followTrainOnMap(trainId, playerId = app.state?.me?.id || '') {
+  const job = findTrainMapJob(trainId, playerId);
+  if (!job) {
+    toast('Ce train n’est pas actuellement visible sur une ligne active.', 'error');
+    return;
+  }
+  app.map.followedTrain = { trainId: job.train.id, playerId: job.playerId || playerId };
+  $('#osmMap')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  updateFollowedTrainPosition(true);
+  requestMapRedraw();
+  toast(`Suivi activé : ${job.model?.name || 'train'}. Clique hors d’un train pour l’arrêter.`, 'info');
+}
+
+function stopFollowingTrain() {
+  if (!app.map.followedTrain) return;
+  app.map.followedTrain = null;
+  requestMapRedraw();
 }
 
 

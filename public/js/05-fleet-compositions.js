@@ -1990,6 +1990,9 @@ function renderOwnedTrain(train) {
   const passengerCapacity = Math.max(0, Number(profile.capacity || 0));
   const passengerLoad = Math.max(0, Math.round(Number(passengerRun.load || 0)));
   const passengerLoadPercent = passengerCapacity > 0 ? clamp(Math.round(passengerLoad / passengerCapacity * 100), 0, 100) : 0;
+  const lastServedStation = line && passengerRun.started
+    ? station(lineStops(line)[clamp(Number(passengerRun.stopIndex || 0), 0, Math.max(0, lineStops(line).length - 1))])
+    : null;
   const sellTip = line
     ? 'Impossible de vendre : Ce train est affecté à une ligne active.'
     : inMaint
@@ -2025,9 +2028,10 @@ function renderOwnedTrain(train) {
           <div><span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b></div>
         </div>
         ${passengerCapacity > 0 ? `
-          <div class="train-passenger-load" title="Voyageurs actuellement à bord de ce train">
+          <div class="train-passenger-load" title="Le remplissage ne change qu’à l’arrivée dans une gare desservie.">
             <div><span>Remplissage</span><b>${passengerLoadPercent}% · ${formatInt(passengerLoad)} / ${formatInt(passengerCapacity)} voyageurs</b></div>
             <div class="progress train-passenger-load-bar"><i style="width:${passengerLoadPercent}%"></i></div>
+            ${lastServedStation ? `<small>Dernière desserte : ${escapeHtml(lastServedStation.name)}</small>` : ''}
             ${passengerRun.lastAlighted > 0 ? `<small>${formatInt(passengerRun.lastAlighted)} descente(s) au dernier arrêt · ${formatSignedMoney(passengerRun.lastRevenue || 0)}</small>` : ''}
           </div>
         ` : ''}
@@ -2039,6 +2043,7 @@ function renderOwnedTrain(train) {
           </div>
         `}
         <div class="actions">
+          <button data-action="follow-train" data-id="${train.id}" ${line && !inMaint && condition > 0 ? '' : 'disabled'} ${tooltipAttr(line && !inMaint && condition > 0 ? 'Centre la carte sur ce train et active son suivi.' : 'Le suivi est disponible lorsqu’un train circule sur une ligne active.')}>Suivre sur la carte</button>
           <button data-action="open-composition" data-id="${train.id}">Composition</button>
           <button class="danger" data-action="sell-train" data-id="${train.id}" ${tooltipAttr(sellTip)} ${line || inMaint ? 'disabled' : ''}>Vendre</button>
         </div>

@@ -79,7 +79,9 @@ const TICK_MS = 2000;
 // Cinq minutes d'exploitation sont simulées à chaque tick : les arrêts restent
 // visibles dans le jeu sans imposer une attente réelle de plusieurs heures.
 const PASSENGER_SIMULATION_MINUTES_PER_TICK = 5;
-const PASSENGER_SIMULATION_VERSION = 2;
+// La position affichée sur la carte utilise désormais cet état de circulation.
+// Incrémenter la version remet à zéro les anciens cycles non synchronisés.
+const PASSENGER_SIMULATION_VERSION = 3;
 const SAVE_EVERY_TICKS = 15;
 const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;

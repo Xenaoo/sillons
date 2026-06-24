@@ -983,16 +983,22 @@ function disableStationPlacement() {
 function onOsmMouseMove(event) {
   if (app.map.navigating) return;
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
-  const stationHit = hitStationAt(p);
-  const lineHit = stationHit ? null : hitLineAt(p);
+  const trainHit = hitTrainAt(p);
+  const stationHit = trainHit ? null : hitStationAt(p);
+  const lineHit = trainHit || stationHit ? null : hitLineAt(p);
   app.hoverStation = stationHit?.id || null;
   app.hoverLine = lineHit ? { playerId: lineHit.playerId, lineId: lineHit.lineId, own: !!lineHit.own } : null;
   const container = app.map.leaflet.getContainer();
-  container.style.cursor = stationHit || lineHit ? 'pointer' : '';
+  container.style.cursor = trainHit || stationHit || lineHit ? 'pointer' : '';
 }
 
 async function onOsmClick(event) {
   const p = { x: event.containerPoint.x, y: event.containerPoint.y };
+  const trainHit = hitTrainAt(p);
+  if (trainHit) {
+    followTrainOnMap(trainHit.trainId, trainHit.playerId);
+    return;
+  }
   const stationHit = hitStationAt(p) || nearestStationAt(p, 10) || nearestProjectedStationAt(p, 12);
   if (stationHit) {
     if (app.focusedLineId) clearFocusedLine();
@@ -1010,6 +1016,7 @@ async function onOsmClick(event) {
     selectMapLine(lineHit);
     return;
   }
+  stopFollowingTrain();
   if (app.focusedLineId) clearFocusedLine();
 }
 
