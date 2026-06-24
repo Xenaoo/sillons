@@ -76,6 +76,9 @@ function publicMapTrain(train, player = null) {
       nextStopAt: Number(train.passengerRun.nextStopAt || 0),
       departedAt: Number(train.passengerRun.departedAt || 0),
       lastStopAt: Number(train.passengerRun.lastStopAt || 0),
+      dwellUntil: Number(train.passengerRun.dwellUntil || 0),
+      legFromIndex: Number(train.passengerRun.legFromIndex || 0),
+      legToIndex: Number(train.passengerRun.legToIndex || 0),
       legMs: Number(train.passengerRun.legMs || 0),
       started: Boolean(train.passengerRun.started)
     } : null,
@@ -100,6 +103,7 @@ function publicMapLine(line) {
     stops,
     trainId: trainIds[0] || '',
     trainIds,
+    speedProfile: normalizeLineSpeedProfile(line?.speedProfile),
     stats: { status: line?.stats?.status || '' }
   };
 }

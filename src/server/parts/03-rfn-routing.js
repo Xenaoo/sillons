@@ -2348,9 +2348,18 @@ async function realRailRouteBetweenStops(stops) {
         for (const pair of pairs) out.push(await sncfRouteGeometryForStations(pair.from, pair.to, { allowSynthetic: false }));
         return out;
       })();
+  const speedProfiles = await Promise.all(geometries.map(async geometry => {
+    try {
+      return await sncfSpeedProfileForGeometry(geometry || []);
+    } catch {
+      return { source: 'fallback', totalKm: 0, coverage: 0, segments: [] };
+    }
+  }));
 
   const segments = [];
+  const combinedSpeedSegments = [];
   let distance = 0;
+  let speedMatchedKm = 0;
   let maxSegment = 0;
   for (let i = 0; i < pairs.length; i += 1) {
     const { from, to } = pairs[i];
@@ -2366,16 +2375,53 @@ async function realRailRouteBetweenStops(stops) {
       };
     }
     const rounded = Math.max(1, Math.round(segmentDistance));
-    segments.push({ from, to, distance: rounded });
+    const speedProfile = speedProfiles[i] || { source: 'fallback', totalKm: segmentDistance, coverage: 0, segments: [] };
+    const profileSegments = Array.isArray(speedProfile.segments) ? speedProfile.segments : [];
+    for (const profileSegment of profileSegments) {
+      const fromKm = distance + Math.max(0, Number(profileSegment?.fromKm || 0));
+      const toKm = distance + Math.max(0, Number(profileSegment?.toKm || 0));
+      const speedKmh = Number(profileSegment?.speedKmh || 0);
+      if (!Number.isFinite(speedKmh) || speedKmh < 5 || toKm <= fromKm) continue;
+      combinedSpeedSegments.push({ fromKm, toKm, distanceKm: toKm - fromKm, speedKmh, source: profileSegment.source || speedProfile.source || 'fallback' });
+    }
+    speedMatchedKm += segmentDistance * Math.max(0, Math.min(1, Number(speedProfile.coverage || 0)));
+    segments.push({
+      from,
+      to,
+      distance: rounded,
+      speedProfile: {
+        source: speedProfile.source || 'fallback',
+        totalKm: Number(speedProfile.totalKm || segmentDistance),
+        coverage: Number(speedProfile.coverage || 0),
+        averageSpeedKmh: Number(speedProfile.averageSpeedKmh || 0),
+        segments: profileSegments
+      }
+    });
     distance += segmentDistance;
     maxSegment = Math.max(maxSegment, segmentDistance);
   }
+
+  const mergedSpeedSegments = mergeRouteSpeedSegments(combinedSpeedSegments);
+  const speedDurationHours = mergedSpeedSegments.reduce((sum, segment) => (
+    sum + Number(segment.distanceKm || 0) / Math.max(5, Number(segment.speedKmh || SNCF_RFN_DEFAULT_SPEED_KMH))
+  ), 0);
+  const speedValues = mergedSpeedSegments.map(segment => Number(segment.speedKmh)).filter(Number.isFinite);
+  const speedProfile = {
+    source: speedMatchedKm > 0 ? SNCF_RFN_SPEED_DATASET : 'fallback',
+    totalKm: Math.round(distance * 1000) / 1000,
+    coverage: distance > 0 ? Math.round((speedMatchedKm / distance) * 1000) / 1000 : 0,
+    averageSpeedKmh: speedDurationHours > 0 ? Math.round(distance / speedDurationHours) : SNCF_RFN_DEFAULT_SPEED_KMH,
+    minSpeedKmh: speedValues.length ? Math.min(...speedValues) : SNCF_RFN_DEFAULT_SPEED_KMH,
+    maxSpeedKmh: speedValues.length ? Math.max(...speedValues) : SNCF_RFN_DEFAULT_SPEED_KMH,
+    segments: mergedSpeedSegments
+  };
 
   return {
     ids,
     distance: Math.round(distance),
     maxSegment: Math.round(maxSegment),
     segments,
+    speedProfile,
     missing: null
   };
 }

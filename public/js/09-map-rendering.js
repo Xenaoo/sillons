@@ -333,7 +333,7 @@ function drawAllLines(ctx, lite = false) {
       )) continue;
 
       const visualLine = visualLineWithEffectiveFrequency(line);
-      const visualRoute = { ...route, coords: route.coords || [], speedProfile: route.speedProfile || null };
+      const visualRoute = { ...route, coords: route.coords || [], speedProfile: route.speedProfile || line.speedProfile || null };
       const speeds = trains.map(train => {
         const model = app.state.balance.trains[train.modelId];
         return model ? trainVisualAverageSpeedKmH(train, model, visualLine, visualRoute) : 0;
@@ -536,7 +536,9 @@ function trainVisualConditionMultiplier(train) {
 function trainVisualEffectiveMaxSpeedKmH(train, model) {
   const profile = train ? trainRuntimeProfile(train, model) : {};
   const maxSpeed = Number(profile.speed || model?.speed || 90);
-  return Math.max(18, maxSpeed * trainVisualConditionMultiplier(train));
+  // `train.profile.speed` est déjà corrigée côté serveur de l'état et de la
+  // composition. La pénaliser une seconde fois désynchronisait la carte.
+  return Math.max(5, maxSpeed);
 }
 
 function trainVisualAverageSpeedKmH(train, model, line, route = null) {
@@ -557,10 +559,7 @@ function trainVisualAverageSpeedKmH(train, model, line, route = null) {
 
   const profile = train ? trainRuntimeProfile(train, model) : {};
   const legacyMaxSpeed = Number(profile.speed || model?.speed || 90);
-  const stopCount = Math.max(2, lineStopsOf(line).length);
-  const stopPenalty = Math.max(0.58, 1 - Math.max(0, stopCount - 2) * 0.045);
-  const servicePenalty = line?.service === 'freight' ? 0.62 : line?.service === 'mixed' ? 0.68 : 0.74;
-  return Math.max(18, legacyMaxSpeed * servicePenalty * stopPenalty * trainVisualConditionMultiplier(train));
+  return Math.max(5, legacyMaxSpeed);
 }
 
 function trainVisualOneWaySeconds(line, train, model, route = null) {
@@ -613,17 +612,23 @@ function trainVisualRouteDistanceKm(line, route) {
   return Math.max(1, Number.isFinite(value) ? value : 1);
 }
 
+function trainVisualDwellSecondsForStop(line, stopIndex) {
+  const stops = lineStopsOf(line);
+  const cadence = typeof lineCadenceClient === 'function' ? lineCadenceClient(line) : null;
+  const isTerminus = stopIndex === 0 || stopIndex === stops.length - 1;
+  const minutes = isTerminus
+    ? Number(cadence?.turnaroundMinutes || 8)
+    : Number(cadence?.dwellMinutes || 3);
+  return Math.max(0, minutes * 60);
+}
+
 function trainVisualDwellSecondsForLine(line) {
   // Demande explicite : 1 minute d'arrêt dans chacune des gares desservies.
-  return Math.max(0, lineStopsOf(line).length) * TRAIN_DWELL_SECONDS_PER_SERVED_STOP;
+  return lineStopsOf(line).reduce((sum, _stop, index) => sum + trainVisualDwellSecondsForStop(line, index), 0);
 }
 
 function trainVisualCommercialSpeedFactor(line, legDistanceKm) {
-  const distance = Math.max(0, Number(legDistanceKm || 0));
-  const distanceBonus = Math.min(0.22, (Math.log1p(distance) / Math.log(31)) * 0.22);
-  const base = line?.service === 'freight' ? 0.62 : line?.service === 'mixed' ? 0.66 : 0.69;
-  const max = line?.service === 'freight' ? 0.82 : line?.service === 'mixed' ? 0.86 : 0.92;
-  return clamp(base + distanceBonus, 0.55, max);
+  return 1;
 }
 
 function positiveModulo(value, modulo) {
@@ -825,11 +830,11 @@ function buildTrainMotionPlan(line, train, model, route, points) {
       fromKm: km,
       toKm: km,
       startSec: elapsed,
-      endSec: elapsed + TRAIN_DWELL_SECONDS_PER_SERVED_STOP,
+      endSec: elapsed + trainVisualDwellSecondsForStop(line, i),
       speedKmh: 0,
       stopIndex: i
     });
-    elapsed += TRAIN_DWELL_SECONDS_PER_SERVED_STOP;
+    elapsed += trainVisualDwellSecondsForStop(line, i);
     if (i < stopPositions.length - 1) {
       const nextKm = Math.max(km, Math.min(totalKm, Number(stopPositions[i + 1]) || totalKm));
       const legDistanceKm = Math.max(0, nextKm - km);
@@ -870,6 +875,43 @@ function trainMotionAtOneWaySecond(plan, second) {
   return { positionKm: Number(plan?.totalKm || 0), speedKmh: 0, dwell: true };
 }
 
+function trainVisualLegPositionAtRatio(line, train, model, route, fromKm, toKm, ratio) {
+  const targetRatio = clamp(Number(ratio || 0), 0, 1);
+  const direction = toKm >= fromKm ? 1 : -1;
+  const targetKm = toKm;
+  let currentKm = fromKm;
+  const slices = [];
+  let totalSeconds = 0;
+  let guard = 0;
+  while ((direction > 0 ? currentKm < targetKm - 0.0001 : currentKm > targetKm + 0.0001) && guard++ < 20000) {
+    const probe = currentKm + direction * 0.00005;
+    const segment = speedProfileSegmentAtKm(route?.speedProfile || line?.speedProfile || null, probe);
+    let boundary = direction > 0 ? Number(segment?.toKm || targetKm) : Number(segment?.fromKm || targetKm);
+    if (!Number.isFinite(boundary) || (direction > 0 ? boundary <= currentKm + 0.0001 : boundary >= currentKm - 0.0001)) boundary = targetKm;
+    const nextKm = direction > 0
+      ? Math.min(targetKm, Math.max(currentKm + 0.0001, boundary))
+      : Math.max(targetKm, Math.min(currentKm - 0.0001, boundary));
+    const speedKmh = Math.max(5, trainVisualSpeedAtKm(line, train, model, route, (currentKm + nextKm) / 2));
+    const durationSeconds = Math.abs(nextKm - currentKm) / speedKmh * TRAIN_REALTIME_SECONDS_PER_TRAVEL_HOUR;
+    slices.push({ fromKm: currentKm, toKm: nextKm, speedKmh, durationSeconds });
+    totalSeconds += durationSeconds;
+    currentKm = nextKm;
+  }
+  if (!slices.length || totalSeconds <= 0) {
+    return { positionKm: fromKm + (toKm - fromKm) * targetRatio, speedKmh: trainVisualSpeedAtKm(line, train, model, route, (fromKm + toKm) / 2) };
+  }
+  let remainingSeconds = totalSeconds * targetRatio;
+  for (const slice of slices) {
+    if (remainingSeconds <= slice.durationSeconds) {
+      const progress = clamp(remainingSeconds / Math.max(0.0001, slice.durationSeconds), 0, 1);
+      return { positionKm: slice.fromKm + (slice.toKm - slice.fromKm) * progress, speedKmh: slice.speedKmh };
+    }
+    remainingSeconds -= slice.durationSeconds;
+  }
+  const last = slices[slices.length - 1];
+  return { positionKm: last.toKm, speedKmh: last.speedKmh };
+}
+
 function trainServerMotion(line, train, model, route, points) {
   const run = train?.passengerRun;
   const sourceLineId = line?.sourceLineId || line?.id;
@@ -879,23 +921,21 @@ function trainServerMotion(line, train, model, route, points) {
   const stops = trainVisualStopPositionsKm(line, route, points, totalKm);
   if (stops.length < 2 || totalKm <= 0) return null;
 
-  const fromIndex = clamp(Math.floor(Number(run.stopIndex || 0)), 0, stops.length - 1);
-  const direction = Number(run.direction || 1) < 0 ? -1 : 1;
-  const toIndex = clamp(fromIndex + direction, 0, stops.length - 1);
+  const fromIndex = clamp(Math.floor(Number(run.legFromIndex ?? run.stopIndex ?? 0)), 0, stops.length - 1);
+  const toIndex = clamp(Math.floor(Number(run.legToIndex ?? (fromIndex + (Number(run.direction || 1) < 0 ? -1 : 1)))), 0, stops.length - 1);
+  const direction = toIndex < fromIndex ? -1 : 1;
   const fromKm = Number(stops[fromIndex] || 0);
   const toKm = Number(stops[toIndex] || fromKm);
   const now = typeof serverNow === 'function' ? serverNow() : Date.now();
-  const departedAt = Math.max(0, Number(run.departedAt || run.lastStopAt || 0));
+  const departedAt = Math.max(0, Number(run.departedAt || run.dwellUntil || run.lastStopAt || 0));
   const nextStopAt = Math.max(0, Number(run.nextStopAt || 0));
   const legMs = Math.max(0, Number(run.legMs || nextStopAt - departedAt || 0));
   if (!departedAt || !nextStopAt || nextStopAt <= departedAt || !legMs) return null;
 
   // Une courte immobilisation rend l'arrivée explicite. Pendant ce créneau,
   // le remplissage et les recettes affichés correspondent visuellement à la gare.
-  const configuredTickMs = Math.max(250, Number(app.state?.game?.tickMs || 2000));
-  const dwellMs = Math.min(configuredTickMs * 0.72, legMs * 0.2);
-  const departureForMap = Math.min(nextStopAt, departedAt + dwellMs);
-  if (now <= departureForMap) {
+  const dwellUntil = Math.max(0, Number(run.dwellUntil || departedAt));
+  if (now <= departedAt) {
     return {
       progress: clamp(fromKm / totalKm, 0, 1),
       reverse: direction < 0,
@@ -903,7 +943,7 @@ function trainServerMotion(line, train, model, route, points) {
       dwell: true,
       oneWaySeconds: legMs / 1000,
       stopCount: stops.length,
-      dwellSeconds: dwellMs / 1000
+      dwellSeconds: Math.max(0, departedAt - Number(run.lastStopAt || departedAt)) / 1000
     };
   }
   if (now >= nextStopAt) {
@@ -914,13 +954,14 @@ function trainServerMotion(line, train, model, route, points) {
       dwell: true,
       oneWaySeconds: legMs / 1000,
       stopCount: stops.length,
-      dwellSeconds: dwellMs / 1000
+      dwellSeconds: Math.max(0, departedAt - Number(run.lastStopAt || departedAt)) / 1000
     };
   }
 
-  const ratio = clamp((now - departureForMap) / Math.max(1, nextStopAt - departureForMap), 0, 1);
-  const positionKm = fromKm + (toKm - fromKm) * ratio;
-  const speedKmh = Math.abs(toKm - fromKm) / Math.max(0.000001, (nextStopAt - departureForMap) / 3600000);
+  const ratio = clamp((now - departedAt) / Math.max(1, nextStopAt - departedAt), 0, 1);
+  const legPosition = trainVisualLegPositionAtRatio(line, train, model, route, fromKm, toKm, ratio);
+  const positionKm = legPosition.positionKm;
+  const speedKmh = legPosition.speedKmh;
   return {
     progress: clamp(positionKm / totalKm, 0, 1),
     reverse: direction < 0,
@@ -928,7 +969,7 @@ function trainServerMotion(line, train, model, route, points) {
     dwell: false,
     oneWaySeconds: legMs / 1000,
     stopCount: stops.length,
-    dwellSeconds: dwellMs / 1000
+    dwellSeconds: Math.max(0, dwellUntil - Number(run.lastStopAt || dwellUntil)) / 1000
   };
 }
 

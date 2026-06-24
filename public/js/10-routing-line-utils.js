@@ -567,8 +567,14 @@ function lineCadenceClient(line) {
     .filter(speed => Number.isFinite(speed) && speed > 0);
   const operatingSpeedKmh = Math.max(25, Math.min(...(speeds.length ? speeds : [80])));
   const distance = Math.max(0, Number(lineDistance(line) || 0));
+  const profileSegments = line?.speedProfile?.segments || [];
+  const rfnTravelMinutes = profileSegments.reduce((sum, segment) => {
+    const segmentDistance = Math.max(0, Number(segment?.distanceKm || (Number(segment?.toKm) - Number(segment?.fromKm)) || 0));
+    const limit = Math.max(5, Number(segment?.speedKmh || line?.speedProfile?.averageSpeedKmh || operatingSpeedKmh));
+    return sum + segmentDistance / Math.max(5, Math.min(operatingSpeedKmh, limit)) * 60;
+  }, 0);
   const oneWayMinutes = distance > 0
-    ? distance / operatingSpeedKmh * 60 + timing.intermediateStops * timing.dwellMinutes
+    ? (rfnTravelMinutes || distance / operatingSpeedKmh * 60) + timing.intermediateStops * timing.dwellMinutes
     : 0;
   const roundTripMinutes = oneWayMinutes > 0
     ? oneWayMinutes * 2 + timing.turnaroundMinutes * 2
@@ -588,6 +594,7 @@ function lineCadenceClient(line) {
     effectiveTrainCount: round(effectiveTrainCount),
     operatingSpeedKmh: Math.round(operatingSpeedKmh),
     intermediateStops: timing.intermediateStops,
+    dwellMinutes: timing.dwellMinutes,
     oneWayMinutes: round(oneWayMinutes),
     turnaroundMinutes: timing.turnaroundMinutes,
     roundTripMinutes: round(roundTripMinutes),

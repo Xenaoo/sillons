@@ -76,12 +76,9 @@ const COMMUNE_DEPARTMENTS = [
   '80','81','82','83','84','85','86','87','88','89','90','91','92','93','94','95'
 ];
 const TICK_MS = 2000;
-// Cinq minutes d'exploitation sont simulées à chaque tick : les arrêts restent
-// visibles dans le jeu sans imposer une attente réelle de plusieurs heures.
-const PASSENGER_SIMULATION_MINUTES_PER_TICK = 5;
-// La position affichée sur la carte utilise désormais cet état de circulation.
-// Incrémenter la version remet à zéro les anciens cycles non synchronisés.
-const PASSENGER_SIMULATION_VERSION = 3;
+// Le tick cadence les calculs économiques, mais les circulations ferroviaires
+// suivent strictement l'horloge réelle (vitesses RFN, matériel et arrêts).
+const PASSENGER_SIMULATION_VERSION = 4;
 const SAVE_EVERY_TICKS = 15;
 const ROUTE_CACHE_MAX_ENTRIES = 5000;
 const DEFAULT_PASSENGER_TARIFF = 0.08;

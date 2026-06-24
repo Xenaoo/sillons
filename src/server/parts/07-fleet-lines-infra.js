@@ -263,6 +263,9 @@ function normalizeTrain(raw, ownerId) {
     nextStopAt: Math.max(0, Number(passengerRun.nextStopAt || 0)),
     departedAt: Math.max(0, Number(passengerRun.departedAt || 0)),
     lastStopAt: Math.max(0, Number(passengerRun.lastStopAt || 0)),
+    dwellUntil: Math.max(0, Number(passengerRun.dwellUntil || 0)),
+    legFromIndex: Math.max(0, Math.floor(Number(passengerRun.legFromIndex || 0))),
+    legToIndex: Math.max(0, Math.floor(Number(passengerRun.legToIndex || 0))),
     legMs: Math.max(0, Number(passengerRun.legMs || 0)),
     started: Boolean(passengerRun.started),
     load: Math.max(0, Math.floor(Number(passengerRun.load || 0))),
@@ -294,11 +297,36 @@ function applyValidatedRouteToLine(line, routeInfo) {
       .map(segment => ({
         from: currentStationId(segment.from),
         to: currentStationId(segment.to),
-        distance: Math.max(1, Math.round(Number(segment.distance || 0)))
+        distance: Math.max(1, Math.round(Number(segment.distance || 0))),
+        speedProfile: normalizeLineSpeedProfile(segment.speedProfile)
       }))
       .filter(segment => segment.from && segment.to && segment.from !== segment.to && segment.distance > 0);
   }
+  line.speedProfile = normalizeLineSpeedProfile(routeInfo.speedProfile);
   return line;
+}
+
+function normalizeLineSpeedProfile(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const segments = (Array.isArray(raw.segments) ? raw.segments : [])
+    .map(segment => {
+      const fromKm = Math.max(0, Number(segment?.fromKm || 0));
+      const toKm = Math.max(0, Number(segment?.toKm || 0));
+      const speedKmh = Math.round(Number(segment?.speedKmh || 0));
+      if (![fromKm, toKm, speedKmh].every(Number.isFinite) || toKm <= fromKm || speedKmh < 5) return null;
+      return { fromKm, toKm, distanceKm: Math.max(0, Number(segment?.distanceKm || toKm - fromKm)), speedKmh, source: segment?.source || raw.source || 'fallback' };
+    })
+    .filter(Boolean);
+  if (!segments.length) return null;
+  return {
+    source: raw.source || 'fallback',
+    totalKm: Math.max(0, Number(raw.totalKm || segments[segments.length - 1].toKm || 0)),
+    coverage: clamp(Number(raw.coverage || 0), 0, 1),
+    averageSpeedKmh: Math.max(5, Number(raw.averageSpeedKmh || 0) || Math.round(segments.reduce((sum, segment) => sum + segment.speedKmh * segment.distanceKm, 0) / Math.max(0.001, segments.reduce((sum, segment) => sum + segment.distanceKm, 0)))),
+    minSpeedKmh: Math.max(5, Number(raw.minSpeedKmh || 0) || Math.min(...segments.map(segment => segment.speedKmh))),
+    maxSpeedKmh: Math.max(5, Number(raw.maxSpeedKmh || 0) || Math.max(...segments.map(segment => segment.speedKmh))),
+    segments
+  };
 }
 
 function createLineInstance(player, stops, trainId, service, frequency, ticketPrice, knownRoute = null) {
@@ -351,6 +379,33 @@ function lineCadenceTiming(service, stopCount) {
   return { intermediateStops, dwellMinutes: 3, turnaroundMinutes: 8 };
 }
 
+function speedProfileTravelMinutes(speedProfile, trainSpeedKmh, fallbackDistanceKm = 0) {
+  const maxTrainSpeed = Math.max(5, Number(trainSpeedKmh || 0));
+  const segments = speedProfile?.segments || [];
+  const durationHours = segments.reduce((sum, segment) => {
+    const distance = Math.max(0, Number(segment?.distanceKm || (Number(segment?.toKm) - Number(segment?.fromKm)) || 0));
+    const rfnLimit = Math.max(5, Number(segment?.speedKmh || speedProfile?.averageSpeedKmh || maxTrainSpeed));
+    return sum + distance / Math.max(5, Math.min(maxTrainSpeed, rfnLimit));
+  }, 0);
+  if (durationHours > 0) return durationHours * 60;
+  const distance = Math.max(0, Number(fallbackDistanceKm || speedProfile?.totalKm || 0));
+  return distance > 0 ? distance / maxTrainSpeed * 60 : 0;
+}
+
+function lineRouteTravelMinutes(line, trainSpeedKmh) {
+  return speedProfileTravelMinutes(line?.speedProfile, trainSpeedKmh, lineDistance(line));
+}
+
+function lineLegTravelMinutes(line, fromStopIndex, toStopIndex, trainSpeedKmh) {
+  const stops = lineStops(line);
+  const from = clamp(Math.floor(Number(fromStopIndex || 0)), 0, Math.max(0, stops.length - 1));
+  const to = clamp(Math.floor(Number(toStopIndex || 0)), 0, Math.max(0, stops.length - 1));
+  const segmentIndex = Math.min(from, to);
+  const segment = Array.isArray(line?.routeSegments) ? line.routeSegments[segmentIndex] : null;
+  const fallbackDistance = Math.max(0, Number(segment?.distance || lineDistance(line) / Math.max(1, stops.length - 1)));
+  return speedProfileTravelMinutes(segment?.speedProfile, trainSpeedKmh, fallbackDistance);
+}
+
 function computeLineCadence(player, line, { availableTrains = null, utilizationFactor = 1 } = {}) {
   const plannedTrains = lineAssignedTrains(player, line);
   const operatingTrains = Array.isArray(availableTrains)
@@ -366,8 +421,9 @@ function computeLineCadence(player, line, { availableTrains = null, utilizationF
     })
     .filter(speed => Number.isFinite(speed) && speed > 0);
   const operatingSpeedKmh = Math.max(25, Math.min(...(speeds.length ? speeds : [80])));
+  const travelMinutes = lineRouteTravelMinutes(line, operatingSpeedKmh);
   const oneWayMinutes = distance > 0
-    ? distance / operatingSpeedKmh * 60 + timing.intermediateStops * timing.dwellMinutes
+    ? travelMinutes + timing.intermediateStops * timing.dwellMinutes
     : 0;
   const roundTripMinutes = oneWayMinutes > 0
     ? oneWayMinutes * 2 + timing.turnaroundMinutes * 2
@@ -391,7 +447,9 @@ function computeLineCadence(player, line, { availableTrains = null, utilizationF
     availableTrainCount,
     effectiveTrainCount: round2(effectiveTrainCount),
     operatingSpeedKmh: Math.round(operatingSpeedKmh),
+    travelMinutes: round2(travelMinutes),
     intermediateStops: timing.intermediateStops,
+    dwellMinutes: timing.dwellMinutes,
     oneWayMinutes: round2(oneWayMinutes),
     turnaroundMinutes: timing.turnaroundMinutes,
     roundTripMinutes: round2(roundTripMinutes),
