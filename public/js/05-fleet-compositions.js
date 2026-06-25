@@ -1536,6 +1536,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
   const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = me.trains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
   const trainsByEpoch = {};
   for (const train of me.trains || []) {
     const model = app.state.balance.trains[train.modelId] || {};
@@ -1575,7 +1576,8 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
         </div>
         <div class="era-catalog fleet-maintenance-era-list">
           ${eraEntries.length ? eraEntries.map(([epoch, trains]) => {
-            const collapsed = isFleetMaintenanceEraCollapsed(epoch);
+            const selectedInEra = mapSelectedTrainId && trains.some(t => String(t.id) === mapSelectedTrainId);
+            const collapsed = !selectedInEra && isFleetMaintenanceEraCollapsed(epoch);
             const sorted = trains.sort((a, b) => {
               const ma = app.state.balance.trains[a.modelId] || {};
               const mb = app.state.balance.trains[b.modelId] || {};
@@ -1982,6 +1984,7 @@ function renderOwnedTrain(train) {
   const line = app.state.me.lines.find(l => l.active && lineHasTrain(l, train.id));
   const maint = train.maintenance || {};
   const inMaint = !!maint.active;
+  const mapSelected = typeof selectedOwnedMapTrainId === 'function' && selectedOwnedMapTrainId() === String(train.id);
   const actions = app.state.balance.maintenanceActions || {};
   const condition = Math.round((train.condition || 0) * 100);
   const conditionClass = condition > 70 ? 'good' : condition > 40 ? 'warn' : 'bad';
@@ -2009,7 +2012,7 @@ function renderOwnedTrain(train) {
   const statusClass = inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
 
   return `
-    <div class="list-item train-catalog-card owned-train-card maintenance-train-card">
+    <div class="list-item train-catalog-card owned-train-card maintenance-train-card ${mapSelected ? 'map-selected' : ''}" data-train-id="${escapeAttr(train.id)}" aria-selected="${mapSelected ? 'true' : 'false'}">
       ${renderTrainArt(model)}
       <div class="train-card-body owned-train-body">
         <div class="item-title">

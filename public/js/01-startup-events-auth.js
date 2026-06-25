@@ -869,8 +869,11 @@ function initOsmMap() {
   });
   app.map.leaflet.on('mousemove', onOsmMouseMove);
   app.map.leaflet.on('mouseout', () => {
+    app.hoverTrain = null;
     app.hoverStation = null;
     app.hoverLine = null;
+    updateTrainMarkerPositions();
+    requestMapRedraw();
     app.map.leaflet.getContainer().style.cursor = '';
   });
   app.map.leaflet.on('click', onOsmClick);
@@ -986,8 +989,21 @@ function onOsmMouseMove(event) {
   const trainHit = hitTrainAt(p);
   const stationHit = trainHit ? null : hitStationAt(p);
   const lineHit = trainHit || stationHit ? null : hitLineAt(p);
-  app.hoverStation = stationHit?.id || null;
-  app.hoverLine = lineHit ? { playerId: lineHit.playerId, lineId: lineHit.lineId, own: !!lineHit.own } : null;
+  const nextTrain = trainHit ? { playerId: trainHit.playerId, trainId: trainHit.trainId } : null;
+  const nextStation = stationHit?.id || null;
+  const nextLine = lineHit ? { playerId: lineHit.playerId, lineId: lineHit.lineId, own: !!lineHit.own } : null;
+  const hoverChanged = app.hoverStation !== nextStation
+    || String(app.hoverTrain?.trainId || '') !== String(nextTrain?.trainId || '')
+    || String(app.hoverTrain?.playerId || '') !== String(nextTrain?.playerId || '')
+    || String(app.hoverLine?.lineId || '') !== String(nextLine?.lineId || '')
+    || String(app.hoverLine?.playerId || '') !== String(nextLine?.playerId || '');
+  app.hoverTrain = nextTrain;
+  app.hoverStation = nextStation;
+  app.hoverLine = nextLine;
+  if (hoverChanged) {
+    updateTrainMarkerPositions();
+    requestMapRedraw();
+  }
   const container = app.map.leaflet.getContainer();
   container.style.cursor = trainHit || stationHit || lineHit ? 'pointer' : '';
 }

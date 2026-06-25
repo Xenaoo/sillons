@@ -244,6 +244,7 @@ function renderAll() {
   syncFocusedLineUi();
   scheduleCompositionRefitScrollAdjustment();
   scheduleMobileMapViewportFix();
+  requestMapRedraw();
   requestAnimationFrame(() => {
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
     if (researchTreeScroll) {

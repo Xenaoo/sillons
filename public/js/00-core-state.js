@@ -139,6 +139,7 @@ const app = {
   selectedStation: localStorage.getItem('sillons.selectedStation') || null,
   hoverStation: null,
   hoverLine: null,
+  hoverTrain: null,
   mapSprites: { trains: {}, stations: {} },
   map: {
     canvas: null,

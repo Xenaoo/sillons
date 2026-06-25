@@ -1327,6 +1327,22 @@
   border-color: rgba(217,168,82,.20);
 }
 
+.fleet-maintenance-grid .maintenance-train-card.map-selected {
+  border-color: rgba(250, 204, 21, .78);
+  box-shadow:
+    0 0 0 1px rgba(250, 204, 21, .35),
+    0 0 0 5px rgba(250, 204, 21, .08),
+    0 18px 42px rgba(0,0,0,.30);
+}
+
+.fleet-maintenance-grid .maintenance-train-card.map-selected .item-title strong {
+  color: #fff4c2;
+}
+
+.fleet-maintenance-grid .maintenance-train-card.map-selected .train-art {
+  border-color: rgba(250, 204, 21, .56);
+}
+
 .fleet-maintenance-grid .maintenance-train-card .train-art {
   height: auto;
   aspect-ratio: 13 / 8;
