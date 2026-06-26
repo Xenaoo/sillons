@@ -2213,3 +2213,36 @@ button[data-tooltip]:focus-visible::before {
   border-color: rgba(217,168,82,.42);
   box-shadow: 0 14px 28px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.03);
 }
+
+/* ===== Performance/mobile: le panneau ne doit jamais élargir le viewport. ===== */
+@media (max-width: 1180px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .layout,
+  .layout.map-visible,
+  .layout.map-hidden {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow-x: hidden !important;
+  }
+
+  .map-section,
+  .side.panel,
+  .tabs,
+  .tab-content {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .side.panel {
+    width: 100% !important;
+  }
+
+  .tabs {
+    width: 100%;
+  }
+}

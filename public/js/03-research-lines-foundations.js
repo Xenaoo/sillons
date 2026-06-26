@@ -416,12 +416,15 @@ function updateResearchTimers() {
 }
 
 function startResearchAnimationLoop() {
+  if (app.researchAnimationLoopStarted) return;
+  app.researchAnimationLoopStarted = true;
   const tick = () => {
     updateResearchTimers();
     updateEpochTrafficAnimation();
-    requestAnimationFrame(tick);
+    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-epoch-traffic-value]');
+    window.setTimeout(tick, visibleResearch ? 250 : 1000);
   };
-  requestAnimationFrame(tick);
+  window.setTimeout(tick, 250);
 }
 
 function compositionMetric(label, value, tooltip, cls = '', secondaryValue = '') {
@@ -525,19 +528,22 @@ function energyStrategyTooltip(id, strategy) {
 
 
 
-function preloadArt() {
-  const sources = new Set([
-    ART.map,
-    ...Object.values(ART.tabs),
-    ...Object.values(ART.researchGroups),
-    ...Object.values(ART.researchNodes)
-  ]);
-  sources.forEach(src => {
-    if (!src || artImages[src]) return;
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = src;
-    artImages[src] = img;
+function loadArtImage(src) {
+  if (!src) return null;
+  if (artImages[src]) return artImages[src];
+  const img = new Image();
+  img.decoding = 'async';
+  img.onload = () => requestMapRedraw({ lite: false });
+  img.src = src;
+  artImages[src] = img;
+  return img;
+}
+
+function preloadArt(sources = [ART.map]) {
+  const queue = new Set(sources.filter(Boolean));
+  if (app.activeTab && ART.tabs[app.activeTab]) queue.add(ART.tabs[app.activeTab]);
+  queue.forEach(src => {
+    loadArtImage(src);
   });
 }
 
@@ -547,6 +553,7 @@ function preloadMapSprites() {
     if (!src || app.mapSprites.trains[id]) return;
     const img = new Image();
     img.decoding = 'async';
+    img.onload = () => requestMapRedraw({ lite: false });
     img.src = src;
     app.mapSprites.trains[id] = img;
   });
@@ -554,6 +561,7 @@ function preloadMapSprites() {
     if (!src || app.mapSprites.stations[level]) return;
     const img = new Image();
     img.decoding = 'async';
+    img.onload = () => requestMapRedraw({ lite: false });
     img.src = src;
     app.mapSprites.stations[level] = img;
   });
@@ -573,7 +581,15 @@ function getTrainMapSprite(modelId) {
 }
 
 function getStationMapSprite(asset) {
-  return app.mapSprites.stations[String(stationPrestigeStage(asset))] || null;
+  const level = String(stationPrestigeStage(asset));
+  if (!app.mapSprites.stations[level] && STATION_MAP_SPRITES[level]) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => requestMapRedraw({ lite: false });
+    img.src = STATION_MAP_SPRITES[level];
+    app.mapSprites.stations[level] = img;
+  }
+  return app.mapSprites.stations[level] || null;
 }
 
 function mapMaxZoomReached() {

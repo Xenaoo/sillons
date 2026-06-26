@@ -1,4 +1,142 @@
 // Routage HTTP/API, réponses JSON et fichiers statiques.
+const CLIENT_SCRIPT_PARTS = Object.freeze([
+  '00-core-state.js',
+  '01-startup-events-auth.js',
+  '02-tutorial-layout-overview.js',
+  '03-research-lines-foundations.js',
+  '04-lines.js',
+  '05-fleet-compositions.js',
+  '06-stations-staff-research.js',
+  '07-resources-budget-market.js',
+  '08-actions-modals.js',
+  '09-map-rendering.js',
+  '10-routing-line-utils.js'
+]);
+
+const CLIENT_STYLE_PARTS = Object.freeze([
+  '00-base-layout.css',
+  '01-theme-map-ui.css',
+  '02-lines-fleet-research.css',
+  '03-accounts-budget-admin.css',
+  '04-compositions.css',
+  '05-bugs-research-overview.css'
+]);
+
+const STATIC_LONG_CACHE = 'public, max-age=31536000, immutable';
+const STATIC_NO_STORE = 'no-store';
+const TEXT_STATIC_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg', '.txt', '.md']);
+const PRECOMPRESSED_STATIC_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.ico', '.gz', '.br']);
+const staticBundleCache = new Map();
+
+function fileSignature(files) {
+  return files.map(file => {
+    const stat = fs.statSync(file);
+    return `${file}:${stat.mtimeMs}:${stat.size}`;
+  }).join('|');
+}
+
+function readClientBundle(kind, dir, names, prelude = '', postlude = '') {
+  const files = names.map(name => path.join(dir, name));
+  const signature = fileSignature(files);
+  const cached = staticBundleCache.get(kind);
+  if (cached?.signature === signature) return cached.body;
+  const body = [
+    prelude,
+    ...files.map((file, index) => `\n/* ===== ${names[index]} ===== */\n${fs.readFileSync(file, 'utf8')}`),
+    postlude
+  ].filter(Boolean).join('\n');
+  staticBundleCache.set(kind, { signature, body });
+  return body;
+}
+
+function clientScriptBundle() {
+  return readClientBundle(
+    'client-js',
+    path.join(PUBLIC_DIR, 'js'),
+    CLIENT_SCRIPT_PARTS,
+    [
+      "'use strict';",
+      "function showSillonsClientBootError(error) {",
+      "  console.error(error);",
+      "  const host = document.getElementById('toastHost') || document.body;",
+      "  const div = document.createElement('div');",
+      "  div.className = 'toast bad';",
+      "  div.textContent = 'Erreur de chargement du client Sillons.';",
+      "  host.appendChild(div);",
+      "}",
+      "window.__sillonsClientBootError = showSillonsClientBootError;"
+    ].join('\n'),
+    [
+      "if (typeof init === 'function') Promise.resolve(init()).catch(showSillonsClientBootError);",
+      "else showSillonsClientBootError(new Error('Initialisation client absente.'));"
+    ].join('\n')
+  );
+}
+
+function clientStyleBundle() {
+  return readClientBundle('client-css', path.join(PUBLIC_DIR, 'css'), CLIENT_STYLE_PARTS);
+}
+
+function acceptsContentEncoding(res, encoding) {
+  const escaped = encoding.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|,)\\s*${escaped}(?:;|,|$)`, 'i').test(String(res.__sillonsAcceptEncoding || ''));
+}
+
+function compressStaticBody(res, filePath, body) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (!TEXT_STATIC_EXTENSIONS.has(ext) || PRECOMPRESSED_STATIC_EXTENSIONS.has(ext) || body.length < 1024) {
+    return { body, encoding: '' };
+  }
+  if (acceptsContentEncoding(res, 'br') && zlib.brotliCompressSync) {
+    return {
+      body: zlib.brotliCompressSync(body, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
+      }),
+      encoding: 'br'
+    };
+  }
+  if (acceptsContentEncoding(res, 'gzip')) {
+    return { body: zlib.gzipSync(body, { level: 6 }), encoding: 'gzip' };
+  }
+  return { body, encoding: '' };
+}
+
+function staticCacheControl(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css', '.svg'].includes(ext)
+    ? STATIC_LONG_CACHE
+    : STATIC_NO_STORE;
+}
+
+function optimizedStaticAssetPath(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.png') return filePath;
+  const jpgPath = filePath.slice(0, -4) + '.jpg';
+  if (fs.existsSync(jpgPath)) return jpgPath;
+  const optimizedPngPath = filePath.slice(0, -4) + '.opt.png';
+  return fs.existsSync(optimizedPngPath) ? optimizedPngPath : filePath;
+}
+
+function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheControl(filePath)) {
+  const raw = Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'utf8');
+  const compressed = compressStaticBody(res, filePath, raw);
+  const headers = {
+    'Content-Type': mimeType(filePath),
+    'Cache-Control': cacheControl,
+    'Content-Length': compressed.body.length
+  };
+  if (compressed.encoding) {
+    headers['Content-Encoding'] = compressed.encoding;
+    headers.Vary = 'Accept-Encoding';
+  }
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  res.end(compressed.body);
+}
+
 async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/client-boot-metrics') {
     const body = await readBody(req);
@@ -218,18 +356,32 @@ function serveStatic(req, res, url) {
     res.end('Forbidden');
     return;
   }
+  if (filePath === '/styles.css') {
+    sendStaticBody(req, res, absolute, clientStyleBundle(), STATIC_LONG_CACHE);
+    return;
+  }
+  if (filePath === '/app.js') {
+    sendStaticBody(req, res, absolute, clientScriptBundle(), STATIC_LONG_CACHE);
+    return;
+  }
   fs.readFile(absolute, (err, data) => {
     if (err) {
       res.writeHead(404);
       res.end('Not found');
       return;
     }
-    const ext = path.extname(absolute).toLowerCase();
-    const cacheControl = ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css'].includes(ext)
-      ? 'public, max-age=604800, immutable'
-      : 'no-store';
-    res.writeHead(200, { 'Content-Type': mimeType(absolute), 'Cache-Control': cacheControl });
-    res.end(data);
+    const responsePath = optimizedStaticAssetPath(absolute);
+    if (responsePath !== absolute) {
+      fs.readFile(responsePath, (optimizedErr, optimizedData) => {
+        if (optimizedErr) {
+          sendStaticBody(req, res, absolute, data);
+          return;
+        }
+        sendStaticBody(req, res, responsePath, optimizedData);
+      });
+      return;
+    }
+    sendStaticBody(req, res, absolute, data);
   });
 }
 

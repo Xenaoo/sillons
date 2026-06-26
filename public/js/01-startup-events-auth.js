@@ -10,11 +10,12 @@ async function init() {
   app.map.ctx = app.map.canvas.getContext('2d');
   hydratePersistedOsmRouteCache();
   bindStaticEvents();
-  preloadArt();
-  preloadMapSprites();
-  initOsmMap();
+  if (!app.authToken) {
+    renderSetupLogoPicker();
+    $('#setup')?.classList.remove('hidden');
+    setAuthMode(app.authMode || 'login');
+  }
   startResearchAnimationLoop();
-  requestAnimationFrame(drawLoop);
   window.addEventListener('pagehide', persistStateSnapshotBeforeReload);
   app.bootTimings.initMs = performance.now() - app.bootTimings.startedAt;
 
@@ -154,6 +155,7 @@ function applyStateSnapshot(data) {
   app.routeDataSignature = worldRouteSignature(data);
   app.state = data;
   $('#setup')?.classList.add('hidden');
+  ensureMapInitialized();
   ensureSelectedStation();
   resizeCanvas();
   renderAll();
@@ -718,6 +720,7 @@ async function refreshState(first, { includeAdmin = false } = {}) {
     if (data.auth?.playerId) { app.playerId = data.auth.playerId; localStorage.setItem('sillons.playerId', app.playerId); }
     if (data.me) {
       $('#setup').classList.add('hidden');
+      ensureMapInitialized();
       maybeNotify(data.me);
       ensureSelectedStation();
     }
@@ -774,14 +777,37 @@ function reportClientBootMetrics(metrics) {
   fetch('/api/client-boot-metrics', { method: 'POST', body, keepalive: true }).catch(() => null);
 }
 
+function startMapDrawLoop() {
+  if (app.map.drawLoopStarted) return;
+  app.map.drawLoopStarted = true;
+  requestAnimationFrame(drawLoop);
+}
+
+function ensureMapInitialized() {
+  if (app.map.mapReady || app.map.leaflet || app.map.initializing) {
+    startMapDrawLoop();
+    return;
+  }
+  app.map.initializing = true;
+  loadArtImage(ART.map);
+  initOsmMap();
+  startMapDrawLoop();
+}
+
 function initOsmMap() {
+  if (app.map.mapReady || app.map.leaflet) return;
   const target = $('#osmMap');
-  if (!target) return;
+  if (!target) {
+    app.map.initializing = false;
+    return;
+  }
   if (!window.L) {
     target.innerHTML = '<div class="osm-error">Carte indisponible. Vérifie ta connexion internet.</div><canvas id="map" width="1200" height="820"></canvas>';
     app.map.canvas = $('#map');
     app.map.ctx = app.map.canvas?.getContext('2d');
     resizeCanvas();
+    app.map.mapReady = true;
+    app.map.initializing = false;
     return;
   }
 
@@ -880,6 +906,7 @@ function initOsmMap() {
 
   app.map.leaflet.whenReady(() => {
     app.map.mapReady = true;
+    app.map.initializing = false;
     resizeCanvas();
     fitFranceMap();
     updateIsoClass();
@@ -1071,6 +1098,7 @@ function applyAuthResponse(response) {
   localStorage.setItem('sillons.playerId', app.playerId);
   app.state = response.state || app.state;
   $('#setup')?.classList.add('hidden');
+  ensureMapInitialized();
   renderAll(true);
   return true;
 }

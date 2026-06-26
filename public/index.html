@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Sillons — Gestion ferroviaire multijoueur</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/styles.css?v=v0.70.11">
+  <link rel="preload" href="/styles.css?v=v0.71.0-perf3" as="style">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=1.9.4">
+  <link rel="stylesheet" href="/styles.css?v=v0.71.0-perf3">
 </head>
 <body>
   <div id="setup" class="setup hidden">
@@ -146,8 +147,8 @@
     </form>
   </dialog>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/app.js?v=v0.70.11"></script>
-  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.70.11</button>
+  <script defer src="/vendor/leaflet/leaflet.js?v=1.9.4"></script>
+  <script defer src="/app.js?v=v0.71.0-perf3"></script>
+  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.0</button>
 </body>
 </html>
