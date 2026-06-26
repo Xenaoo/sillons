@@ -3,13 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Sillons est un jeu navigateur de gestion ferroviaire multijoueur en France. Connecte-toi pour retrouver ta compagnie, tes lignes et ta progression.">
+  <meta name="theme-color" content="#07111d">
   <title>Sillons — Gestion ferroviaire multijoueur</title>
-  <link rel="preload" href="/styles.css?v=v0.71.0-perf3" as="style">
-  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=1.9.4">
-  <link rel="stylesheet" href="/styles.css?v=v0.71.0-perf3">
+  <style>
+    :root { color-scheme: dark; --text: #f4ead2; --muted: #b6a986; --line: rgba(217,168,82,.24); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 20% 8%, rgba(217,168,82,.18), transparent 28%), linear-gradient(135deg, #07111d 0%, #0b1726 52%, #050914 100%);
+      overflow-x: hidden;
+    }
+    .hidden { display: none !important; }
+    .auth-boot .topbar, .auth-boot .layout, .auth-boot #panelCollapseBtn, .auth-boot #versionBadge { display: none !important; }
+    .setup {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: radial-gradient(circle at 70% 22%, rgba(54,106,134,.20), transparent 30%), linear-gradient(180deg, rgba(4,9,18,.82), rgba(4,9,18,.96));
+    }
+    .setup-card {
+      width: min(420px, 100%);
+      display: grid;
+      gap: 14px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(10,16,28,.97), rgba(7,11,20,.97));
+      box-shadow: 0 26px 72px rgba(0,0,0,.46);
+    }
+    .brand-block, .setup-logo-preview-card, .auth-tabs { display: flex; align-items: center; gap: 12px; }
+    .logo-mark {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid rgba(217,168,82,.42);
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(217,168,82,.24), rgba(49,74,92,.18));
+      color: #f7df9d;
+      font-size: 26px;
+      font-weight: 900;
+    }
+    .setup-card h1 { margin: 0; color: #f5e6c2; font-size: 24px; letter-spacing: .08em; text-transform: uppercase; }
+    .setup-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .small { font-size: 12px; }
+    .muted { color: var(--muted); }
+    code { color: #f0c875; }
+    label { display: grid; gap: 7px; color: #d7c9a7; font-size: 13px; }
+    input, button { font: inherit; border: 1px solid var(--line); border-radius: 12px; }
+    input { width: 100%; min-height: 42px; padding: 10px 12px; color: var(--text); background: rgba(2,6,23,.70); outline: none; }
+    input:focus { border-color: rgba(217,168,82,.72); box-shadow: 0 0 0 3px rgba(217,168,82,.14); }
+    input[type="color"] { padding: 4px; }
+    button { min-height: 42px; padding: 10px 13px; color: var(--text); background: rgba(28,38,55,.84); cursor: pointer; }
+    button.primary, button.active { color: #130d05; font-weight: 800; background: linear-gradient(180deg, #efc875, #bd8440); }
+    .auth-tabs button { flex: 1 1 0; }
+    .setup-logo-block { display: grid; gap: 10px; }
+    .setup-logo-head { display: grid; gap: 2px; }
+    .setup-logo-preview-card { padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(2,6,23,.38); }
+    .setup-logo-preview-card img { width: 48px; height: 48px; object-fit: contain; }
+    .logo-picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-height: 210px; overflow: auto; }
+    .logo-choice { display: grid; justify-items: center; gap: 5px; min-height: 78px; padding: 7px; font-size: 10px; }
+    .logo-choice img { width: 34px; height: 34px; object-fit: contain; }
+    .toast-host { position: fixed; right: 16px; bottom: 16px; z-index: 2000; display: grid; gap: 8px; }
+    .toast { max-width: min(360px, calc(100vw - 32px)); padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px; background: rgba(8,14,25,.98); box-shadow: 0 20px 54px rgba(0,0,0,.42); }
+    .toast.error { border-color: rgba(239,68,68,.48); color: #fecaca; }
+    @media (max-width: 520px) { .setup { align-items: start; padding: 10px; } .setup-card { padding: 16px; } .logo-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  </style>
 </head>
-<body>
-  <div id="setup" class="setup hidden">
+<body class="auth-boot">
+  <div id="setup" class="setup">
     <form id="setupForm" class="setup-card auth-card">
       <div class="brand-block">
         <div class="logo-mark">S</div>
@@ -18,7 +89,7 @@
           <p>Connecte-toi pour retrouver ta compagnie et ta progression.</p>
         </div>
       </div>
-      <div class="auth-tabs" role="tablist" aria-label="Compte joueur">
+      <div class="auth-tabs" aria-label="Compte joueur">
         <button id="authLoginTab" type="button" class="active" data-auth-mode="login">Connexion</button>
         <button id="authRegisterTab" type="button" data-auth-mode="register">Créer un compte</button>
       </div>
@@ -41,7 +112,7 @@
             <span class="small muted">Choisis un emblème ferroviaire pixel-art qui colle à la DA du jeu.</span>
           </div>
           <div class="setup-logo-preview-card">
-            <img id="setupLogoPreview" src="/assets/company_logos/steam_front.png" alt="Logo sélectionné">
+            <img id="setupLogoPreview" width="48" height="48" alt="Logo sélectionné">
             <div>
               <div class="small muted">Sélection actuelle</div>
               <div id="setupLogoLabel" class="setup-logo-label">Locomotive vapeur</div>
@@ -60,7 +131,7 @@
   <header class="topbar">
     <div class="brand">
       <div class="logo-mark small-logo company-logo-wrap">
-        <img id="companyLogoBadge" class="hidden" src="/assets/company_logos/steam_front.png" alt="Logo compagnie">
+        <img id="companyLogoBadge" class="hidden" width="42" height="42" alt="Logo compagnie">
         <span id="companyLogoFallback">S</span>
       </div>
       <div>
@@ -147,8 +218,7 @@
     </form>
   </dialog>
 
-  <script defer src="/vendor/leaflet/leaflet.js?v=1.9.4"></script>
-  <script defer src="/app.js?v=v0.71.0-perf3"></script>
+  <script defer src="/auth-boot.js?v=v0.71.0-perf4"></script>
   <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.0</button>
 </body>
 </html>

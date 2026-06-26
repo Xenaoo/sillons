@@ -4,6 +4,7 @@
   "description": "Jeu navigateur multijoueur de gestion ferroviaire en France, sans dépendance externe.",
   "main": "server.js",
   "scripts": {
+    "build:static": "node scripts/build-static-bundles.js",
     "start": "node server.js",
     "check": "node scripts/check-split-code.js",
     "reset": "node scripts/reset-save.js",
