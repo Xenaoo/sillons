@@ -104,10 +104,13 @@ const COMPANY_LOGOS = [
   { id: 'switch_roundel', label: 'Aiguillage', src: '/assets/company_logos/switch_roundel.png' }
 ];
 
+const BOOT_AUTH = window.__sillonsBootAuth || {};
+const INITIAL_AUTH_TOKEN = localStorage.getItem('sillons.authToken') || BOOT_AUTH.token || '';
+const INITIAL_PLAYER_ID = INITIAL_AUTH_TOKEN ? (localStorage.getItem('sillons.playerId') || BOOT_AUTH.playerId || '') : '';
 
 const app = {
-  authToken: localStorage.getItem('sillons.authToken') || '',
-  playerId: localStorage.getItem('sillons.authToken') ? (localStorage.getItem('sillons.playerId') || '') : '',
+  authToken: INITIAL_AUTH_TOKEN,
+  playerId: INITIAL_PLAYER_ID,
   authMode: 'login',
   state: null,
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',

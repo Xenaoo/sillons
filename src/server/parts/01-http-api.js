@@ -419,7 +419,26 @@ function sendJson(res, status, payload) {
   const serializeStartedAt = process.hrtime.bigint();
   const json = JSON.stringify(payload);
   const stringifyMs = Number(process.hrtime.bigint() - serializeStartedAt) / 1e6;
-  const acceptsGzip = /(?:^|,)\s*gzip(?:;|,|$)/i.test(String(res.__sillonsAcceptEncoding || ''));
+  const acceptsBr = acceptsContentEncoding(res, 'br');
+  const acceptsGzip = acceptsContentEncoding(res, 'gzip');
+  if (acceptsBr && zlib.brotliCompressSync && json.length >= 1024) {
+    const brStartedAt = process.hrtime.bigint();
+    const body = zlib.brotliCompressSync(Buffer.from(json), {
+      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
+    });
+    const brMs = Number(process.hrtime.bigint() - brStartedAt) / 1e6;
+    const existingTiming = String(res.getHeader('Server-Timing') || '');
+    res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}, br;dur=${brMs.toFixed(1)}`);
+    res.writeHead(status, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Encoding': 'br',
+      'Content-Length': body.length,
+      Vary: 'Accept-Encoding'
+    });
+    res.end(body);
+    return;
+  }
   if (acceptsGzip) {
     const gzipStartedAt = process.hrtime.bigint();
     const body = zlib.gzipSync(json, { level: 6 });

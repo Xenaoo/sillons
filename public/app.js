@@ -125,10 +125,13 @@ const COMPANY_LOGOS = [
   { id: 'switch_roundel', label: 'Aiguillage', src: '/assets/company_logos/switch_roundel.png' }
 ];
 
+const BOOT_AUTH = window.__sillonsBootAuth || {};
+const INITIAL_AUTH_TOKEN = localStorage.getItem('sillons.authToken') || BOOT_AUTH.token || '';
+const INITIAL_PLAYER_ID = INITIAL_AUTH_TOKEN ? (localStorage.getItem('sillons.playerId') || BOOT_AUTH.playerId || '') : '';
 
 const app = {
-  authToken: localStorage.getItem('sillons.authToken') || '',
-  playerId: localStorage.getItem('sillons.authToken') ? (localStorage.getItem('sillons.playerId') || '') : '',
+  authToken: INITIAL_AUTH_TOKEN,
+  playerId: INITIAL_PLAYER_ID,
   authMode: 'login',
   state: null,
   activeTab: localStorage.getItem('sillons.activeTab') || 'overview',
@@ -443,13 +446,38 @@ async function init() {
   app.bootTimings.initMs = performance.now() - app.bootTimings.startedAt;
 
   const snapshotStartedAt = performance.now();
-  const snapshot = await readStateSnapshot();
-  app.bootTimings.snapshotHit = Boolean(snapshot);
-  if (snapshot) applyStateSnapshot(snapshot);
+  let renderedFromCachedState = false;
+  const bootState = consumeBootState();
+  app.bootTimings.snapshotHit = Boolean(bootState);
+  if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
+  if (!renderedFromCachedState) {
+    const snapshot = await readStateSnapshot();
+    app.bootTimings.snapshotHit = Boolean(snapshot);
+    if (snapshot) renderedFromCachedState = applyStateSnapshot(snapshot);
+  }
   app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
-  void refreshState(true);
+  window.setTimeout(() => {
+    void refreshState(!renderedFromCachedState);
+  }, renderedFromCachedState ? 900 : 0);
   setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
+}
+
+function consumeBootState() {
+  const bootAuth = window.__sillonsBootAuth;
+  if (bootAuth?.token) {
+    app.authToken = String(bootAuth.token || '');
+    app.playerId = String(bootAuth.playerId || app.playerId || '');
+  }
+  const data = window.__sillonsBootState;
+  if (data) {
+    try { delete window.__sillonsBootState; } catch (error) { window.__sillonsBootState = null; }
+  }
+  if (!data?.ok || !data?.me || !data?.world) return null;
+  const expectedPlayerId = String(app.playerId || localStorage.getItem('sillons.playerId') || '').trim();
+  const actualPlayerId = String(data.auth?.playerId || data.me?.id || '').trim();
+  if (!actualPlayerId || (expectedPlayerId && actualPlayerId !== expectedPlayerId)) return null;
+  return data;
 }
 
 function openStateSnapshotDb() {
@@ -577,6 +605,7 @@ function applyStateSnapshot(data) {
   app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
   app.routeDataSignature = worldRouteSignature(data);
   app.state = data;
+  document.body.classList.remove('auth-boot', 'app-shell-boot');
   $('#setup')?.classList.add('hidden');
   ensureMapInitialized();
   ensureSelectedStation();
@@ -1520,7 +1549,9 @@ function applyAuthResponse(response) {
   localStorage.setItem('sillons.authToken', app.authToken);
   localStorage.setItem('sillons.playerId', app.playerId);
   app.state = response.state || app.state;
+  document.body.classList.remove('auth-boot', 'app-shell-boot');
   $('#setup')?.classList.add('hidden');
+  if (response.state) scheduleStateSnapshot(response.state);
   ensureMapInitialized();
   renderAll(true);
   return true;

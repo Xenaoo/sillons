@@ -19,6 +19,71 @@
     }
     .hidden { display: none !important; }
     .auth-boot .topbar, .auth-boot .layout, .auth-boot #panelCollapseBtn, .auth-boot #versionBadge { display: none !important; }
+    .app-shell-boot .setup { display: none !important; }
+    .app-shell-boot .topbar {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(5, 10, 20, .94);
+    }
+    .app-shell-boot .brand { display: flex; align-items: center; gap: 10px; min-width: 190px; }
+    .app-shell-boot .brand strong { display: block; color: #f5e6c2; font-size: 18px; }
+    .app-shell-boot .brand span { display: block; color: var(--muted); font-size: 12px; }
+    .app-shell-boot .small-logo { width: 42px; height: 42px; font-size: 22px; border-radius: 12px; }
+    .app-shell-boot .company-logo-wrap img { width: 34px; height: 34px; object-fit: contain; }
+    .app-shell-boot .top-stats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .app-shell-boot .top-stats .metric {
+      min-width: 92px;
+      padding: 7px 9px;
+      border: 1px solid rgba(217,168,82,.22);
+      border-radius: 10px;
+      background: rgba(2,6,23,.45);
+    }
+    .app-shell-boot .top-actions, .app-shell-boot .notification-mount, .app-shell-boot #panelCollapseBtn, .app-shell-boot #versionBadge { display: none !important; }
+    .app-shell-boot .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+      gap: 12px;
+      height: calc(100vh - 64px);
+      padding: 12px;
+    }
+    .app-shell-boot .panel, .app-shell-boot .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(6,12,22,.82);
+      box-shadow: 0 18px 52px rgba(0,0,0,.24);
+    }
+    .app-shell-boot .map-section { min-height: 0; overflow: hidden; }
+    .app-shell-boot .map-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 13px;
+      border-bottom: 1px solid rgba(217,168,82,.18);
+    }
+    .app-shell-boot .map-toolbar-right { display: none; }
+    .app-shell-boot #osmMap { height: calc(100% - 47px); min-height: 320px; }
+    .app-shell-boot #map { display: block; width: 100%; height: 100%; }
+    .app-shell-boot .side { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
+    .app-shell-boot .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid rgba(217,168,82,.16); }
+    .app-shell-boot .tabs button { min-height: 34px; padding: 7px 9px; border-radius: 9px; font-size: 12px; }
+    .app-shell-boot .tab-content { min-height: 0; overflow: auto; padding: 12px; }
+    .app-shell-boot .card { padding: 14px; }
+    .app-shell-boot .card h2 { margin: 0 0 12px; color: #f5e6c2; font-size: 20px; }
+    .app-shell-boot .card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .app-shell-boot .metric { display: grid; gap: 3px; }
+    .app-shell-boot .metric span { color: var(--muted); font-size: 11px; }
+    .app-shell-boot .metric b { color: #f5e6c2; font-size: 16px; }
+    @media (max-width: 900px) {
+      .app-shell-boot .topbar { align-items: flex-start; flex-direction: column; }
+      .app-shell-boot .top-stats { justify-content: flex-start; }
+      .app-shell-boot .layout { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 64px); }
+      .app-shell-boot #osmMap { height: 360px; }
+    }
     .setup {
       position: fixed;
       inset: 0;
@@ -218,7 +283,7 @@
     </form>
   </dialog>
 
-  <script defer src="/auth-boot.js?v=v0.71.0-perf4"></script>
+  <script defer src="/auth-boot.js?v=v0.71.0-perf5"></script>
   <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.0</button>
 </body>
 </html>
