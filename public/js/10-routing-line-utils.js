@@ -559,7 +559,7 @@ function lineCadenceClient(line) {
   if (stored && Number.isFinite(Number(stored.roundTripMinutes))) return stored;
 
   const plannedTrains = lineAssignedTrainsClient(line);
-  const operatingTrains = plannedTrains.filter(train => !train.maintenance?.active && Number(train.condition ?? 1) > 0);
+  const operatingTrains = plannedTrains.filter(train => !train.construction?.active && !train.maintenance?.active && Number(train.condition ?? 1) > 0);
   const timingTrains = operatingTrains.length ? operatingTrains : plannedTrains;
   const timing = lineCadenceTimingClient(line?.service, lineStopsOf(line).length);
   const speeds = timingTrains
@@ -1616,23 +1616,77 @@ function trainModelLockedReason(model) {
   return '';
 }
 
+function trainConstructionDurationMsClient(model) {
+  const maxEpoch = Math.max(1, (app.state?.balance?.epochs?.length || 7) - 1);
+  const era = clamp(Math.floor(Number(model?.unlockEpoch || 0)), 0, maxEpoch);
+  const techRank = clamp((Math.max(1, Number(model?.requiredTechLevel || 1)) - 1) / 7, 0, 1);
+  const price = Math.max(95000, Number(model?.price || 95000));
+  const priceRank = clamp((Math.log10(price) - Math.log10(95000)) / (Math.log10(92000000) - Math.log10(95000)), 0, 1);
+  const inEraRank = clamp(techRank * 0.7 + priceRank * 0.3, 0, 1);
+  const globalRank = clamp((era + inEraRank) / (maxEpoch + 1), 0, 1);
+  const minMs = 60 * 1000;
+  const maxMs = 20 * 60 * 60 * 1000;
+  return Math.round(minMs + Math.pow(globalRank, 1.55) * (maxMs - minMs));
+}
+
 function maintenanceActionLockedReason(action) {
   if (action.requiredTech && !hasTech(action.requiredTech)) return `Recherche : ${techNodeTitle(action.requiredTech)}`;
-  if (action.requiresDepot && !Object.values(app.state.me.stations || {}).some(a => a.depot || (a.maintenance || 0) > 0)) return 'Atelier ou dépôt requis';
+  if (action.facility && maintenanceFacilityLevelClient(action.facility) <= 0) return `${maintenanceFacilityNameClient(action.facility)} requis`;
   return '';
+}
+
+function maintenanceFacilityLevelClient(facilityId) {
+  const raw = app.state?.me?.maintenanceFacilities?.[facilityId];
+  return Math.max(0, Math.floor(Number(raw?.level ?? raw ?? 0)));
+}
+
+function maintenanceFacilityNameClient(facilityId) {
+  return app.state?.balance?.maintenanceFacilities?.[facilityId]?.name || 'Bâtiment';
+}
+
+function maintenanceFacilityUpgradeCostClient(facilityId) {
+  const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
+  if (!facility) return 0;
+  const level = maintenanceFacilityLevelClient(facilityId);
+  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level) * Number(app.state?.game?.market?.steel || 1));
+}
+
+function maintenanceFacilityDurationMultiplierClient(facilityId) {
+  const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
+  if (!facility) return 1;
+  const level = maintenanceFacilityLevelClient(facilityId);
+  const reduction = Math.min(Number(facility.maxDurationReduction || 0), level * Number(facility.durationReductionPerLevel || 0));
+  return clamp(1 - reduction, 0.18, 1);
+}
+
+function totalMaintenanceFacilityScoreClient() {
+  return maintenanceFacilityLevelClient('depot') * 0.45
+    + maintenanceFacilityLevelClient('workshop')
+    + maintenanceFacilityLevelClient('technicentre') * 1.35;
+}
+
+function maintenanceDurationMsClient(train, model, action) {
+  const condition = clamp(Number(train?.condition ?? 1), 0, 1);
+  const durabilityFactor = 0.35 + (1 - condition) * 1.65;
+  const facilityMultiplier = maintenanceFacilityDurationMultiplierClient(action.facility);
+  const mechanicBonus = Math.min(0.16, Number(app.state?.me?.staff?.mechanics || 0) * 0.006);
+  const branchBonus = Math.min(0.18, Number(app.state?.me?.tech?.maintenance || 0) * 0.004);
+  const techBonus = branchBonus + Math.min(0.24, techLevel('steam_workshops') * 0.045) + Math.min(0.1, techLevel('electric_standardized_maintenance') * 0.02);
+  const skillMultiplier = clamp(1 - mechanicBonus - techBonus, 0.42, 1);
+  const baseMinutes = Math.max(1, Number(action.baseMinutes || action.days * 12 || 15));
+  return Math.max(60000, Math.ceil(baseMinutes * 60000 * durabilityFactor * facilityMultiplier * skillMultiplier));
 }
 
 function maintenancePreview(train, model, action) {
   const missing = Math.max(0.02, 1 - train.condition);
-  const totalWorkshop = Object.values(app.state.me.stations || {}).reduce((s, a) => s + (a.maintenance || 0), 0);
-  const workshopDiscount = Math.min(0.18, totalWorkshop * 0.025);
-  const techDiscount = (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
+  const workshopDiscount = Math.min(0.18, totalMaintenanceFacilityScoreClient() * 0.025);
+  const branchDiscount = 1 - Math.min(0.24, Number(app.state?.me?.tech?.maintenance || 0) * 0.006);
+  const techDiscount = branchDiscount * (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
   const cost = Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
-  const workshopBonus = Math.min(0.35, totalWorkshop * 0.035 + (app.state.me.staff.mechanics || 0) * 0.012);
-  const techBonus = (hasTech('steam_workshops') ? 0.22 : 0) + (hasTech('electric_standardized_maintenance') ? 0.08 : 0);
-  const days = Math.max(1, Math.ceil(action.days * (1 - workshopBonus - techBonus)));
+  const durationMs = maintenanceDurationMsClient(train, model, action);
   const target = Math.round(Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore)) * 100);
-  return `${money(cost)} · ${formatCycles(days)} · vers ${target}%`;
+  const condition = Math.round(clamp(Number(train?.condition || 0), 0, 1) * 100);
+  return `${money(cost)} · ${formatDurationMs(durationMs)} · état ${condition}% → ${target}%`;
 }
 
 
@@ -1653,9 +1707,15 @@ function updateLinePreview(sourceId = '') {
     if (button) button.disabled = !model;
     return;
   }
+  if (train.construction?.active) {
+    box.className = 'line-preview bad small';
+    box.textContent = `Train indisponible : fabrication en cours, ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`;
+    if (button) button.disabled = true;
+    return;
+  }
   if (train.maintenance?.active) {
     box.className = 'line-preview bad small';
-    box.textContent = `Train indisponible : Maintenance en cours, ${formatCycles(train.maintenance.daysLeft)} restant(s).`;
+    box.textContent = `Train indisponible : Maintenance en cours, ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * Math.max(250, Number(app.state?.game?.tickMs || 2000)))} restantes.`;
     if (button) button.disabled = true;
     return;
   }

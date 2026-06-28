@@ -675,7 +675,7 @@ function stateRenderSignature(state = app.state) {
     epochTrafficTotalClient(me),
     Object.values(me.staff || {}).join(','),
     Object.keys(me.stations || {}).length,
-    (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? t.maintenance.daysLeft : 0}`).join('|'),
+    (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? Math.ceil(Number(t.maintenance.remainingMs || 0) / 1000) : 0}:${t.construction?.active ? Math.ceil(Number(t.construction.remainingMs || 0) / 1000) : 0}`).join('|'),
     (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.service}:${lineTrainIdsOf(l).join('+')}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}:${l.stats?.capacity?.sillons?.maxFrequency}:${l.stats?.capacity?.sillons?.lineCapacity}:${l.stats?.capacity?.sillons?.theoreticalCapacity}:${l.stats?.capacity?.sillons?.backgroundUsed}:${l.stats?.capacity?.sillons?.totalUsed}:${l.stats?.capacity?.sillons?.utilizationPercent}`).join('|'),
     Object.entries(me.techUnlocked || {}).sort().map(([id, level]) => `${id}:${level}`).join(','),
     me.researchProject ? `${me.researchProject.nodeId}:${me.researchProject.targetLevel}:${me.researchProject.durationMs}:${me.researchProject.costMoney || 0}:${me.researchProject.startedAt || 0}` : '',

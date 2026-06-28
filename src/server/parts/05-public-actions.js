@@ -68,6 +68,7 @@ function publicMapTrain(train, player = null) {
     modelId: train?.modelId,
     condition: Number(train?.condition ?? 0.9),
     maintenance: { active: Boolean(train?.maintenance?.active) },
+    construction: { active: Boolean(train?.construction?.active) },
     passengerRun: train?.passengerRun ? {
       simulationVersion: Number(train.passengerRun.simulationVersion || 0),
       lineId: train.passengerRun.lineId || null,
@@ -128,6 +129,7 @@ function publicPlayer(p) {
     researchQueue: publicResearchQueue(p),
     eraTransition: publicEraTransition(p),
     maintenancePolicy: p.maintenancePolicy || 'standard',
+    maintenanceFacilities: normalizeMaintenanceFacilities(p),
     score: Math.round(scorePlayer(p)),
     stats: p.stats,
     trains: p.trains.map(t => publicTrain(t, p)),
@@ -223,6 +225,11 @@ function createPlayer(input) {
     researchQueue: [],
     eraTransition: null,
     maintenancePolicy: 'standard',
+    maintenanceFacilities: {
+      depot: { level: 0 },
+      workshop: { level: 0 },
+      technicentre: { level: 0 }
+    },
     reputation: 50,
     co2: 0,
     energyStrategy: 'spot',
@@ -281,6 +288,7 @@ async function applyAction(playerId, type, payload) {
     sellSelectedTrains: () => actionSellSelectedTrains(player, payload),
     repairTrain: () => actionRepairTrain(player, payload),
     repairAllTrains: () => actionRepairAllTrains(player, payload),
+    buyMaintenanceFacility: () => actionBuyMaintenanceFacility(player, payload),
     updateTrainComposition: () => actionUpdateTrainComposition(player, payload),
     setMaintenancePolicy: () => actionSetMaintenancePolicy(player, payload),
     createLine: () => actionCreateLine(player, payload),
@@ -331,18 +339,19 @@ function actionBuyTrain(player, payload) {
   const price = Math.round(unitPrice * quantity);
   if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
   player.cash -= price;
+  const durationMs = trainConstructionDurationMs(model);
   for (let i = 0; i < quantity; i++) {
-    player.trains.push(createTrainInstance(payload.modelId, player.id));
+    player.trains.push(createTrainInstance(payload.modelId, player.id, { constructionActive: true }));
   }
   markTutorialAction(player, 'buyTrain');
   const quantityLabel = quantity > 1 ? `${quantity} exemplaires` : '1 exemplaire';
-  notify(player, `Achat confirmé : ${quantityLabel} de ${model.name} pour ${money(price)}.`);
-  return ok(quantity > 1 ? `${quantity} trains achetés.` : 'Train acheté.');
+  notify(player, `Achat confirmé : ${quantityLabel} de ${model.name} pour ${money(price)}. Fabrication lancée : ${formatDurationMs(durationMs)}.`);
+  return ok(quantity > 1 ? `${quantity} fabrications lancées.` : 'Fabrication lancée.');
 }
 
 
 function cloneTrainInstanceForPlayer(sourceTrain, playerId) {
-  const clone = createTrainInstance(sourceTrain.modelId, playerId);
+  const clone = createTrainInstance(sourceTrain.modelId, playerId, { constructionActive: true });
   clone.condition = Math.max(0.5, Math.min(1, Number(sourceTrain.condition || 1)));
   clone.age = Math.max(0, Math.round(Number(sourceTrain.age || 0)));
   clone.composition = JSON.parse(JSON.stringify(sourceTrain.composition || {}));
@@ -353,6 +362,7 @@ function cloneTrainInstanceForPlayer(sourceTrain, playerId) {
 function actionDuplicateTrain(player, payload) {
   const source = player.trains.find(t => t.id === String(payload.trainId || ''));
   if (!source) return fail('Train introuvable.');
+  if (trainUnderConstruction(source)) return fail('Duplication indisponible.', 'Le train source est encore en fabrication.');
   if (source.maintenance?.active) return fail('Duplication indisponible.', 'Le train source est actuellement en maintenance.');
   const model = BALANCE.trains[source.modelId];
   if (!model) return fail('Modèle introuvable.');
@@ -362,8 +372,8 @@ function actionDuplicateTrain(player, payload) {
   player.cash -= price;
   const clone = cloneTrainInstanceForPlayer(source, player.id);
   player.trains.push(clone);
-  notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}.`);
-  return ok('Train dupliqué.');
+  notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}. Fabrication lancée : ${formatDurationMs(trainConstructionDurationMs(model))}.`);
+  return ok('Fabrication lancée.');
 }
 
 function lineSillonPurchaseCost(line, count = 1) {
@@ -379,6 +389,7 @@ function newlyAddedTrainIds(currentIds, nextIds) {
 
 function trainSaleIssue(player, train) {
   if (!train) return fail('Train introuvable.');
+  if (trainUnderConstruction(train)) return fail('Ce train est en fabrication.', 'Attends la livraison avant de le vendre.');
   if (train.maintenance?.active) return fail('Ce train est en maintenance.', 'Attends la fin de l’intervention avant de le vendre.');
   if (player.lines.some(line => line.active && lineTrainIds(line).includes(train.id))) {
     return fail('Ce train est affecté à une ligne active. Fermez ou modifiez la ligne avant de le vendre.');
@@ -431,6 +442,7 @@ function actionSellSelectedTrains(player, payload = {}) {
 
 function prepareTrainCompositionUpdate(player, train, payload) {
   if (!train) return { ok: false, result: fail('Train introuvable.') };
+  if (trainUnderConstruction(train)) return { ok: false, result: fail('Composition indisponible.', 'Le train est encore en fabrication.') };
   if (train.maintenance?.active) return { ok: false, result: fail('Composition indisponible.', 'Le train est actuellement en maintenance.') };
   const model = BALANCE.trains[train.modelId];
   if (!model) return { ok: false, result: fail('Modèle introuvable.') };
@@ -619,7 +631,8 @@ async function actionCreateLine(player, payload) {
   if (serviceStopProblem) return fail(serviceStopProblem);
   const train = player.trains.find(t => t.id === trainId);
   if (!train) return fail('Train introuvable.');
-  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
+  if (trainUnderConstruction(train)) return fail('Ce train est indisponible.', `Fabrication en cours : ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`);
+  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS)} restantes.`);
   if (trainUsedByActiveLine(player, trainId)) return fail('Ce train est déjà affecté à une ligne active.');
   const model = BALANCE.trains[train.modelId];
   const operatingModel = getTrainOperatingProfile(train, model, player);
@@ -665,7 +678,8 @@ async function actionAssignTrainToLine(player, payload) {
   const train = player.trains.find(t => t.id === trainId);
   if (!train) return fail('Train introuvable.');
   if (lineTrainIds(line).includes(trainId)) return fail('Ce train est déjà affecté à cette ligne.');
-  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
+  if (trainUnderConstruction(train)) return fail('Ce train est indisponible.', `Fabrication en cours : ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`);
+  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS)} restantes.`);
   if (trainUsedByActiveLine(player, trainId, line.id)) return fail('Ce train est déjà utilisé ailleurs.', 'Retire-le de son autre ligne avant de l’affecter ici.');
   const model = BALANCE.trains[train.modelId];
   const operatingModel = getTrainOperatingProfile(train, model, player);
@@ -722,7 +736,8 @@ async function actionSetTrainLineAssignment(player, payload) {
   if (!targetLine) return fail('Ligne active introuvable.');
   normalizeLine(targetLine);
   if (currentLine?.id === targetLine.id) return ok('Ce train est déjà affecté à cette ligne.');
-  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatCycles(train.maintenance.daysLeft)} restant(s).`);
+  if (trainUnderConstruction(train)) return fail('Ce train est indisponible.', `Fabrication en cours : ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`);
+  if (train.maintenance?.active) return fail('Ce train est indisponible.', `Maintenance en cours : ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS)} restantes.`);
 
   const model = BALANCE.trains[train.modelId];
   const operatingModel = getTrainOperatingProfile(train, model, player);
@@ -847,7 +862,8 @@ async function actionUpdateLine(player, payload) {
   for (const trainId of nextTrainIds) {
     const train = player.trains.find(t => t.id === trainId);
     if (!train) return fail(`Train introuvable : ${trainId}.`);
-    if (train.maintenance?.active) return fail('Un train sélectionné est en maintenance.', `${BALANCE.trains[train.modelId]?.name || 'Train'} sera disponible dans ${formatCycles(train.maintenance.daysLeft)}.`);
+    if (trainUnderConstruction(train)) return fail('Un train sélectionné est en fabrication.', `${BALANCE.trains[train.modelId]?.name || 'Train'} sera livré dans ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)}.`);
+    if (train.maintenance?.active) return fail('Un train sélectionné est en maintenance.', `${BALANCE.trains[train.modelId]?.name || 'Train'} sera disponible dans ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS)}.`);
     if (trainUsedByActiveLine(player, train.id, line.id)) return fail('Un train sélectionné est déjà utilisé ailleurs.', 'Retire-le de son autre ligne avant de l’affecter ici.');
     selectedTrains.push(train);
   }
@@ -937,12 +953,11 @@ function actionUpgradeStation(player, payload) {
   const kind = String(payload.kind || 'level');
   const station = stationById(stationId);
   if (!station) return fail('Gare introuvable.');
-  if (!['level', 'commerce', 'maintenance', 'depot'].includes(kind)) return fail('Amélioration inconnue.');
+  if (kind === 'maintenance' || kind === 'depot') return fail('Amélioration retirée.', 'Les ateliers et dépôts se construisent maintenant dans Parc > Maintenance, hors des gares.');
+  if (!['level', 'commerce'].includes(kind)) return fail('Amélioration inconnue.');
   const researchByUpgrade = {
     level: { id: 'passenger_flow', level: 1 },
-    commerce: { id: 'ticket_halls', level: 1 },
-    maintenance: { id: 'steam_workshops', level: 1 },
-    depot: { id: 'steam_depots', level: 1 }
+    commerce: { id: 'ticket_halls', level: 1 }
   };
   const research = researchByUpgrade[kind];
   if (research && !hasTech(player, research.id, research.level)) {
@@ -964,9 +979,7 @@ function actionUpgradeStation(player, payload) {
   const maxed =
     !wasUnowned && (
       (kind === 'level' && asset.level >= 5) ||
-      (kind === 'commerce' && asset.commerce >= 4) ||
-      (kind === 'maintenance' && asset.maintenance >= 4) ||
-      (kind === 'depot' && asset.depot)
+      (kind === 'commerce' && asset.commerce >= 4)
     );
   if (maxed) return fail('Cette amélioration est déjà au maximum.');
 
@@ -981,12 +994,6 @@ function actionUpgradeStation(player, payload) {
   } else if (kind === 'commerce') {
     asset.commerce += 1;
     notify(player, `Commerces développés à ${station.name} pour ${money(cost)}.`);
-  } else if (kind === 'maintenance') {
-    asset.maintenance += 1;
-    notify(player, `Atelier renforcé à ${station.name} pour ${money(cost)}.`);
-  } else if (kind === 'depot') {
-    asset.depot = true;
-    notify(player, `Dépôt créé à ${station.name} pour ${money(cost)}.`);
   }
   return ok('Gare améliorée.');
 }
@@ -1011,8 +1018,6 @@ function stationAcquisitionCost(station) {
 function stationUpgradeCost(station, asset, kind) {
   if (kind === 'level') return Math.round((85000 + station.baseDemand * 55) * asset.level * state.market.steel);
   if (kind === 'commerce') return Math.round(50000 * (asset.commerce + 1) * asset.level);
-  if (kind === 'maintenance') return Math.round(90000 * (asset.maintenance + 1) * asset.level);
-  if (kind === 'depot') return 180000;
   return 0;
 }
 
@@ -1020,8 +1025,8 @@ function stationSaleRefundBreakdown(station, asset) {
   const normalized = {
     level: clamp(Math.floor(Number(asset?.level || 1)), 1, 5),
     commerce: clamp(Math.floor(Number(asset?.commerce || 0)), 0, 4),
-    maintenance: clamp(Math.floor(Number(asset?.maintenance || 0)), 0, 4),
-    depot: Boolean(asset?.depot)
+    maintenance: 0,
+    depot: false
   };
   const acquisition = stationAcquisitionCost(station);
   let levels = 0;
@@ -1032,11 +1037,8 @@ function stationSaleRefundBreakdown(station, asset) {
   for (let commerce = 0; commerce < normalized.commerce; commerce++) {
     commerces += stationUpgradeCost(station, { ...normalized, commerce }, 'commerce');
   }
-  let maintenance = 0;
-  for (let step = 0; step < normalized.maintenance; step++) {
-    maintenance += stationUpgradeCost(station, { ...normalized, maintenance: step }, 'maintenance');
-  }
-  const depot = normalized.depot ? stationUpgradeCost(station, normalized, 'depot') : 0;
+  const maintenance = 0;
+  const depot = 0;
   const total = Math.round(acquisition + levels + commerces + maintenance + depot);
   return { acquisition, levels, commerces, maintenance, depot, total };
 }
@@ -1055,7 +1057,7 @@ function actionSellStation(player, payload) {
   notify(
     player,
     `${station.name} vendue : remboursement ${money(refund.total)} ` +
-    `(gare ${money(refund.acquisition)}, niveaux ${money(refund.levels)}, commerces ${money(refund.commerces)}, ateliers ${money(refund.maintenance)}, dépôt ${money(refund.depot)}). Les lignes qui la desservent restent actives.`
+    `(gare ${money(refund.acquisition)}, niveaux ${money(refund.levels)}, commerces ${money(refund.commerces)}). Les lignes qui la desservent restent actives.`
   );
   return ok(`${station.name} vendue pour ${money(refund.total)}.`);
 }
@@ -1091,13 +1093,38 @@ function actionFireStaff(player, payload) {
   return ok();
 }
 
+function actionBuyMaintenanceFacility(player, payload) {
+  const facilityId = String(payload.facility || payload.id || '');
+  const facility = BALANCE.maintenanceFacilities?.[facilityId];
+  if (!facility) return fail('Bâtiment de maintenance inconnu.');
+  normalizeMaintenanceFacilities(player);
+  if (facility.requiredTech && !hasTech(player, facility.requiredTech)) {
+    const tech = techNodeById(facility.requiredTech);
+    return fail('Recherche requise.', `Débloque d’abord : ${tech?.title || facility.requiredTech}.`);
+  }
+  const cost = maintenanceFacilityUpgradeCost(player, facilityId);
+  if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût : ${money(cost)}.`);
+  player.cash -= cost;
+  player.maintenanceFacilities[facilityId].level = maintenanceFacilityLevel(player, facilityId) + 1;
+  const level = maintenanceFacilityLevel(player, facilityId);
+  const reduction = Math.round((1 - maintenanceFacilityDurationMultiplier(player, facilityId)) * 100);
+  notify(player, `${facility.name} niveau ${level} acheté pour ${money(cost)}. Durées ${facility.actionLabel.toLowerCase()} réduites de ${reduction}%.`);
+  return ok(`${facility.name} niveau ${level} acheté.`);
+}
+
+function maintenanceFacilityRequiredLabel(mode) {
+  const facility = BALANCE.maintenanceFacilities?.[mode?.facility];
+  return facility?.name || 'Bâtiment de maintenance';
+}
+
 function actionRepairTrain(player, payload) {
   const trainId = String(payload.trainId || '');
   const modeId = String(payload.mode || 'standard');
   const train = player.trains.find(t => t.id === trainId);
   if (!train) return fail('Train introuvable.');
   normalizeTrain(train, player.id);
-  if (train.maintenance?.active) return fail('Ce train est déjà en maintenance.', `Fin prévue dans ${formatCycles(train.maintenance.daysLeft)}.`);
+  if (trainUnderConstruction(train)) return fail('Ce train est encore en fabrication.', `Livraison prévue dans ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)}.`);
+  if (train.maintenance?.active) return fail('Ce train est déjà en maintenance.', `Fin prévue dans ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS)}.`);
 
   const model = BALANCE.trains[train.modelId];
   const mode = BALANCE.maintenanceActions[modeId];
@@ -1106,27 +1133,30 @@ function actionRepairTrain(player, payload) {
     const tech = techNodeById(mode.requiredTech);
     return fail('Recherche requise pour cette maintenance.', `Débloque d’abord : ${tech?.title || mode.requiredTech}.`);
   }
-  if (mode.requiresDepot && !hasMaintenanceWorkshop(player)) {
-    return fail('Atelier requis.', 'Construis un atelier de maintenance ou un dépôt dans au moins une gare exploitée.');
+  if (mode.facility && !hasMaintenanceFacility(player, mode.facility)) {
+    return fail(`${maintenanceFacilityRequiredLabel(mode)} requis.`, `Achète au moins un niveau dans Parc > Maintenance pour lancer : ${mode.name}.`);
   }
   const targetCondition = Math.max(train.condition, Math.min(mode.target || 0.99, train.condition + mode.restore));
   if (targetCondition <= train.condition + 0.005) return fail('Cette intervention n’apporterait presque aucune amélioration.', `Choisis une intervention plus lourde ou attends que l’état descende sous ${Math.round((mode.target || 0.99) * 100)}%.`);
 
   const cost = maintenanceActionCost(player, train, model, mode);
   if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût: ${money(cost)}.`);
-  const duration = maintenanceDuration(player, mode);
+  const durationMs = maintenanceDurationMs(player, train, model, mode);
   player.cash -= cost;
   train.maintenance = {
     active: true,
     mode: modeId,
     label: mode.name,
-    daysLeft: duration,
-    duration,
+    daysLeft: Math.ceil(durationMs / Math.max(250, TICK_MS)),
+    duration: Math.ceil(durationMs / Math.max(250, TICK_MS)),
+    remainingMs: durationMs,
+    durationMs,
     targetCondition,
     startedDay: state.day,
+    startedAt: Date.now(),
     cost
   };
-  notify(player, `${model.name} envoyé en maintenance (${mode.name}) : ${formatCycles(duration)}, ${money(cost)}.`);
+  notify(player, `${model.name} envoyé en maintenance (${mode.name}) : ${formatDurationMs(durationMs)}, ${money(cost)}.`);
   return ok('Maintenance planifiée.');
 }
 
@@ -1138,43 +1168,49 @@ function actionRepairAllTrains(player, payload) {
     const tech = techNodeById(mode.requiredTech);
     return fail('Recherche requise pour cette maintenance.', `Débloque d’abord : ${tech?.title || mode.requiredTech}.`);
   }
-  if (mode.requiresDepot && !hasMaintenanceWorkshop(player)) {
-    return fail('Atelier requis.', 'Construis un atelier de maintenance ou un dépôt dans au moins une gare exploitée.');
+  if (mode.facility && !hasMaintenanceFacility(player, mode.facility)) {
+    return fail(`${maintenanceFacilityRequiredLabel(mode)} requis.`, `Achète au moins un niveau dans Parc > Maintenance pour lancer : ${mode.name}.`);
   }
 
   const candidates = [];
   let totalCost = 0;
+  let maxDurationMs = 0;
   for (const train of player.trains || []) {
     normalizeTrain(train, player.id);
+    if (trainUnderConstruction(train)) continue;
     if (train.maintenance?.active) continue;
     const model = BALANCE.trains[train.modelId];
     if (!model) continue;
     const targetCondition = Math.max(train.condition, Math.min(mode.target || 0.99, train.condition + mode.restore));
     if (targetCondition <= train.condition + 0.005) continue;
     const cost = maintenanceActionCost(player, train, model, mode);
-    candidates.push({ train, model, targetCondition, cost });
+    const durationMs = maintenanceDurationMs(player, train, model, mode);
+    candidates.push({ train, model, targetCondition, cost, durationMs });
     totalCost += cost;
+    maxDurationMs = Math.max(maxDurationMs, durationMs);
   }
 
-  if (!candidates.length) return fail('Aucun train éligible.', 'Tous les trains sont déjà en maintenance ou dans un état trop élevé pour cette intervention.');
+  if (!candidates.length) return fail('Aucun train éligible.', 'Les trains sont en fabrication, déjà en maintenance ou dans un état trop élevé pour cette intervention.');
   totalCost = Math.round(totalCost);
   if (!canPay(player, totalCost)) return fail(`Trésorerie insuffisante. Coût total : ${money(totalCost)}.`);
 
-  const duration = maintenanceDuration(player, mode);
   player.cash -= totalCost;
   for (const item of candidates) {
     item.train.maintenance = {
       active: true,
       mode: modeId,
       label: mode.name,
-      daysLeft: duration,
-      duration,
+      daysLeft: Math.ceil(item.durationMs / Math.max(250, TICK_MS)),
+      duration: Math.ceil(item.durationMs / Math.max(250, TICK_MS)),
+      remainingMs: item.durationMs,
+      durationMs: item.durationMs,
       targetCondition: item.targetCondition,
       startedDay: state.day,
+      startedAt: Date.now(),
       cost: item.cost
     };
   }
-  notify(player, `${candidates.length} train(s) envoyés en maintenance (${mode.name}) : ${formatCycles(duration)}, ${money(totalCost)}.`);
+  notify(player, `${candidates.length} train(s) envoyés en maintenance (${mode.name}) : jusqu’à ${formatDurationMs(maxDurationMs)}, ${money(totalCost)}.`);
   return ok(`${candidates.length} train(s) envoyés en maintenance.`);
 }
 
@@ -1358,12 +1394,39 @@ function processTrainMaintenance(player) {
   for (const train of player.trains) {
     normalizeTrain(train, player.id);
     if (!train.maintenance?.active) continue;
-    train.maintenance.daysLeft -= 1;
-    if (train.maintenance.daysLeft <= 0) {
+    train.maintenance.remainingMs = Math.max(0, Number(train.maintenance.remainingMs || train.maintenance.daysLeft * TICK_MS) - TICK_MS);
+    train.maintenance.daysLeft = Math.ceil(train.maintenance.remainingMs / Math.max(250, TICK_MS));
+    if (train.maintenance.remainingMs <= 0) {
       const model = BALANCE.trains[train.modelId];
       train.condition = clamp(train.maintenance.targetCondition || Math.max(train.condition, 0.9), 0.1, 1);
-      train.maintenance = { active: false, mode: null, daysLeft: 0, duration: 0, targetCondition: 0, lastServiceDay: state.day };
-      notify(player, `${model?.name || 'Train'} ressort d’atelier : État ${Math.round(train.condition * 100)}%.`);
+      train.maintenance = { active: false, mode: null, daysLeft: 0, duration: 0, remainingMs: 0, durationMs: 0, targetCondition: 0, lastServiceDay: state.day };
+      notify(player, `${model?.name || 'Train'} ressort de maintenance : État ${Math.round(train.condition * 100)}%.`);
+    }
+  }
+}
+
+function processTrainConstruction(player) {
+  for (const train of player.trains) {
+    normalizeTrain(train, player.id);
+    if (!train.construction?.active) continue;
+    train.construction.remainingMs = Math.max(0, Number(train.construction.remainingMs || 0) - TICK_MS);
+    if (train.construction.remainingMs <= 0) {
+      const model = BALANCE.trains[train.modelId];
+      const durationMs = Math.max(0, Number(train.construction.durationMs || 0));
+      const startedAt = train.construction.startedAt || null;
+      const startedDay = train.construction.startedDay || null;
+      train.construction = {
+        active: false,
+        label: null,
+        remainingMs: 0,
+        durationMs,
+        startedAt,
+        startedDay,
+        completedAt: Date.now(),
+        completedDay: state.day
+      };
+      train.acquiredDay = state.day;
+      notify(player, `${model?.name || 'Train'} livré : disponible dans le parc.`);
     }
   }
 }

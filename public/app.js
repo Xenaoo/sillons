@@ -263,9 +263,9 @@ const TUTORIAL_STEPS = [
   { id: 'line-price', target: '#lineTicketPrice', tab: 'lines', subtab: 'create', title: 'Fixer le prix', body: 'Un prix trop élevé réduit l’attractivité. Cherche un équilibre entre volume de voyageurs et recette par billet.', action: 'Continuer' },
   { id: 'create-line', target: '#createLineBtn:not([disabled])', tab: 'lines', subtab: 'create', title: 'Ouvrir la ligne', body: 'Clique sur Ouvrir la ligne. Si tu possèdes déjà une ligne active, l’étape est validée automatiquement.', wait: 'hasLine' },
   { id: 'lines-manage', target: '[data-lines-subtab="manage"]', tab: 'lines', title: 'Modifier les lignes', body: 'Le sous-menu Modifier sert à suivre la finance, les besoins métiers, la capacité, les arrêts et l’état opérationnel de chaque ligne.', wait: 'linesSubtab:manage' },
-  { id: 'stations-tab', target: '#tabs [data-tab="stations"]', title: 'Gares', body: 'Clique sur Gares. Tu peux améliorer les niveaux, commerces, ateliers et dépôts pour soutenir le trafic et la maintenance.', wait: 'activeTab:stations' },
+  { id: 'stations-tab', target: '#tabs [data-tab="stations"]', title: 'Gares', body: 'Clique sur Gares. Tu peux améliorer les niveaux et commerces pour soutenir le trafic. Les bâtiments de maintenance sont dans Parc > Maintenance.', wait: 'activeTab:stations' },
   { id: 'staff-tab', target: '#tabs [data-tab="staff"]', title: 'Ressources humaines', body: 'Clique sur RH. Les conducteurs sont obligatoires, les autres métiers améliorent recettes, régularité, satisfaction, maintenance et infrastructure.', wait: 'activeTab:staff' },
-  { id: 'maintenance-tab', target: 'button[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Surveille l’état des trains : à 0 %, ils ne roulent plus et disparaissent de la carte.', wait: 'fleetSubtab:maintenance' },
+  { id: 'maintenance-tab', target: 'button[data-fleet-subtab="maintenance"]', tab: 'fleet', title: 'Maintenance', body: 'Retourne dans Parc puis Maintenance. Achète dépôts, ateliers et technicentres, puis surveille l’état des trains : à 0 %, ils ne roulent plus.', wait: 'fleetSubtab:maintenance' },
   { id: 'resources-tab', target: '#tabs [data-tab="resources"]', title: 'Énergie', body: 'Clique sur Énergie. Surveille charbon, diesel et électricité : sans ressource, les lignes concernées s’arrêtent.', wait: 'activeTab:resources' },
   { id: 'market-tab', target: '#tabs [data-tab="market"]', title: 'Marché et financement', body: 'Clique sur Marché. Tu y ajustes les contrats et le financement pour accompagner la croissance de la compagnie.', wait: 'activeTab:market' },
   { id: 'budget-tab', target: '#tabs [data-tab="budget"]', title: 'Budget', body: 'Clique sur Budget. C’est le menu à consulter pour comprendre chaque recette, dépense, charge fixe et résultat net.', wait: 'activeTab:budget' },
@@ -1101,7 +1101,7 @@ function stateRenderSignature(state = app.state) {
     epochTrafficTotalClient(me),
     Object.values(me.staff || {}).join(','),
     Object.keys(me.stations || {}).length,
-    (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? t.maintenance.daysLeft : 0}`).join('|'),
+    (me.trains || []).map(t => `${t.id}:${Math.round((t.condition || 0) * 1000)}:${t.profile?.speed || ''}:${t.profile?.energy || ''}:${t.maintenance?.active ? Math.ceil(Number(t.maintenance.remainingMs || 0) / 1000) : 0}:${t.construction?.active ? Math.ceil(Number(t.construction.remainingMs || 0) / 1000) : 0}`).join('|'),
     (me.lines || []).map(l => `${l.id}:${l.active ? 1 : 0}:${l.frequency}:${l.tariff}:${l.service}:${lineTrainIdsOf(l).join('+')}:${lineStopsOf(l).join('>')}:${l.stats?.revenue}:${l.stats?.expenses}:${l.stats?.profit}:${l.stats?.passengers}:${l.stats?.freightTons}:${l.stats?.market?.passengerShare}:${l.stats?.market?.freightShare}:${l.stats?.capacity?.sillons?.maxFrequency}:${l.stats?.capacity?.sillons?.lineCapacity}:${l.stats?.capacity?.sillons?.theoreticalCapacity}:${l.stats?.capacity?.sillons?.backgroundUsed}:${l.stats?.capacity?.sillons?.totalUsed}:${l.stats?.capacity?.sillons?.utilizationPercent}`).join('|'),
     Object.entries(me.techUnlocked || {}).sort().map(([id, level]) => `${id}:${level}`).join(','),
     me.researchProject ? `${me.researchProject.nodeId}:${me.researchProject.targetLevel}:${me.researchProject.durationMs}:${me.researchProject.costMoney || 0}:${me.researchProject.startedAt || 0}` : '',
@@ -3467,6 +3467,15 @@ function formatCycles(value) {
   return n <= 1 ? '1 cycle' : `${n} cycles`;
 }
 
+function formatDurationMs(value) {
+  const totalMinutes = Math.max(1, Math.ceil(Number(value || 0) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${totalMinutes} min`;
+  if (minutes <= 0) return `${hours} h`;
+  return `${hours} h ${minutes} min`;
+}
+
 function serverNow() {
   return Date.now() + (app.serverClockOffset || 0);
 }
@@ -3574,15 +3583,11 @@ function stationUpgradeTooltip(station, asset, upgrade) {
     level: upgrade.label === 'Acheter'
       ? 'achète la gare, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
       : 'augmente la capacité et l’attractivité de la gare ; débloque une meilleure base pour les autres améliorations.',
-    commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.',
-    maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
-    depot: 'permet le stationnement et améliore la portée pratique des trains vapeur sur les itinéraires qui passent par cette gare.'
+    commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.'
   };
   const nextAsset = { ...(asset || {}) };
   if (upgrade.kind === 'level') nextAsset.level = upgrade.label === 'Acheter' ? 1 : Number(nextAsset.level || 1) + 1;
   if (upgrade.kind === 'commerce') nextAsset.commerce = Number(nextAsset.commerce || 0) + 1;
-  if (upgrade.kind === 'maintenance') nextAsset.maintenance = Number(nextAsset.maintenance || 0) + 1;
-  if (upgrade.kind === 'depot') nextAsset.depot = true;
   const nextCost = stationOperatingCostBreakdown(nextAsset).total;
   return `${upgrade.label} à ${station.name}. Coût immédiat : ${money(upgrade.cost)}. Coût d’exploitation après amélioration : ${moneyPerHour(nextCost)}. Effet : ${effects[upgrade.kind] || 'Amélioration de la gare.'}`;
 }
@@ -3668,9 +3673,7 @@ function preloadMapSprites() {
 function stationPrestigeStage(asset) {
   if (!asset) return 1;
   const score = Number(asset.level || 1)
-    + Math.floor(Number(asset.commerce || 0) / 2)
-    + Math.floor(Number(asset.maintenance || 0) / 2)
-    + (asset.depot ? 1 : 0);
+    + Math.floor(Number(asset.commerce || 0) / 2);
   return Math.max(1, Math.min(6, score));
 }
 
@@ -3822,7 +3825,7 @@ function updateLineDistanceCalculator() {
 
 function renderCreateLinePanel() {
   const me = app.state.me;
-  const freeTrains = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id)));
+  const freeTrains = me.trains.filter(t => !t.construction?.active && !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id)));
   const draft = normalizeLineDraft(freeTrains);
   const trainOptions = freeTrains.map(t => {
     const model = app.state.balance.trains[t.modelId];
@@ -4305,11 +4308,13 @@ function renderLineItem(line) {
       ? { cls: 'bad', label: 'Ressource insuffisante' }
       : line.stats?.status === 'sillon-limited'
         ? { cls: 'warn', label: 'Sillons limités' }
-        : line.stats?.status === 'maintenance'
-          ? { cls: 'warn', label: 'Maintenance' }
-          : line.stats?.status === 'train-out-of-service'
-            ? { cls: 'bad', label: 'Train immobilisé' }
-            : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
+        : line.stats?.status === 'construction'
+          ? { cls: 'warn', label: 'Train en fabrication' }
+          : line.stats?.status === 'maintenance'
+            ? { cls: 'warn', label: 'Maintenance' }
+            : line.stats?.status === 'train-out-of-service'
+              ? { cls: 'bad', label: 'Train immobilisé' }
+              : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
   const shortStops = stops.length > 4
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);
@@ -4825,7 +4830,8 @@ function formatMaintenanceCountdown(hours) {
 
 function trainProjectionLabel(train) {
   const projection = train?.maintenanceProjection || {};
-  if (train?.maintenance?.active) return 'En atelier';
+  if (train?.construction?.active) return `Livraison dans ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)}`;
+  if (train?.maintenance?.active) return 'En maintenance';
   if (Number(train?.condition || 0) <= 0) return 'Maintenance requise';
   return `0% dans ${formatMaintenanceCountdown(projection.hoursToZero)}`;
 }
@@ -5129,6 +5135,8 @@ function setCompositionSelection(ids, primaryId = '') {
 function setCompositionEditorTrain(trainId = '') {
   const id = String(trainId || '').trim();
   if (id && !compositionValidTrainIds().has(id)) return false;
+  const train = id ? app.state?.me?.trains?.find(item => item.id === id) : null;
+  if (train?.construction?.active) return false;
   app.compositionEditorTrainId = id;
   if (id) localStorage.setItem('sillons.compositionEditorTrainId', id);
   else localStorage.removeItem('sillons.compositionEditorTrainId');
@@ -5231,6 +5239,7 @@ function compositionAssignmentFilterOptions() {
     .sort((a, b) => linePublicName(a).localeCompare(linePublicName(b), 'fr'));
   return [
     { id: 'all', label: 'Tous les trains' },
+    { id: 'construction', label: 'En fabrication' },
     { id: 'free', label: 'Trains libres' },
     ...lines.map(line => ({ id: `line:${line.id}`, label: linePublicName(line) }))
   ];
@@ -5238,6 +5247,7 @@ function compositionAssignmentFilterOptions() {
 
 function compositionTrainAssignmentKey(train) {
   if (!train) return 'free';
+  if (train.construction?.active) return 'construction';
   const line = trainCurrentLine(train.id);
   if (line) return `line:${line.id}`;
   return 'free';
@@ -5260,7 +5270,7 @@ function compositionFilteredTrainIds() {
 function compositionSelectionSaleSummary(selectedIds = compositionSelectedIds()) {
   const selected = new Set(selectedIds);
   const trains = (app.state?.me?.trains || []).filter(train => selected.has(train.id));
-  const unavailable = trains.filter(train => train.maintenance?.active || trainCurrentLine(train.id));
+  const unavailable = trains.filter(train => train.construction?.active || train.maintenance?.active || trainCurrentLine(train.id));
   const estimatedValue = trains.reduce((total, train) => {
     const model = app.state.balance.trains[train.modelId];
     return total + (model ? trainResaleEstimateClient(train, model) : 0);
@@ -5281,7 +5291,7 @@ function setCompositionAssignmentFilter(value) {
 }
 
 function assignableLinesForTrain(train, currentLine = null) {
-  if (!train || train.maintenance?.active) return [];
+  if (!train || train.construction?.active || train.maintenance?.active) return [];
   const model = app.state.balance.trains[train.modelId];
   const profile = previewOperatingProfile(train, model);
   const currentLineId = currentLine?.id || '';
@@ -5372,11 +5382,12 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
   const active = app.compositionEditorTrainId === train.id;
   const selected = selectedTrainIds.has(train.id);
   const line = trainCurrentLine(train.id);
+  const inConstruction = !!train.construction?.active;
   const inMaint = !!train.maintenance?.active;
-  const canSell = !line && !inMaint;
+  const canSell = !line && !inConstruction && !inMaint;
   const assignable = safeAssignableLinesForTrain(train, line);
-  const hasAssignmentAction = !!line || (assignable.length > 0 && !inMaint);
-  const statusLabel = line ? linePublicName(line) : inMaint ? 'En atelier' : 'Libre';
+  const hasAssignmentAction = !!line || (assignable.length > 0 && !inConstruction && !inMaint);
+  const statusLabel = line ? linePublicName(line) : inConstruction ? 'En fabrication' : inMaint ? 'En maintenance' : 'Libre';
   const assignButtonLabel = line ? 'Appliquer' : 'Affecter';
   const sellEstimate = trainResaleEstimateClient(train, model);
   const era = trainEraLabel(Number(model.unlockEpoch ?? model.epoch ?? 0));
@@ -5406,7 +5417,7 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
       </div>
       <div class="composition-assign-row">
         <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>
-          <option value="">${line ? 'Changer / retirer...' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
+          <option value="">${line ? 'Changer / retirer...' : inConstruction ? 'En fabrication' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
           ${line ? `<option value="__remove__">Retirer de la ligne actuelle</option>` : ''}
           ${assignable.map(candidate => {
             const slots = lineAvailableSillonsClient(candidate);
@@ -5417,8 +5428,8 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
         <button type="button" class="ghost" data-action="assign-train-line" data-id="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>${escapeHtml(assignButtonLabel)}</button>
       </div>
       <div class="composition-train-actions">
-        <button type="button" class="ghost" data-action="duplicate-train" data-id="${escapeAttr(train.id)}" ${tooltipAttr(`Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
-        <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${escapeAttr(train.id)}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : 'Impossible : train en maintenance.')}>Vendre</button>
+        <button type="button" class="ghost" data-action="duplicate-train" data-id="${escapeAttr(train.id)}" ${inConstruction || inMaint ? 'disabled' : ''} ${tooltipAttr(inConstruction ? 'Impossible : train encore en fabrication.' : inMaint ? 'Impossible : train en maintenance.' : `Duplique ce matériel avec la même composition. Coût : ${money(Math.round((model?.price || 0) * 0.98))}.`)}>Dupliquer</button>
+        <button type="button" class="danger ghost composition-sell-train-btn" data-action="sell-train" data-id="${escapeAttr(train.id)}" ${canSell ? '' : 'disabled'} ${tooltipAttr(canSell ? `Vendre ce train inutilisé. Estimation : ${money(sellEstimate)}.` : line ? 'Impossible : train affecté à une ligne active.' : inConstruction ? 'Impossible : train en fabrication.' : 'Impossible : train en maintenance.')}>Vendre</button>
       </div>
     </article>
   `;
@@ -5481,9 +5492,11 @@ function renderCompositionSelectionToolbar(selectedIds, displayedTrains) {
   const allVisibleSelected = visibleCount > 0 && visibleIds.every(id => selectedIds.includes(id));
   const sale = compositionSelectionSaleSummary(selectedIds);
   const saleBlocked = sale.unavailable.length > 0;
+  const editBlocked = sale.trains.some(train => train.construction?.active);
   const saleTooltip = saleBlocked
-    ? `Vente impossible : ${sale.unavailable.length} train${sale.unavailable.length > 1 ? 's sont' : ' est'} en maintenance ou affecté à une ligne active.`
+    ? `Vente impossible : ${sale.unavailable.length} train${sale.unavailable.length > 1 ? 's sont' : ' est'} en fabrication, en maintenance ou affecté à une ligne active.`
     : `Vendre les ${selectedCount} trains sélectionnés. Valeur estimée : ${money(sale.estimatedValue)}.`;
+  const editTooltip = editBlocked ? 'Composition indisponible tant qu’un train sélectionné est en fabrication.' : 'Modifier la composition des trains sélectionnés.';
   const hint = selectedCount
     ? 'Sélection faite. Clique sur Modifier pour ouvrir l’atelier d’édition de la composition.'
     : 'Clique sur une zone libre d’une vignette pour sélectionner un ou plusieurs trains.';
@@ -5494,7 +5507,7 @@ function renderCompositionSelectionToolbar(selectedIds, displayedTrains) {
       <div class="composition-selection-actions">
         <span class="tag ${selectedCount ? 'good' : ''}">${selectedCount} sélectionné${selectedCount > 1 ? 's' : ''}</span>
         <button type="button" class="ghost" data-action="select-visible-composition-trains" ${allVisibleSelected || !visibleCount ? 'disabled' : ''}>Tout sélectionner affiché</button>
-        <button type="button" class="primary" data-action="edit-composition-selection" ${selectedCount ? '' : 'disabled'}>Modifier</button>
+        <button type="button" class="primary" data-action="edit-composition-selection" ${tooltipAttr(editTooltip)} ${selectedCount && !editBlocked ? '' : 'disabled'}>Modifier</button>
         <button type="button" class="ghost" data-action="clear-composition-selection" ${selectedCount ? '' : 'disabled'}>Vider</button>
         ${selectedCount > 1 ? `<button type="button" class="danger ghost" data-action="sell-composition-selection" ${tooltipAttr(saleTooltip)} ${saleBlocked ? 'disabled' : ''}>Tout vendre</button>` : ''}
       </div>
@@ -5751,8 +5764,9 @@ function renderFleetCompositionPanel() {
   const displayedTrains = compositionFilteredTrains(me.trains);
   const groups = groupCompositionTrains(displayedTrains);
   const selectedTrainIds = new Set(cleanedSelection);
-  const configurable = me.trains.filter(t => !!t.compositionSpec).length;
-  const avgSeats = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / me.trains.length) : 0;
+  const deliveredTrains = me.trains.filter(t => !t.construction?.active);
+  const configurable = deliveredTrains.filter(t => !!t.compositionSpec).length;
+  const avgSeats = deliveredTrains.length ? Math.round(deliveredTrains.reduce((sum, t) => sum + trainRuntimeProfile(t).capacity, 0) / deliveredTrains.length) : 0;
 
   return `
     <div class="fleet-composition-layout composition-refit-layout ${selected ? 'has-editor' : 'no-editor'}">
@@ -5795,6 +5809,7 @@ function renderFleet() {
   const models = Object.values(app.state.balance.trains);
   const available = models.filter(t => trainModelUnlocked(t));
   const locked = models.filter(t => !trainModelUnlocked(t));
+  const inConstruction = me.trains.filter(t => t.construction?.active).length;
   const inWorkshop = me.trains.filter(t => t.maintenance?.active).length;
   const avgCondition = me.trains.length ? Math.round(me.trains.reduce((sum, t) => sum + Number(t.condition || 0), 0) / me.trains.length * 100) : 0;
   const heroTitle = active === 'catalog' ? 'Catalogue du matériel roulant' : active === 'maintenance' ? 'Maintenance du matériel' : 'Atelier de compositions';
@@ -5815,7 +5830,7 @@ function renderFleet() {
         </button>
         <button type="button" data-fleet-subtab="maintenance" class="${active === 'maintenance' ? 'active' : ''}">
           <span>Maintenance</span>
-          <b>${inWorkshop} en atelier</b>
+          <b>${inWorkshop} en maintenance · ${inConstruction} en fabrication</b>
         </button>
         <button type="button" data-fleet-subtab="composition" class="${active === 'composition' ? 'active' : ''}">
           <span>Compositions</span>
@@ -5913,9 +5928,12 @@ function renderFleetCatalogPanel(available, locked) {
 
 function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
-  const free = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const constructing = me.trains.filter(t => t.construction?.active).length;
+  const free = me.trains.filter(t => !t.construction?.active && !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = me.trains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
+  const standardAction = app.state.balance.maintenanceActions?.standard || null;
+  const bulkLocked = standardAction ? maintenanceActionLockedReason(standardAction) : '';
   const trainsByEpoch = {};
   for (const train of me.trains || []) {
     const model = app.state.balance.trains[train.modelId] || {};
@@ -5928,10 +5946,13 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
     <div class="fleet-maintenance-layout">
       <div class="card fleet-kpi-card">
         ${metric('État moyen', `${avgCondition}%`, avgCondition >= 70 ? 'good-text' : avgCondition >= 45 ? '' : 'bad-text')}
-        ${metric('En atelier', inWorkshop)}
+        ${metric('En fabrication', constructing)}
+        ${metric('En maintenance', inWorkshop)}
         ${metric('Affectés', assigned)}
         ${metric('Libres', free)}
       </div>
+
+      ${renderMaintenanceFacilitiesCard()}
 
       ${renderMaintenancePolicyCard()}
 
@@ -5939,9 +5960,9 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
         <div class="fleet-card-heading">
           <div>
             <h2>Maintenance globale</h2>
-            <p class="muted small">Envoie en une seule action tous les trains éligibles en révision atelier. Les trains déjà en atelier ou presque neufs sont ignorés.</p>
+            <p class="muted small">Envoie en une seule action tous les trains éligibles en maintenance intermédiaire. La durée dépend de l’état restant de chaque train et du niveau d’atelier.</p>
           </div>
-          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${me.trains.length ? '' : 'disabled'}>Tout envoyer en maintenance</button>
+          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${tooltipAttr(bulkLocked || 'Lance une maintenance intermédiaire sur tous les trains éligibles.')} ${me.trains.length && !bulkLocked ? '' : 'disabled'}>Tout envoyer en maintenance</button>
         </div>
       </div>
 
@@ -5982,6 +6003,55 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
         </div>
       </div>
     </div>
+  `;
+}
+
+function renderMaintenanceFacilitiesCard() {
+  const facilities = Object.values(app.state.balance.maintenanceFacilities || {});
+  const cash = Number(app.state.me.cash || 0);
+  return `
+    <div class="card fleet-maintenance-facilities-card">
+      <div class="fleet-card-heading">
+        <div>
+          <h2>Bâtiments de maintenance</h2>
+          <p class="muted small">Les niveaux sont illimités. Chaque niveau coûte plus cher et réduit la durée d’indisponibilité des trains pour le type d’intervention associé.</p>
+        </div>
+        <span class="tag">${facilities.length} filières</span>
+      </div>
+      <div class="maintenance-policy-grid maintenance-facility-grid">
+        ${facilities.map(facility => renderMaintenanceFacility(facility, cash)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderMaintenanceFacility(facility, cash) {
+  const level = maintenanceFacilityLevelClient(facility.id);
+  const nextCost = maintenanceFacilityUpgradeCostClient(facility.id);
+  const currentReduction = Math.round((1 - maintenanceFacilityDurationMultiplierClient(facility.id)) * 100);
+  const nextReduction = Math.round((1 - Math.max(0.18, 1 - Math.min(Number(facility.maxDurationReduction || 0), (level + 1) * Number(facility.durationReductionPerLevel || 0)))) * 100);
+  const locked = facility.requiredTech && !hasTech(facility.requiredTech)
+    ? `Recherche : ${techNodeTitle(facility.requiredTech)}`
+    : '';
+  const disabled = locked || cash < nextCost;
+  const tooltip = locked
+    ? `${facility.name}. ${locked}.`
+    : `${facility.name}. ${facility.description} Niveau actuel ${level}, réduction actuelle ${currentReduction}%, prochain niveau ${nextReduction}%. Coût : ${money(nextCost)}.`;
+  return `
+    <article class="maintenance-policy-card maintenance-facility-card ${level > 0 ? 'active' : ''}">
+      <div class="policy-head">
+        <strong>${escapeHtml(facility.name)}</strong>
+        <span class="tag ${level > 0 ? 'good' : 'warn'}">Niv. ${formatInt(level)}</span>
+      </div>
+      <p class="small muted">${escapeHtml(facility.description)}</p>
+      <div class="policy-stats">
+        <div><span>Usage</span><b>${escapeHtml(facility.actionLabel || 'Maintenance')}</b></div>
+        <div><span>Réduction</span><b>${currentReduction}%</b></div>
+        <div><span>Niv. suivant</span><b>${nextReduction}%</b></div>
+      </div>
+      ${locked ? `<em class="small bad-text">${escapeHtml(locked)}</em>` : ''}
+      <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>Acheter niveau ${formatInt(level + 1)} <span>${money(nextCost)}</span></button>
+    </article>
   `;
 }
 
@@ -6246,6 +6316,62 @@ function trainPurchaseUnitPriceClient(model) {
   return Math.round(Number(model.price || 0) * multiplier);
 }
 
+const TRAIN_CONSTRUCTION_STAGES = [
+  'Commande validée',
+  'Caisse et bogies',
+  'Traction et énergie',
+  'Aménagements',
+  'Essais et réception'
+];
+
+function trainConstructionProgress(train, model = null) {
+  const construction = train?.construction || {};
+  const durationMs = Math.max(0, Number(construction.durationMs || (model ? trainConstructionDurationMsClient(model) : 0)));
+  const remainingMs = Math.max(0, Number(construction.remainingMs ?? (construction.active ? durationMs : 0)));
+  const progress = durationMs > 0 ? clamp(1 - remainingMs / durationMs, 0, 1) : (construction.active ? 0 : 1);
+  return {
+    active: Boolean(construction.active),
+    durationMs,
+    remainingMs,
+    progress,
+    percent: Math.round(progress * 100)
+  };
+}
+
+function trainConstructionStageIndex(info) {
+  const count = TRAIN_CONSTRUCTION_STAGES.length;
+  if (!info?.active || info.progress >= 1) return count - 1;
+  return clamp(Math.floor(info.progress * count), 0, count - 1);
+}
+
+function renderTrainConstructionPanel(train, model) {
+  const info = trainConstructionProgress(train, model);
+  const stageIndex = trainConstructionStageIndex(info);
+  const stageLabel = TRAIN_CONSTRUCTION_STAGES[stageIndex] || 'Fabrication';
+  return `
+    <div class="train-construction-panel">
+      <div class="train-construction-head">
+        <div>
+          <span>Fabrication</span>
+          <b>${escapeHtml(stageLabel)} · ${info.percent}%</b>
+        </div>
+        <strong>${escapeHtml(formatDurationMs(info.remainingMs))} restantes</strong>
+      </div>
+      <div class="progress train-construction-bar"><i style="width:${info.percent}%"></i></div>
+      <div class="train-construction-meta">
+        <span>Durée totale : ${escapeHtml(formatDurationMs(info.durationMs))}</span>
+        <span>Livraison automatique à 100%</span>
+      </div>
+      <div class="train-construction-steps">
+        ${TRAIN_CONSTRUCTION_STAGES.map((label, index) => {
+          const state = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'pending';
+          return `<span class="construction-step ${state}"><i>${index + 1}</i><b>${escapeHtml(label)}</b></span>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function parseTrainPurchaseQuantityDraft(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
@@ -6303,6 +6429,7 @@ function renderTrainCatalogItem(model, buyable) {
   const baseMaintenanceRatio = 1 - Math.min(1, Number(model.maintenance || 0) / 1.3);
   const effectiveMaintenanceRatio = 1 - Math.min(1, Number(effective.maintenance || 0) / 1.3);
   const unitPrice = trainPurchaseUnitPriceClient(model);
+  const constructionMs = trainConstructionDurationMsClient(model);
   const powerKw = estimateTrainPowerKw(model);
   const multipleUnit = isMultipleUnitModelClient(model);
   const muSpec = multipleUnit ? buildClientCompositionSpec(model, 'multiple_unit') : null;
@@ -6323,6 +6450,7 @@ function renderTrainCatalogItem(model, buyable) {
           ${multipleUnit ? renderTrainStat('UM max', `${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}`, muSpec.powerUnits.max / 3, muSpec.powerUnits.max >= 3 ? 'good' : '') : ''}
           ${renderTrainStat('Fiabilité', reliabilityValues.base, model.reliability, effective.reliability >= 0.92 ? 'good' : '', reliabilityValues.modified, effective.reliability)}
           ${renderTrainStat('Confort', comfortValues.base, model.comfort, model.comfort >= 0.8 ? 'good' : '', comfortValues.modified, effective.comfort)}
+          ${renderTrainStat('Fabrication', formatDurationMs(constructionMs), constructionMs / (20 * 60 * 60 * 1000), constructionMs <= 60 * 60 * 1000 ? 'good' : constructionMs >= 8 * 60 * 60 * 1000 ? 'warn' : '')}
           ${renderTrainStat('Maint./h', baseMaintenanceHourly, baseMaintenanceRatio, model.maintenance <= 0.45 ? 'good' : 'warn', effectiveMaintenanceHourly, effectiveMaintenanceRatio)}
         </div>
         ${renderTrainRequirementPills(model)}
@@ -6335,7 +6463,7 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
         <div class="actions">
-          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${buyable ? '' : 'disabled'}>Acheter</button>
+          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatDurationMs(constructionMs)}.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter</button>
         </div>
       </div>
     </div>
@@ -6361,6 +6489,8 @@ function formatTrainServiceTime(train) {
 function renderOwnedTrain(train) {
   const model = app.state.balance.trains[train.modelId];
   const line = app.state.me.lines.find(l => l.active && lineHasTrain(l, train.id));
+  const construction = train.construction || {};
+  const inConstruction = !!construction.active;
   const maint = train.maintenance || {};
   const inMaint = !!maint.active;
   const mapSelected = typeof selectedOwnedMapTrainId === 'function' && selectedOwnedMapTrainId() === String(train.id);
@@ -6378,17 +6508,23 @@ function renderOwnedTrain(train) {
     : null;
   const sellTip = line
     ? 'Impossible de vendre : Ce train est affecté à une ligne active.'
-    : inMaint
-      ? 'Impossible de vendre : Ce train est en maintenance.'
-      : `Vend ce train d’occasion. Valeur influencée par son état (${condition}%).`;
-  const statusLabel = line
-    ? linePublicName(line)
-    : inMaint
-      ? 'En atelier'
-      : condition <= 0
-        ? 'Immobilisé'
-        : 'Libre';
-  const statusClass = inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
+    : inConstruction
+      ? 'Impossible de vendre : Ce train est en fabrication.'
+      : inMaint
+        ? 'Impossible de vendre : Ce train est en maintenance.'
+        : `Vend ce train d’occasion. Valeur influencée par son état (${condition}%).`;
+  const statusLabel = inConstruction
+    ? 'En fabrication'
+    : line
+      ? linePublicName(line)
+      : inMaint
+        ? 'En maintenance'
+        : condition <= 0
+          ? 'Immobilisé'
+          : 'Libre';
+  const statusClass = inConstruction || inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
+  const maintenanceRemaining = formatDurationMs(Number(maint.remainingMs || 0) || Number(maint.daysLeft || 0) * Math.max(250, Number(app.state?.game?.tickMs || 2000)));
+  const constructionRemaining = formatDurationMs(Number(construction.remainingMs || 0) || Number(construction.durationMs || 0));
 
   return `
     <div class="list-item train-catalog-card owned-train-card maintenance-train-card ${mapSelected ? 'map-selected' : ''}" data-train-id="${escapeAttr(train.id)}" aria-selected="${mapSelected ? 'true' : 'false'}">
@@ -6405,12 +6541,12 @@ function renderOwnedTrain(train) {
         </div>
         <div class="progress train-condition-bar ${conditionClass}"><i style="width:${condition}%"></i></div>
         <div class="owned-train-detail-grid">
-          <div><span>Disponibilité</span><b>${inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${formatCycles(maint.daysLeft)}` : 'Disponible'}</b></div>
+          <div><span>Disponibilité</span><b>${inConstruction ? `Livraison · ${constructionRemaining}` : inMaint ? `${escapeHtml(maint.label || 'Maintenance')} · ${maintenanceRemaining}` : 'Disponible'}</b></div>
           <div><span>Usure historique</span><b>${escapeHtml(formatTrainServiceTime(train))}</b></div>
           <div><span>Composition</span><b>${escapeHtml(deriveCompositionSummary(train))}</b></div>
           <div><span>Maintenance</span><b>${maintenanceHourlyRange(profile, line ? lineDistance(line) : 100, 1, train.condition)}</b></div>
         </div>
-        ${passengerCapacity > 0 ? `
+        ${!inConstruction && passengerCapacity > 0 ? `
           <div class="train-passenger-load" title="Le remplissage ne change qu’à l’arrivée dans une gare desservie.">
             <div><span>Remplissage</span><b>${passengerLoadPercent}% · ${formatInt(passengerLoad)} / ${formatInt(passengerCapacity)} voyageurs</b></div>
             <div class="progress train-passenger-load-bar"><i style="width:${passengerLoadPercent}%"></i></div>
@@ -6418,7 +6554,10 @@ function renderOwnedTrain(train) {
             ${passengerRun.lastAlighted > 0 ? `<small>${formatInt(passengerRun.lastAlighted)} descente(s) au dernier arrêt · ${formatSignedMoney(passengerRun.lastRevenue || 0)}</small>` : ''}
           </div>
         ` : ''}
-        ${inMaint ? `
+        ${inConstruction ? `
+          ${renderTrainConstructionPanel(train, model)}
+          <p class="small muted">Le train sera automatiquement livré à la fin de la fabrication. Il ne peut pas encore être affecté, modifié, maintenu ou vendu.</p>
+        ` : inMaint ? `
           <p class="small muted">Le train est immobilisé. Toute ligne qui l’utilise reste ouverte mais ne produit rien jusqu’à la fin de l’intervention.</p>
         ` : `
           <div class="maintenance-actions">
@@ -6426,9 +6565,9 @@ function renderOwnedTrain(train) {
           </div>
         `}
         <div class="actions">
-          <button data-action="follow-train" data-id="${train.id}" ${line && !inMaint && condition > 0 ? '' : 'disabled'} ${tooltipAttr(line && !inMaint && condition > 0 ? 'Centre la carte sur ce train et active son suivi.' : 'Le suivi est disponible lorsqu’un train circule sur une ligne active.')}>Suivre sur la carte</button>
-          <button data-action="open-composition" data-id="${train.id}">Composition</button>
-          <button class="danger" data-action="sell-train" data-id="${train.id}" ${tooltipAttr(sellTip)} ${line || inMaint ? 'disabled' : ''}>Vendre</button>
+          <button data-action="follow-train" data-id="${train.id}" ${line && !inConstruction && !inMaint && condition > 0 ? '' : 'disabled'} ${tooltipAttr(line && !inConstruction && !inMaint && condition > 0 ? 'Centre la carte sur ce train et active son suivi.' : 'Le suivi est disponible lorsqu’un train circule sur une ligne active.')}>Suivre sur la carte</button>
+          <button data-action="open-composition" data-id="${train.id}" ${inConstruction ? 'disabled' : ''} ${tooltipAttr(inConstruction ? 'Composition disponible après livraison.' : 'Ouvre l’atelier de composition.')}>Composition</button>
+          <button class="danger" data-action="sell-train" data-id="${train.id}" ${tooltipAttr(sellTip)} ${line || inConstruction || inMaint ? 'disabled' : ''}>Vendre</button>
         </div>
       </div>
     </div>
@@ -6440,9 +6579,11 @@ function renderMaintenanceButton(train, model, action) {
   const preview = maintenancePreview(train, model, action);
   const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
   const disabled = locked || targetCondition <= train.condition + 0.005;
+  const facility = action.facility ? maintenanceFacilityNameClient(action.facility) : 'Maintenance';
   return `
-    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} ${preview}. Effet : Immobilise le train pendant l’intervention, puis remonte son état, sa vitesse effective et sa ponctualité.`)} ${disabled ? 'disabled' : ''}>
+    <button class="maintenance-btn" data-action="repair-train" data-id="${train.id}" data-mode="${action.id}" ${tooltipAttr(`${action.name}. ${action.description || ''} Bâtiment : ${facility}. ${preview}. Effet : Immobilise le train pendant l’intervention, puis remonte son état, sa vitesse effective et sa ponctualité.`)} ${disabled ? 'disabled' : ''}>
       <strong>${escapeHtml(action.name)}</strong>
+      <small>${escapeHtml(facility)}</small>
       <span>${preview}</span>
       ${locked ? `<em>${escapeHtml(locked)}</em>` : ''}
     </button>
@@ -6459,7 +6600,7 @@ function renderStations() {
   const ownedEntries = sortOwnedStationEntries(Object.entries(me.stations || {}));
   const collapsed = app.ownedStationsCollapsed;
   return `
-    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs, les ateliers et les dépôts tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Ateliers'])}
+    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs et les commerces tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Péages'])}
 
     <div class="card">
       <h2>Gare sélectionnée</h2>
@@ -6561,9 +6702,7 @@ function renderSelectedStation(s) {
   const acquisitionCost = stationAcquisitionCost(s);
   const upgrades = [
     { kind: 'level', label: asset ? `Niveau +1` : 'Gare libre', maxed: !asset || preview.level >= 5, cost: asset ? stationUpgradeCost(s, preview, 'level') : 0 },
-    { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') },
-    { kind: 'maintenance', label: 'Atelier', maxed: unowned || preview.maintenance >= 4, cost: stationUpgradeCost(s, preview, 'maintenance') },
-    { kind: 'depot', label: 'Dépôt', maxed: unowned || !!preview.depot, cost: stationUpgradeCost(s, preview, 'depot') }
+    { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') }
   ];
   return `
     <div class="list-item selected-station-card">
@@ -6576,8 +6715,6 @@ function renderSelectedStation(s) {
         <span>Mode d’accès</span><b>${asset ? 'Gare exploitée' : 'Sillons sur ligne'}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
-        <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
-        <span>Dépôt</span><b>${asset?.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset?.electrified ? 'Oui' : 'Non'}</b>
         ${asset ? `<span>Remboursement vente</span><b>${money(stationSaleRefundBreakdown(s, asset).total)}</b>` : ''}
         ${asset ? stationOperatingCostRows(asset) : ''}
@@ -6682,8 +6819,6 @@ function stationPurchaseMetaLabel(s) {
 function stationUpgradeCost(s, asset, kind) {
   if (kind === 'level') return Math.round((85000 + s.baseDemand * 55) * asset.level * app.state.game.market.steel);
   if (kind === 'commerce') return Math.round(50000 * (asset.commerce + 1) * asset.level);
-  if (kind === 'maintenance') return Math.round(90000 * (asset.maintenance + 1) * asset.level);
-  if (kind === 'depot') return 180000;
   return 0;
 }
 
@@ -6691,17 +6826,16 @@ function stationSaleRefundBreakdown(s, asset = {}) {
   const normalized = {
     level: Math.max(1, Math.min(5, Math.floor(Number(asset.level || 1)))),
     commerce: Math.max(0, Math.min(4, Math.floor(Number(asset.commerce || 0)))),
-    maintenance: Math.max(0, Math.min(4, Math.floor(Number(asset.maintenance || 0)))),
-    depot: Boolean(asset.depot)
+    maintenance: 0,
+    depot: false
   };
   const acquisition = stationAcquisitionCost(s);
   let levels = 0;
   for (let level = 1; level < normalized.level; level++) levels += stationUpgradeCost(s, { ...normalized, level }, 'level');
   let commerces = 0;
   for (let commerce = 0; commerce < normalized.commerce; commerce++) commerces += stationUpgradeCost(s, { ...normalized, commerce }, 'commerce');
-  let maintenance = 0;
-  for (let step = 0; step < normalized.maintenance; step++) maintenance += stationUpgradeCost(s, { ...normalized, maintenance: step }, 'maintenance');
-  const depot = normalized.depot ? stationUpgradeCost(s, normalized, 'depot') : 0;
+  const maintenance = 0;
+  const depot = 0;
   const total = Math.round(acquisition + levels + commerces + maintenance + depot);
   return { acquisition, levels, commerces, maintenance, depot, total };
 }
@@ -6723,7 +6857,7 @@ function stationSaleTooltip(s, asset) {
   const circulation = users.length
     ? ` ${users.length} ligne${users.length > 1 ? 's' : ''} la desservent encore et resteront actives.`
     : '';
-  return `Vend ${s.name} et rembourse la gare, les niveaux, les commerces, les ateliers et le dépôt. Remboursement total : ${money(refund.total)}.${circulation}`;
+  return `Vend ${s.name} et rembourse la gare, les niveaux et les commerces. Remboursement total : ${money(refund.total)}.${circulation}`;
 }
 
 function economyValue(key, fallback = 0) {
@@ -6734,8 +6868,8 @@ function economyValue(key, fallback = 0) {
 function stationOperatingCostBreakdown(asset = {}) {
   const level = Number(asset.level || 0) * economyValue('stationLevelCost', 58);
   const commerce = Number(asset.commerce || 0) * economyValue('stationCommerceCost', 64);
-  const maintenance = Number(asset.maintenance || 0) * economyValue('stationMaintenanceCost', 92);
-  const depot = asset.depot ? economyValue('stationDepotCost', 150) : 0;
+  const maintenance = 0;
+  const depot = 0;
   return { level, commerce, maintenance, depot, total: level + commerce + maintenance + depot };
 }
 
@@ -6743,8 +6877,6 @@ function stationOperatingCostRows(asset = {}) {
   const cost = stationOperatingCostBreakdown(asset);
   return `
     <span>Coût/h commerces</span><b>${moneyPerHour(cost.commerce)}</b>
-    <span>Coût/h atelier</span><b>${moneyPerHour(cost.maintenance)}</b>
-    <span>Coût/h dépôt</span><b>${moneyPerHour(cost.depot)}</b>
     <span>Coût/h total gare</span><b>${moneyPerHour(cost.total)}</b>
   `;
 }
@@ -6768,8 +6900,6 @@ function renderStationAsset(s, asset) {
       <div class="station-owned-mini-stats">
         <div><span>Niv.</span><b>${asset.level}</b></div>
         <div><span>Com.</span><b>${asset.commerce}</b></div>
-        <div><span>Atel.</span><b>${asset.maintenance}</b></div>
-        <div><span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b></div>
       </div>
       <div class="station-owned-tile-foot">
         <span>Revente ${money(refund.total)}</span>
@@ -8194,7 +8324,7 @@ function renderBudget() {
         ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Fraude résiduelle, litiges voyageurs et dispositifs de contrôle')}
         ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Support client, planification commerciale et organisation opérationnelle')}
         ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
-        ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
+        ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux et commerces')}
         ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
         ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
         ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Coût/h du laboratoire pendant un projet actif')}
@@ -8254,7 +8384,6 @@ function renderMarket() {
     </div>
   `;
 }
-
 
 
 // ===== 08-actions-modals.js =====
@@ -8415,6 +8544,8 @@ if (action === 'select-all-composition-trains' || action === 'select-visible-com
 if (action === 'edit-composition-selection') {
   const ids = compositionSelectedIds();
   if (!ids.length) return toast('Sélectionne au moins un train.', 'error');
+  const selectedTrains = (app.state?.me?.trains || []).filter(train => ids.includes(train.id));
+  if (selectedTrains.some(train => train.construction?.active)) return toast('Composition indisponible : un train sélectionné est encore en fabrication.', 'error');
   setCompositionSelection(ids, ids[0]);
   setCompositionEditorTrain(ids[0]);
   renderAll();
@@ -8430,7 +8561,7 @@ if (action === 'sell-composition-selection') {
   const ids = compositionSelectedIds();
   if (ids.length < 2) return toast('Sélectionne au moins deux trains.', 'error');
   const sale = compositionSelectionSaleSummary(ids);
-  if (sale.unavailable.length) return toast('Vente impossible : un ou plusieurs trains sont en maintenance ou affectés à une ligne active.', 'error');
+  if (sale.unavailable.length) return toast('Vente impossible : un ou plusieurs trains sont en fabrication, en maintenance ou affectés à une ligne active.', 'error');
   const message = `Vendre définitivement les ${ids.length} trains sélectionnés ?
 
 Valeur estimée totale : ${money(sale.estimatedValue)}.
@@ -8453,6 +8584,8 @@ if (action === 'toggle-composition-group') {
 }
 if (action === 'open-composition') {
   const trainId = button.dataset.id || '';
+  const train = app.state?.me?.trains?.find(item => item.id === trainId);
+  if (train?.construction?.active) return toast('Composition disponible après livraison du train.', 'error');
   app.activeTab = 'fleet';
   app.activeFleetSubtab = 'composition';
   setCompositionSelection([trainId], trainId);
@@ -8471,6 +8604,8 @@ if (action === 'save-train-composition') {
   if (!train) return;
   const targetIds = compositionEditTargetIds(trainId);
   if (!targetIds.length) return toast('Aucun train sélectionné.', 'error');
+  const targetTrains = (app.state?.me?.trains || []).filter(item => targetIds.includes(item.id));
+  if (targetTrains.some(item => item.construction?.active)) return toast('Composition indisponible : un train ciblé est encore en fabrication.', 'error');
   const spec = trainCompositionSpec(train);
   const payload = { trainId, trainIds: targetIds, mode: spec.mode };
   if (spec.mode === 'multiple_unit') {
@@ -8511,23 +8646,27 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       const input = document.querySelector(`[data-buy-train-qty="${CSS.escape(modelId)}"]`);
       const quantity = normalizeTrainPurchaseQuantity(input?.value || 1);
       if (input) updateTrainPurchaseTotal(input, { commit: true });
-      if (quantity > 1) {
-        const model = app.state?.balance?.trains?.[modelId];
-        const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
-        const totalPrice = unitPrice * quantity;
-        if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
+    if (quantity > 1) {
+      const model = app.state?.balance?.trains?.[modelId];
+      const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+      const totalPrice = unitPrice * quantity;
+      const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+      if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
 
-Coût total estimé : ${money(totalPrice)}.`, { confirmLabel: 'Acheter' }))) return;
-      }
+Coût total estimé : ${money(totalPrice)}.
+Fabrication estimée : ${formatDurationMs(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
+    }
       return doAction('buyTrain', { modelId, quantity });
     }
   if (action === 'duplicate-train') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
     const model = train ? app.state.balance.trains[train.modelId] : null;
     const price = Math.round((model?.price || 0) * 0.98);
+    const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
     if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
 
-Coût estimé : ${money(price)}.`, { confirmLabel: 'Dupliquer' }))) return;
+Coût estimé : ${money(price)}.
+Fabrication estimée : ${formatDurationMs(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
   if (action === 'assign-train-line') {
@@ -8566,9 +8705,10 @@ Valeur estimée : ${money(estimate)}.` : ''}`;
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'repair-all-trains') {
     const mode = button.dataset.mode || 'standard';
-    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance atelier ?\n\nLes trains affectés à des lignes seront immobilisés pendant l’intervention.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
+    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance intermédiaire ?\n\nLa durée dépend de leur état restant et du niveau d’atelier.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
     return doAction('repairAllTrains', { mode });
   }
+  if (action === 'buy-maintenance-facility') return doAction('buyMaintenanceFacility', { facility: button.dataset.facility });
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
     const id = button.dataset.id || '';
@@ -9633,7 +9773,7 @@ function drawAllLines(ctx, lite = false) {
       // zoom ; sinon les circulations semblent disparaitre de la carte.
 
       const trains = lineAssignedTrainsClient(line, player)
-        .filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
+        .filter(t => !t.construction?.active && !t.maintenance?.active && Number(t.condition || 0) > 0);
       if (!trains.length) continue;
 
       // Les états de pénurie masquent seulement les trains concurrents.
@@ -9641,6 +9781,7 @@ function drawAllLines(ctx, lite = false) {
       if (!own && (
         line.stats?.status === 'resource-shortage'
         || line.stats?.status === 'driver-shortage'
+        || line.stats?.status === 'construction'
         || line.stats?.status === 'train-out-of-service'
       )) continue;
 
@@ -11199,7 +11340,6 @@ function drawTooltip(ctx) {
   const stage = stationPrestigeStage(asset);
   const level = Number(asset?.level || 0);
   const commerce = Number(asset?.commerce || 0);
-  const maintenance = Number(asset?.maintenance || 0);
 
   const margin = 12;
   const width = Math.min(hasSprite ? 386 : 286, Math.max(220, app.map.width - margin * 2));
@@ -11345,7 +11485,7 @@ function drawTooltip(ctx) {
   chip(infoX, contentY, chipW, 'Dessertes', lines.length);
   chip(infoX + chipW + 8, contentY, chipW, 'Niveau', level || 0, '#f0c875');
   chip(infoX, contentY + 48, chipW, 'Commerce', commerce);
-  chip(infoX + chipW + 8, contentY + 48, chipW, 'Atelier', maintenance);
+  chip(infoX + chipW + 8, contentY + 48, chipW, 'Péage', owner ? 'Actif' : 'Libre');
 
   const footerY = y + height - 32;
   roundRect(ctx, x + 14, footerY, width - 28, 21, 10);
@@ -12317,7 +12457,7 @@ function lineCadenceClient(line) {
   if (stored && Number.isFinite(Number(stored.roundTripMinutes))) return stored;
 
   const plannedTrains = lineAssignedTrainsClient(line);
-  const operatingTrains = plannedTrains.filter(train => !train.maintenance?.active && Number(train.condition ?? 1) > 0);
+  const operatingTrains = plannedTrains.filter(train => !train.construction?.active && !train.maintenance?.active && Number(train.condition ?? 1) > 0);
   const timingTrains = operatingTrains.length ? operatingTrains : plannedTrains;
   const timing = lineCadenceTimingClient(line?.service, lineStopsOf(line).length);
   const speeds = timingTrains
@@ -13374,23 +13514,77 @@ function trainModelLockedReason(model) {
   return '';
 }
 
+function trainConstructionDurationMsClient(model) {
+  const maxEpoch = Math.max(1, (app.state?.balance?.epochs?.length || 7) - 1);
+  const era = clamp(Math.floor(Number(model?.unlockEpoch || 0)), 0, maxEpoch);
+  const techRank = clamp((Math.max(1, Number(model?.requiredTechLevel || 1)) - 1) / 7, 0, 1);
+  const price = Math.max(95000, Number(model?.price || 95000));
+  const priceRank = clamp((Math.log10(price) - Math.log10(95000)) / (Math.log10(92000000) - Math.log10(95000)), 0, 1);
+  const inEraRank = clamp(techRank * 0.7 + priceRank * 0.3, 0, 1);
+  const globalRank = clamp((era + inEraRank) / (maxEpoch + 1), 0, 1);
+  const minMs = 60 * 1000;
+  const maxMs = 20 * 60 * 60 * 1000;
+  return Math.round(minMs + Math.pow(globalRank, 1.55) * (maxMs - minMs));
+}
+
 function maintenanceActionLockedReason(action) {
   if (action.requiredTech && !hasTech(action.requiredTech)) return `Recherche : ${techNodeTitle(action.requiredTech)}`;
-  if (action.requiresDepot && !Object.values(app.state.me.stations || {}).some(a => a.depot || (a.maintenance || 0) > 0)) return 'Atelier ou dépôt requis';
+  if (action.facility && maintenanceFacilityLevelClient(action.facility) <= 0) return `${maintenanceFacilityNameClient(action.facility)} requis`;
   return '';
+}
+
+function maintenanceFacilityLevelClient(facilityId) {
+  const raw = app.state?.me?.maintenanceFacilities?.[facilityId];
+  return Math.max(0, Math.floor(Number(raw?.level ?? raw ?? 0)));
+}
+
+function maintenanceFacilityNameClient(facilityId) {
+  return app.state?.balance?.maintenanceFacilities?.[facilityId]?.name || 'Bâtiment';
+}
+
+function maintenanceFacilityUpgradeCostClient(facilityId) {
+  const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
+  if (!facility) return 0;
+  const level = maintenanceFacilityLevelClient(facilityId);
+  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level) * Number(app.state?.game?.market?.steel || 1));
+}
+
+function maintenanceFacilityDurationMultiplierClient(facilityId) {
+  const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
+  if (!facility) return 1;
+  const level = maintenanceFacilityLevelClient(facilityId);
+  const reduction = Math.min(Number(facility.maxDurationReduction || 0), level * Number(facility.durationReductionPerLevel || 0));
+  return clamp(1 - reduction, 0.18, 1);
+}
+
+function totalMaintenanceFacilityScoreClient() {
+  return maintenanceFacilityLevelClient('depot') * 0.45
+    + maintenanceFacilityLevelClient('workshop')
+    + maintenanceFacilityLevelClient('technicentre') * 1.35;
+}
+
+function maintenanceDurationMsClient(train, model, action) {
+  const condition = clamp(Number(train?.condition ?? 1), 0, 1);
+  const durabilityFactor = 0.35 + (1 - condition) * 1.65;
+  const facilityMultiplier = maintenanceFacilityDurationMultiplierClient(action.facility);
+  const mechanicBonus = Math.min(0.16, Number(app.state?.me?.staff?.mechanics || 0) * 0.006);
+  const branchBonus = Math.min(0.18, Number(app.state?.me?.tech?.maintenance || 0) * 0.004);
+  const techBonus = branchBonus + Math.min(0.24, techLevel('steam_workshops') * 0.045) + Math.min(0.1, techLevel('electric_standardized_maintenance') * 0.02);
+  const skillMultiplier = clamp(1 - mechanicBonus - techBonus, 0.42, 1);
+  const baseMinutes = Math.max(1, Number(action.baseMinutes || action.days * 12 || 15));
+  return Math.max(60000, Math.ceil(baseMinutes * 60000 * durabilityFactor * facilityMultiplier * skillMultiplier));
 }
 
 function maintenancePreview(train, model, action) {
   const missing = Math.max(0.02, 1 - train.condition);
-  const totalWorkshop = Object.values(app.state.me.stations || {}).reduce((s, a) => s + (a.maintenance || 0), 0);
-  const workshopDiscount = Math.min(0.18, totalWorkshop * 0.025);
-  const techDiscount = (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
+  const workshopDiscount = Math.min(0.18, totalMaintenanceFacilityScoreClient() * 0.025);
+  const branchDiscount = 1 - Math.min(0.24, Number(app.state?.me?.tech?.maintenance || 0) * 0.006);
+  const techDiscount = branchDiscount * (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
   const cost = Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
-  const workshopBonus = Math.min(0.35, totalWorkshop * 0.035 + (app.state.me.staff.mechanics || 0) * 0.012);
-  const techBonus = (hasTech('steam_workshops') ? 0.22 : 0) + (hasTech('electric_standardized_maintenance') ? 0.08 : 0);
-  const days = Math.max(1, Math.ceil(action.days * (1 - workshopBonus - techBonus)));
+  const durationMs = maintenanceDurationMsClient(train, model, action);
   const target = Math.round(Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore)) * 100);
-  return `${money(cost)} · ${formatCycles(days)} · vers ${target}%`;
+  const condition = Math.round(clamp(Number(train?.condition || 0), 0, 1) * 100);
+  return `${money(cost)} · ${formatDurationMs(durationMs)} · état ${condition}% → ${target}%`;
 }
 
 
@@ -13411,9 +13605,15 @@ function updateLinePreview(sourceId = '') {
     if (button) button.disabled = !model;
     return;
   }
+  if (train.construction?.active) {
+    box.className = 'line-preview bad small';
+    box.textContent = `Train indisponible : fabrication en cours, ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`;
+    if (button) button.disabled = true;
+    return;
+  }
   if (train.maintenance?.active) {
     box.className = 'line-preview bad small';
-    box.textContent = `Train indisponible : Maintenance en cours, ${formatCycles(train.maintenance.daysLeft)} restant(s).`;
+    box.textContent = `Train indisponible : Maintenance en cours, ${formatDurationMs(train.maintenance.remainingMs || train.maintenance.daysLeft * Math.max(250, Number(app.state?.game?.tickMs || 2000)))} restantes.`;
     if (button) button.disabled = true;
     return;
   }

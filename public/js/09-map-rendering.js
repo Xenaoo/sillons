@@ -327,7 +327,7 @@ function drawAllLines(ctx, lite = false) {
       // zoom ; sinon les circulations semblent disparaitre de la carte.
 
       const trains = lineAssignedTrainsClient(line, player)
-        .filter(t => !t.maintenance?.active && Number(t.condition || 0) > 0);
+        .filter(t => !t.construction?.active && !t.maintenance?.active && Number(t.condition || 0) > 0);
       if (!trains.length) continue;
 
       // Les états de pénurie masquent seulement les trains concurrents.
@@ -335,6 +335,7 @@ function drawAllLines(ctx, lite = false) {
       if (!own && (
         line.stats?.status === 'resource-shortage'
         || line.stats?.status === 'driver-shortage'
+        || line.stats?.status === 'construction'
         || line.stats?.status === 'train-out-of-service'
       )) continue;
 
@@ -1893,7 +1894,6 @@ function drawTooltip(ctx) {
   const stage = stationPrestigeStage(asset);
   const level = Number(asset?.level || 0);
   const commerce = Number(asset?.commerce || 0);
-  const maintenance = Number(asset?.maintenance || 0);
 
   const margin = 12;
   const width = Math.min(hasSprite ? 386 : 286, Math.max(220, app.map.width - margin * 2));
@@ -2039,7 +2039,7 @@ function drawTooltip(ctx) {
   chip(infoX, contentY, chipW, 'Dessertes', lines.length);
   chip(infoX + chipW + 8, contentY, chipW, 'Niveau', level || 0, '#f0c875');
   chip(infoX, contentY + 48, chipW, 'Commerce', commerce);
-  chip(infoX + chipW + 8, contentY + 48, chipW, 'Atelier', maintenance);
+  chip(infoX + chipW + 8, contentY + 48, chipW, 'Péage', owner ? 'Actif' : 'Libre');
 
   const footerY = y + height - 32;
   roundRect(ctx, x + 14, footerY, width - 28, 21, 10);

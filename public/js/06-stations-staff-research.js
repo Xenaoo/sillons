@@ -6,7 +6,7 @@ function renderStations() {
   const ownedEntries = sortOwnedStationEntries(Object.entries(me.stations || {}));
   const collapsed = app.ownedStationsCollapsed;
   return `
-    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs, les ateliers et les dépôts tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Ateliers'])}
+    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs et les commerces tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Péages'])}
 
     <div class="card">
       <h2>Gare sélectionnée</h2>
@@ -108,9 +108,7 @@ function renderSelectedStation(s) {
   const acquisitionCost = stationAcquisitionCost(s);
   const upgrades = [
     { kind: 'level', label: asset ? `Niveau +1` : 'Gare libre', maxed: !asset || preview.level >= 5, cost: asset ? stationUpgradeCost(s, preview, 'level') : 0 },
-    { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') },
-    { kind: 'maintenance', label: 'Atelier', maxed: unowned || preview.maintenance >= 4, cost: stationUpgradeCost(s, preview, 'maintenance') },
-    { kind: 'depot', label: 'Dépôt', maxed: unowned || !!preview.depot, cost: stationUpgradeCost(s, preview, 'depot') }
+    { kind: 'commerce', label: 'Commerces', maxed: unowned || preview.commerce >= 4, cost: stationUpgradeCost(s, preview, 'commerce') }
   ];
   return `
     <div class="list-item selected-station-card">
@@ -123,8 +121,6 @@ function renderSelectedStation(s) {
         <span>Mode d’accès</span><b>${asset ? 'Gare exploitée' : 'Sillons sur ligne'}</b>
         <span>Niveau gare</span><b>${asset ? asset.level : 'Non possédée'}</b>
         <span>Commerces</span><b>${asset ? asset.commerce : 0}/4</b>
-        <span>Atelier</span><b>${asset ? asset.maintenance : 0}/4</b>
-        <span>Dépôt</span><b>${asset?.depot ? 'Oui' : 'Non'}</b>
         <span>Électrifiée</span><b>${asset?.electrified ? 'Oui' : 'Non'}</b>
         ${asset ? `<span>Remboursement vente</span><b>${money(stationSaleRefundBreakdown(s, asset).total)}</b>` : ''}
         ${asset ? stationOperatingCostRows(asset) : ''}
@@ -229,8 +225,6 @@ function stationPurchaseMetaLabel(s) {
 function stationUpgradeCost(s, asset, kind) {
   if (kind === 'level') return Math.round((85000 + s.baseDemand * 55) * asset.level * app.state.game.market.steel);
   if (kind === 'commerce') return Math.round(50000 * (asset.commerce + 1) * asset.level);
-  if (kind === 'maintenance') return Math.round(90000 * (asset.maintenance + 1) * asset.level);
-  if (kind === 'depot') return 180000;
   return 0;
 }
 
@@ -238,17 +232,16 @@ function stationSaleRefundBreakdown(s, asset = {}) {
   const normalized = {
     level: Math.max(1, Math.min(5, Math.floor(Number(asset.level || 1)))),
     commerce: Math.max(0, Math.min(4, Math.floor(Number(asset.commerce || 0)))),
-    maintenance: Math.max(0, Math.min(4, Math.floor(Number(asset.maintenance || 0)))),
-    depot: Boolean(asset.depot)
+    maintenance: 0,
+    depot: false
   };
   const acquisition = stationAcquisitionCost(s);
   let levels = 0;
   for (let level = 1; level < normalized.level; level++) levels += stationUpgradeCost(s, { ...normalized, level }, 'level');
   let commerces = 0;
   for (let commerce = 0; commerce < normalized.commerce; commerce++) commerces += stationUpgradeCost(s, { ...normalized, commerce }, 'commerce');
-  let maintenance = 0;
-  for (let step = 0; step < normalized.maintenance; step++) maintenance += stationUpgradeCost(s, { ...normalized, maintenance: step }, 'maintenance');
-  const depot = normalized.depot ? stationUpgradeCost(s, normalized, 'depot') : 0;
+  const maintenance = 0;
+  const depot = 0;
   const total = Math.round(acquisition + levels + commerces + maintenance + depot);
   return { acquisition, levels, commerces, maintenance, depot, total };
 }
@@ -270,7 +263,7 @@ function stationSaleTooltip(s, asset) {
   const circulation = users.length
     ? ` ${users.length} ligne${users.length > 1 ? 's' : ''} la desservent encore et resteront actives.`
     : '';
-  return `Vend ${s.name} et rembourse la gare, les niveaux, les commerces, les ateliers et le dépôt. Remboursement total : ${money(refund.total)}.${circulation}`;
+  return `Vend ${s.name} et rembourse la gare, les niveaux et les commerces. Remboursement total : ${money(refund.total)}.${circulation}`;
 }
 
 function economyValue(key, fallback = 0) {
@@ -281,8 +274,8 @@ function economyValue(key, fallback = 0) {
 function stationOperatingCostBreakdown(asset = {}) {
   const level = Number(asset.level || 0) * economyValue('stationLevelCost', 58);
   const commerce = Number(asset.commerce || 0) * economyValue('stationCommerceCost', 64);
-  const maintenance = Number(asset.maintenance || 0) * economyValue('stationMaintenanceCost', 92);
-  const depot = asset.depot ? economyValue('stationDepotCost', 150) : 0;
+  const maintenance = 0;
+  const depot = 0;
   return { level, commerce, maintenance, depot, total: level + commerce + maintenance + depot };
 }
 
@@ -290,8 +283,6 @@ function stationOperatingCostRows(asset = {}) {
   const cost = stationOperatingCostBreakdown(asset);
   return `
     <span>Coût/h commerces</span><b>${moneyPerHour(cost.commerce)}</b>
-    <span>Coût/h atelier</span><b>${moneyPerHour(cost.maintenance)}</b>
-    <span>Coût/h dépôt</span><b>${moneyPerHour(cost.depot)}</b>
     <span>Coût/h total gare</span><b>${moneyPerHour(cost.total)}</b>
   `;
 }
@@ -315,8 +306,6 @@ function renderStationAsset(s, asset) {
       <div class="station-owned-mini-stats">
         <div><span>Niv.</span><b>${asset.level}</b></div>
         <div><span>Com.</span><b>${asset.commerce}</b></div>
-        <div><span>Atel.</span><b>${asset.maintenance}</b></div>
-        <div><span>Dépôt</span><b>${asset.depot ? 'Oui' : 'Non'}</b></div>
       </div>
       <div class="station-owned-tile-foot">
         <span>Revente ${money(refund.total)}</span>

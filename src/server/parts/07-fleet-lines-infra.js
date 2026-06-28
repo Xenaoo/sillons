@@ -220,7 +220,30 @@ function publicTrain(train, player = null) {
   };
 }
 
-function createTrainInstance(modelId, ownerId) {
+function createTrainConstruction(model) {
+  const durationMs = trainConstructionDurationMs(model);
+  return {
+    active: true,
+    label: 'Fabrication',
+    remainingMs: durationMs,
+    durationMs,
+    startedAt: Date.now(),
+    startedDay: state.day || 1,
+    completedAt: null,
+    completedDay: null
+  };
+}
+
+function inactiveTrainConstruction() {
+  return { active: false, label: null, remainingMs: 0, durationMs: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
+}
+
+function trainUnderConstruction(train) {
+  return Boolean(train?.construction?.active);
+}
+
+function createTrainInstance(modelId, ownerId, options = {}) {
+  const model = BALANCE.trains[modelId];
   const train = {
     id: crypto.randomUUID(),
     modelId,
@@ -228,9 +251,9 @@ function createTrainInstance(modelId, ownerId) {
     condition: 0.96,
     age: 0,
     acquiredDay: state.day || 1,
-    maintenance: { active: false, mode: null, daysLeft: 0, duration: 0, targetCondition: 0, lastServiceDay: state.day || 1 }
+    construction: options.constructionActive && model ? createTrainConstruction(model) : inactiveTrainConstruction(),
+    maintenance: { active: false, mode: null, daysLeft: 0, duration: 0, remainingMs: 0, durationMs: 0, targetCondition: 0, lastServiceDay: state.day || 1 }
   };
-  const model = BALANCE.trains[modelId];
   if (model) ensureTrainComposition(train, model);
   return train;
 }
@@ -242,15 +265,33 @@ function normalizeTrain(raw, ownerId) {
   raw.condition = clamp(Number(raw.condition ?? 0.9), 0, 1);
   raw.age = Math.max(0, Math.floor(Number(raw.age || 0)));
   raw.acquiredDay = raw.acquiredDay || state.day || 1;
+  const c = raw.construction && typeof raw.construction === 'object' ? raw.construction : {};
+  const constructionDurationMs = Math.max(0, Math.round(Number(c.durationMs || 0)));
+  const constructionRemainingMs = Math.max(0, Math.round(Number(c.remainingMs ?? (c.active ? constructionDurationMs : 0))));
+  raw.construction = {
+    active: Boolean(c.active) && constructionRemainingMs > 0,
+    label: c.label || null,
+    remainingMs: constructionRemainingMs,
+    durationMs: constructionDurationMs,
+    startedAt: Math.max(0, Number(c.startedAt || 0)) || null,
+    startedDay: c.startedDay || null,
+    completedAt: Math.max(0, Number(c.completedAt || 0)) || null,
+    completedDay: c.completedDay || null
+  };
   const m = raw.maintenance && typeof raw.maintenance === 'object' ? raw.maintenance : {};
+  const legacyRemainingMs = Number(m.daysLeft || 0) > 0 ? Number(m.daysLeft || 0) * Math.max(250, TICK_MS) : 0;
+  const legacyDurationMs = Number(m.duration || 0) > 0 ? Number(m.duration || 0) * Math.max(250, TICK_MS) : 0;
   raw.maintenance = {
     active: Boolean(m.active),
     mode: m.mode || null,
     label: m.label || null,
     daysLeft: Math.max(0, Math.floor(Number(m.daysLeft || 0))),
     duration: Math.max(0, Math.floor(Number(m.duration || 0))),
+    remainingMs: Math.max(0, Math.round(Number(m.remainingMs ?? legacyRemainingMs))),
+    durationMs: Math.max(0, Math.round(Number(m.durationMs ?? legacyDurationMs))),
     targetCondition: clamp(Number(m.targetCondition || 0), 0, 1),
     startedDay: m.startedDay || null,
+    startedAt: Math.max(0, Number(m.startedAt || 0)) || null,
     cost: Math.round(Number(m.cost || 0)),
     lastServiceDay: m.lastServiceDay || raw.acquiredDay
   };
@@ -369,7 +410,7 @@ function lineAssignedTrains(player, line, { availableOnly = false } = {}) {
   return ids
     .map(id => trainsById.get(id))
     .filter(Boolean)
-    .filter(train => !availableOnly || (!train.maintenance?.active && trainConditionValue(train) > 0));
+    .filter(train => !availableOnly || (!trainUnderConstruction(train) && !train.maintenance?.active && trainConditionValue(train) > 0));
 }
 
 function lineCadenceTiming(service, stopCount) {
@@ -410,7 +451,7 @@ function computeLineCadence(player, line, { availableTrains = null, utilizationF
   const plannedTrains = lineAssignedTrains(player, line);
   const operatingTrains = Array.isArray(availableTrains)
     ? availableTrains
-    : plannedTrains.filter(train => !train.maintenance?.active && trainConditionValue(train) > 0);
+    : plannedTrains.filter(train => !trainUnderConstruction(train) && !train.maintenance?.active && trainConditionValue(train) > 0);
   const timingTrains = operatingTrains.length ? operatingTrains : plannedTrains;
   const timing = lineCadenceTiming(line?.service, lineStops(line).length);
   const distance = Math.max(0, Number(lineDistance(line) || 0));
@@ -626,13 +667,11 @@ function computePassageRights(player, line, model, distance, infrastructureUsage
   for (const stopId of [...new Set(linePathIds(line))]) {
     const ownerInfo = stationOwnerInfo(stopId);
     if (!ownerInfo || ownerInfo.player.id === player.id) continue;
-    const asset = ownerInfo.asset || { level: 1, commerce: 0, maintenance: 0, depot: false };
+    const asset = ownerInfo.asset || { level: 1, commerce: 0 };
     const stationLevel = clamp(Number(asset.level || 1), 1, 5);
     const qualityFactor = 1
       + Math.max(0, stationLevel - 1) * 0.125
-      + clamp(Number(asset.commerce || 0), 0, 4) * 0.04
-      + clamp(Number(asset.maintenance || 0), 0, 4) * 0.025
-      + (asset.depot ? 0.06 : 0);
+      + clamp(Number(asset.commerce || 0), 0, 4) * 0.04;
     const stopAmount = (ECONOMY.stationAccessTollBase + capacityBase * ECONOMY.stationAccessTollCapacityFactor) * frequency * qualityFactor;
     stationTotal += stopAmount;
     addAllocation(ownerInfo.player.id, stopAmount, `station:${stopId}`);
@@ -1379,9 +1418,9 @@ function normalizeStationAsset(player, stationId) {
   const raw = player.stations[stationId] || {};
   const asset = {
     level: clamp(Math.floor(Number(raw.level || 1)), 1, 5),
-    depot: Boolean(raw.depot),
+    depot: false,
     commerce: clamp(Math.floor(Number(raw.commerce || 0)), 0, 4),
-    maintenance: clamp(Math.floor(Number(raw.maintenance || 0)), 0, 4),
+    maintenance: 0,
     electrified: Boolean(raw.electrified)
   };
   player.stations[stationId] = asset;
@@ -1392,7 +1431,7 @@ function stationCapacityFactor(player, stationId) {
   const asset = player.stations[stationId];
   if (!asset) return 0.75;
   const techBoost = (hasTech(player, 'passenger_flow') ? 0.05 : 0) + (hasTech(player, 'intermodal_hubs') ? 0.04 : 0);
-  return clamp(0.75 + asset.level * 0.1 + asset.maintenance * 0.025 + techBoost, 0.65, 1.45);
+  return clamp(0.75 + asset.level * 0.1 + techBoost, 0.65, 1.45);
 }
 
 
@@ -1425,7 +1464,30 @@ function techNodeById(nodeId) {
 }
 
 function totalMaintenance(player) {
-  return Object.values(player.stations).reduce((sum, a) => sum + (a.maintenance || 0), 0);
+  normalizeMaintenanceFacilities(player);
+  return maintenanceFacilityLevel(player, 'depot') * 0.45
+    + maintenanceFacilityLevel(player, 'workshop')
+    + maintenanceFacilityLevel(player, 'technicentre') * 1.35;
+}
+
+function maintenanceFacilityLevel(player, facilityId) {
+  const raw = player?.maintenanceFacilities?.[facilityId];
+  return Math.max(0, Math.floor(Number(raw?.level ?? raw ?? 0)));
+}
+
+function maintenanceFacilityUpgradeCost(player, facilityId) {
+  const def = BALANCE.maintenanceFacilities?.[facilityId];
+  if (!def) return 0;
+  const level = maintenanceFacilityLevel(player, facilityId);
+  return Math.round(Number(def.baseCost || 0) * Math.pow(Number(def.growth || 1.45), level) * state.market.steel);
+}
+
+function maintenanceFacilityDurationMultiplier(player, facilityId) {
+  const def = BALANCE.maintenanceFacilities?.[facilityId];
+  if (!def) return 1;
+  const level = maintenanceFacilityLevel(player, facilityId);
+  const reduction = Math.min(Number(def.maxDurationReduction || 0), level * Number(def.durationReductionPerLevel || 0));
+  return clamp(1 - reduction, 0.18, 1);
 }
 
 function currentPriceMultiplier(player, energyType) {

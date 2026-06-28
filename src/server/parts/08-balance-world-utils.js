@@ -261,6 +261,28 @@ function formatCycles(value) {
   return cycles <= 1 ? '1 cycle' : `${cycles} cycles`;
 }
 
+function formatDurationMs(value) {
+  const totalMinutes = Math.max(1, Math.ceil(Number(value || 0) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${totalMinutes} min`;
+  if (minutes <= 0) return `${hours} h`;
+  return `${hours} h ${minutes} min`;
+}
+
+function trainConstructionDurationMs(model) {
+  const maxEpoch = Math.max(1, (BALANCE?.epochs?.length || 7) - 1);
+  const era = clamp(Math.floor(Number(model?.unlockEpoch || 0)), 0, maxEpoch);
+  const techRank = clamp((Math.max(1, Number(model?.requiredTechLevel || 1)) - 1) / 7, 0, 1);
+  const price = Math.max(95000, Number(model?.price || 95000));
+  const priceRank = clamp((Math.log10(price) - Math.log10(95000)) / (Math.log10(92000000) - Math.log10(95000)), 0, 1);
+  const inEraRank = clamp(techRank * 0.7 + priceRank * 0.3, 0, 1);
+  const globalRank = clamp((era + inEraRank) / (maxEpoch + 1), 0, 1);
+  const minMs = 60 * 1000;
+  const maxMs = 20 * HOUR_MS;
+  return Math.round(minMs + Math.pow(globalRank, 1.55) * (maxMs - minMs));
+}
+
 function trainCatalogEntries() {
   const file = path.join(__dirname, 'data', 'sillons_train_catalog_v1.json');
   const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -506,10 +528,49 @@ function buildBalance() {
   };
 
   const maintenanceActions = {
-    light: { id: 'light', name: 'Révision légère', description: 'Intervention courte. Remonte légèrement l’état.', baseCost: 4500, priceFactor: 0.018, restore: 0.18, target: 0.82, days: 1, requiresDepot: false },
-    standard: { id: 'standard', name: 'Révision atelier', description: 'Remise à niveau solide. Demande un atelier ou dépôt.', baseCost: 12000, priceFactor: 0.045, restore: 0.38, target: 0.92, days: 3, requiresDepot: true },
-    heavy: { id: 'heavy', name: 'Grande révision', description: 'Réparation lourde pour matériel très usé.', baseCost: 32000, priceFactor: 0.085, restore: 0.62, target: 0.98, days: 6, requiresDepot: true, requiredTech: 'steam_workshops' },
-    refurbish: { id: 'refurbish', name: 'Rénovation complète', description: 'Très coûteux, mais remet presque à neuf.', baseCost: 70000, priceFactor: 0.13, restore: 0.9, target: 1, days: 10, requiresDepot: true, requiredTech: 'electric_standardized_maintenance' }
+    light: { id: 'light', name: 'Petite maintenance', description: 'Intervention courte en dépôt. Remonte légèrement l’état.', baseCost: 4500, priceFactor: 0.018, restore: 0.18, target: 0.82, baseMinutes: 18, facility: 'depot' },
+    standard: { id: 'standard', name: 'Maintenance intermédiaire', description: 'Remise à niveau solide en atelier.', baseCost: 12000, priceFactor: 0.045, restore: 0.38, target: 0.92, baseMinutes: 55, facility: 'workshop' },
+    heavy: { id: 'heavy', name: 'Grande révision atelier', description: 'Réparation lourde en atelier pour matériel très usé.', baseCost: 32000, priceFactor: 0.085, restore: 0.62, target: 0.98, baseMinutes: 130, facility: 'workshop', requiredTech: 'steam_workshops' },
+    refurbish: { id: 'refurbish', name: 'Rénovation technicentre', description: 'Très coûteux, mais remet presque à neuf dans un technicentre.', baseCost: 70000, priceFactor: 0.13, restore: 0.9, target: 1, baseMinutes: 420, facility: 'technicentre', requiredTech: 'electric_standardized_maintenance' }
+  };
+
+  const maintenanceFacilities = {
+    depot: {
+      id: 'depot',
+      name: 'Dépôt',
+      shortName: 'Dépôt',
+      description: 'Indispensable pour la petite maintenance. Chaque niveau accélère les petites interventions.',
+      actionLabel: 'Petite maintenance',
+      baseCost: 160000,
+      growth: 1.42,
+      durationReductionPerLevel: 0.075,
+      maxDurationReduction: 0.72,
+      requiredTech: 'steam_depots'
+    },
+    workshop: {
+      id: 'workshop',
+      name: 'Atelier',
+      shortName: 'Atelier',
+      description: 'Indispensable pour la maintenance intermédiaire et les grandes révisions. Chaque niveau réduit l’indisponibilité.',
+      actionLabel: 'Maintenance intermédiaire',
+      baseCost: 420000,
+      growth: 1.48,
+      durationReductionPerLevel: 0.065,
+      maxDurationReduction: 0.68,
+      requiredTech: 'steam_workshops'
+    },
+    technicentre: {
+      id: 'technicentre',
+      name: 'Technicentre',
+      shortName: 'Technicentre',
+      description: 'Indispensable pour les rénovations complètes. Chaque niveau rend les immobilisations lourdes plus courtes.',
+      actionLabel: 'Rénovations',
+      baseCost: 1800000,
+      growth: 1.55,
+      durationReductionPerLevel: 0.055,
+      maxDurationReduction: 0.62,
+      requiredTech: 'electric_standardized_maintenance'
+    }
   };
 
   normalizeTrainModelCompositionFlags(trains);
@@ -533,6 +594,7 @@ function buildBalance() {
     energyStrategies,
     maintenancePolicies,
     maintenanceActions,
+    maintenanceFacilities,
     techTree,
     public: { epochs, trains, staff, energyStrategies, maintenancePolicies, maintenanceActions, techTree, economy: {
       researchLabBaseCost: ECONOMY.researchLabBaseCost,
@@ -542,7 +604,7 @@ function buildBalance() {
       stationDepotCost: ECONOMY.stationDepotCost,
       stationAccessTollBase: ECONOMY.stationAccessTollBase,
       stationAccessTollCapacityFactor: ECONOMY.stationAccessTollCapacityFactor
-    }, techLabels: {
+    }, maintenanceFacilities, techLabels: {
       traction: 'Traction',
       energy: 'Énergie',
       operations: 'Exploitation',
@@ -610,7 +672,7 @@ function buildTechTree() {
         ['traction', 'steam_first_locomotives', 'Première locomotive à vapeur', 'Débloque l’achat du premier matériel roulant et lance la compagnie.', [], ['Acheter les locomotives vapeur de départ']],
         ['operations', 'steam_passenger_locomotives', 'Haltes et service voyageurs', 'Débloque la création de lignes voyageurs et les voitures voyageurs.', [req('steam_first_locomotives')], ['Créer des lignes voyageurs']],
         ['freight', 'steam_freight_locomotives', 'Wagons marchandises', 'Débloque les lignes fret et les premières compositions marchandises.', [req('steam_first_locomotives')], ['Créer des lignes fret']],
-        ['maintenance', 'steam_depots', 'Dépôts charbon et eau', 'Débloque la construction de dépôts dans les gares possédées.', [req('steam_first_locomotives')], ['Construire un dépôt']],
+        ['maintenance', 'steam_depots', 'Dépôts charbon et eau', 'Débloque l’achat de dépôts dans Parc > Maintenance.', [req('steam_first_locomotives')], ['Construire un dépôt']],
         ['operations', 'manual_dispatch', 'Aiguillages et régulation manuelle', 'Débloque les lignes à plus de deux arrêts.', [req('steam_passenger_locomotives')], ['Créer des lignes avec arrêts intermédiaires']],
         ['operations', 'passenger_slots_steam', 'Horaires voyageurs coordonnés', 'Débloque davantage de sillons voyageurs par ligne.', [req('manual_dispatch', 2)], ['+2 sillons voyageurs par ligne'], { sillonSlots: { passengers: 2 } }],
         ['freight', 'freight_slots_steam', 'Marches marchandises organisées', 'Débloque davantage de sillons fret par ligne.', [req('steam_freight_locomotives', 2)], ['+2 sillons fret par ligne'], { sillonSlots: { freight: 2 }, subtree: 'freight' }],
@@ -619,7 +681,7 @@ function buildTechTree() {
         ['social', 'crew_training', 'Formation des équipages', 'Débloque les premiers gains de productivité des conducteurs.', [req('steam_passenger_locomotives')], ['Réduire les besoins d’équipage']],
         ['energy', 'steam_improved_boilers', 'Chaudières améliorées', 'Débloque les locomotives vapeur plus puissantes.', [req('steam_first_locomotives', 2)], ['Acheter des locomotives vapeur intermédiaires']],
         ['maintenance', 'steam_reinforced_brakes', 'Frein continu automatique', 'Débloque les compositions voyageurs express et les trains plus longs.', [req('steam_passenger_locomotives', 2), req('steam_freight_locomotives', 2)], ['Utiliser des compositions express']],
-        ['maintenance', 'steam_workshops', 'Ateliers vapeur', 'Débloque les ateliers de gare et la grande révision.', [req('steam_depots', 2), req('steam_improved_boilers', 2)], ['Construire un atelier', 'Débloquer la grande révision']],
+        ['maintenance', 'steam_workshops', 'Ateliers vapeur', 'Débloque les ateliers de compagnie et la grande révision.', [req('steam_depots', 2), req('steam_improved_boilers', 2)], ['Construire un atelier', 'Débloquer la grande révision']],
         ['freight', 'basic_freight_yards', 'Triages locaux', 'Débloque les wagons spécialisés et les flux de fret plus rentables.', [req('steam_freight_locomotives', 2)], ['Débloquer les wagons spécialisés'], { subtree: 'freight' }],
         ['operations', 'steam_network_standards', 'Normes de réseau vapeur', 'Jalon de maturité requis pour préparer l’ère diesel.', [req('steam_improved_boilers', 3), req('manual_dispatch', 3), req('steam_workshops', 2)], ['Jalon vers l’ère diesel']]
       ]],

@@ -530,6 +530,7 @@
 
 .fleet-catalog-card,
 .fleet-policy-card,
+.fleet-maintenance-facilities-card,
 .fleet-owned-card {
   background:
     radial-gradient(circle at 100% 0%, rgba(81,142,205,.12), transparent 30%),
@@ -624,6 +625,17 @@
 .policy-stats b {
   color: #f4e3bd;
   font-size: 12px;
+}
+
+.maintenance-facility-card .policy-stats {
+  grid-template-columns: 1fr;
+}
+
+.maintenance-facility-card button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .fleet-owned-grid {

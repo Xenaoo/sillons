@@ -327,6 +327,27 @@ function grantExistingResearchRights(player, unlocked) {
     if (asset.depot) grantResearchLevel(unlocked, 'steam_depots', 1);
     if (asset.electrified) grantResearchLevel(unlocked, 'electric_substations', 2);
   }
+  const facilities = player.maintenanceFacilities || {};
+  if (Number(facilities.depot?.level ?? facilities.depot ?? 0) > 0) grantResearchLevel(unlocked, 'steam_depots', 1);
+  if (Number(facilities.workshop?.level ?? facilities.workshop ?? 0) > 0) grantResearchLevel(unlocked, 'steam_workshops', 1);
+  if (Number(facilities.technicentre?.level ?? facilities.technicentre ?? 0) > 0) grantResearchLevel(unlocked, 'electric_standardized_maintenance', 1);
+}
+
+function normalizeMaintenanceFacilities(player) {
+  const raw = player.maintenanceFacilities && typeof player.maintenanceFacilities === 'object' ? player.maintenanceFacilities : {};
+  const legacyStations = Object.values(player.stations || {});
+  const legacyDepotLevels = legacyStations.reduce((sum, asset) => sum + (asset?.depot ? 1 : 0), 0);
+  const legacyWorkshopLevels = legacyStations.reduce((sum, asset) => sum + Math.max(0, Math.floor(Number(asset?.maintenance || 0))), 0);
+  const readLevel = id => {
+    const value = raw[id];
+    return Math.max(0, Math.floor(Number(value?.level ?? value ?? 0)));
+  };
+  player.maintenanceFacilities = {
+    depot: { level: Math.max(readLevel('depot'), legacyDepotLevels) },
+    workshop: { level: Math.max(readLevel('workshop'), legacyWorkshopLevels) },
+    technicentre: { level: readLevel('technicentre') }
+  };
+  return player.maintenanceFacilities;
 }
 
 function migrateResearchTree(player) {
@@ -394,6 +415,7 @@ function migratePlayer(player, fallbackId) {
   p.researchQueue = normalizeResearchQueue(p.researchQueue);
   p.eraTransition = normalizeEraTransition(p.eraTransition, p);
   p.maintenancePolicy = BALANCE.maintenancePolicies[p.maintenancePolicy] ? p.maintenancePolicy : 'standard';
+  p.maintenanceFacilities = normalizeMaintenanceFacilities(p);
   p.staff = { ...staffDefaults, ...(p.staff || {}) };
   p.tutorial = createTutorialState(p.tutorial);
   p.stats = { ...statsDefaults, ...(p.stats || {}) };

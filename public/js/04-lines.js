@@ -89,7 +89,7 @@ function updateLineDistanceCalculator() {
 
 function renderCreateLinePanel() {
   const me = app.state.me;
-  const freeTrains = me.trains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id)));
+  const freeTrains = me.trains.filter(t => !t.construction?.active && !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id)));
   const draft = normalizeLineDraft(freeTrains);
   const trainOptions = freeTrains.map(t => {
     const model = app.state.balance.trains[t.modelId];
@@ -572,11 +572,13 @@ function renderLineItem(line) {
       ? { cls: 'bad', label: 'Ressource insuffisante' }
       : line.stats?.status === 'sillon-limited'
         ? { cls: 'warn', label: 'Sillons limités' }
-        : line.stats?.status === 'maintenance'
-          ? { cls: 'warn', label: 'Maintenance' }
-          : line.stats?.status === 'train-out-of-service'
-            ? { cls: 'bad', label: 'Train immobilisé' }
-            : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
+        : line.stats?.status === 'construction'
+          ? { cls: 'warn', label: 'Train en fabrication' }
+          : line.stats?.status === 'maintenance'
+            ? { cls: 'warn', label: 'Maintenance' }
+            : line.stats?.status === 'train-out-of-service'
+              ? { cls: 'bad', label: 'Train immobilisé' }
+              : { cls: line.active ? 'good' : 'bad', label: line.active ? 'Active' : 'Fermée' };
   const shortStops = stops.length > 4
     ? `${station(stops[0])?.name || stops[0]} → ${stops.length - 2} arrêts → ${station(stops[stops.length - 1])?.name || stops[stops.length - 1]}`
     : lineStopsLabel(stops);

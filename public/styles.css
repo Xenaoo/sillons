@@ -3391,6 +3391,7 @@ button[data-tooltip]:focus-visible::before {
 
 .fleet-catalog-card,
 .fleet-policy-card,
+.fleet-maintenance-facilities-card,
 .fleet-owned-card {
   background:
     radial-gradient(circle at 100% 0%, rgba(81,142,205,.12), transparent 30%),
@@ -3485,6 +3486,17 @@ button[data-tooltip]:focus-visible::before {
 .policy-stats b {
   color: #f4e3bd;
   font-size: 12px;
+}
+
+.maintenance-facility-card .policy-stats {
+  grid-template-columns: 1fr;
+}
+
+.maintenance-facility-card button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .fleet-owned-grid {
@@ -9287,6 +9299,127 @@ dialog.modal--wide {
 .train-passenger-load-bar > i { background: linear-gradient(90deg, #557fa8, #75c49c); }
 .train-passenger-load small { color: #75c49c; font-size: 10px; }
 
+.train-construction-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid rgba(96,165,250,.24);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(9,24,43,.62), rgba(8,16,28,.54));
+}
+
+.train-construction-head,
+.train-construction-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.train-construction-head div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.train-construction-head span,
+.train-construction-meta {
+  color: #a9c7e8;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.train-construction-head b,
+.train-construction-head strong {
+  min-width: 0;
+  color: #f4e7c4;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.train-construction-head strong {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.train-construction-bar > i {
+  background: linear-gradient(90deg, #60a5fa, #75c49c, #d9a852);
+}
+
+.train-construction-meta {
+  font-size: 10px;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.train-construction-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.construction-step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 7px;
+  background: rgba(2,6,23,.32);
+  color: #9aa9bd;
+}
+
+.construction-step i {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: rgba(148,163,184,.16);
+  color: currentColor;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.construction-step b {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.construction-step.done {
+  border-color: rgba(117,196,156,.30);
+  color: #75c49c;
+}
+
+.construction-step.current {
+  border-color: rgba(217,168,82,.42);
+  background: rgba(217,168,82,.10);
+  color: #f4e7c4;
+}
+
+@media (max-width: 720px) {
+  .train-construction-head,
+  .train-construction-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .train-construction-head strong {
+    text-align: left;
+  }
+
+  .train-construction-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .fleet-maintenance-grid .maintenance-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -9301,6 +9434,12 @@ dialog.modal--wide {
 
 .fleet-maintenance-grid .maintenance-btn strong {
   font-size: 11px;
+}
+
+.fleet-maintenance-grid .maintenance-btn small {
+  color: #8fb8d8;
+  font-size: 10px;
+  line-height: 1.1;
 }
 
 .fleet-maintenance-grid .maintenance-btn span,

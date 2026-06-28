@@ -369,6 +369,15 @@ function formatCycles(value) {
   return n <= 1 ? '1 cycle' : `${n} cycles`;
 }
 
+function formatDurationMs(value) {
+  const totalMinutes = Math.max(1, Math.ceil(Number(value || 0) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${totalMinutes} min`;
+  if (minutes <= 0) return `${hours} h`;
+  return `${hours} h ${minutes} min`;
+}
+
 function serverNow() {
   return Date.now() + (app.serverClockOffset || 0);
 }
@@ -476,15 +485,11 @@ function stationUpgradeTooltip(station, asset, upgrade) {
     level: upgrade.label === 'Acheter'
       ? 'achète la gare, permet d’y créer des lignes et donne droit aux revenus de passage payés par les concurrents.'
       : 'augmente la capacité et l’attractivité de la gare ; débloque une meilleure base pour les autres améliorations.',
-    commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.',
-    maintenance: 'augmente la capacité d’atelier, réduit les coûts/durées de maintenance et aide à maintenir le parc fiable.',
-    depot: 'permet le stationnement et améliore la portée pratique des trains vapeur sur les itinéraires qui passent par cette gare.'
+    commerce: 'ajoute des revenus annexes et améliore la satisfaction voyageurs.'
   };
   const nextAsset = { ...(asset || {}) };
   if (upgrade.kind === 'level') nextAsset.level = upgrade.label === 'Acheter' ? 1 : Number(nextAsset.level || 1) + 1;
   if (upgrade.kind === 'commerce') nextAsset.commerce = Number(nextAsset.commerce || 0) + 1;
-  if (upgrade.kind === 'maintenance') nextAsset.maintenance = Number(nextAsset.maintenance || 0) + 1;
-  if (upgrade.kind === 'depot') nextAsset.depot = true;
   const nextCost = stationOperatingCostBreakdown(nextAsset).total;
   return `${upgrade.label} à ${station.name}. Coût immédiat : ${money(upgrade.cost)}. Coût d’exploitation après amélioration : ${moneyPerHour(nextCost)}. Effet : ${effects[upgrade.kind] || 'Amélioration de la gare.'}`;
 }
@@ -570,9 +575,7 @@ function preloadMapSprites() {
 function stationPrestigeStage(asset) {
   if (!asset) return 1;
   const score = Number(asset.level || 1)
-    + Math.floor(Number(asset.commerce || 0) / 2)
-    + Math.floor(Number(asset.maintenance || 0) / 2)
-    + (asset.depot ? 1 : 0);
+    + Math.floor(Number(asset.commerce || 0) / 2);
   return Math.max(1, Math.min(6, score));
 }
 

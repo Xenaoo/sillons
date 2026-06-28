@@ -189,7 +189,11 @@ function recomputeBranchLevel(player, branch) {
 }
 
 function hasMaintenanceWorkshop(player) {
-  return Object.values(player.stations || {}).some(a => a.depot || (a.maintenance || 0) > 0);
+  return ['depot', 'workshop', 'technicentre'].some(id => maintenanceFacilityLevel(player, id) > 0);
+}
+
+function hasMaintenanceFacility(player, facilityId) {
+  return maintenanceFacilityLevel(player, facilityId) > 0;
 }
 
 function maintenanceActionCost(player, train, model, mode) {
@@ -200,11 +204,17 @@ function maintenanceActionCost(player, train, model, mode) {
   return Math.round((mode.baseCost + model.price * mode.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
 }
 
-function maintenanceDuration(player, mode) {
-  const workshopBonus = Math.min(0.35, totalMaintenance(player) * 0.035 + (player.staff.mechanics || 0) * 0.012);
+function maintenanceDurationMs(player, train, model, mode) {
+  const condition = clamp(Number(train?.condition ?? 1), 0, 1);
+  const durabilityFactor = 0.35 + (1 - condition) * 1.65;
+  const facilityMultiplier = maintenanceFacilityDurationMultiplier(player, mode.facility);
+  const mechanicBonus = Math.min(0.16, (player.staff.mechanics || 0) * 0.006);
   const branchBonus = Math.min(0.18, Number(player.tech?.maintenance || 0) * 0.004);
   const techBonus = branchBonus + Math.min(0.24, techLevel(player, 'steam_workshops') * 0.045) + Math.min(0.1, techLevel(player, 'electric_standardized_maintenance') * 0.02);
-  return Math.max(1, Math.ceil(mode.days * (1 - workshopBonus - techBonus)));
+  const skillMultiplier = clamp(1 - mechanicBonus - techBonus, 0.42, 1);
+  const baseMinutes = Math.max(1, Number(mode.baseMinutes || mode.days * 12 || 15));
+  const duration = baseMinutes * 60000 * durabilityFactor * facilityMultiplier * skillMultiplier;
+  return Math.max(60000, Math.ceil(duration));
 }
 
 function actionEnergyStrategy(player, payload) {
@@ -485,6 +495,7 @@ function computeAnnualLineCapacity(profile, cadence, service, capacityFactor) {
 function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options = {}) {
   const dryRun = Boolean(options.dryRun);
   if (!dryRun) {
+    processTrainConstruction(player);
     processTrainMaintenance(player);
     processEraTransition(player);
     processResearchProject(player);
@@ -522,7 +533,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     normalizeLineTrainIds(line);
     const assignedTrains = lineAssignedTrains(player, line);
     if (!assignedTrains.length) continue;
-    const availableTrains = assignedTrains.filter(t => !t.maintenance?.active && trainConditionValue(t) > 0);
+    const availableTrains = assignedTrains.filter(t => !trainUnderConstruction(t) && !t.maintenance?.active && trainConditionValue(t) > 0);
     const bundle = combinedOperatingProfile(player, availableTrains);
     const stoppedBundle = bundle || combinedOperatingProfile(player, assignedTrains);
     if (!stoppedBundle) continue;
@@ -570,6 +581,7 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     };
     if (!bundle) {
       const stoppedForCondition = assignedTrains.every(t => trainConditionValue(t) <= 0);
+      const stoppedForConstruction = assignedTrains.some(t => trainUnderConstruction(t));
       line.stats = {
         passengers: 0,
         freightTons: 0,
@@ -579,7 +591,8 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
         punctuality: 0,
         satisfaction: stoppedForCondition ? 4 : 20,
         share: 0,
-        status: stoppedForCondition ? 'train-out-of-service' : 'maintenance',
+        status: stoppedForConstruction ? 'construction' : stoppedForCondition ? 'train-out-of-service' : 'maintenance',
+        message: stoppedForConstruction ? 'Train en fabrication : la ligne attend la livraison du matériel.' : undefined,
         cadence,
         staffing: lineStaffingStats,
         market: routeDemandMarketPayload(routeDemand),
@@ -969,12 +982,12 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
   }
 
   const staffCost = Object.entries(player.staff).reduce((sum, [role, count]) => sum + (BALANCE.staff[role]?.salary || 0) * count / ECONOMY.staffCostDivisor, 0) * (1 - Math.min(0.1, techLevel(player, 'crew_training') * 0.018));
-  const stationCost = Object.values(player.stations).reduce((sum, a) => sum + (a.level * ECONOMY.stationLevelCost + a.commerce * ECONOMY.stationCommerceCost + a.maintenance * ECONOMY.stationMaintenanceCost + (a.depot ? ECONOMY.stationDepotCost : 0)), 0);
+  const stationCost = Object.values(player.stations).reduce((sum, a) => sum + (a.level * ECONOMY.stationLevelCost + a.commerce * ECONOMY.stationCommerceCost), 0);
   const debtCost = player.debt * ECONOMY.debtInterestPerTick;
   const idleTrainCost = player.trains.reduce((sum, train) => {
     const used = player.lines.some(line => line.active && lineTrainIds(line).includes(train.id));
     const model = BALANCE.trains[train.modelId];
-    return sum + (!used && model ? model.price * ECONOMY.idleTrainStorageFactor : 0);
+    return sum + (!trainUnderConstruction(train) && !used && model ? model.price * ECONOMY.idleTrainStorageFactor : 0);
   }, 0);
   const stationRevenue = computeOwnedStationRevenue(player, projectedStationPassengers, projectedStationFreight, expectedStationServiceCalls);
   const actualStationRevenue = dryRun
@@ -1658,7 +1671,6 @@ function computeOwnedStationRevenue(player, passengers, freightTons, serviceCall
     sum
     + (asset.level || 1) * ECONOMY.ownedStationIncomeBase
     + (asset.commerce || 0) * ECONOMY.ownedStationCommerceIncome
-    + (asset.depot ? 24 : 0)
   ), 0);
   const trafficIncome = passengers * 0.18 + freightTons * 0.032;
   const branchBonus = 1 + Math.min(0.20, Number(player.tech.stations || 0) * 0.004);
@@ -1691,7 +1703,7 @@ function trainConditionPerformanceFactor(train) {
 }
 
 function computeTrainWearPerTick(player, train, model, line, profile = null, staffing = null, policy = null) {
-  if (!train || !model || !line?.active || train.maintenance?.active || trainConditionValue(train) <= 0) return 0;
+  if (!train || !model || !line?.active || trainUnderConstruction(train) || train.maintenance?.active || trainConditionValue(train) <= 0) return 0;
   const activeProfile = profile || getTrainOperatingProfile(train, model, player);
   const activeStaffing = staffing || computeStaffing(player);
   const activePolicy = policy || BALANCE.maintenancePolicies[player.maintenancePolicy] || BALANCE.maintenancePolicies.standard;
@@ -1710,8 +1722,9 @@ function computeTrainWearPerTick(player, train, model, line, profile = null, sta
 function trainMaintenanceProjection(player, train, model, profile = null) {
   const line = player?.lines?.find(l => l.active && lineTrainIds(l).includes(train?.id));
   const baseHours = trainBaseWearLifetimeHours(model);
+  if (trainUnderConstruction(train)) return { active: false, baseHours, hoursToZero: null, label: 'En fabrication' };
   if (!line) return { active: false, baseHours, hoursToZero: null, label: 'Non affecté' };
-  if (train?.maintenance?.active) return { active: false, baseHours, hoursToZero: null, label: 'En atelier' };
+  if (train?.maintenance?.active) return { active: false, baseHours, hoursToZero: null, label: 'En maintenance' };
   if (trainConditionValue(train) <= 0) return { active: false, baseHours, hoursToZero: 0, label: 'Immobilisé' };
   const wearPerTick = computeTrainWearPerTick(player, train, model, line, profile);
   if (wearPerTick <= 0) return { active: false, baseHours, hoursToZero: null, label: 'Aucune usure' };

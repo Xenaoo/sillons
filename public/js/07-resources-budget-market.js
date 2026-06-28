@@ -246,7 +246,7 @@ function renderBudget() {
         ${budgetRow('Contrôle & fraude', commercialControlCost, 'expense', 'Fraude résiduelle, litiges voyageurs et dispositifs de contrôle')}
         ${budgetRow('Organisation commerciale', commercialAdministrationCost, 'expense', 'Support client, planification commerciale et organisation opérationnelle')}
         ${budgetRow('Personnel', b.staffCost || 0, 'expense', 'Salaires')}
-        ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux, commerces, ateliers, dépôts')}
+        ${budgetRow('Gares', b.stationCost || 0, 'expense', 'Niveaux et commerces')}
         ${budgetRow('Dette', b.debtCost || 0, 'expense', 'Intérêts et charge financière')}
         ${budgetRow('Parc inutilisé', b.idleTrainCost || 0, 'expense', 'Stockage du matériel non affecté')}
         ${budgetRow('R&D', b.researchCost || 0, 'expense', 'Coût/h du laboratoire pendant un projet actif')}
@@ -306,4 +306,3 @@ function renderMarket() {
     </div>
   `;
 }
-

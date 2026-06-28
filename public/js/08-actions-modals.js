@@ -155,6 +155,8 @@ if (action === 'select-all-composition-trains' || action === 'select-visible-com
 if (action === 'edit-composition-selection') {
   const ids = compositionSelectedIds();
   if (!ids.length) return toast('Sélectionne au moins un train.', 'error');
+  const selectedTrains = (app.state?.me?.trains || []).filter(train => ids.includes(train.id));
+  if (selectedTrains.some(train => train.construction?.active)) return toast('Composition indisponible : un train sélectionné est encore en fabrication.', 'error');
   setCompositionSelection(ids, ids[0]);
   setCompositionEditorTrain(ids[0]);
   renderAll();
@@ -170,7 +172,7 @@ if (action === 'sell-composition-selection') {
   const ids = compositionSelectedIds();
   if (ids.length < 2) return toast('Sélectionne au moins deux trains.', 'error');
   const sale = compositionSelectionSaleSummary(ids);
-  if (sale.unavailable.length) return toast('Vente impossible : un ou plusieurs trains sont en maintenance ou affectés à une ligne active.', 'error');
+  if (sale.unavailable.length) return toast('Vente impossible : un ou plusieurs trains sont en fabrication, en maintenance ou affectés à une ligne active.', 'error');
   const message = `Vendre définitivement les ${ids.length} trains sélectionnés ?
 
 Valeur estimée totale : ${money(sale.estimatedValue)}.
@@ -193,6 +195,8 @@ if (action === 'toggle-composition-group') {
 }
 if (action === 'open-composition') {
   const trainId = button.dataset.id || '';
+  const train = app.state?.me?.trains?.find(item => item.id === trainId);
+  if (train?.construction?.active) return toast('Composition disponible après livraison du train.', 'error');
   app.activeTab = 'fleet';
   app.activeFleetSubtab = 'composition';
   setCompositionSelection([trainId], trainId);
@@ -211,6 +215,8 @@ if (action === 'save-train-composition') {
   if (!train) return;
   const targetIds = compositionEditTargetIds(trainId);
   if (!targetIds.length) return toast('Aucun train sélectionné.', 'error');
+  const targetTrains = (app.state?.me?.trains || []).filter(item => targetIds.includes(item.id));
+  if (targetTrains.some(item => item.construction?.active)) return toast('Composition indisponible : un train ciblé est encore en fabrication.', 'error');
   const spec = trainCompositionSpec(train);
   const payload = { trainId, trainIds: targetIds, mode: spec.mode };
   if (spec.mode === 'multiple_unit') {
@@ -251,23 +257,27 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       const input = document.querySelector(`[data-buy-train-qty="${CSS.escape(modelId)}"]`);
       const quantity = normalizeTrainPurchaseQuantity(input?.value || 1);
       if (input) updateTrainPurchaseTotal(input, { commit: true });
-      if (quantity > 1) {
-        const model = app.state?.balance?.trains?.[modelId];
-        const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
-        const totalPrice = unitPrice * quantity;
-        if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
+    if (quantity > 1) {
+      const model = app.state?.balance?.trains?.[modelId];
+      const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+      const totalPrice = unitPrice * quantity;
+      const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+      if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
 
-Coût total estimé : ${money(totalPrice)}.`, { confirmLabel: 'Acheter' }))) return;
-      }
+Coût total estimé : ${money(totalPrice)}.
+Fabrication estimée : ${formatDurationMs(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
+    }
       return doAction('buyTrain', { modelId, quantity });
     }
   if (action === 'duplicate-train') {
     const train = app.state.me.trains.find(t => t.id === button.dataset.id);
     const model = train ? app.state.balance.trains[train.modelId] : null;
     const price = Math.round((model?.price || 0) * 0.98);
+    const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
     if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
 
-Coût estimé : ${money(price)}.`, { confirmLabel: 'Dupliquer' }))) return;
+Coût estimé : ${money(price)}.
+Fabrication estimée : ${formatDurationMs(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
   if (action === 'assign-train-line') {
@@ -306,9 +316,10 @@ Valeur estimée : ${money(estimate)}.` : ''}`;
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'repair-all-trains') {
     const mode = button.dataset.mode || 'standard';
-    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance atelier ?\n\nLes trains affectés à des lignes seront immobilisés pendant l’intervention.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
+    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance intermédiaire ?\n\nLa durée dépend de leur état restant et du niveau d’atelier.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
     return doAction('repairAllTrains', { mode });
   }
+  if (action === 'buy-maintenance-facility') return doAction('buyMaintenanceFacility', { facility: button.dataset.facility });
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
     const id = button.dataset.id || '';
