@@ -860,9 +860,9 @@ function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options
     const delayRisk = 1 - reliability;
     const dispatcherPunctualityBonus = (dispatchRevenueFactor - 1) * 22;
     const stationSatisfactionBonus = (stationAgentFlowFactor - 1) * 20;
-    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, effectiveFrequency - 10) * 1.4 - Math.max(0, 1 - lineDriverCoverage) * 18 + dispatcherPunctualityBonus, 35, 99);
+    const punctuality = clamp(100 - delayRisk * 100 - Math.max(0, effectiveFrequency - 10) * 1.4 - Math.max(0, 1 - lineDriverCoverage) * 18 + dispatcherPunctualityBonus - Number(eventFactor.punctualityPenalty || 0), 35, 99);
     const satisfaction = clamp(
-      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, effectiveFrequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5 - Math.max(0, 1 - lineDriverCoverage) * 12 + stationSatisfactionBonus,
+      30 + operatingModel.comfort * 45 + player.reputation * 0.23 + Math.min(12, effectiveFrequency) - effectiveTariff * 65 + averageStationLevel(player, line) * 4 + Math.max(0, stops.length - 2) * 1.5 - Math.max(0, 1 - lineDriverCoverage) * 12 + stationSatisfactionBonus - Number(eventFactor.satisfactionPenalty || 0),
       10,
       100
     );
@@ -1855,52 +1855,188 @@ function ratio(value, need) {
 
 function updateMarket() {
   const drift = () => (Math.random() - 0.5) * 0.035;
+  const eventMarket = currentEventMarketFactor();
   for (const key of Object.keys(state.market)) {
     const base = createMarket()[key];
-    state.market[key] = round2(clamp(state.market[key] + drift(), base * 0.55, base * 1.85));
-  }
-  for (const event of state.events) {
-    if (event.kind === 'energy') {
-      state.market.diesel = round2(state.market.diesel * 1.01);
-      state.market.electricity = round2(state.market.electricity * 1.006);
-    }
-    if (event.kind === 'tourism') state.market.demand = round2(state.market.demand * 1.003);
-    if (event.kind === 'freight') state.market.freight = round2(state.market.freight * 1.005);
+    const factor = Number(eventMarket[key] || 1);
+    const target = base * factor;
+    const pull = (target - Number(state.market[key] || base)) * 0.018;
+    const min = Math.min(base * 0.55, target * 0.88);
+    const max = Math.max(base * 1.85, target * 1.12);
+    state.market[key] = round2(clamp(state.market[key] + drift() + pull, min, max));
   }
 }
 
 function updateEvents() {
-  for (const event of state.events) event.remaining -= 1;
-  state.events = state.events.filter(e => e.remaining > 0);
-  if (Math.random() < 0.08 || state.events.length === 0) {
-    const event = createEvent(null, Math.floor(8 + Math.random() * 20));
+  const now = Date.now();
+  state.events = normalizeEvents(state.events, now)
+    .map(event => refreshEventRemaining(event, now))
+    .filter(event => event.remainingMs > 0);
+
+  if (state.events.length) {
+    const latestEndAt = Math.max(...state.events.map(event => Number(event.endsAt || now)));
+    if (!Number.isFinite(Number(state.nextEventAt)) || Number(state.nextEventAt) < latestEndAt) {
+      state.nextEventAt = latestEndAt + randomEventCooldownMs();
+    }
+    return;
+  }
+
+  if (!Number.isFinite(Number(state.nextEventAt)) || Number(state.nextEventAt) <= now - HOUR_MS) {
+    state.nextEventAt = now + randomEventCooldownMs();
+  }
+
+  if (now >= Number(state.nextEventAt || 0)) {
+    const event = createEvent();
     state.events.push(event);
     state.news.push({ day: state.day, text: event.title });
     state.news = state.news.slice(-60);
+    state.nextEventAt = Number(event.endsAt || now) + randomEventCooldownMs();
   }
 }
 
 function currentEventFactor() {
   let passenger = 1;
   let freight = 1;
+  let punctualityPenalty = 0;
+  let satisfactionPenalty = 0;
   for (const event of state.events) {
     passenger *= event.passenger || 1;
     freight *= event.freight || 1;
+    punctualityPenalty += Number(event.punctualityPenalty || 0);
+    satisfactionPenalty += Number(event.satisfactionPenalty || 0);
   }
-  return { passenger, freight };
+  return { passenger, freight, punctualityPenalty, satisfactionPenalty };
 }
 
-function createEvent(forcedKind, duration) {
-  const events = [
-    { kind: 'tourism', title: 'Vacances scolaires : Forte demande voyageurs sur les axes touristiques.', passenger: 1.18, freight: 0.98 },
-    { kind: 'energy', title: 'Tension sur les marchés de l’énergie : Les coûts de traction augmentent.', passenger: 1.0, freight: 0.96 },
-    { kind: 'weather', title: 'Météo difficile : La ponctualité devient plus fragile.', passenger: 0.94, freight: 0.92 },
-    { kind: 'freight', title: 'Rebond industriel : Les contrats fret sont plus nombreux.', passenger: 1.0, freight: 1.2 },
-    { kind: 'expo', title: 'Grand événement national : Hausse temporaire des déplacements longue distance.', passenger: 1.14, freight: 1.02 },
-    { kind: 'social', title: 'Tensions sociales sectorielles : Les compagnies sous-effectif sont pénalisées.', passenger: 0.97, freight: 0.97 }
+function currentEventMarketFactor() {
+  const factor = {};
+  for (const event of state.events || []) {
+    for (const [key, value] of Object.entries(event.market || {})) {
+      factor[key] = Number(factor[key] || 1) * Math.max(0.1, Number(value || 1));
+    }
+  }
+  return factor;
+}
+
+function randomEventCooldownMs(initial = false) {
+  const minHours = initial ? 1.5 : 4;
+  const maxHours = initial ? 3.5 : 10;
+  return Math.round((minHours + Math.random() * (maxHours - minHours)) * HOUR_MS);
+}
+
+function eventDefinitions() {
+  return [
+    {
+      kind: 'tourism',
+      title: 'Vacances scolaires : hausse modérée des déplacements touristiques.',
+      passenger: 1.07,
+      freight: 0.99,
+      durationHours: [4, 8]
+    },
+    {
+      kind: 'energy',
+      title: 'Tension énergie : traction diesel et électricité légèrement plus chères.',
+      passenger: 0.995,
+      freight: 0.985,
+      market: { diesel: 1.06, electricity: 1.035, coal: 1.025 },
+      durationHours: [3, 6]
+    },
+    {
+      kind: 'weather',
+      title: 'Épisode météo régional : trafic plus fragile pendant quelques heures.',
+      passenger: 0.975,
+      freight: 0.965,
+      punctualityPenalty: 3,
+      satisfactionPenalty: 1,
+      durationHours: [2.5, 5]
+    },
+    {
+      kind: 'freight',
+      title: 'Rebond industriel : demande fret en hausse sur les grands axes.',
+      passenger: 1.0,
+      freight: 1.08,
+      durationHours: [4, 7]
+    },
+    {
+      kind: 'expo',
+      title: 'Grand salon national : affluence longue distance temporairement renforcée.',
+      passenger: 1.09,
+      freight: 1.01,
+      durationHours: [3, 6]
+    },
+    {
+      kind: 'social',
+      title: 'Tensions sociales localisées : exploitation un peu moins régulière.',
+      passenger: 0.985,
+      freight: 0.985,
+      punctualityPenalty: 2,
+      satisfactionPenalty: 1,
+      market: { labor: 1.025 },
+      durationHours: [2.5, 4.5]
+    }
   ];
-  const event = forcedKind ? events.find(e => e.kind === forcedKind) || events[0] : events[Math.floor(Math.random() * events.length)];
-  return { ...event, remaining: duration };
+}
+
+function eventDefinition(kind) {
+  const definitions = eventDefinitions();
+  return definitions.find(event => event.kind === kind) || definitions[0];
+}
+
+function eventDurationMs(event) {
+  const range = Array.isArray(event?.durationHours) ? event.durationHours : [3, 6];
+  const min = Math.max(2, Number(range[0] || 3));
+  const max = Math.max(min, Number(range[1] || min));
+  return Math.round((min + Math.random() * (max - min)) * HOUR_MS);
+}
+
+function normalizeEvent(event, now = Date.now()) {
+  if (!event || typeof event !== 'object') return null;
+  const def = eventDefinition(event.kind);
+  const durationMs = Math.max(2 * HOUR_MS, Number(event.durationMs || eventDurationMs({ ...def, ...event })));
+  let remainingMs = Number(event.remainingMs);
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+    const legacyRemainingMs = Number(event.remaining || 0) > 0 ? Number(event.remaining || 0) * Math.max(250, TICK_MS) : 0;
+    remainingMs = legacyRemainingMs > 0 ? Math.max(90 * 60 * 1000, Math.min(durationMs, legacyRemainingMs)) : durationMs;
+  }
+  const startedAt = Number(event.startedAt || now - Math.max(0, durationMs - remainingMs));
+  const endsAt = Number(event.endsAt || now + remainingMs);
+  const normalized = {
+    ...def,
+    ...event,
+    durationMs,
+    remainingMs: Math.max(0, Math.min(durationMs, endsAt - now)),
+    startedAt,
+    endsAt
+  };
+  normalized.remaining = Math.ceil(normalized.remainingMs / Math.max(250, TICK_MS));
+  return normalized.remainingMs > 0 ? normalized : null;
+}
+
+function normalizeEvents(events, now = Date.now()) {
+  return (Array.isArray(events) ? events : []).map(event => normalizeEvent(event, now)).filter(Boolean).slice(0, 1);
+}
+
+function refreshEventRemaining(event, now = Date.now()) {
+  const remainingMs = Math.max(0, Number(event.endsAt || now) - now);
+  return {
+    ...event,
+    remainingMs,
+    remaining: Math.ceil(remainingMs / Math.max(250, TICK_MS))
+  };
+}
+
+function createEvent(forcedKind = null, durationMs = null) {
+  const definitions = eventDefinitions();
+  const def = forcedKind ? eventDefinition(forcedKind) : definitions[Math.floor(Math.random() * definitions.length)];
+  const now = Date.now();
+  const finalDurationMs = Math.max(2 * HOUR_MS, Number(durationMs || eventDurationMs(def)));
+  return normalizeEvent({
+    ...def,
+    durationMs: finalDurationMs,
+    remainingMs: finalDurationMs,
+    startedAt: now,
+    endsAt: now + finalDurationMs
+  }, now);
 }
 
 function epochTrafficTotal(player) {

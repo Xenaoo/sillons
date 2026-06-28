@@ -1479,7 +1479,7 @@ function maintenanceFacilityUpgradeCost(player, facilityId) {
   const def = BALANCE.maintenanceFacilities?.[facilityId];
   if (!def) return 0;
   const level = maintenanceFacilityLevel(player, facilityId);
-  return Math.round(Number(def.baseCost || 0) * Math.pow(Number(def.growth || 1.45), level) * state.market.steel);
+  return Math.round(Number(def.baseCost || 0) * Math.pow(Number(def.growth || 1.45), level));
 }
 
 function maintenanceFacilityDurationMultiplier(player, facilityId) {

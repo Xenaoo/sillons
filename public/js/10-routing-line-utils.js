@@ -1648,7 +1648,7 @@ function maintenanceFacilityUpgradeCostClient(facilityId) {
   const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
   if (!facility) return 0;
   const level = maintenanceFacilityLevelClient(facilityId);
-  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level) * Number(app.state?.game?.market?.steel || 1));
+  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level));
 }
 
 function maintenanceFacilityDurationMultiplierClient(facilityId) {

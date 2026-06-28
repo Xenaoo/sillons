@@ -2933,12 +2933,23 @@ function renderOverview() {
     <div class="card">
       <h3>Événements en cours</h3>
       <div class="list">
-        ${app.state.game.events.map(e => `
-          <div class="list-item">
-            <div class="item-title"><strong>${escapeHtml(e.title)}</strong><span class="tag">Temporaire</span></div>
-            <div class="kv"><span>Voyageurs</span><b>×${round(e.passenger || 1)}</b><span>Fret</span><b>×${round(e.freight || 1)}</b></div>
-          </div>
-        `).join('') || '<p class="muted">Aucun événement.</p>'}
+        ${app.state.game.events.map(e => {
+          const tickMs = Math.max(250, Number(app.state?.game?.tickMs || 2000));
+          const remainingMs = Math.max(0, Number(e.remainingMs || 0) || Number(e.remaining || 0) * tickMs);
+          const punctuality = Number(e.punctualityPenalty || 0);
+          const satisfaction = Number(e.satisfactionPenalty || 0);
+          return `
+            <div class="list-item">
+              <div class="item-title"><strong>${escapeHtml(e.title)}</strong><span class="tag">${escapeHtml(formatDurationMs(remainingMs))}</span></div>
+              <div class="kv">
+                <span>Voyageurs</span><b>×${round(e.passenger || 1)}</b>
+                <span>Fret</span><b>×${round(e.freight || 1)}</b>
+                ${punctuality ? `<span>Ponctualité</span><b>-${round(punctuality)} pts</b>` : ''}
+                ${satisfaction ? `<span>Satisfaction</span><b>-${round(satisfaction)} pts</b>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('') || '<p class="muted">Aucun événement.</p>'}
       </div>
     </div>
 
@@ -13546,7 +13557,7 @@ function maintenanceFacilityUpgradeCostClient(facilityId) {
   const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
   if (!facility) return 0;
   const level = maintenanceFacilityLevelClient(facilityId);
-  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level) * Number(app.state?.game?.market?.steel || 1));
+  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level));
 }
 
 function maintenanceFacilityDurationMultiplierClient(facilityId) {
