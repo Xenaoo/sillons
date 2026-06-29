@@ -1621,6 +1621,73 @@
 }
 
 
+.facility-construction-actions {
+  margin-top: 0;
+}
+
+.facility-construction-actions button {
+  width: 100%;
+}
+
+.maintenance-bulk-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.maintenance-bulk-choice-list {
+  display: grid;
+  gap: 8px;
+}
+
+.maintenance-bulk-choice {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(217,168,82,.18);
+  background: rgba(2,6,23,.34);
+}
+
+.maintenance-bulk-choice span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.maintenance-bulk-choice strong {
+  color: #f4e3bd;
+}
+
+.maintenance-bulk-choice small,
+.maintenance-bulk-choice em {
+  color: #b8aa84;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.maintenance-bulk-choice b {
+  color: #f0c875;
+  white-space: nowrap;
+}
+
+.maintenance-bulk-choice.disabled {
+  opacity: .58;
+}
+
+@media (max-width: 720px) {
+  .maintenance-bulk-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-bulk-choice b {
+    white-space: normal;
+  }
+}
+
 /* ===== v64.4.1 — correction cadrage vignettes Maintenance ===== */
 .fleet-maintenance-grid .maintenance-train-card {
   display: grid !important;

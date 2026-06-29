@@ -284,12 +284,14 @@ async function applyAction(playerId, type, payload) {
   const handlers = {
     buyTrain: () => actionBuyTrain(player, payload),
     cancelTrainConstruction: () => actionCancelTrainConstruction(player, payload),
+    cancelAllTrainConstruction: () => actionCancelAllTrainConstruction(player),
     duplicateTrain: () => actionDuplicateTrain(player, payload),
     sellTrain: () => actionSellTrain(player, payload),
     sellSelectedTrains: () => actionSellSelectedTrains(player, payload),
     repairTrain: () => actionRepairTrain(player, payload),
     repairAllTrains: () => actionRepairAllTrains(player, payload),
     buyMaintenanceFacility: () => actionBuyMaintenanceFacility(player, payload),
+    cancelMaintenanceFacilityConstruction: () => actionCancelMaintenanceFacilityConstruction(player, payload),
     updateTrainComposition: () => actionUpdateTrainComposition(player, payload),
     setMaintenancePolicy: () => actionSetMaintenancePolicy(player, payload),
     createLine: () => actionCreateLine(player, payload),
@@ -397,6 +399,13 @@ function actionDuplicateTrain(player, payload) {
   return ok('Fabrication lancée.');
 }
 
+function trainConstructionRefund(player, train, model = null) {
+  const sourceModel = model || BALANCE.trains[train?.modelId];
+  if (!sourceModel) return 0;
+  const fallbackRefund = Math.round(Number(sourceModel.price || 0) * currentPriceMultiplier(player, sourceModel.energyType));
+  return Math.max(0, Math.round(Number(train?.construction?.pricePaid || fallbackRefund)));
+}
+
 function actionCancelTrainConstruction(player, payload) {
   const trainId = String(payload.trainId || '');
   const index = player.trains.findIndex(t => t.id === trainId);
@@ -406,8 +415,7 @@ function actionCancelTrainConstruction(player, payload) {
   if (!trainUnderConstruction(train)) return fail('Annulation impossible.', 'Ce train n’est pas en fabrication.');
   const model = BALANCE.trains[train.modelId];
   if (!model) return fail('Modèle introuvable.');
-  const fallbackRefund = Math.round(Number(model.price || 0) * currentPriceMultiplier(player, model.energyType));
-  const refund = Math.max(0, Math.round(Number(train.construction?.pricePaid || fallbackRefund)));
+  const refund = trainConstructionRefund(player, train, model);
   player.cash += refund;
   player.trains.splice(index, 1);
   reflowTrainConstructionQueue(player);
@@ -418,6 +426,31 @@ function actionCancelTrainConstruction(player, payload) {
   }
   notify(player, `Fabrication annulée : ${model.name}. Remboursement : ${money(refund)}.`);
   return ok(`Fabrication annulée. ${money(refund)} remboursés.`);
+}
+
+function actionCancelAllTrainConstruction(player) {
+  const cancelledIds = new Set();
+  let count = 0;
+  let refund = 0;
+  for (const train of player.trains || []) {
+    normalizeTrain(train, player.id);
+    if (!trainUnderConstruction(train)) continue;
+    const model = BALANCE.trains[train.modelId];
+    if (!model) continue;
+    count += 1;
+    cancelledIds.add(train.id);
+    refund += trainConstructionRefund(player, train, model);
+  }
+  if (!count) return fail('Aucune fabrication à annuler.');
+  player.cash += refund;
+  player.trains = (player.trains || []).filter(train => !cancelledIds.has(train.id));
+  for (const line of player.lines || []) {
+    const nextIds = lineTrainIds(line).filter(id => !cancelledIds.has(id));
+    line.trainIds = nextIds;
+    line.trainId = nextIds[0] || '';
+  }
+  notify(player, `${count} fabrication(s) annulée(s). Remboursement : ${money(refund)}.`);
+  return ok(`${count} fabrication(s) annulée(s). ${money(refund)} remboursés.`);
 }
 
 function lineSillonPurchaseCost(line, count = 1) {
@@ -1161,6 +1194,7 @@ function actionBuyMaintenanceFacility(player, payload) {
     targetLevel: level,
     remainingMs: durationMs,
     durationMs,
+    costMoney: cost,
     startedAt: Date.now(),
     startedDay: state.day || 1,
     completedAt: null,
@@ -1168,6 +1202,22 @@ function actionBuyMaintenanceFacility(player, payload) {
   };
   notify(player, `${facility.name} niveau ${level} lancé pour ${money(cost)}. Fin de chantier prévue dans ${formatDurationMs(durationMs)}.`);
   return ok(`${facility.name} niveau ${level} en construction.`);
+}
+
+function actionCancelMaintenanceFacilityConstruction(player, payload) {
+  const facilityId = String(payload.facility || payload.id || '');
+  const facility = BALANCE.maintenanceFacilities?.[facilityId];
+  if (!facility) return fail('Bâtiment de maintenance inconnu.');
+  const facilities = normalizeMaintenanceFacilities(player);
+  const current = facilities[facilityId];
+  const construction = current?.construction;
+  if (!construction?.active) return fail('Annulation impossible.', `${facility.name} n’est pas en construction.`);
+  const fallbackRefund = maintenanceFacilityUpgradeCost(player, facilityId);
+  const refund = Math.max(0, Math.round(Number(construction.costMoney || fallbackRefund)));
+  player.cash += refund;
+  current.construction = inactiveMaintenanceFacilityConstruction();
+  notify(player, `Chantier annulé : ${facility.name}. Remboursement : ${money(refund)}.`);
+  return ok(`Chantier annulé. ${money(refund)} remboursés.`);
 }
 
 function maintenanceFacilityRequiredLabel(mode) {

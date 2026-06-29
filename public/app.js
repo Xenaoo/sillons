@@ -239,6 +239,7 @@ const app = {
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
   constructionProgressCache: {},
+  constructionCompletionRefreshAt: 0,
   maintenanceProgressCache: {},
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
@@ -1139,7 +1140,7 @@ function isResearchTreeAutoRefreshFrozen() {
   return app.activeTab === 'research';
 }
 
-async function refreshState(first, { includeAdmin = false } = {}) {
+async function refreshState(first, { includeAdmin = false, forceRender = false } = {}) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
   try {
@@ -1179,9 +1180,9 @@ async function refreshState(first, { includeAdmin = false } = {}) {
       ensureSelectedStation();
     }
     const nextRenderKey = stateRenderSignature(data);
-    const shouldRender = first || nextRenderKey !== app.lastRenderKey;
+    const shouldRender = forceRender || first || nextRenderKey !== app.lastRenderKey;
     if (!shouldRender) return;
-    if (!first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
+    if (!forceRender && !first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
       // Les sous-menus du Parc ne sont plus reconstruits à chaque tick serveur :
       // les sélections, scrolls, boutons et champs restent stables jusqu'à une action utilisateur.
       renderTopbar();
@@ -3544,18 +3545,51 @@ function applyMaintenanceProgress(el, rawProgress) {
   el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
 }
 
+function requestConstructionCompletionRefresh() {
+  const now = performance.now();
+  if (now < Number(app.constructionCompletionRefreshAt || 0)) return;
+  app.constructionCompletionRefreshAt = now + 1500;
+  window.setTimeout(() => {
+    if (typeof refreshState === 'function') void refreshState(false, { forceRender: true, includeAdmin: app.activeTab === 'admin' });
+  }, 220);
+}
+
+function updateTrainConstructionStageUi(progressEl, progress, remainingMs, durationMs) {
+  const panel = progressEl.closest?.('.train-construction-panel');
+  if (!panel || !Array.isArray(globalThis.TRAIN_CONSTRUCTION_STAGES) && typeof TRAIN_CONSTRUCTION_STAGES === 'undefined') return;
+  const stages = typeof TRAIN_CONSTRUCTION_STAGES !== 'undefined' ? TRAIN_CONSTRUCTION_STAGES : globalThis.TRAIN_CONSTRUCTION_STAGES;
+  if (!Array.isArray(stages) || !stages.length) return;
+  const waitingMs = Math.max(0, remainingMs - durationMs);
+  const stageIndex = waitingMs > 0 ? -1 : Math.max(0, Math.min(stages.length - 1, Math.floor(progress / 100 * stages.length)));
+  const label = waitingMs > 0 ? 'En file d’attente' : stages[stageIndex] || 'Fabrication';
+  const labelEl = panel.querySelector('[data-construction-stage-label]');
+  if (labelEl) labelEl.textContent = `${label} · ${Math.round(progress)}%`;
+  panel.querySelectorAll('[data-construction-step-index]').forEach(step => {
+    const index = Number(step.dataset.constructionStepIndex || 0);
+    step.classList.toggle('done', index < stageIndex);
+    step.classList.toggle('current', index === stageIndex);
+    step.classList.toggle('pending', index > stageIndex || stageIndex < 0);
+  });
+}
+
 function updateConstructionTimers() {
   const now = serverNow();
+  let due = false;
   document.querySelectorAll('[data-construction-timer]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
-    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+    const remainingMs = Math.max(0, endAt - now);
+    el.textContent = formatResearchTime(remainingMs);
+    if (endAt > 0 && remainingMs <= 0) due = true;
   });
   document.querySelectorAll('[data-construction-progress]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
     const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const remainingMs = Math.max(0, endAt - now);
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyConstructionProgress(el, progress);
+    updateTrainConstructionStageUi(el, progress, remainingMs, durationMs);
   });
+  if (due) requestConstructionCompletionRefresh();
 }
 
 function updateMaintenanceTimers() {
@@ -5956,7 +5990,9 @@ function trainConstructionCardTitle(train, model) {
 }
 
 function renderFleetConstructionQueue() {
-  const trains = (app.state.me?.trains || []).filter(train => train.construction?.active).sort(constructionTrainSort);
+  const trains = (app.state.me?.trains || [])
+    .filter(train => train.construction?.active && Number(train.construction?.remainingMs ?? train.construction?.durationMs ?? 0) > 0)
+    .sort(constructionTrainSort);
   if (!trains.length) return '';
   return `
     <div class="card fleet-construction-card">
@@ -5965,7 +6001,10 @@ function renderFleetConstructionQueue() {
           <h2>Fabrications en cours</h2>
           <p class="muted small">Suivi des commandes lancées. Chaque train est livré automatiquement à la fin de ses essais.</p>
         </div>
-        <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
+        <div class="fleet-construction-head-actions">
+          <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
+          <button type="button" class="danger ghost" data-action="cancel-all-train-construction">Annuler tout</button>
+        </div>
       </div>
       <div class="train-card-grid fleet-construction-grid">
         ${trains.map(train => {
@@ -6047,6 +6086,31 @@ function renderFleetCatalogPanel(available, locked) {
   `;
 }
 
+function maintenanceBulkPreviewClient(action) {
+  const locked = maintenanceActionLockedReason(action);
+  const result = { action, locked, count: 0, totalCost: 0, maxDurationMs: 0, affordable: true };
+  if (locked) return result;
+  for (const train of app.state?.me?.trains || []) {
+    if (train.construction?.active || train.maintenance?.active) continue;
+    const model = app.state.balance.trains[train.modelId];
+    if (!model) continue;
+    const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
+    if (targetCondition <= train.condition + 0.005) continue;
+    const cost = maintenanceActionCostClient(train, model, action);
+    const durationMs = maintenanceDurationMsClient(train, model, action);
+    result.count += 1;
+    result.totalCost += cost;
+    result.maxDurationMs = Math.max(result.maxDurationMs, durationMs);
+  }
+  result.totalCost = Math.round(result.totalCost);
+  result.affordable = Number(app.state?.me?.cash || 0) >= result.totalCost;
+  return result;
+}
+
+function maintenanceBulkPreviewsClient() {
+  return Object.values(app.state?.balance?.maintenanceActions || {}).map(action => maintenanceBulkPreviewClient(action));
+}
+
 function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
   const constructing = me.trains.filter(t => t.construction?.active).length;
@@ -6054,8 +6118,9 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const free = maintenanceTrains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = maintenanceTrains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
-  const standardAction = app.state.balance.maintenanceActions?.standard || null;
-  const bulkLocked = standardAction ? maintenanceActionLockedReason(standardAction) : '';
+  const bulkPreviews = maintenanceBulkPreviewsClient();
+  const bulkAvailable = bulkPreviews.some(preview => !preview.locked && preview.count > 0);
+  const bulkTooltip = bulkAvailable ? 'Choisir le type de maintenance et vérifier le coût total.' : 'Aucun type de maintenance globale disponible pour le parc actuel.';
   const trainsByEpoch = {};
   for (const train of maintenanceTrains) {
     const model = app.state.balance.trains[train.modelId] || {};
@@ -6084,7 +6149,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
             <h2>Maintenance globale</h2>
             <p class="muted small">Envoie en une seule action tous les trains éligibles en maintenance intermédiaire. La durée dépend de l’état restant de chaque train et du niveau d’atelier.</p>
           </div>
-          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${tooltipAttr(bulkLocked || 'Lance une maintenance intermédiaire sur tous les trains éligibles.')} ${maintenanceTrains.length && !bulkLocked ? '' : 'disabled'}>Tout envoyer en maintenance</button>
+          <button class="danger confirm-danger" data-action="repair-all-trains" ${tooltipAttr(bulkTooltip)} ${maintenanceTrains.length && bulkAvailable ? '' : 'disabled'}>Tout envoyer en maintenance</button>
         </div>
       </div>
 
@@ -6198,6 +6263,7 @@ function renderMaintenanceFacility(facility, cash) {
       </div>
       ${locked ? `<em class="small bad-text">${escapeHtml(locked)}</em>` : ''}
       ${construction.active ? renderFacilityConstructionPanel(facility, construction) : ''}
+      ${construction.active ? `<div class="actions facility-construction-actions"><button type="button" class="danger ghost" data-action="cancel-maintenance-facility-construction" data-facility="${escapeAttr(facility.id)}">Annuler le chantier</button></div>` : ''}
       <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>
         ${construction.active ? `Niveau ${formatInt(construction.targetLevel)} en chantier` : `Construire niveau ${formatInt(level + 1)}`}
         <span>${construction.active ? formatResearchTime(construction.remainingMs) : `${money(nextCost)} · ${formatResearchTime(nextDuration)}`}</span>
@@ -6511,7 +6577,7 @@ function renderTrainConstructionPanel(train, model) {
       <div class="train-construction-head">
         <div>
           <span>Fabrication</span>
-          <b>${escapeHtml(stageLabel)} · ${info.percent}%</b>
+          <b data-construction-stage-label>${escapeHtml(stageLabel)} · ${info.percent}%</b>
         </div>
         <strong class="research-clock" data-construction-timer data-end-at="${Math.round(info.endAt || 0)}">${formatResearchTime(info.remainingMs)}</strong>
       </div>
@@ -6523,7 +6589,7 @@ function renderTrainConstructionPanel(train, model) {
       <div class="train-construction-steps">
         ${TRAIN_CONSTRUCTION_STAGES.map((label, index) => {
           const state = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'pending';
-          return `<span class="construction-step ${state}"><i>${index + 1}</i><b>${escapeHtml(label)}</b></span>`;
+          return `<span class="construction-step ${state}" data-construction-step-index="${index}"><i>${index + 1}</i><b>${escapeHtml(label)}</b></span>`;
         }).join('')}
       </div>
     </div>
@@ -8622,6 +8688,64 @@ function energyStrategyDescription(id) {
   }[id] || '';
 }
 
+function chooseBulkMaintenanceMode() {
+  const modal = $('#modal');
+  if (!modal) return Promise.resolve('');
+  const previews = maintenanceBulkPreviewsClient();
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      modal.removeEventListener('close', onClose);
+      if (modal.open) modal.close();
+      resolve(value || '');
+    };
+    const onClose = () => finish('');
+    const rows = previews.map(preview => {
+      const action = preview.action;
+      const disabled = preview.locked || preview.count <= 0 || !preview.affordable;
+      const status = preview.locked
+        ? preview.locked
+        : preview.count <= 0
+          ? 'Aucun train éligible'
+          : !preview.affordable
+            ? 'Trésorerie insuffisante'
+            : `${formatInt(preview.count)} train${preview.count > 1 ? 's' : ''}`;
+      const details = preview.count > 0
+        ? `${money(preview.totalCost)} · jusqu’à ${formatDurationMs(preview.maxDurationMs)}`
+        : 'Aucune intervention utile';
+      return `
+        <button type="button" class="maintenance-bulk-choice ${disabled ? 'disabled' : ''}" data-bulk-maintenance-mode="${escapeAttr(action.id)}" ${disabled ? 'disabled' : ''}>
+          <span>
+            <strong>${escapeHtml(action.name)}</strong>
+            <small>${escapeHtml(action.description || '')}</small>
+          </span>
+          <b>${escapeHtml(details)}</b>
+          <em>${escapeHtml(status)}</em>
+        </button>
+      `;
+    }).join('');
+    modal.classList.toggle('modal--wide', true);
+    $('#modalTitle').textContent = 'Maintenance globale';
+    $('#modalBody').innerHTML = `
+      <div class="maintenance-bulk-modal">
+        <p class="muted small">Choisis le type d’intervention à appliquer à tous les trains éligibles. Les coûts sont cumulés ; la durée indiquée est la plus longue immobilisation prévue.</p>
+        <div class="maintenance-bulk-choice-list">${rows}</div>
+        <div class="game-confirm-actions">
+          <button type="button" class="ghost" data-bulk-maintenance-cancel>Annuler</button>
+        </div>
+      </div>
+    `;
+    modal.addEventListener('close', onClose, { once: true });
+    $('#modalBody').querySelector('[data-bulk-maintenance-cancel]')?.addEventListener('click', () => finish(''));
+    $('#modalBody').querySelectorAll('[data-bulk-maintenance-mode]').forEach(button => {
+      button.addEventListener('click', () => finish(button.dataset.bulkMaintenanceMode || ''));
+    });
+    modal.showModal();
+  });
+}
+
 async function onTabContentClick(event) {
   markUiInteraction();
   const researchDetailOverlay = event.target.closest('.research-detail-overlay');
@@ -8876,10 +9000,12 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
       const totalPrice = unitPrice * quantity;
       const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+      const totalBuildTime = trainPurchaseDurationLabel(buildTime, quantity);
       if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
 
 Coût total estimé : ${money(totalPrice)}.
-Fabrication estimée : ${formatResearchTime(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
+Dernière livraison prévue : ${totalBuildTime}.
+Fabrication séquentielle : ${formatResearchTime(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
     }
       return doAction('buyTrain', { modelId, quantity });
     }
@@ -8888,10 +9014,11 @@ Fabrication estimée : ${formatResearchTime(buildTime)} par train.`, { confirmLa
     const model = train ? app.state.balance.trains[train.modelId] : null;
     const price = Math.round((model?.price || 0) * 0.98);
     const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+    const deliveryTime = formatResearchTime(trainConstructionBacklogMsClient() + buildTime);
     if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
 
 Coût estimé : ${money(price)}.
-Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
+Livraison prévue : ${deliveryTime}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
   if (action === 'cancel-train-construction') {
@@ -8904,6 +9031,19 @@ Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupl
 Temps restant : ${remaining}.
 Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler la construction', danger: true }))) return;
     return doAction('cancelTrainConstruction', { trainId: button.dataset.id });
+  }
+  if (action === 'cancel-all-train-construction') {
+    const trains = (app.state.me?.trains || []).filter(train => train.construction?.active);
+    const refund = trains.reduce((sum, train) => {
+      const model = app.state.balance.trains[train.modelId];
+      return sum + Math.max(0, Math.round(Number(train.construction?.pricePaid || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+    }, 0);
+    const maxRemaining = trains.reduce((max, train) => Math.max(max, Number(train.construction?.remainingMs || 0)), 0);
+    if (!(await gameConfirm('Annuler toute la file', `Annuler ${trains.length} fabrication${trains.length > 1 ? 's' : ''} en cours ?
+
+Dernière livraison prévue : ${formatResearchTime(maxRemaining)}.
+Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler tout', danger: true }))) return;
+    return doAction('cancelAllTrainConstruction', {});
   }
   if (action === 'assign-train-line') {
     const trainId = button.dataset.id;
@@ -8940,11 +9080,22 @@ Valeur estimée : ${money(estimate)}.` : ''}`;
   }
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'repair-all-trains') {
-    const mode = button.dataset.mode || 'standard';
-    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance intermédiaire ?\n\nLa durée dépend de leur état restant et du niveau d’atelier.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
+    const mode = await chooseBulkMaintenanceMode();
+    if (!mode) return;
     return doAction('repairAllTrains', { mode });
   }
   if (action === 'buy-maintenance-facility') return doAction('buyMaintenanceFacility', { facility: button.dataset.facility });
+  if (action === 'cancel-maintenance-facility-construction') {
+    const facilityId = button.dataset.facility || '';
+    const facility = app.state.balance.maintenanceFacilities?.[facilityId];
+    const construction = maintenanceFacilityConstructionClient(facilityId);
+    const refund = Math.max(0, Math.round(Number(construction.costMoney || maintenanceFacilityUpgradeCostClient(facilityId))));
+    if (!(await gameConfirm('Annuler le chantier', `Annuler la construction de ${facility?.name || 'ce bâtiment'} niveau ${construction.targetLevel || ''} ?
+
+Temps restant : ${formatResearchTime(construction.remainingMs)}.
+Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler le chantier', danger: true }))) return;
+    return doAction('cancelMaintenanceFacilityConstruction', { facility: facilityId });
+  }
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
     const id = button.dataset.id || '';
@@ -13789,6 +13940,7 @@ function maintenanceFacilityConstructionClient(facilityId) {
     targetLevel: Math.max(0, Math.floor(Number(construction.targetLevel || maintenanceFacilityLevelClient(facilityId) + 1))),
     durationMs,
     remainingMs,
+    costMoney: Math.max(0, Math.round(Number(construction.costMoney || construction.cost || 0))),
     endAt: serverNow() + remainingMs,
     progress,
     percent: Math.round(progress * 100),
@@ -13846,12 +13998,16 @@ function maintenanceDurationMsClient(train, model, action) {
   return Math.max(60000, Math.ceil(baseMinutes * 60000 * durabilityFactor * facilityMultiplier * skillMultiplier));
 }
 
-function maintenancePreview(train, model, action) {
+function maintenanceActionCostClient(train, model, action) {
   const missing = Math.max(0.02, 1 - train.condition);
   const workshopDiscount = Math.min(0.18, totalMaintenanceFacilityScoreClient() * 0.025);
   const branchDiscount = 1 - Math.min(0.24, Number(app.state?.me?.tech?.maintenance || 0) * 0.006);
   const techDiscount = branchDiscount * (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
-  const cost = Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
+  return Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
+}
+
+function maintenancePreview(train, model, action) {
+  const cost = maintenanceActionCostClient(train, model, action);
   const durationMs = maintenanceDurationMsClient(train, model, action);
   const target = Math.round(Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore)) * 100);
   const condition = Math.round(clamp(Number(train?.condition || 0), 0, 1) * 100);

@@ -711,7 +711,7 @@ function isResearchTreeAutoRefreshFrozen() {
   return app.activeTab === 'research';
 }
 
-async function refreshState(first, { includeAdmin = false } = {}) {
+async function refreshState(first, { includeAdmin = false, forceRender = false } = {}) {
   if (app.refreshInFlight) return;
   app.refreshInFlight = true;
   try {
@@ -751,9 +751,9 @@ async function refreshState(first, { includeAdmin = false } = {}) {
       ensureSelectedStation();
     }
     const nextRenderKey = stateRenderSignature(data);
-    const shouldRender = first || nextRenderKey !== app.lastRenderKey;
+    const shouldRender = forceRender || first || nextRenderKey !== app.lastRenderKey;
     if (!shouldRender) return;
-    if (!first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
+    if (!forceRender && !first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
       // Les sous-menus du Parc ne sont plus reconstruits à chaque tick serveur :
       // les sélections, scrolls, boutons et champs restent stables jusqu'à une action utilisateur.
       renderTopbar();

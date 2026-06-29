@@ -1990,6 +1990,18 @@ input[type="number"] {
   margin-top: 12px;
 }
 
+.fleet-construction-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fleet-construction-head-actions button {
+  min-height: 32px;
+}
+
 .construction-train-card {
   display: grid !important;
   grid-template-columns: minmax(190px, 34%) minmax(0, 1fr) !important;

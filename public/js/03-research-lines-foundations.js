@@ -433,18 +433,51 @@ function applyMaintenanceProgress(el, rawProgress) {
   el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
 }
 
+function requestConstructionCompletionRefresh() {
+  const now = performance.now();
+  if (now < Number(app.constructionCompletionRefreshAt || 0)) return;
+  app.constructionCompletionRefreshAt = now + 1500;
+  window.setTimeout(() => {
+    if (typeof refreshState === 'function') void refreshState(false, { forceRender: true, includeAdmin: app.activeTab === 'admin' });
+  }, 220);
+}
+
+function updateTrainConstructionStageUi(progressEl, progress, remainingMs, durationMs) {
+  const panel = progressEl.closest?.('.train-construction-panel');
+  if (!panel || !Array.isArray(globalThis.TRAIN_CONSTRUCTION_STAGES) && typeof TRAIN_CONSTRUCTION_STAGES === 'undefined') return;
+  const stages = typeof TRAIN_CONSTRUCTION_STAGES !== 'undefined' ? TRAIN_CONSTRUCTION_STAGES : globalThis.TRAIN_CONSTRUCTION_STAGES;
+  if (!Array.isArray(stages) || !stages.length) return;
+  const waitingMs = Math.max(0, remainingMs - durationMs);
+  const stageIndex = waitingMs > 0 ? -1 : Math.max(0, Math.min(stages.length - 1, Math.floor(progress / 100 * stages.length)));
+  const label = waitingMs > 0 ? 'En file d’attente' : stages[stageIndex] || 'Fabrication';
+  const labelEl = panel.querySelector('[data-construction-stage-label]');
+  if (labelEl) labelEl.textContent = `${label} · ${Math.round(progress)}%`;
+  panel.querySelectorAll('[data-construction-step-index]').forEach(step => {
+    const index = Number(step.dataset.constructionStepIndex || 0);
+    step.classList.toggle('done', index < stageIndex);
+    step.classList.toggle('current', index === stageIndex);
+    step.classList.toggle('pending', index > stageIndex || stageIndex < 0);
+  });
+}
+
 function updateConstructionTimers() {
   const now = serverNow();
+  let due = false;
   document.querySelectorAll('[data-construction-timer]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
-    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+    const remainingMs = Math.max(0, endAt - now);
+    el.textContent = formatResearchTime(remainingMs);
+    if (endAt > 0 && remainingMs <= 0) due = true;
   });
   document.querySelectorAll('[data-construction-progress]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
     const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const remainingMs = Math.max(0, endAt - now);
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyConstructionProgress(el, progress);
+    updateTrainConstructionStageUi(el, progress, remainingMs, durationMs);
   });
+  if (due) requestConstructionCompletionRefresh();
 }
 
 function updateMaintenanceTimers() {

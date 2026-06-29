@@ -1505,7 +1505,9 @@ function trainConstructionCardTitle(train, model) {
 }
 
 function renderFleetConstructionQueue() {
-  const trains = (app.state.me?.trains || []).filter(train => train.construction?.active).sort(constructionTrainSort);
+  const trains = (app.state.me?.trains || [])
+    .filter(train => train.construction?.active && Number(train.construction?.remainingMs ?? train.construction?.durationMs ?? 0) > 0)
+    .sort(constructionTrainSort);
   if (!trains.length) return '';
   return `
     <div class="card fleet-construction-card">
@@ -1514,7 +1516,10 @@ function renderFleetConstructionQueue() {
           <h2>Fabrications en cours</h2>
           <p class="muted small">Suivi des commandes lancées. Chaque train est livré automatiquement à la fin de ses essais.</p>
         </div>
-        <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
+        <div class="fleet-construction-head-actions">
+          <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
+          <button type="button" class="danger ghost" data-action="cancel-all-train-construction">Annuler tout</button>
+        </div>
       </div>
       <div class="train-card-grid fleet-construction-grid">
         ${trains.map(train => {
@@ -1596,6 +1601,31 @@ function renderFleetCatalogPanel(available, locked) {
   `;
 }
 
+function maintenanceBulkPreviewClient(action) {
+  const locked = maintenanceActionLockedReason(action);
+  const result = { action, locked, count: 0, totalCost: 0, maxDurationMs: 0, affordable: true };
+  if (locked) return result;
+  for (const train of app.state?.me?.trains || []) {
+    if (train.construction?.active || train.maintenance?.active) continue;
+    const model = app.state.balance.trains[train.modelId];
+    if (!model) continue;
+    const targetCondition = Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore));
+    if (targetCondition <= train.condition + 0.005) continue;
+    const cost = maintenanceActionCostClient(train, model, action);
+    const durationMs = maintenanceDurationMsClient(train, model, action);
+    result.count += 1;
+    result.totalCost += cost;
+    result.maxDurationMs = Math.max(result.maxDurationMs, durationMs);
+  }
+  result.totalCost = Math.round(result.totalCost);
+  result.affordable = Number(app.state?.me?.cash || 0) >= result.totalCost;
+  return result;
+}
+
+function maintenanceBulkPreviewsClient() {
+  return Object.values(app.state?.balance?.maintenanceActions || {}).map(action => maintenanceBulkPreviewClient(action));
+}
+
 function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
   const constructing = me.trains.filter(t => t.construction?.active).length;
@@ -1603,8 +1633,9 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const free = maintenanceTrains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = maintenanceTrains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
-  const standardAction = app.state.balance.maintenanceActions?.standard || null;
-  const bulkLocked = standardAction ? maintenanceActionLockedReason(standardAction) : '';
+  const bulkPreviews = maintenanceBulkPreviewsClient();
+  const bulkAvailable = bulkPreviews.some(preview => !preview.locked && preview.count > 0);
+  const bulkTooltip = bulkAvailable ? 'Choisir le type de maintenance et vérifier le coût total.' : 'Aucun type de maintenance globale disponible pour le parc actuel.';
   const trainsByEpoch = {};
   for (const train of maintenanceTrains) {
     const model = app.state.balance.trains[train.modelId] || {};
@@ -1633,7 +1664,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
             <h2>Maintenance globale</h2>
             <p class="muted small">Envoie en une seule action tous les trains éligibles en maintenance intermédiaire. La durée dépend de l’état restant de chaque train et du niveau d’atelier.</p>
           </div>
-          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${tooltipAttr(bulkLocked || 'Lance une maintenance intermédiaire sur tous les trains éligibles.')} ${maintenanceTrains.length && !bulkLocked ? '' : 'disabled'}>Tout envoyer en maintenance</button>
+          <button class="danger confirm-danger" data-action="repair-all-trains" ${tooltipAttr(bulkTooltip)} ${maintenanceTrains.length && bulkAvailable ? '' : 'disabled'}>Tout envoyer en maintenance</button>
         </div>
       </div>
 
@@ -1747,6 +1778,7 @@ function renderMaintenanceFacility(facility, cash) {
       </div>
       ${locked ? `<em class="small bad-text">${escapeHtml(locked)}</em>` : ''}
       ${construction.active ? renderFacilityConstructionPanel(facility, construction) : ''}
+      ${construction.active ? `<div class="actions facility-construction-actions"><button type="button" class="danger ghost" data-action="cancel-maintenance-facility-construction" data-facility="${escapeAttr(facility.id)}">Annuler le chantier</button></div>` : ''}
       <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>
         ${construction.active ? `Niveau ${formatInt(construction.targetLevel)} en chantier` : `Construire niveau ${formatInt(level + 1)}`}
         <span>${construction.active ? formatResearchTime(construction.remainingMs) : `${money(nextCost)} · ${formatResearchTime(nextDuration)}`}</span>
@@ -2060,7 +2092,7 @@ function renderTrainConstructionPanel(train, model) {
       <div class="train-construction-head">
         <div>
           <span>Fabrication</span>
-          <b>${escapeHtml(stageLabel)} · ${info.percent}%</b>
+          <b data-construction-stage-label>${escapeHtml(stageLabel)} · ${info.percent}%</b>
         </div>
         <strong class="research-clock" data-construction-timer data-end-at="${Math.round(info.endAt || 0)}">${formatResearchTime(info.remainingMs)}</strong>
       </div>
@@ -2072,7 +2104,7 @@ function renderTrainConstructionPanel(train, model) {
       <div class="train-construction-steps">
         ${TRAIN_CONSTRUCTION_STAGES.map((label, index) => {
           const state = index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'pending';
-          return `<span class="construction-step ${state}"><i>${index + 1}</i><b>${escapeHtml(label)}</b></span>`;
+          return `<span class="construction-step ${state}" data-construction-step-index="${index}"><i>${index + 1}</i><b>${escapeHtml(label)}</b></span>`;
         }).join('')}
       </div>
     </div>

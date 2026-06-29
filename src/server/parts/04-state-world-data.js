@@ -335,7 +335,7 @@ function grantExistingResearchRights(player, unlocked) {
 }
 
 function inactiveMaintenanceFacilityConstruction() {
-  return { active: false, label: null, targetLevel: null, remainingMs: 0, durationMs: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
+  return { active: false, label: null, targetLevel: null, remainingMs: 0, durationMs: 0, costMoney: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
 }
 
 function normalizeMaintenanceFacilities(player) {
@@ -363,6 +363,7 @@ function normalizeMaintenanceFacilities(player) {
           targetLevel,
           remainingMs,
           durationMs,
+          costMoney: Math.max(0, Math.round(Number(c.costMoney || c.cost || 0))),
           startedAt: Math.max(0, Number(c.startedAt || 0)) || null,
           startedDay: c.startedDay || null,
           completedAt: null,

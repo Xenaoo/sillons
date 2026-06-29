@@ -1655,6 +1655,7 @@ function maintenanceFacilityConstructionClient(facilityId) {
     targetLevel: Math.max(0, Math.floor(Number(construction.targetLevel || maintenanceFacilityLevelClient(facilityId) + 1))),
     durationMs,
     remainingMs,
+    costMoney: Math.max(0, Math.round(Number(construction.costMoney || construction.cost || 0))),
     endAt: serverNow() + remainingMs,
     progress,
     percent: Math.round(progress * 100),
@@ -1712,12 +1713,16 @@ function maintenanceDurationMsClient(train, model, action) {
   return Math.max(60000, Math.ceil(baseMinutes * 60000 * durabilityFactor * facilityMultiplier * skillMultiplier));
 }
 
-function maintenancePreview(train, model, action) {
+function maintenanceActionCostClient(train, model, action) {
   const missing = Math.max(0.02, 1 - train.condition);
   const workshopDiscount = Math.min(0.18, totalMaintenanceFacilityScoreClient() * 0.025);
   const branchDiscount = 1 - Math.min(0.24, Number(app.state?.me?.tech?.maintenance || 0) * 0.006);
   const techDiscount = branchDiscount * (hasTech('steam_workshops') ? 0.92 : 1) * (hasTech('electric_standardized_maintenance') ? 0.94 : 1);
-  const cost = Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
+  return Math.round((action.baseCost + model.price * action.priceFactor * missing) * (1 - workshopDiscount) * techDiscount);
+}
+
+function maintenancePreview(train, model, action) {
+  const cost = maintenanceActionCostClient(train, model, action);
   const durationMs = maintenanceDurationMsClient(train, model, action);
   const target = Math.round(Math.max(train.condition, Math.min(action.target || 0.99, train.condition + action.restore)) * 100);
   const condition = Math.round(clamp(Number(train?.condition || 0), 0, 1) * 100);

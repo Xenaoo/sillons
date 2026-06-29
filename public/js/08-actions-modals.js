@@ -8,6 +8,64 @@ function energyStrategyDescription(id) {
   }[id] || '';
 }
 
+function chooseBulkMaintenanceMode() {
+  const modal = $('#modal');
+  if (!modal) return Promise.resolve('');
+  const previews = maintenanceBulkPreviewsClient();
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      modal.removeEventListener('close', onClose);
+      if (modal.open) modal.close();
+      resolve(value || '');
+    };
+    const onClose = () => finish('');
+    const rows = previews.map(preview => {
+      const action = preview.action;
+      const disabled = preview.locked || preview.count <= 0 || !preview.affordable;
+      const status = preview.locked
+        ? preview.locked
+        : preview.count <= 0
+          ? 'Aucun train éligible'
+          : !preview.affordable
+            ? 'Trésorerie insuffisante'
+            : `${formatInt(preview.count)} train${preview.count > 1 ? 's' : ''}`;
+      const details = preview.count > 0
+        ? `${money(preview.totalCost)} · jusqu’à ${formatDurationMs(preview.maxDurationMs)}`
+        : 'Aucune intervention utile';
+      return `
+        <button type="button" class="maintenance-bulk-choice ${disabled ? 'disabled' : ''}" data-bulk-maintenance-mode="${escapeAttr(action.id)}" ${disabled ? 'disabled' : ''}>
+          <span>
+            <strong>${escapeHtml(action.name)}</strong>
+            <small>${escapeHtml(action.description || '')}</small>
+          </span>
+          <b>${escapeHtml(details)}</b>
+          <em>${escapeHtml(status)}</em>
+        </button>
+      `;
+    }).join('');
+    modal.classList.toggle('modal--wide', true);
+    $('#modalTitle').textContent = 'Maintenance globale';
+    $('#modalBody').innerHTML = `
+      <div class="maintenance-bulk-modal">
+        <p class="muted small">Choisis le type d’intervention à appliquer à tous les trains éligibles. Les coûts sont cumulés ; la durée indiquée est la plus longue immobilisation prévue.</p>
+        <div class="maintenance-bulk-choice-list">${rows}</div>
+        <div class="game-confirm-actions">
+          <button type="button" class="ghost" data-bulk-maintenance-cancel>Annuler</button>
+        </div>
+      </div>
+    `;
+    modal.addEventListener('close', onClose, { once: true });
+    $('#modalBody').querySelector('[data-bulk-maintenance-cancel]')?.addEventListener('click', () => finish(''));
+    $('#modalBody').querySelectorAll('[data-bulk-maintenance-mode]').forEach(button => {
+      button.addEventListener('click', () => finish(button.dataset.bulkMaintenanceMode || ''));
+    });
+    modal.showModal();
+  });
+}
+
 async function onTabContentClick(event) {
   markUiInteraction();
   const researchDetailOverlay = event.target.closest('.research-detail-overlay');
@@ -262,10 +320,12 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       const unitPrice = Math.max(0, Math.round(Number(button.dataset.unitPrice || (model ? trainPurchaseUnitPriceClient(model) : 0))));
       const totalPrice = unitPrice * quantity;
       const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+      const totalBuildTime = trainPurchaseDurationLabel(buildTime, quantity);
       if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
 
 Coût total estimé : ${money(totalPrice)}.
-Fabrication estimée : ${formatResearchTime(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
+Dernière livraison prévue : ${totalBuildTime}.
+Fabrication séquentielle : ${formatResearchTime(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
     }
       return doAction('buyTrain', { modelId, quantity });
     }
@@ -274,10 +334,11 @@ Fabrication estimée : ${formatResearchTime(buildTime)} par train.`, { confirmLa
     const model = train ? app.state.balance.trains[train.modelId] : null;
     const price = Math.round((model?.price || 0) * 0.98);
     const buildTime = model ? trainConstructionDurationMsClient(model) : 0;
+    const deliveryTime = formatResearchTime(trainConstructionBacklogMsClient() + buildTime);
     if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
 
 Coût estimé : ${money(price)}.
-Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
+Livraison prévue : ${deliveryTime}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
   if (action === 'cancel-train-construction') {
@@ -290,6 +351,19 @@ Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupl
 Temps restant : ${remaining}.
 Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler la construction', danger: true }))) return;
     return doAction('cancelTrainConstruction', { trainId: button.dataset.id });
+  }
+  if (action === 'cancel-all-train-construction') {
+    const trains = (app.state.me?.trains || []).filter(train => train.construction?.active);
+    const refund = trains.reduce((sum, train) => {
+      const model = app.state.balance.trains[train.modelId];
+      return sum + Math.max(0, Math.round(Number(train.construction?.pricePaid || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+    }, 0);
+    const maxRemaining = trains.reduce((max, train) => Math.max(max, Number(train.construction?.remainingMs || 0)), 0);
+    if (!(await gameConfirm('Annuler toute la file', `Annuler ${trains.length} fabrication${trains.length > 1 ? 's' : ''} en cours ?
+
+Dernière livraison prévue : ${formatResearchTime(maxRemaining)}.
+Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler tout', danger: true }))) return;
+    return doAction('cancelAllTrainConstruction', {});
   }
   if (action === 'assign-train-line') {
     const trainId = button.dataset.id;
@@ -326,11 +400,22 @@ Valeur estimée : ${money(estimate)}.` : ''}`;
   }
   if (action === 'repair-train') return doAction('repairTrain', { trainId: button.dataset.id, mode: button.dataset.mode });
   if (action === 'repair-all-trains') {
-    const mode = button.dataset.mode || 'standard';
-    if (!(await gameConfirm('Maintenance globale', 'Envoyer tous les trains éligibles en maintenance intermédiaire ?\n\nLa durée dépend de leur état restant et du niveau d’atelier.', { confirmLabel: 'Tout envoyer', danger: true }))) return;
+    const mode = await chooseBulkMaintenanceMode();
+    if (!mode) return;
     return doAction('repairAllTrains', { mode });
   }
   if (action === 'buy-maintenance-facility') return doAction('buyMaintenanceFacility', { facility: button.dataset.facility });
+  if (action === 'cancel-maintenance-facility-construction') {
+    const facilityId = button.dataset.facility || '';
+    const facility = app.state.balance.maintenanceFacilities?.[facilityId];
+    const construction = maintenanceFacilityConstructionClient(facilityId);
+    const refund = Math.max(0, Math.round(Number(construction.costMoney || maintenanceFacilityUpgradeCostClient(facilityId))));
+    if (!(await gameConfirm('Annuler le chantier', `Annuler la construction de ${facility?.name || 'ce bâtiment'} niveau ${construction.targetLevel || ''} ?
+
+Temps restant : ${formatResearchTime(construction.remainingMs)}.
+Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler le chantier', danger: true }))) return;
+    return doAction('cancelMaintenanceFacilityConstruction', { facility: facilityId });
+  }
   if (action === 'maintenance-policy') return doAction('setMaintenancePolicy', { policy: button.dataset.id });
   if (action === 'toggle-line-card') {
     const id = button.dataset.id || '';
