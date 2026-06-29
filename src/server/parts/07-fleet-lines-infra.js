@@ -221,11 +221,12 @@ function publicTrain(train, player = null) {
 }
 
 function createTrainConstruction(model, options = {}) {
-  const durationMs = trainConstructionDurationMs(model);
+  const durationMs = Math.max(0, Math.round(Number(options.durationMs || trainConstructionDurationMs(model))));
+  const remainingMs = Math.max(0, Math.round(Number(options.remainingMs ?? durationMs)));
   return {
     active: true,
     label: 'Fabrication',
-    remainingMs: durationMs,
+    remainingMs,
     durationMs,
     pricePaid: Math.max(0, Math.round(Number(options.pricePaid || 0))),
     startedAt: Date.now(),
@@ -237,6 +238,31 @@ function createTrainConstruction(model, options = {}) {
 
 function inactiveTrainConstruction() {
   return { active: false, label: null, remainingMs: 0, durationMs: 0, pricePaid: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
+}
+
+function trainConstructionBacklogMs(player) {
+  let backlogMs = 0;
+  for (const train of player?.trains || []) {
+    normalizeTrain(train, player.id);
+    const construction = train?.construction;
+    if (!construction?.active) continue;
+    backlogMs = Math.max(backlogMs, Number(construction.remainingMs || 0));
+  }
+  return Math.max(0, Math.round(backlogMs));
+}
+
+function reflowTrainConstructionQueue(player) {
+  for (const train of player?.trains || []) normalizeTrain(train, player.id);
+  const queued = (player?.trains || [])
+    .filter(train => train?.construction?.active)
+    .sort((a, b) => Number(a.construction.remainingMs || 0) - Number(b.construction.remainingMs || 0));
+  let cumulativeMs = 0;
+  for (const [index, train] of queued.entries()) {
+    const durationMs = Math.max(0, Math.round(Number(train.construction.durationMs || 0)));
+    if (index === 0) cumulativeMs = Math.min(Math.max(0, Number(train.construction.remainingMs || durationMs)), durationMs);
+    else cumulativeMs += durationMs;
+    train.construction.remainingMs = Math.max(0, Math.round(cumulativeMs));
+  }
 }
 
 function trainUnderConstruction(train) {
@@ -252,7 +278,11 @@ function createTrainInstance(modelId, ownerId, options = {}) {
     condition: 0.96,
     age: 0,
     acquiredDay: state.day || 1,
-    construction: options.constructionActive && model ? createTrainConstruction(model, { pricePaid: options.constructionPricePaid }) : inactiveTrainConstruction(),
+    construction: options.constructionActive && model ? createTrainConstruction(model, {
+      pricePaid: options.constructionPricePaid,
+      remainingMs: options.constructionRemainingMs,
+      durationMs: options.constructionDurationMs
+    }) : inactiveTrainConstruction(),
     maintenance: { active: false, mode: null, daysLeft: 0, duration: 0, remainingMs: 0, durationMs: 0, targetCondition: 0, lastServiceDay: state.day || 1 }
   };
   if (model) ensureTrainComposition(train, model);

@@ -2028,11 +2028,14 @@ function trainConstructionProgress(train, model = null) {
   const construction = train?.construction || {};
   const durationMs = Math.max(0, Number(construction.durationMs || (model ? trainConstructionDurationMsClient(model) : 0)));
   const remainingMs = Math.max(0, Number(construction.remainingMs ?? (construction.active ? durationMs : 0)));
-  const progress = durationMs > 0 ? clamp(1 - remainingMs / durationMs, 0, 1) : (construction.active ? 0 : 1);
+  const waitingMs = Math.max(0, remainingMs - durationMs);
+  const workRemainingMs = Math.min(remainingMs, durationMs);
+  const progress = durationMs > 0 ? clamp(1 - workRemainingMs / durationMs, 0, 1) : (construction.active ? 0 : 1);
   return {
     active: Boolean(construction.active),
     durationMs,
     remainingMs,
+    waitingMs,
     endAt: serverNow() + remainingMs,
     startedAt: construction.startedAt || 0,
     progress,
@@ -2042,6 +2045,7 @@ function trainConstructionProgress(train, model = null) {
 
 function trainConstructionStageIndex(info) {
   const count = TRAIN_CONSTRUCTION_STAGES.length;
+  if (info?.waitingMs > 0) return -1;
   if (!info?.active || info.progress >= 1) return count - 1;
   return clamp(Math.floor(info.progress * count), 0, count - 1);
 }
@@ -2049,7 +2053,7 @@ function trainConstructionStageIndex(info) {
 function renderTrainConstructionPanel(train, model) {
   const info = trainConstructionProgress(train, model);
   const stageIndex = trainConstructionStageIndex(info);
-  const stageLabel = TRAIN_CONSTRUCTION_STAGES[stageIndex] || 'Fabrication';
+  const stageLabel = info.waitingMs > 0 ? 'En file d’attente' : TRAIN_CONSTRUCTION_STAGES[stageIndex] || 'Fabrication';
   const key = `train:${train.id || model?.id || 'train'}:${info.startedAt || 0}:${info.durationMs || 0}`;
   return `
     <div class="train-construction-panel">
@@ -2062,7 +2066,7 @@ function renderTrainConstructionPanel(train, model) {
       </div>
       <div class="progress research-progress train-construction-bar"><i data-construction-progress data-construction-key="${escapeAttr(key)}" data-end-at="${Math.round(info.endAt || 0)}" data-duration-ms="${Math.round(info.durationMs || 1)}" data-last-progress="${info.percent}" style="width:${info.percent}%"></i></div>
       <div class="train-construction-meta">
-        <span>Durée totale : ${escapeHtml(formatResearchTime(info.durationMs))}</span>
+        <span>${info.waitingMs > 0 ? `Démarrage dans : ${escapeHtml(formatResearchTime(info.waitingMs))}` : `Durée de fabrication : ${escapeHtml(formatResearchTime(info.durationMs))}`}</span>
         <span>Livraison automatique à 100%</span>
       </div>
       <div class="train-construction-steps">
@@ -2130,9 +2134,19 @@ function normalizeTrainPurchaseQuantity(value) {
   return parseTrainPurchaseQuantityDraft(value) ?? 1;
 }
 
+function trainConstructionBacklogMsClient() {
+  let backlogMs = 0;
+  for (const train of app.state?.me?.trains || []) {
+    const construction = train?.construction;
+    if (!construction?.active) continue;
+    backlogMs = Math.max(backlogMs, Number(construction.remainingMs || 0));
+  }
+  return Math.max(0, Math.round(backlogMs));
+}
+
 function trainPurchaseDurationLabel(durationMs, quantity) {
   const count = Math.max(1, Math.floor(Number(quantity || 1)));
-  return formatResearchTime(Math.max(0, Number(durationMs || 0)) * count);
+  return formatResearchTime(trainConstructionBacklogMsClient() + Math.max(0, Number(durationMs || 0)) * count);
 }
 
 function updateTrainPurchaseTotal(input, options = {}) {
@@ -2217,8 +2231,8 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
         <div class="actions train-buy-actions">
-          <button class="primary train-buy-button" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatResearchTime(constructionMs)} par train.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter</button>
-          <span class="train-buy-duration" title="Durée de fabrication selon la quantité saisie.">
+          <button class="primary train-buy-button" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance une fabrication séquentielle. Durée unitaire : ${formatResearchTime(constructionMs)}.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <span class="train-buy-duration" title="Dernière livraison prévue selon la quantité saisie et la file de fabrication actuelle.">
             <small>Fabrication</small>
             <b data-buy-train-duration="${escapeAttr(model.id)}">${trainPurchaseDurationLabel(constructionMs, 1)}</b>
           </span>

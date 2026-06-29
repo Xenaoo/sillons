@@ -341,18 +341,35 @@ function actionBuyTrain(player, payload) {
   if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
   player.cash -= price;
   const durationMs = trainConstructionDurationMs(model);
+  reflowTrainConstructionQueue(player);
+  const backlogMs = trainConstructionBacklogMs(player);
   for (let i = 0; i < quantity; i++) {
-    player.trains.push(createTrainInstance(payload.modelId, player.id, { constructionActive: true, constructionPricePaid: unitPrice }));
+    player.trains.push(createTrainInstance(payload.modelId, player.id, {
+      constructionActive: true,
+      constructionPricePaid: unitPrice,
+      constructionDurationMs: durationMs,
+      constructionRemainingMs: backlogMs + durationMs * (i + 1)
+    }));
   }
   markTutorialAction(player, 'buyTrain');
   const quantityLabel = quantity > 1 ? `${quantity} exemplaires` : '1 exemplaire';
-  notify(player, `Achat confirmé : ${quantityLabel} de ${model.name} pour ${money(price)}. Fabrication lancée : ${formatDurationMs(durationMs)}.`);
+  const orderDurationMs = durationMs * quantity;
+  const deliveryDelayMs = backlogMs + orderDurationMs;
+  const queueLabel = backlogMs > 0 ? ` File actuelle : ${formatDurationMs(backlogMs)}.` : '';
+  notify(player, `Achat confirmé : ${quantityLabel} de ${model.name} pour ${money(price)}. Fabrication séquentielle : ${formatDurationMs(orderDurationMs)}.${queueLabel} Dernière livraison dans ${formatDurationMs(deliveryDelayMs)}.`);
   return ok(quantity > 1 ? `${quantity} fabrications lancées.` : 'Fabrication lancée.');
 }
 
 
 function cloneTrainInstanceForPlayer(sourceTrain, playerId, options = {}) {
-  const clone = createTrainInstance(sourceTrain.modelId, playerId, { constructionActive: true, constructionPricePaid: options.pricePaid });
+  const model = BALANCE.trains[sourceTrain.modelId];
+  const durationMs = model ? trainConstructionDurationMs(model) : 0;
+  const clone = createTrainInstance(sourceTrain.modelId, playerId, {
+    constructionActive: true,
+    constructionPricePaid: options.pricePaid,
+    constructionDurationMs: durationMs,
+    constructionRemainingMs: options.remainingMs
+  });
   clone.condition = Math.max(0.5, Math.min(1, Number(sourceTrain.condition || 1)));
   clone.age = Math.max(0, Math.round(Number(sourceTrain.age || 0)));
   clone.composition = JSON.parse(JSON.stringify(sourceTrain.composition || {}));
@@ -371,9 +388,12 @@ function actionDuplicateTrain(player, payload) {
   const price = Math.round(model.price * multiplier * 0.98);
   if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
   player.cash -= price;
-  const clone = cloneTrainInstanceForPlayer(source, player.id, { pricePaid: price });
+  const durationMs = trainConstructionDurationMs(model);
+  reflowTrainConstructionQueue(player);
+  const backlogMs = trainConstructionBacklogMs(player);
+  const clone = cloneTrainInstanceForPlayer(source, player.id, { pricePaid: price, remainingMs: backlogMs + durationMs });
   player.trains.push(clone);
-  notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}. Fabrication lancée : ${formatDurationMs(trainConstructionDurationMs(model))}.`);
+  notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}. Fabrication séquentielle lancée : livraison dans ${formatDurationMs(backlogMs + durationMs)}.`);
   return ok('Fabrication lancée.');
 }
 
@@ -390,6 +410,7 @@ function actionCancelTrainConstruction(player, payload) {
   const refund = Math.max(0, Math.round(Number(train.construction?.pricePaid || fallbackRefund)));
   player.cash += refund;
   player.trains.splice(index, 1);
+  reflowTrainConstructionQueue(player);
   for (const line of player.lines || []) {
     const nextIds = lineTrainIds(line).filter(id => id !== trainId);
     line.trainIds = nextIds;
@@ -1443,6 +1464,7 @@ function processTrainMaintenance(player) {
 }
 
 function processTrainConstruction(player) {
+  reflowTrainConstructionQueue(player);
   for (const train of player.trains) {
     normalizeTrain(train, player.id);
     if (!train.construction?.active) continue;
