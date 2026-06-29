@@ -409,6 +409,35 @@ function applyResearchProgress(el, rawProgress) {
   el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
 }
 
+function constructionProgressPercentFromData(endAt, durationMs) {
+  const now = serverNow();
+  const remainingMs = Math.max(0, Number(endAt || 0) - now);
+  return Math.max(0, Math.min(100, (1 - remainingMs / Math.max(1, Number(durationMs || 1))) * 100));
+}
+
+function applyConstructionProgress(el, rawProgress) {
+  const key = el.dataset.constructionKey || '';
+  const last = key ? Number(app.constructionProgressCache[key] ?? el.dataset.lastProgress ?? 0) : Number(el.dataset.lastProgress || 0);
+  const progress = key ? Math.max(last, rawProgress) : rawProgress;
+  el.dataset.lastProgress = String(progress);
+  if (key) app.constructionProgressCache[key] = progress;
+  el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+}
+
+function updateConstructionTimers() {
+  const now = serverNow();
+  document.querySelectorAll('[data-construction-timer]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+  });
+  document.querySelectorAll('[data-construction-progress]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const progress = constructionProgressPercentFromData(endAt, durationMs);
+    applyConstructionProgress(el, progress);
+  });
+}
+
 function updateResearchTimers() {
   const now = serverNow();
   document.querySelectorAll('[data-research-timer], [data-research-total-timer]').forEach(el => {
@@ -422,6 +451,7 @@ function updateResearchTimers() {
     const progress = researchProgressPercentFromData(endAt, durationMs, workRate);
     applyResearchProgress(el, progress);
   });
+  updateConstructionTimers();
 }
 
 function startResearchAnimationLoop() {
@@ -430,7 +460,7 @@ function startResearchAnimationLoop() {
   const tick = () => {
     updateResearchTimers();
     updateEpochTrafficAnimation();
-    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-epoch-traffic-value]');
+    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-epoch-traffic-value]');
     window.setTimeout(tick, visibleResearch ? 250 : 1000);
   };
   window.setTimeout(tick, 250);

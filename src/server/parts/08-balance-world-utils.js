@@ -283,6 +283,15 @@ function trainConstructionDurationMs(model) {
   return Math.round(minMs + Math.pow(globalRank, 1.55) * (maxMs - minMs));
 }
 
+function maintenanceFacilityConstructionDurationMs(player, facilityId) {
+  const facility = BALANCE.maintenanceFacilities?.[facilityId];
+  if (!facility) return 0;
+  const level = maintenanceFacilityLevel(player, facilityId);
+  const baseMs = Math.max(0, Number(facility.baseConstructionMs || 0));
+  const growth = Math.max(1, Number(facility.constructionGrowth || facility.growth || 1.25));
+  return Math.round(baseMs * Math.pow(growth, level));
+}
+
 function trainCatalogEntries() {
   const file = path.join(__dirname, 'data', 'sillons_train_catalog_v1.json');
   const catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -542,7 +551,9 @@ function buildBalance() {
       description: 'Indispensable pour la petite maintenance. Chaque niveau accélère les petites interventions.',
       actionLabel: 'Petite maintenance',
       baseCost: 160000,
-      growth: 1.42,
+      growth: 1.25,
+      baseConstructionMs: 2 * HOUR_MS,
+      constructionGrowth: 1.25,
       durationReductionPerLevel: 0.075,
       maxDurationReduction: 0.72,
       requiredTech: 'steam_depots'
@@ -554,7 +565,9 @@ function buildBalance() {
       description: 'Indispensable pour la maintenance intermédiaire et les grandes révisions. Chaque niveau réduit l’indisponibilité.',
       actionLabel: 'Maintenance intermédiaire',
       baseCost: 420000,
-      growth: 1.48,
+      growth: 1.25,
+      baseConstructionMs: 6 * HOUR_MS,
+      constructionGrowth: 1.25,
       durationReductionPerLevel: 0.065,
       maxDurationReduction: 0.68,
       requiredTech: 'steam_workshops'
@@ -566,7 +579,9 @@ function buildBalance() {
       description: 'Indispensable pour les rénovations complètes. Chaque niveau rend les immobilisations lourdes plus courtes.',
       actionLabel: 'Rénovations',
       baseCost: 1800000,
-      growth: 1.55,
+      growth: 1.25,
+      baseConstructionMs: 18 * HOUR_MS,
+      constructionGrowth: 1.25,
       durationReductionPerLevel: 0.055,
       maxDurationReduction: 0.62,
       requiredTech: 'electric_standardized_maintenance'

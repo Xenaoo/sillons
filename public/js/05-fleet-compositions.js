@@ -446,7 +446,7 @@ function formatMaintenanceCountdown(hours) {
 
 function trainProjectionLabel(train) {
   const projection = train?.maintenanceProjection || {};
-  if (train?.construction?.active) return `Livraison dans ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)}`;
+  if (train?.construction?.active) return `Livraison dans ${formatResearchTime(train.construction.remainingMs || train.construction.durationMs || 0)}`;
   if (train?.maintenance?.active) return 'En maintenance';
   if (Number(train?.condition || 0) <= 0) return 'Maintenance requise';
   return `0% dans ${formatMaintenanceCountdown(projection.hoursToZero)}`;
@@ -1641,18 +1641,42 @@ function renderMaintenanceFacilitiesCard() {
   `;
 }
 
+function renderFacilityConstructionPanel(facility, construction) {
+  const key = `facility:${facility.id}:${construction.targetLevel}:${construction.startedAt || 0}:${construction.durationMs || 0}`;
+  return `
+    <div class="facility-construction-panel">
+      <div class="facility-construction-head">
+        <div>
+          <span>Chantier niveau ${formatInt(construction.targetLevel)}</span>
+          <b>${construction.percent}%</b>
+        </div>
+        <strong class="research-clock" data-construction-timer data-end-at="${Math.round(construction.endAt || 0)}">${formatResearchTime(construction.remainingMs)}</strong>
+      </div>
+      <div class="progress research-progress facility-construction-progress"><i data-construction-progress data-construction-key="${escapeAttr(key)}" data-end-at="${Math.round(construction.endAt || 0)}" data-duration-ms="${Math.round(construction.durationMs || 1)}" data-last-progress="${construction.percent}" style="width:${construction.percent}%"></i></div>
+      <div class="facility-construction-meta">
+        <span>Durée totale : ${escapeHtml(formatResearchTime(construction.durationMs))}</span>
+        <span>Activation automatique à la fin</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderMaintenanceFacility(facility, cash) {
   const level = maintenanceFacilityLevelClient(facility.id);
   const nextCost = maintenanceFacilityUpgradeCostClient(facility.id);
+  const nextDuration = maintenanceFacilityConstructionDurationMsClient(facility.id);
+  const construction = maintenanceFacilityConstructionClient(facility.id);
   const currentReduction = Math.round((1 - maintenanceFacilityDurationMultiplierClient(facility.id)) * 100);
   const nextReduction = Math.round((1 - Math.max(0.18, 1 - Math.min(Number(facility.maxDurationReduction || 0), (level + 1) * Number(facility.durationReductionPerLevel || 0)))) * 100);
   const locked = facility.requiredTech && !hasTech(facility.requiredTech)
     ? `Recherche : ${techNodeTitle(facility.requiredTech)}`
     : '';
-  const disabled = locked || cash < nextCost;
-  const tooltip = locked
-    ? `${facility.name}. ${locked}.`
-    : `${facility.name}. ${facility.description} Niveau actuel ${level}, réduction actuelle ${currentReduction}%, prochain niveau ${nextReduction}%. Coût : ${money(nextCost)}.`;
+  const disabled = locked || construction.active || cash < nextCost;
+  const tooltip = construction.active
+    ? `${facility.name} niveau ${construction.targetLevel} en construction. Fin prévue : ${formatResearchTime(construction.remainingMs)}.`
+    : locked
+      ? `${facility.name}. ${locked}.`
+      : `${facility.name}. ${facility.description} Niveau actuel ${level}, réduction actuelle ${currentReduction}%, prochain niveau ${nextReduction}%. Coût : ${money(nextCost)}. Durée : ${formatResearchTime(nextDuration)}.`;
   return `
     <article class="maintenance-policy-card maintenance-facility-card ${level > 0 ? 'active' : ''}">
       <div class="policy-head">
@@ -1664,9 +1688,14 @@ function renderMaintenanceFacility(facility, cash) {
         <div><span>Usage</span><b>${escapeHtml(facility.actionLabel || 'Maintenance')}</b></div>
         <div><span>Réduction</span><b>${currentReduction}%</b></div>
         <div><span>Niv. suivant</span><b>${nextReduction}%</b></div>
+        <div><span>Construction</span><b>${construction.active ? formatResearchTime(construction.remainingMs) : formatResearchTime(nextDuration)}</b></div>
       </div>
       ${locked ? `<em class="small bad-text">${escapeHtml(locked)}</em>` : ''}
-      <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>Acheter niveau ${formatInt(level + 1)} <span>${money(nextCost)}</span></button>
+      ${construction.active ? renderFacilityConstructionPanel(facility, construction) : ''}
+      <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>
+        ${construction.active ? `Niveau ${formatInt(construction.targetLevel)} en chantier` : `Construire niveau ${formatInt(level + 1)}`}
+        <span>${construction.active ? formatResearchTime(construction.remainingMs) : `${money(nextCost)} · ${formatResearchTime(nextDuration)}`}</span>
+      </button>
     </article>
   `;
 }
@@ -1949,6 +1978,8 @@ function trainConstructionProgress(train, model = null) {
     active: Boolean(construction.active),
     durationMs,
     remainingMs,
+    endAt: serverNow() + remainingMs,
+    startedAt: construction.startedAt || 0,
     progress,
     percent: Math.round(progress * 100)
   };
@@ -1964,6 +1995,7 @@ function renderTrainConstructionPanel(train, model) {
   const info = trainConstructionProgress(train, model);
   const stageIndex = trainConstructionStageIndex(info);
   const stageLabel = TRAIN_CONSTRUCTION_STAGES[stageIndex] || 'Fabrication';
+  const key = `train:${train.id || model?.id || 'train'}:${info.startedAt || 0}:${info.durationMs || 0}`;
   return `
     <div class="train-construction-panel">
       <div class="train-construction-head">
@@ -1971,11 +2003,11 @@ function renderTrainConstructionPanel(train, model) {
           <span>Fabrication</span>
           <b>${escapeHtml(stageLabel)} · ${info.percent}%</b>
         </div>
-        <strong>${escapeHtml(formatDurationMs(info.remainingMs))} restantes</strong>
+        <strong class="research-clock" data-construction-timer data-end-at="${Math.round(info.endAt || 0)}">${formatResearchTime(info.remainingMs)}</strong>
       </div>
-      <div class="progress train-construction-bar"><i style="width:${info.percent}%"></i></div>
+      <div class="progress research-progress train-construction-bar"><i data-construction-progress data-construction-key="${escapeAttr(key)}" data-end-at="${Math.round(info.endAt || 0)}" data-duration-ms="${Math.round(info.durationMs || 1)}" data-last-progress="${info.percent}" style="width:${info.percent}%"></i></div>
       <div class="train-construction-meta">
-        <span>Durée totale : ${escapeHtml(formatDurationMs(info.durationMs))}</span>
+        <span>Durée totale : ${escapeHtml(formatResearchTime(info.durationMs))}</span>
         <span>Livraison automatique à 100%</span>
       </div>
       <div class="train-construction-steps">
@@ -2066,7 +2098,7 @@ function renderTrainCatalogItem(model, buyable) {
           ${multipleUnit ? renderTrainStat('UM max', `${muSpec.powerUnits.max} rame${muSpec.powerUnits.max > 1 ? 's' : ''}`, muSpec.powerUnits.max / 3, muSpec.powerUnits.max >= 3 ? 'good' : '') : ''}
           ${renderTrainStat('Fiabilité', reliabilityValues.base, model.reliability, effective.reliability >= 0.92 ? 'good' : '', reliabilityValues.modified, effective.reliability)}
           ${renderTrainStat('Confort', comfortValues.base, model.comfort, model.comfort >= 0.8 ? 'good' : '', comfortValues.modified, effective.comfort)}
-          ${renderTrainStat('Fabrication', formatDurationMs(constructionMs), constructionMs / (20 * 60 * 60 * 1000), constructionMs <= 60 * 60 * 1000 ? 'good' : constructionMs >= 8 * 60 * 60 * 1000 ? 'warn' : '')}
+          ${renderTrainStat('Fabrication', formatResearchTime(constructionMs), constructionMs / (20 * 60 * 60 * 1000), constructionMs <= 60 * 60 * 1000 ? 'good' : constructionMs >= 8 * 60 * 60 * 1000 ? 'warn' : '')}
           ${renderTrainStat('Maint./h', baseMaintenanceHourly, baseMaintenanceRatio, model.maintenance <= 0.45 ? 'good' : 'warn', effectiveMaintenanceHourly, effectiveMaintenanceRatio)}
         </div>
         ${renderTrainRequirementPills(model)}
@@ -2079,7 +2111,7 @@ function renderTrainCatalogItem(model, buyable) {
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
         <div class="actions">
-          <button class="primary" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatDurationMs(constructionMs)}.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <button class="primary train-buy-button" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatResearchTime(constructionMs)}.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter <span>${formatResearchTime(constructionMs)}</span></button>
         </div>
       </div>
     </div>
@@ -2140,7 +2172,7 @@ function renderOwnedTrain(train) {
           : 'Libre';
   const statusClass = inConstruction || inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
   const maintenanceRemaining = formatDurationMs(Number(maint.remainingMs || 0) || Number(maint.daysLeft || 0) * Math.max(250, Number(app.state?.game?.tickMs || 2000)));
-  const constructionRemaining = formatDurationMs(Number(construction.remainingMs || 0) || Number(construction.durationMs || 0));
+  const constructionRemaining = formatResearchTime(Number(construction.remainingMs || 0) || Number(construction.durationMs || 0));
 
   return `
     <div class="list-item train-catalog-card owned-train-card maintenance-train-card ${mapSelected ? 'map-selected' : ''}" data-train-id="${escapeAttr(train.id)}" aria-selected="${mapSelected ? 'true' : 'false'}">

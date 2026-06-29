@@ -334,6 +334,10 @@ function grantExistingResearchRights(player, unlocked) {
   if (Number(facilities.technicentre?.level ?? facilities.technicentre ?? 0) > 0) grantResearchLevel(unlocked, 'electric_standardized_maintenance', 1);
 }
 
+function inactiveMaintenanceFacilityConstruction() {
+  return { active: false, label: null, targetLevel: null, remainingMs: 0, durationMs: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
+}
+
 function normalizeMaintenanceFacilities(player) {
   const raw = player.maintenanceFacilities && typeof player.maintenanceFacilities === 'object' ? player.maintenanceFacilities : {};
   const legacyStations = Object.values(player.stations || {});
@@ -343,10 +347,37 @@ function normalizeMaintenanceFacilities(player) {
     const value = raw[id];
     return Math.max(0, Math.floor(Number(value?.level ?? value ?? 0)));
   };
+  const normalizeOne = (id, minimumLevel = 0) => {
+    let level = Math.max(readLevel(id), minimumLevel);
+    const source = raw[id] && typeof raw[id] === 'object' ? raw[id] : {};
+    const c = source.construction && typeof source.construction === 'object' ? source.construction : null;
+    let construction = inactiveMaintenanceFacilityConstruction();
+    if (c) {
+      const durationMs = Math.max(0, Math.round(Number(c.durationMs || 0)));
+      const remainingMs = Math.max(0, Math.round(Number(c.remainingMs ?? (c.active ? durationMs : 0))));
+      const targetLevel = Math.max(level + 1, Math.floor(Number(c.targetLevel || level + 1)));
+      if (Boolean(c.active) && durationMs > 0 && remainingMs > 0) {
+        construction = {
+          active: true,
+          label: c.label || 'Construction',
+          targetLevel,
+          remainingMs,
+          durationMs,
+          startedAt: Math.max(0, Number(c.startedAt || 0)) || null,
+          startedDay: c.startedDay || null,
+          completedAt: null,
+          completedDay: null
+        };
+      } else if (Boolean(c.active) && remainingMs <= 0) {
+        level = Math.max(level, targetLevel);
+      }
+    }
+    return { level, construction };
+  };
   player.maintenanceFacilities = {
-    depot: { level: Math.max(readLevel('depot'), legacyDepotLevels) },
-    workshop: { level: Math.max(readLevel('workshop'), legacyWorkshopLevels) },
-    technicentre: { level: readLevel('technicentre') }
+    depot: normalizeOne('depot', legacyDepotLevels),
+    workshop: normalizeOne('workshop', legacyWorkshopLevels),
+    technicentre: normalizeOne('technicentre')
   };
   return player.maintenanceFacilities;
 }

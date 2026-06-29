@@ -217,6 +217,7 @@ const app = {
   compositionTouchScroll: null,
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
+  constructionProgressCache: {},
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };

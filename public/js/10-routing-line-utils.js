@@ -1631,13 +1631,39 @@ function trainConstructionDurationMsClient(model) {
 
 function maintenanceActionLockedReason(action) {
   if (action.requiredTech && !hasTech(action.requiredTech)) return `Recherche : ${techNodeTitle(action.requiredTech)}`;
-  if (action.facility && maintenanceFacilityLevelClient(action.facility) <= 0) return `${maintenanceFacilityNameClient(action.facility)} requis`;
+  if (action.facility && maintenanceFacilityLevelClient(action.facility) <= 0) {
+    return maintenanceFacilityUnderConstructionClient(action.facility)
+      ? `${maintenanceFacilityNameClient(action.facility)} en construction`
+      : `${maintenanceFacilityNameClient(action.facility)} requis`;
+  }
   return '';
 }
 
 function maintenanceFacilityLevelClient(facilityId) {
   const raw = app.state?.me?.maintenanceFacilities?.[facilityId];
   return Math.max(0, Math.floor(Number(raw?.level ?? raw ?? 0)));
+}
+
+function maintenanceFacilityConstructionClient(facilityId) {
+  const raw = app.state?.me?.maintenanceFacilities?.[facilityId];
+  const construction = raw?.construction || {};
+  const durationMs = Math.max(0, Number(construction.durationMs || 0));
+  const remainingMs = Math.max(0, Number(construction.remainingMs ?? (construction.active ? durationMs : 0)));
+  const progress = durationMs > 0 ? clamp(1 - remainingMs / durationMs, 0, 1) : (construction.active ? 0 : 1);
+  return {
+    active: Boolean(construction.active) && remainingMs > 0,
+    targetLevel: Math.max(0, Math.floor(Number(construction.targetLevel || maintenanceFacilityLevelClient(facilityId) + 1))),
+    durationMs,
+    remainingMs,
+    endAt: serverNow() + remainingMs,
+    progress,
+    percent: Math.round(progress * 100),
+    startedAt: construction.startedAt || 0
+  };
+}
+
+function maintenanceFacilityUnderConstructionClient(facilityId) {
+  return maintenanceFacilityConstructionClient(facilityId).active;
 }
 
 function maintenanceFacilityNameClient(facilityId) {
@@ -1648,7 +1674,16 @@ function maintenanceFacilityUpgradeCostClient(facilityId) {
   const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
   if (!facility) return 0;
   const level = maintenanceFacilityLevelClient(facilityId);
-  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.45), level));
+  return Math.round(Number(facility.baseCost || 0) * Math.pow(Number(facility.growth || 1.25), level));
+}
+
+function maintenanceFacilityConstructionDurationMsClient(facilityId) {
+  const facility = app.state?.balance?.maintenanceFacilities?.[facilityId];
+  if (!facility) return 0;
+  const level = maintenanceFacilityLevelClient(facilityId);
+  const baseMs = Math.max(0, Number(facility.baseConstructionMs || 0));
+  const growth = Math.max(1, Number(facility.constructionGrowth || facility.growth || 1.25));
+  return Math.round(baseMs * Math.pow(growth, level));
 }
 
 function maintenanceFacilityDurationMultiplierClient(facilityId) {
@@ -1709,7 +1744,7 @@ function updateLinePreview(sourceId = '') {
   }
   if (train.construction?.active) {
     box.className = 'line-preview bad small';
-    box.textContent = `Train indisponible : fabrication en cours, ${formatDurationMs(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`;
+    box.textContent = `Train indisponible : fabrication en cours, ${formatResearchTime(train.construction.remainingMs || train.construction.durationMs || 0)} restantes.`;
     if (button) button.disabled = true;
     return;
   }

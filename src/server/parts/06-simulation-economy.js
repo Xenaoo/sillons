@@ -495,6 +495,7 @@ function computeAnnualLineCapacity(profile, cadence, service, capacityFactor) {
 function simulatePlayer(player, lineMarkets, passageRightsLedger = null, options = {}) {
   const dryRun = Boolean(options.dryRun);
   if (!dryRun) {
+    processMaintenanceFacilityConstruction(player);
     processTrainConstruction(player);
     processTrainMaintenance(player);
     processEraTransition(player);

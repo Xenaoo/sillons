@@ -265,7 +265,7 @@ Remboursement estimé : ${money(economy.refund)}.`, { confirmLabel: 'Modifier' }
       if (!(await gameConfirm('Acheter plusieurs trains', `Acheter ${quantity} exemplaires de ${model?.name || 'ce matériel'} ?
 
 Coût total estimé : ${money(totalPrice)}.
-Fabrication estimée : ${formatDurationMs(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
+Fabrication estimée : ${formatResearchTime(buildTime)} par train.`, { confirmLabel: 'Acheter' }))) return;
     }
       return doAction('buyTrain', { modelId, quantity });
     }
@@ -277,7 +277,7 @@ Fabrication estimée : ${formatDurationMs(buildTime)} par train.`, { confirmLabe
     if (!(await gameConfirm('Dupliquer un train', `Acheter un exemplaire identique de ${model?.name || 'ce matériel'} avec la même composition ?
 
 Coût estimé : ${money(price)}.
-Fabrication estimée : ${formatDurationMs(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
+Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
   if (action === 'assign-train-line') {

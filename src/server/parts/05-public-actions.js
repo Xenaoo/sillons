@@ -1098,6 +1098,10 @@ function actionBuyMaintenanceFacility(player, payload) {
   const facility = BALANCE.maintenanceFacilities?.[facilityId];
   if (!facility) return fail('Bâtiment de maintenance inconnu.');
   normalizeMaintenanceFacilities(player);
+  const current = player.maintenanceFacilities[facilityId];
+  if (current?.construction?.active) {
+    return fail('Chantier déjà en cours.', `${facility.name} niveau ${current.construction.targetLevel || current.level + 1} sera terminé dans ${formatDurationMs(current.construction.remainingMs || current.construction.durationMs || 0)}.`);
+  }
   if (facility.requiredTech && !hasTech(player, facility.requiredTech)) {
     const tech = techNodeById(facility.requiredTech);
     return fail('Recherche requise.', `Débloque d’abord : ${tech?.title || facility.requiredTech}.`);
@@ -1105,11 +1109,21 @@ function actionBuyMaintenanceFacility(player, payload) {
   const cost = maintenanceFacilityUpgradeCost(player, facilityId);
   if (!canPay(player, cost)) return fail(`Trésorerie insuffisante. Coût : ${money(cost)}.`);
   player.cash -= cost;
-  player.maintenanceFacilities[facilityId].level = maintenanceFacilityLevel(player, facilityId) + 1;
-  const level = maintenanceFacilityLevel(player, facilityId);
-  const reduction = Math.round((1 - maintenanceFacilityDurationMultiplier(player, facilityId)) * 100);
-  notify(player, `${facility.name} niveau ${level} acheté pour ${money(cost)}. Durées ${facility.actionLabel.toLowerCase()} réduites de ${reduction}%.`);
-  return ok(`${facility.name} niveau ${level} acheté.`);
+  const level = maintenanceFacilityLevel(player, facilityId) + 1;
+  const durationMs = maintenanceFacilityConstructionDurationMs(player, facilityId);
+  player.maintenanceFacilities[facilityId].construction = {
+    active: true,
+    label: 'Construction',
+    targetLevel: level,
+    remainingMs: durationMs,
+    durationMs,
+    startedAt: Date.now(),
+    startedDay: state.day || 1,
+    completedAt: null,
+    completedDay: null
+  };
+  notify(player, `${facility.name} niveau ${level} lancé pour ${money(cost)}. Fin de chantier prévue dans ${formatDurationMs(durationMs)}.`);
+  return ok(`${facility.name} niveau ${level} en construction.`);
 }
 
 function maintenanceFacilityRequiredLabel(mode) {
@@ -1428,5 +1442,28 @@ function processTrainConstruction(player) {
       train.acquiredDay = state.day;
       notify(player, `${model?.name || 'Train'} livré : disponible dans le parc.`);
     }
+  }
+}
+
+function processMaintenanceFacilityConstruction(player) {
+  const facilities = normalizeMaintenanceFacilities(player);
+  for (const [facilityId, facilityState] of Object.entries(facilities)) {
+    const construction = facilityState?.construction;
+    if (!construction?.active) continue;
+    construction.remainingMs = Math.max(0, Number(construction.remainingMs || 0) - TICK_MS);
+    if (construction.remainingMs > 0) continue;
+    const targetLevel = Math.max(maintenanceFacilityLevel(player, facilityId) + 1, Math.floor(Number(construction.targetLevel || 0)));
+    facilityState.level = targetLevel;
+    facilityState.construction = {
+      ...inactiveMaintenanceFacilityConstruction(),
+      durationMs: Math.max(0, Number(construction.durationMs || 0)),
+      startedAt: construction.startedAt || null,
+      startedDay: construction.startedDay || null,
+      completedAt: Date.now(),
+      completedDay: state.day
+    };
+    const facility = BALANCE.maintenanceFacilities?.[facilityId];
+    const reduction = Math.round((1 - maintenanceFacilityDurationMultiplier(player, facilityId)) * 100);
+    notify(player, `${facility?.name || 'Bâtiment'} niveau ${targetLevel} terminé : durées ${String(facility?.actionLabel || 'maintenance').toLowerCase()} réduites de ${reduction}%.`);
   }
 }
