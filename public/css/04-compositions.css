@@ -1707,6 +1707,7 @@
 .fleet-maintenance-grid .maintenance-train-card .item-title {
   min-width: 0;
   align-items: start;
+  flex-wrap: wrap;
 }
 
 .fleet-maintenance-grid .maintenance-train-card .item-title strong {
@@ -1716,10 +1717,20 @@
 }
 
 .fleet-maintenance-grid .maintenance-train-card .item-title .tag {
-  max-width: min(48%, 132px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-end;
+  overflow: visible;
+  text-align: right;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.fleet-catalog-grid.fleet-maintenance-grid .maintenance-train-card .train-card-body .item-title .tag {
+  max-width: 100% !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
 }
 
 .fleet-maintenance-grid .owned-train-composition-preview {

@@ -241,6 +241,7 @@ const app = {
   constructionProgressCache: {},
   constructionCompletionRefreshAt: 0,
   maintenanceProgressCache: {},
+  maintenanceCompletionRefreshAt: 0,
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };
@@ -1128,9 +1129,9 @@ function stateRenderSignature(state = app.state) {
 
 
 function isFleetSubmenuAutoRefreshFrozen() {
-  // La maintenance doit refléter immédiatement les sorties d'atelier ; seuls les
-  // sous-menus avec sélections ou champs à préserver restent gelés entre deux ticks.
-  return app.activeTab === 'fleet' && ['catalog', 'composition'].includes(app.activeFleetSubtab || '');
+  // Les compteurs du Parc avancent côté client. On évite donc de reconstruire
+  // les cartes à chaque tick serveur, sinon les images sont rechargées en boucle.
+  return app.activeTab === 'fleet' && ['catalog', 'maintenance', 'composition'].includes(app.activeFleetSubtab || '');
 }
 
 function isResearchTreeAutoRefreshFrozen() {
@@ -3554,6 +3555,15 @@ function requestConstructionCompletionRefresh() {
   }, 220);
 }
 
+function requestMaintenanceCompletionRefresh() {
+  const now = performance.now();
+  if (now < Number(app.maintenanceCompletionRefreshAt || 0)) return;
+  app.maintenanceCompletionRefreshAt = now + 1500;
+  window.setTimeout(() => {
+    if (typeof refreshState === 'function') void refreshState(false, { forceRender: true, includeAdmin: app.activeTab === 'admin' });
+  }, 220);
+}
+
 function updateTrainConstructionStageUi(progressEl, progress, remainingMs, durationMs) {
   const panel = progressEl.closest?.('.train-construction-panel');
   if (!panel || !Array.isArray(globalThis.TRAIN_CONSTRUCTION_STAGES) && typeof TRAIN_CONSTRUCTION_STAGES === 'undefined') return;
@@ -3594,9 +3604,12 @@ function updateConstructionTimers() {
 
 function updateMaintenanceTimers() {
   const now = serverNow();
+  let due = false;
   document.querySelectorAll('[data-maintenance-timer]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
-    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+    const remainingMs = Math.max(0, endAt - now);
+    el.textContent = formatResearchTime(remainingMs);
+    if (endAt > 0 && remainingMs <= 0) due = true;
   });
   document.querySelectorAll('[data-maintenance-progress]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
@@ -3604,6 +3617,7 @@ function updateMaintenanceTimers() {
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyMaintenanceProgress(el, progress);
   });
+  if (due) requestMaintenanceCompletionRefresh();
 }
 
 function updateResearchTimers() {

@@ -442,6 +442,15 @@ function requestConstructionCompletionRefresh() {
   }, 220);
 }
 
+function requestMaintenanceCompletionRefresh() {
+  const now = performance.now();
+  if (now < Number(app.maintenanceCompletionRefreshAt || 0)) return;
+  app.maintenanceCompletionRefreshAt = now + 1500;
+  window.setTimeout(() => {
+    if (typeof refreshState === 'function') void refreshState(false, { forceRender: true, includeAdmin: app.activeTab === 'admin' });
+  }, 220);
+}
+
 function updateTrainConstructionStageUi(progressEl, progress, remainingMs, durationMs) {
   const panel = progressEl.closest?.('.train-construction-panel');
   if (!panel || !Array.isArray(globalThis.TRAIN_CONSTRUCTION_STAGES) && typeof TRAIN_CONSTRUCTION_STAGES === 'undefined') return;
@@ -482,9 +491,12 @@ function updateConstructionTimers() {
 
 function updateMaintenanceTimers() {
   const now = serverNow();
+  let due = false;
   document.querySelectorAll('[data-maintenance-timer]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
-    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+    const remainingMs = Math.max(0, endAt - now);
+    el.textContent = formatResearchTime(remainingMs);
+    if (endAt > 0 && remainingMs <= 0) due = true;
   });
   document.querySelectorAll('[data-maintenance-progress]').forEach(el => {
     const endAt = Number(el.dataset.endAt || 0);
@@ -492,6 +504,7 @@ function updateMaintenanceTimers() {
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyMaintenanceProgress(el, progress);
   });
+  if (due) requestMaintenanceCompletionRefresh();
 }
 
 function updateResearchTimers() {
