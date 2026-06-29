@@ -2132,8 +2132,7 @@ function normalizeTrainPurchaseQuantity(value) {
 
 function trainPurchaseDurationLabel(durationMs, quantity) {
   const count = Math.max(1, Math.floor(Number(quantity || 1)));
-  const time = formatResearchTime(durationMs);
-  return count <= 1 ? time : `${formatInt(count)} × ${time}`;
+  return formatResearchTime(Math.max(0, Number(durationMs || 0)) * count);
 }
 
 function updateTrainPurchaseTotal(input, options = {}) {
