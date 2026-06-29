@@ -283,6 +283,7 @@ async function applyAction(playerId, type, payload) {
 
   const handlers = {
     buyTrain: () => actionBuyTrain(player, payload),
+    cancelTrainConstruction: () => actionCancelTrainConstruction(player, payload),
     duplicateTrain: () => actionDuplicateTrain(player, payload),
     sellTrain: () => actionSellTrain(player, payload),
     sellSelectedTrains: () => actionSellSelectedTrains(player, payload),
@@ -341,7 +342,7 @@ function actionBuyTrain(player, payload) {
   player.cash -= price;
   const durationMs = trainConstructionDurationMs(model);
   for (let i = 0; i < quantity; i++) {
-    player.trains.push(createTrainInstance(payload.modelId, player.id, { constructionActive: true }));
+    player.trains.push(createTrainInstance(payload.modelId, player.id, { constructionActive: true, constructionPricePaid: unitPrice }));
   }
   markTutorialAction(player, 'buyTrain');
   const quantityLabel = quantity > 1 ? `${quantity} exemplaires` : '1 exemplaire';
@@ -350,8 +351,8 @@ function actionBuyTrain(player, payload) {
 }
 
 
-function cloneTrainInstanceForPlayer(sourceTrain, playerId) {
-  const clone = createTrainInstance(sourceTrain.modelId, playerId, { constructionActive: true });
+function cloneTrainInstanceForPlayer(sourceTrain, playerId, options = {}) {
+  const clone = createTrainInstance(sourceTrain.modelId, playerId, { constructionActive: true, constructionPricePaid: options.pricePaid });
   clone.condition = Math.max(0.5, Math.min(1, Number(sourceTrain.condition || 1)));
   clone.age = Math.max(0, Math.round(Number(sourceTrain.age || 0)));
   clone.composition = JSON.parse(JSON.stringify(sourceTrain.composition || {}));
@@ -370,10 +371,32 @@ function actionDuplicateTrain(player, payload) {
   const price = Math.round(model.price * multiplier * 0.98);
   if (!canPay(player, price)) return fail(`Trésorerie insuffisante. Prix: ${money(price)}.`);
   player.cash -= price;
-  const clone = cloneTrainInstanceForPlayer(source, player.id);
+  const clone = cloneTrainInstanceForPlayer(source, player.id, { pricePaid: price });
   player.trains.push(clone);
   notify(player, `${model.name} dupliqué avec la même composition pour ${money(price)}. Fabrication lancée : ${formatDurationMs(trainConstructionDurationMs(model))}.`);
   return ok('Fabrication lancée.');
+}
+
+function actionCancelTrainConstruction(player, payload) {
+  const trainId = String(payload.trainId || '');
+  const index = player.trains.findIndex(t => t.id === trainId);
+  if (index < 0) return fail('Train introuvable.');
+  const train = player.trains[index];
+  normalizeTrain(train, player.id);
+  if (!trainUnderConstruction(train)) return fail('Annulation impossible.', 'Ce train n’est pas en fabrication.');
+  const model = BALANCE.trains[train.modelId];
+  if (!model) return fail('Modèle introuvable.');
+  const fallbackRefund = Math.round(Number(model.price || 0) * currentPriceMultiplier(player, model.energyType));
+  const refund = Math.max(0, Math.round(Number(train.construction?.pricePaid || fallbackRefund)));
+  player.cash += refund;
+  player.trains.splice(index, 1);
+  for (const line of player.lines || []) {
+    const nextIds = lineTrainIds(line).filter(id => id !== trainId);
+    line.trainIds = nextIds;
+    line.trainId = nextIds[0] || '';
+  }
+  notify(player, `Fabrication annulée : ${model.name}. Remboursement : ${money(refund)}.`);
+  return ok(`Fabrication annulée. ${money(refund)} remboursés.`);
 }
 
 function lineSillonPurchaseCost(line, count = 1) {

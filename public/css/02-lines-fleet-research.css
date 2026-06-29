@@ -1946,18 +1946,48 @@ input[type="number"] {
   text-transform: none;
 }
 
-.fleet-catalog-grid .train-buy-button {
-  display: inline-flex;
+.fleet-catalog-grid .train-buy-actions {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
-.fleet-catalog-grid .train-buy-button span {
+.fleet-catalog-grid .train-buy-button {
+  min-width: 112px;
+}
+
+.fleet-catalog-grid .train-buy-duration {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 104px;
+  color: #aeb7c7;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+
+.fleet-catalog-grid .train-buy-duration b {
+  color: #f0c875;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  opacity: .92;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fleet-construction-card {
+  border-color: rgba(96,165,250,.24);
+}
+
+.fleet-construction-grid {
+  margin-top: 12px;
+}
+
+.construction-train-card {
+  border-color: rgba(96,165,250,.24);
 }
 
 .train-prereq-panel {

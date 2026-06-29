@@ -220,13 +220,14 @@ function publicTrain(train, player = null) {
   };
 }
 
-function createTrainConstruction(model) {
+function createTrainConstruction(model, options = {}) {
   const durationMs = trainConstructionDurationMs(model);
   return {
     active: true,
     label: 'Fabrication',
     remainingMs: durationMs,
     durationMs,
+    pricePaid: Math.max(0, Math.round(Number(options.pricePaid || 0))),
     startedAt: Date.now(),
     startedDay: state.day || 1,
     completedAt: null,
@@ -235,7 +236,7 @@ function createTrainConstruction(model) {
 }
 
 function inactiveTrainConstruction() {
-  return { active: false, label: null, remainingMs: 0, durationMs: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
+  return { active: false, label: null, remainingMs: 0, durationMs: 0, pricePaid: 0, startedAt: null, startedDay: null, completedAt: null, completedDay: null };
 }
 
 function trainUnderConstruction(train) {
@@ -251,7 +252,7 @@ function createTrainInstance(modelId, ownerId, options = {}) {
     condition: 0.96,
     age: 0,
     acquiredDay: state.day || 1,
-    construction: options.constructionActive && model ? createTrainConstruction(model) : inactiveTrainConstruction(),
+    construction: options.constructionActive && model ? createTrainConstruction(model, { pricePaid: options.constructionPricePaid }) : inactiveTrainConstruction(),
     maintenance: { active: false, mode: null, daysLeft: 0, duration: 0, remainingMs: 0, durationMs: 0, targetCondition: 0, lastServiceDay: state.day || 1 }
   };
   if (model) ensureTrainComposition(train, model);
@@ -273,6 +274,7 @@ function normalizeTrain(raw, ownerId) {
     label: c.label || null,
     remainingMs: constructionRemainingMs,
     durationMs: constructionDurationMs,
+    pricePaid: Math.max(0, Math.round(Number(c.pricePaid || 0))),
     startedAt: Math.max(0, Number(c.startedAt || 0)) || null,
     startedDay: c.startedDay || null,
     completedAt: Math.max(0, Number(c.completedAt || 0)) || null,

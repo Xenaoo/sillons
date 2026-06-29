@@ -1491,6 +1491,56 @@ function setFleetMaintenanceEraCollapsed(epoch, collapsed) {
   localStorage.setItem('sillons.fleetMaintenanceEraCollapsed', JSON.stringify(app.fleetMaintenanceEraCollapsed));
 }
 
+function constructionTrainSort(a, b) {
+  const am = app.state.balance.trains[a.modelId] || {};
+  const bm = app.state.balance.trains[b.modelId] || {};
+  const ar = Number(a.construction?.remainingMs ?? a.construction?.durationMs ?? 0);
+  const br = Number(b.construction?.remainingMs ?? b.construction?.durationMs ?? 0);
+  return ar - br || String(am.name || '').localeCompare(String(bm.name || ''), 'fr') || String(a.id).localeCompare(String(b.id));
+}
+
+function trainConstructionCardTitle(train, model) {
+  const suffix = String(train?.id || '').slice(0, 4).toUpperCase();
+  return `${model?.name || 'Train'}${suffix ? ` #${suffix}` : ''}`;
+}
+
+function renderFleetConstructionQueue() {
+  const trains = (app.state.me?.trains || []).filter(train => train.construction?.active).sort(constructionTrainSort);
+  if (!trains.length) return '';
+  return `
+    <div class="card fleet-construction-card">
+      <div class="fleet-card-heading">
+        <div>
+          <h2>Fabrications en cours</h2>
+          <p class="muted small">Suivi des commandes lancées. Chaque train est livré automatiquement à la fin de ses essais.</p>
+        </div>
+        <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
+      </div>
+      <div class="train-card-grid fleet-catalog-grid fleet-construction-grid">
+        ${trains.map(train => {
+          const model = app.state.balance.trains[train.modelId] || {};
+          return `
+            <article class="list-item train-catalog-card owned-train-card construction-train-card" data-train-id="${escapeAttr(train.id)}">
+              ${renderTrainArt(model)}
+              <div class="train-card-body">
+                <div class="item-title">
+                  <strong>${escapeHtml(trainConstructionCardTitle(train, model))}</strong>
+                  <span class="tag warn">En fabrication</span>
+                </div>
+                <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
+                ${renderTrainConstructionPanel(train, model)}
+                <div class="actions">
+                  <button class="danger" data-action="cancel-train-construction" data-id="${escapeAttr(train.id)}">Annuler la construction</button>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderFleetCatalogPanel(available, locked) {
   const me = app.state.me;
   const models = Object.values(app.state.balance.trains);
@@ -1506,6 +1556,8 @@ function renderFleetCatalogPanel(available, locked) {
         ${metric('Matériels verrouillés', locked.length)}
         ${metric('Époque actuelle', me.eraName)}
       </div>
+
+      ${renderFleetConstructionQueue()}
 
       <div class="card rolling-stock-catalog fleet-catalog-card">
         <div class="fleet-card-heading">
@@ -1545,13 +1597,14 @@ function renderFleetCatalogPanel(available, locked) {
 function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const me = app.state.me;
   const constructing = me.trains.filter(t => t.construction?.active).length;
-  const free = me.trains.filter(t => !t.construction?.active && !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
-  const assigned = me.trains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const maintenanceTrains = (me.trains || []).filter(t => !t.construction?.active);
+  const free = maintenanceTrains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
+  const assigned = maintenanceTrains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
   const standardAction = app.state.balance.maintenanceActions?.standard || null;
   const bulkLocked = standardAction ? maintenanceActionLockedReason(standardAction) : '';
   const trainsByEpoch = {};
-  for (const train of me.trains || []) {
+  for (const train of maintenanceTrains) {
     const model = app.state.balance.trains[train.modelId] || {};
     const epoch = Number(model.unlockEpoch ?? model.epoch ?? 0);
     (trainsByEpoch[epoch] ||= []).push(train);
@@ -1578,7 +1631,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
             <h2>Maintenance globale</h2>
             <p class="muted small">Envoie en une seule action tous les trains éligibles en maintenance intermédiaire. La durée dépend de l’état restant de chaque train et du niveau d’atelier.</p>
           </div>
-          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${tooltipAttr(bulkLocked || 'Lance une maintenance intermédiaire sur tous les trains éligibles.')} ${me.trains.length && !bulkLocked ? '' : 'disabled'}>Tout envoyer en maintenance</button>
+          <button class="danger confirm-danger" data-action="repair-all-trains" data-mode="standard" ${tooltipAttr(bulkLocked || 'Lance une maintenance intermédiaire sur tous les trains éligibles.')} ${maintenanceTrains.length && !bulkLocked ? '' : 'disabled'}>Tout envoyer en maintenance</button>
         </div>
       </div>
 
@@ -1588,7 +1641,7 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
             <h2>Parc de la compagnie</h2>
             <p class="muted small">Lance les interventions depuis les cartes de matériel. Un train usé perd en vitesse et en ponctualité. À 0 %, il est immobilisé et sa ligne ne produit plus rien.</p>
           </div>
-          <span class="tag">${me.trains.length} unité(s)</span>
+          <span class="tag">${maintenanceTrains.length} unité(s)</span>
         </div>
         <div class="era-catalog fleet-maintenance-era-list">
           ${eraEntries.length ? eraEntries.map(([epoch, trains]) => {
@@ -2032,6 +2085,12 @@ function normalizeTrainPurchaseQuantity(value) {
   return parseTrainPurchaseQuantityDraft(value) ?? 1;
 }
 
+function trainPurchaseDurationLabel(durationMs, quantity) {
+  const count = Math.max(1, Math.floor(Number(quantity || 1)));
+  const time = formatResearchTime(durationMs);
+  return count <= 1 ? time : `${formatInt(count)} × ${time}`;
+}
+
 function updateTrainPurchaseTotal(input, options = {}) {
   if (!input) return;
   const modelId = input.dataset.buyTrainQty || '';
@@ -2040,8 +2099,11 @@ function updateTrainPurchaseTotal(input, options = {}) {
   if (options.commit) input.value = String(committedQuantity);
   const card = input.closest('.train-catalog-card');
   const total = card?.querySelector(`[data-buy-train-total="${CSS.escape(modelId)}"]`);
+  const duration = card?.querySelector(`[data-buy-train-duration="${CSS.escape(modelId)}"]`);
   const unitPrice = Math.max(0, Math.round(Number(input.dataset.unitPrice || 0)));
+  const constructionMs = Math.max(0, Math.round(Number(input.dataset.constructionMs || 0)));
   if (total) total.textContent = quantity === null ? '—' : money(unitPrice * quantity);
+  if (duration) duration.textContent = quantity === null ? '—' : trainPurchaseDurationLabel(constructionMs, committedQuantity);
 }
 
 
@@ -2106,12 +2168,16 @@ function renderTrainCatalogItem(model, buyable) {
         <div class="train-buy-control">
           <label>
             <span>Quantité</span>
-            <input type="number" min="1" max="99" step="1" value="1" inputmode="numeric" data-buy-train-qty="${escapeAttr(model.id)}" data-unit-price="${unitPrice}" ${buyable ? '' : 'disabled'}>
+            <input type="number" min="1" max="99" step="1" value="1" inputmode="numeric" data-buy-train-qty="${escapeAttr(model.id)}" data-unit-price="${unitPrice}" data-construction-ms="${constructionMs}" ${buyable ? '' : 'disabled'}>
           </label>
           <span class="train-buy-total">Total <b data-buy-train-total="${escapeAttr(model.id)}">${money(unitPrice)}</b></span>
         </div>
-        <div class="actions">
-          <button class="primary train-buy-button" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatResearchTime(constructionMs)}.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter <span>${formatResearchTime(constructionMs)}</span></button>
+        <div class="actions train-buy-actions">
+          <button class="primary train-buy-button" data-action="buy-train" data-id="${model.id}" data-unit-price="${unitPrice}" ${tooltipAttr(buyable ? `Lance la fabrication. Durée estimée : ${formatResearchTime(constructionMs)} par train.` : 'Prérequis manquants.')} ${buyable ? '' : 'disabled'}>Acheter</button>
+          <span class="train-buy-duration" title="Durée de fabrication selon la quantité saisie.">
+            <small>Fabrication</small>
+            <b data-buy-train-duration="${escapeAttr(model.id)}">${trainPurchaseDurationLabel(constructionMs, 1)}</b>
+          </span>
         </div>
       </div>
     </div>

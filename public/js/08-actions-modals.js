@@ -280,6 +280,17 @@ Coût estimé : ${money(price)}.
 Fabrication estimée : ${formatResearchTime(buildTime)}.`, { confirmLabel: 'Dupliquer' }))) return;
     return doAction('duplicateTrain', { trainId: button.dataset.id });
   }
+  if (action === 'cancel-train-construction') {
+    const train = app.state.me.trains.find(t => t.id === button.dataset.id);
+    const model = train ? app.state.balance.trains[train.modelId] : null;
+    const refund = Math.max(0, Math.round(Number(train?.construction?.pricePaid || (model ? trainPurchaseUnitPriceClient(model) : 0))));
+    const remaining = formatResearchTime(train?.construction?.remainingMs || train?.construction?.durationMs || 0);
+    if (!(await gameConfirm('Annuler la construction', `Annuler la fabrication de ${model?.name || 'ce train'} ?
+
+Temps restant : ${remaining}.
+Remboursement estimé : ${money(refund)}.`, { confirmLabel: 'Annuler la construction', danger: true }))) return;
+    return doAction('cancelTrainConstruction', { trainId: button.dataset.id });
+  }
   if (action === 'assign-train-line') {
     const trainId = button.dataset.id;
     const select = document.querySelector(`[data-assign-line-select="${CSS.escape(trainId)}"]`);
