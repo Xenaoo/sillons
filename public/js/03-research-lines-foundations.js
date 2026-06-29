@@ -424,6 +424,15 @@ function applyConstructionProgress(el, rawProgress) {
   el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
 }
 
+function applyMaintenanceProgress(el, rawProgress) {
+  const key = el.dataset.maintenanceKey || '';
+  const last = key ? Number(app.maintenanceProgressCache[key] ?? el.dataset.lastProgress ?? 0) : Number(el.dataset.lastProgress || 0);
+  const progress = key ? Math.max(last, rawProgress) : rawProgress;
+  el.dataset.lastProgress = String(progress);
+  if (key) app.maintenanceProgressCache[key] = progress;
+  el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+}
+
 function updateConstructionTimers() {
   const now = serverNow();
   document.querySelectorAll('[data-construction-timer]').forEach(el => {
@@ -435,6 +444,20 @@ function updateConstructionTimers() {
     const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyConstructionProgress(el, progress);
+  });
+}
+
+function updateMaintenanceTimers() {
+  const now = serverNow();
+  document.querySelectorAll('[data-maintenance-timer]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+  });
+  document.querySelectorAll('[data-maintenance-progress]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const progress = constructionProgressPercentFromData(endAt, durationMs);
+    applyMaintenanceProgress(el, progress);
   });
 }
 
@@ -452,6 +475,7 @@ function updateResearchTimers() {
     applyResearchProgress(el, progress);
   });
   updateConstructionTimers();
+  updateMaintenanceTimers();
 }
 
 function startResearchAnimationLoop() {
@@ -460,7 +484,7 @@ function startResearchAnimationLoop() {
   const tick = () => {
     updateResearchTimers();
     updateEpochTrafficAnimation();
-    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-epoch-traffic-value]');
+    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-maintenance-timer], [data-epoch-traffic-value]');
     window.setTimeout(tick, visibleResearch ? 250 : 1000);
   };
   window.setTimeout(tick, 250);

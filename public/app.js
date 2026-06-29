@@ -239,6 +239,7 @@ const app = {
   pendingCompositionScrollRestore: null,
   researchProgressCache: {},
   constructionProgressCache: {},
+  maintenanceProgressCache: {},
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };
@@ -3534,6 +3535,15 @@ function applyConstructionProgress(el, rawProgress) {
   el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
 }
 
+function applyMaintenanceProgress(el, rawProgress) {
+  const key = el.dataset.maintenanceKey || '';
+  const last = key ? Number(app.maintenanceProgressCache[key] ?? el.dataset.lastProgress ?? 0) : Number(el.dataset.lastProgress || 0);
+  const progress = key ? Math.max(last, rawProgress) : rawProgress;
+  el.dataset.lastProgress = String(progress);
+  if (key) app.maintenanceProgressCache[key] = progress;
+  el.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+}
+
 function updateConstructionTimers() {
   const now = serverNow();
   document.querySelectorAll('[data-construction-timer]').forEach(el => {
@@ -3545,6 +3555,20 @@ function updateConstructionTimers() {
     const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
     const progress = constructionProgressPercentFromData(endAt, durationMs);
     applyConstructionProgress(el, progress);
+  });
+}
+
+function updateMaintenanceTimers() {
+  const now = serverNow();
+  document.querySelectorAll('[data-maintenance-timer]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    el.textContent = formatResearchTime(Math.max(0, endAt - now));
+  });
+  document.querySelectorAll('[data-maintenance-progress]').forEach(el => {
+    const endAt = Number(el.dataset.endAt || 0);
+    const durationMs = Math.max(1, Number(el.dataset.durationMs || 1));
+    const progress = constructionProgressPercentFromData(endAt, durationMs);
+    applyMaintenanceProgress(el, progress);
   });
 }
 
@@ -3562,6 +3586,7 @@ function updateResearchTimers() {
     applyResearchProgress(el, progress);
   });
   updateConstructionTimers();
+  updateMaintenanceTimers();
 }
 
 function startResearchAnimationLoop() {
@@ -3570,7 +3595,7 @@ function startResearchAnimationLoop() {
   const tick = () => {
     updateResearchTimers();
     updateEpochTrafficAnimation();
-    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-epoch-traffic-value]');
+    const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-maintenance-timer], [data-epoch-traffic-value]');
     window.setTimeout(tick, visibleResearch ? 250 : 1000);
   };
   window.setTimeout(tick, 250);
@@ -5942,20 +5967,22 @@ function renderFleetConstructionQueue() {
         </div>
         <span class="tag warn">${trains.length} chantier${trains.length > 1 ? 's' : ''}</span>
       </div>
-      <div class="train-card-grid fleet-catalog-grid fleet-construction-grid">
+      <div class="train-card-grid fleet-construction-grid">
         ${trains.map(train => {
           const model = app.state.balance.trains[train.modelId] || {};
           return `
-            <article class="list-item train-catalog-card owned-train-card construction-train-card" data-train-id="${escapeAttr(train.id)}">
+            <article class="list-item train-catalog-card construction-train-card" data-train-id="${escapeAttr(train.id)}">
               ${renderTrainArt(model)}
               <div class="train-card-body">
                 <div class="item-title">
                   <strong>${escapeHtml(trainConstructionCardTitle(train, model))}</strong>
                   <span class="tag warn">En fabrication</span>
                 </div>
-                <p class="small muted">${escapeHtml(model.description || trainStrengths(model))}</p>
-                ${renderTrainConstructionPanel(train, model)}
-                <div class="actions">
+                <p class="small muted construction-train-description">${escapeHtml(model.description || trainStrengths(model))}</p>
+                <div class="construction-train-progress">
+                  ${renderTrainConstructionPanel(train, model)}
+                </div>
+                <div class="actions construction-train-actions">
                   <button class="danger" data-action="cancel-train-construction" data-id="${escapeAttr(train.id)}">Annuler la construction</button>
                 </div>
               </div>
@@ -6499,6 +6526,49 @@ function renderTrainConstructionPanel(train, model) {
   `;
 }
 
+function trainMaintenanceProgress(train) {
+  const maint = train?.maintenance || {};
+  const tickMs = Math.max(250, Number(app.state?.game?.tickMs || 2000));
+  const remainingFallback = Number(maint.daysLeft || 0) * tickMs;
+  const legacyDuration = Number(maint.duration || 0) * tickMs;
+  const remainingMs = Math.max(0, Number(maint.remainingMs || remainingFallback || (maint.active ? maint.durationMs : 0) || 0));
+  const durationMs = Math.max(remainingMs, Number(maint.durationMs || legacyDuration || remainingMs || 0));
+  const progress = durationMs > 0 ? clamp(1 - remainingMs / durationMs, 0, 1) : (maint.active ? 0 : 1);
+  return {
+    active: Boolean(maint.active),
+    label: maint.label || 'Maintenance',
+    durationMs,
+    remainingMs,
+    endAt: serverNow() + remainingMs,
+    startedAt: maint.startedAt || 0,
+    targetCondition: Number(maint.targetCondition || 0),
+    progress,
+    percent: Math.round(progress * 100)
+  };
+}
+
+function renderTrainMaintenancePanel(train) {
+  const info = trainMaintenanceProgress(train);
+  const key = `maintenance:${train.id || 'train'}:${info.startedAt || 0}:${info.durationMs || 0}`;
+  const target = info.targetCondition > 0 ? `État cible : ${Math.round(info.targetCondition * 100)}%` : 'Retour automatique en service';
+  return `
+    <div class="train-maintenance-panel">
+      <div class="train-maintenance-head">
+        <div>
+          <span>Maintenance en cours</span>
+          <b>${escapeHtml(info.label)} · ${info.percent}%</b>
+        </div>
+        <strong class="research-clock" data-maintenance-timer data-end-at="${Math.round(info.endAt || 0)}">${formatResearchTime(info.remainingMs)}</strong>
+      </div>
+      <div class="progress research-progress train-maintenance-bar"><i data-maintenance-progress data-maintenance-key="${escapeAttr(key)}" data-end-at="${Math.round(info.endAt || 0)}" data-duration-ms="${Math.round(info.durationMs || 1)}" data-last-progress="${info.percent}" style="width:${info.percent}%"></i></div>
+      <div class="train-maintenance-meta">
+        <span>Durée totale : ${escapeHtml(formatResearchTime(info.durationMs))}</span>
+        <span>${escapeHtml(target)}</span>
+      </div>
+    </div>
+  `;
+}
+
 function parseTrainPurchaseQuantityDraft(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
@@ -6633,6 +6703,7 @@ function renderOwnedTrain(train) {
   const inConstruction = !!construction.active;
   const maint = train.maintenance || {};
   const inMaint = !!maint.active;
+  const maintenanceInfo = inMaint ? trainMaintenanceProgress(train) : null;
   const mapSelected = typeof selectedOwnedMapTrainId === 'function' && selectedOwnedMapTrainId() === String(train.id);
   const actions = app.state.balance.maintenanceActions || {};
   const condition = Math.round((train.condition || 0) * 100);
@@ -6663,7 +6734,7 @@ function renderOwnedTrain(train) {
           ? 'Immobilisé'
           : 'Libre';
   const statusClass = inConstruction || inMaint ? 'warn' : condition <= 0 ? 'bad' : line ? 'good' : '';
-  const maintenanceRemaining = formatDurationMs(Number(maint.remainingMs || 0) || Number(maint.daysLeft || 0) * Math.max(250, Number(app.state?.game?.tickMs || 2000)));
+  const maintenanceRemaining = maintenanceInfo ? formatResearchTime(maintenanceInfo.remainingMs) : '';
   const constructionRemaining = formatResearchTime(Number(construction.remainingMs || 0) || Number(construction.durationMs || 0));
 
   return `
@@ -6698,6 +6769,7 @@ function renderOwnedTrain(train) {
           ${renderTrainConstructionPanel(train, model)}
           <p class="small muted">Le train sera automatiquement livré à la fin de la fabrication. Il ne peut pas encore être affecté, modifié, maintenu ou vendu.</p>
         ` : inMaint ? `
+          ${renderTrainMaintenancePanel(train)}
           <p class="small muted">Le train est immobilisé. Toute ligne qui l’utilise reste ouverte mais ne produit rien jusqu’à la fin de l’intervention.</p>
         ` : `
           <div class="maintenance-actions">

@@ -1983,11 +1983,71 @@ input[type="number"] {
 }
 
 .fleet-construction-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)) !important;
+  align-items: stretch;
+  gap: 12px !important;
   margin-top: 12px;
 }
 
 .construction-train-card {
+  display: grid !important;
+  grid-template-columns: minmax(190px, 34%) minmax(0, 1fr) !important;
+  align-items: stretch;
+  gap: 14px !important;
+  min-height: 0 !important;
+  padding: 12px !important;
   border-color: rgba(96,165,250,.24);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(96,165,250,.12), transparent 34%),
+    linear-gradient(180deg, rgba(9,18,34,.74), rgba(4,9,18,.58)) !important;
+}
+
+.construction-train-card .train-art {
+  width: 100%;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 13 / 8;
+  align-self: start;
+}
+
+.construction-train-card .train-art img {
+  min-height: 0 !important;
+}
+
+.construction-train-card .train-card-body {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.construction-train-description {
+  margin-bottom: 2px !important;
+  line-height: 1.28 !important;
+}
+
+.construction-train-progress {
+  min-width: 0;
+}
+
+.construction-train-card .train-construction-panel {
+  margin-top: 0;
+}
+
+.construction-train-actions {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.construction-train-actions button {
+  min-width: min(100%, 190px);
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .construction-train-card {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 .train-prereq-panel {
