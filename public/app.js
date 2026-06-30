@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.11';
+const PROJECT_VERSION = 'v0.71.12';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -195,6 +195,8 @@ const app = {
     trainMarkerRaf: false,
     trainMarkerZoomFrame: null,
     lastTrainMarkerSyncAt: 0,
+    tileLayerScheduled: false,
+    tileLayerInstallTimer: null,
     followedTrain: null,
     lastFollowCenterAt: 0,
     followingProgrammatically: false,
@@ -1280,7 +1282,7 @@ function initOsmMap() {
     fadeAnimation: false
   });
 
-  addReliableFrenchTileLayer(app.map.leaflet);
+  scheduleMapTileLayerInstall(app.map.leaflet);
   clearTrainMarkerLayer();
 
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
@@ -1372,6 +1374,22 @@ function initOsmMap() {
     const observer = new ResizeObserver(() => resizeCanvas());
     observer.observe(target);
   }
+}
+
+function scheduleMapTileLayerInstall(map) {
+  if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
+  app.map.tileLayerScheduled = true;
+  const install = () => {
+    clearTimeout(app.map.tileLayerInstallTimer);
+    app.map.tileLayerInstallTimer = window.setTimeout(() => {
+      if (!app.map.leaflet || app.map.tileLayerName) return;
+      addReliableFrenchTileLayer(app.map.leaflet);
+      scheduleLeafletInvalidateSize();
+      requestMapRedraw({ lite: true });
+    }, 1200);
+  };
+  if (document.readyState === 'complete') install();
+  else window.addEventListener('load', install, { once: true });
 }
 
 function addReliableFrenchTileLayer(map) {

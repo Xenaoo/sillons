@@ -850,7 +850,7 @@ function initOsmMap() {
     fadeAnimation: false
   });
 
-  addReliableFrenchTileLayer(app.map.leaflet);
+  scheduleMapTileLayerInstall(app.map.leaflet);
   clearTrainMarkerLayer();
 
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
@@ -942,6 +942,22 @@ function initOsmMap() {
     const observer = new ResizeObserver(() => resizeCanvas());
     observer.observe(target);
   }
+}
+
+function scheduleMapTileLayerInstall(map) {
+  if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
+  app.map.tileLayerScheduled = true;
+  const install = () => {
+    clearTimeout(app.map.tileLayerInstallTimer);
+    app.map.tileLayerInstallTimer = window.setTimeout(() => {
+      if (!app.map.leaflet || app.map.tileLayerName) return;
+      addReliableFrenchTileLayer(app.map.leaflet);
+      scheduleLeafletInvalidateSize();
+      requestMapRedraw({ lite: true });
+    }, 1200);
+  };
+  if (document.readyState === 'complete') install();
+  else window.addEventListener('load', install, { once: true });
 }
 
 function addReliableFrenchTileLayer(map) {

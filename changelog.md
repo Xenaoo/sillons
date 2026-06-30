@@ -1,3 +1,10 @@
+# v0.71.12 - chargement initial de la carte
+
+- La couche de tuiles OpenStreetMap n'est plus installee pendant le chemin critique du premier affichage.
+- La carte Leaflet, le canvas et l'interface s'affichent d'abord ; les tuiles externes sont ajoutees apres l'evenement `load`.
+- Correction de l'attente visible lors d'une arrivee sur le site ou d'une actualisation quand les tuiles OSM repondent lentement.
+- Increment de version : interface et serveur v0.71.12, package npm 0.71.12.
+
 # v0.71.11 — alignement des effets des bâtiments
 
 - Les cartes Dépôt, Atelier et Technicentre réservent maintenant la même hauteur de description.
