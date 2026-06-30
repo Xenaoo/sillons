@@ -1622,11 +1622,27 @@
 
 
 .facility-construction-actions {
-  margin-top: 0;
+  margin-top: 2px;
 }
 
 .facility-construction-actions button {
   width: 100%;
+}
+
+.facility-construction-actions .facility-cancel-construction-btn {
+  min-height: 40px;
+  justify-content: center;
+  border-color: rgba(233,123,114,.58) !important;
+  background: linear-gradient(180deg, rgba(121,41,34,.96), rgba(74,25,27,.94)) !important;
+  color: #ffe2d7 !important;
+  box-shadow: 0 0 0 1px rgba(255,213,189,.08), 0 12px 24px rgba(121,41,34,.26);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.facility-construction-actions .facility-cancel-construction-btn:hover {
+  border-color: rgba(255,173,150,.82) !important;
+  background: linear-gradient(180deg, rgba(154,52,43,.98), rgba(96,31,33,.96)) !important;
 }
 
 .maintenance-bulk-modal {

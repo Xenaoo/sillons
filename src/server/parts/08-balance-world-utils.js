@@ -554,8 +554,8 @@ function buildBalance() {
       growth: 1.25,
       baseConstructionMs: 2 * HOUR_MS,
       constructionGrowth: 1.25,
-      durationReductionPerLevel: 0.075,
-      maxDurationReduction: 0.72,
+      durationReductionPerLevel: 0.02,
+      maxDurationReduction: 0.24,
       requiredTech: 'steam_depots'
     },
     workshop: {
@@ -568,8 +568,8 @@ function buildBalance() {
       growth: 1.25,
       baseConstructionMs: 6 * HOUR_MS,
       constructionGrowth: 1.25,
-      durationReductionPerLevel: 0.065,
-      maxDurationReduction: 0.68,
+      durationReductionPerLevel: 0.025,
+      maxDurationReduction: 0.30,
       requiredTech: 'steam_workshops'
     },
     technicentre: {
@@ -582,8 +582,8 @@ function buildBalance() {
       growth: 1.25,
       baseConstructionMs: 18 * HOUR_MS,
       constructionGrowth: 1.25,
-      durationReductionPerLevel: 0.055,
-      maxDurationReduction: 0.62,
+      durationReductionPerLevel: 0.03,
+      maxDurationReduction: 0.36,
       requiredTech: 'electric_standardized_maintenance'
     }
   };

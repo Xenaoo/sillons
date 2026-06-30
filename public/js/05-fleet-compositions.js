@@ -1747,13 +1747,35 @@ function renderFacilityConstructionPanel(facility, construction) {
   `;
 }
 
+function maintenanceFacilityReductionValueAtLevel(facility, level) {
+  const perLevel = Math.max(0, Number(facility.durationReductionPerLevel || 0));
+  const maxReduction = Math.max(0, Number(facility.maxDurationReduction || 0));
+  const reduction = Math.min(maxReduction, Math.max(0, Number(level || 0)) * perLevel);
+  return Math.min(0.82, Math.max(0, reduction));
+}
+
+function formatMaintenanceFacilityReduction(value) {
+  const pct = Math.round(Math.max(0, Number(value || 0)) * 1000) / 10;
+  if (Math.abs(pct) < 0.05) return '0%';
+  return `-${pct.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}%`;
+}
+
+function formatMaintenanceFacilityGain(value) {
+  const pct = Math.round(Math.max(0, Number(value || 0)) * 1000) / 10;
+  if (Math.abs(pct) < 0.05) return 'Plafond atteint';
+  return `+${pct.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} pts`;
+}
+
 function renderMaintenanceFacility(facility, cash) {
   const level = maintenanceFacilityLevelClient(facility.id);
   const nextCost = maintenanceFacilityUpgradeCostClient(facility.id);
   const nextDuration = maintenanceFacilityConstructionDurationMsClient(facility.id);
   const construction = maintenanceFacilityConstructionClient(facility.id);
-  const currentReduction = Math.round((1 - maintenanceFacilityDurationMultiplierClient(facility.id)) * 100);
-  const nextReduction = Math.round((1 - Math.max(0.18, 1 - Math.min(Number(facility.maxDurationReduction || 0), (level + 1) * Number(facility.durationReductionPerLevel || 0)))) * 100);
+  const perLevelReduction = Math.max(0, Number(facility.durationReductionPerLevel || 0));
+  const maxReduction = Math.max(0, Number(facility.maxDurationReduction || 0));
+  const currentReduction = 1 - maintenanceFacilityDurationMultiplierClient(facility.id);
+  const nextReduction = maintenanceFacilityReductionValueAtLevel(facility, level + 1);
+  const nextGain = Math.max(0, nextReduction - currentReduction);
   const locked = facility.requiredTech && !hasTech(facility.requiredTech)
     ? `Recherche : ${techNodeTitle(facility.requiredTech)}`
     : '';
@@ -1762,7 +1784,7 @@ function renderMaintenanceFacility(facility, cash) {
     ? `${facility.name} niveau ${construction.targetLevel} en construction. Fin prévue : ${formatResearchTime(construction.remainingMs)}.`
     : locked
       ? `${facility.name}. ${locked}.`
-      : `${facility.name}. ${facility.description} Niveau actuel ${level}, réduction actuelle ${currentReduction}%, prochain niveau ${nextReduction}%. Coût : ${money(nextCost)}. Durée : ${formatResearchTime(nextDuration)}.`;
+      : `${facility.name}. ${facility.description} Niveau actuel ${level}, réduction actuelle ${formatMaintenanceFacilityReduction(currentReduction)}, prochain niveau ${formatMaintenanceFacilityReduction(nextReduction)}. Coût : ${money(nextCost)}. Durée : ${formatResearchTime(nextDuration)}.`;
   return `
     <article class="maintenance-policy-card maintenance-facility-card ${level > 0 ? 'active' : ''}">
       <div class="policy-head">
@@ -1770,15 +1792,30 @@ function renderMaintenanceFacility(facility, cash) {
         <span class="tag ${level > 0 ? 'good' : 'warn'}">Niv. ${formatInt(level)}</span>
       </div>
       <p class="small muted">${escapeHtml(facility.description)}</p>
-      <div class="policy-stats">
-        <div><span>Usage</span><b>${escapeHtml(facility.actionLabel || 'Maintenance')}</b></div>
-        <div><span>Réduction</span><b>${currentReduction}%</b></div>
-        <div><span>Niv. suivant</span><b>${nextReduction}%</b></div>
-        <div><span>Construction</span><b>${construction.active ? formatResearchTime(construction.remainingMs) : formatResearchTime(nextDuration)}</b></div>
+      <div class="facility-effect-grid">
+        <div class="facility-effect-chip facility-effect-chip--main">
+          <span>Effet / niveau</span>
+          <b>${formatMaintenanceFacilityReduction(perLevelReduction)}</b>
+          <small>${escapeHtml(facility.actionLabel || 'Maintenance')}</small>
+        </div>
+        <div class="facility-effect-chip">
+          <span>Effet actuel</span>
+          <b>${formatMaintenanceFacilityReduction(currentReduction)}</b>
+          <small>Niv. ${formatInt(level)} · plafond ${formatMaintenanceFacilityReduction(maxReduction)}</small>
+        </div>
+        <div class="facility-effect-chip facility-effect-chip--next">
+          <span>Niv. suivant</span>
+          <b>${formatMaintenanceFacilityReduction(nextReduction)}</b>
+          <small>${formatMaintenanceFacilityGain(nextGain)}</small>
+        </div>
+      </div>
+      <div class="facility-build-summary">
+        <div><span>Coût</span><b>${money(nextCost)}</b></div>
+        <div><span>${construction.active ? 'Fin du chantier' : 'Durée chantier'}</span><b>${construction.active ? formatResearchTime(construction.remainingMs) : formatResearchTime(nextDuration)}</b></div>
       </div>
       ${locked ? `<em class="small bad-text">${escapeHtml(locked)}</em>` : ''}
       ${construction.active ? renderFacilityConstructionPanel(facility, construction) : ''}
-      ${construction.active ? `<div class="actions facility-construction-actions"><button type="button" class="danger ghost" data-action="cancel-maintenance-facility-construction" data-facility="${escapeAttr(facility.id)}">Annuler le chantier</button></div>` : ''}
+      ${construction.active ? `<div class="actions facility-construction-actions"><button type="button" class="danger facility-cancel-construction-btn" data-action="cancel-maintenance-facility-construction" data-facility="${escapeAttr(facility.id)}">Annuler la construction</button></div>` : ''}
       <button data-action="buy-maintenance-facility" data-facility="${escapeAttr(facility.id)}" ${tooltipAttr(tooltip)} ${disabled ? 'disabled' : ''}>
         ${construction.active ? `Niveau ${formatInt(construction.targetLevel)} en chantier` : `Construire niveau ${formatInt(level + 1)}`}
         <span>${construction.active ? formatResearchTime(construction.remainingMs) : `${money(nextCost)} · ${formatResearchTime(nextDuration)}`}</span>

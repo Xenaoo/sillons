@@ -5,7 +5,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const CLIENT_VERSION = 'v0.71.0-perf5';
+const CLIENT_VERSION = 'v0.71.0-perf8';
 
 const CLIENT_SCRIPT_PARTS = [
   '00-core-state.js',
