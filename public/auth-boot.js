@@ -1,7 +1,7 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.12';
+  const APP_VERSION = 'v0.71.13';
   const LEAFLET_VERSION = '1.9.4';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
@@ -157,7 +157,9 @@
       const record = raw ? JSON.parse(raw) : null;
       if (!record?.state || String(record.playerId || statePlayerId(record.state)) !== playerId) return null;
       if (Date.now() - Number(record.savedAt || 0) > STATE_SNAPSHOT_MAX_AGE_MS) return null;
-      return record.state?.ok && record.state?.me && record.state?.world ? record.state : null;
+      const state = record.state?.ok && record.state?.me && record.state?.world ? record.state : null;
+      if (state) window.__sillonsBootState = state;
+      return state;
     } catch (error) {
       return null;
     }
@@ -277,16 +279,37 @@
   async function loadApp(options = {}) {
     if (window.__sillonsAppLoading) return;
     window.__sillonsAppLoading = true;
-    void warmAppAssets();
-    const bootState = seedBootState(options.state) || readBootSnapshot();
+    let bootState = options.state ? seedBootState(options.state) : null;
     if (bootState) renderConnectedShell(bootState);
     else renderEmptyShell();
+    await afterBootShellPaint();
+    if (!bootState) {
+      bootState = readBootSnapshot();
+      if (bootState) {
+        renderConnectedShell(bootState);
+        await afterBootShellPaint();
+      }
+    }
+    void warmAppAssets();
     await Promise.all([
       loadStyle(APP_ASSETS.leafletCss),
       loadStyle(APP_ASSETS.styles)
     ]);
     await loadScript(APP_ASSETS.leafletJs);
     await loadScript(APP_ASSETS.appJs);
+  }
+
+  function afterBootShellPaint() {
+    return new Promise(resolve => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      window.setTimeout(done, 80);
+      requestAnimationFrame(() => window.setTimeout(done, 0));
+    });
   }
 
   function setAuthMode(mode) {

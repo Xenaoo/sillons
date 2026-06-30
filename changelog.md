@@ -1,3 +1,10 @@
+# v0.71.13 - affichage plus rapide apres F5
+
+- Le shell connecte est peint avant la lecture du snapshot de session et avant le chargement des feuilles de style completes.
+- Le snapshot lu par `auth-boot.js` est reutilise par le client complet au lieu d'etre parse une seconde fois.
+- Le premier rendu de `renderAll` differe l'initialisation Leaflet et le dessin complet de la carte afin que le panneau de jeu s'affiche avant les lignes, trains et tuiles.
+- Increment de version : interface et serveur v0.71.13, package npm 0.71.13.
+
 # v0.71.12 - chargement initial de la carte
 
 - La couche de tuiles OpenStreetMap n'est plus installee pendant le chemin critique du premier affichage.

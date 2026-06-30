@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.12';
+const PROJECT_VERSION = 'v0.71.13';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -197,6 +197,8 @@ const app = {
     lastTrainMarkerSyncAt: 0,
     tileLayerScheduled: false,
     tileLayerInstallTimer: null,
+    startupMapScheduled: false,
+    deferredRedrawTimer: null,
     followedTrain: null,
     lastFollowCenterAt: 0,
     followingProgrammatically: false,
@@ -613,10 +615,10 @@ function applyStateSnapshot(data) {
   app.state = data;
   document.body.classList.remove('auth-boot', 'app-shell-boot');
   $('#setup')?.classList.add('hidden');
-  ensureMapInitialized();
   ensureSelectedStation();
   resizeCanvas();
-  renderAll();
+  renderAll({ deferMapRedraw: true });
+  scheduleStartupMapInitialization();
   return true;
 }
 
@@ -1178,7 +1180,8 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
     if (data.auth?.playerId) { app.playerId = data.auth.playerId; localStorage.setItem('sillons.playerId', app.playerId); }
     if (data.me) {
       $('#setup').classList.add('hidden');
-      ensureMapInitialized();
+      if (first && !app.map.mapReady && !app.map.leaflet) scheduleStartupMapInitialization();
+      else ensureMapInitialized();
       maybeNotify(data.me);
       ensureSelectedStation();
     }
@@ -1195,7 +1198,7 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
       // menus déroulants, saisie, sliders, suggestions et formulaires restent ouverts.
       renderTopbar();
     } else {
-      renderAll();
+      renderAll({ deferMapRedraw: first && !app.map.mapReady });
     }
     if (first) {
       reportClientBootMetrics({
@@ -1239,6 +1242,20 @@ function startMapDrawLoop() {
   if (app.map.drawLoopStarted) return;
   app.map.drawLoopStarted = true;
   requestAnimationFrame(drawLoop);
+}
+
+function scheduleStartupMapInitialization() {
+  if (app.map.mapReady || app.map.leaflet || app.map.startupMapScheduled) {
+    startMapDrawLoop();
+    return;
+  }
+  app.map.startupMapScheduled = true;
+  window.setTimeout(() => {
+    app.map.startupMapScheduled = false;
+    ensureMapInitialized();
+    resizeCanvas();
+    requestMapRedraw({ lite: true });
+  }, 180);
 }
 
 function ensureMapInitialized() {
@@ -2333,8 +2350,9 @@ function positionTutorialElements(target, card, step) {
   card.dataset.arrow = cardLeft > rect.left ? 'left' : 'right';
 }
 
-function renderAll() {
+function renderAll(options = {}) {
   if (!app.state) return;
+  const deferMapRedraw = Boolean(options && typeof options === 'object' && options.deferMapRedraw);
   const compositionScrollKey = currentCompositionScrollKey();
   const researchTreeScroll = app.activeTab === 'research' ? (() => {
     const tree = document.querySelector('.research-skilltree-scroll');
@@ -2348,7 +2366,12 @@ function renderAll() {
   syncFocusedLineUi();
   scheduleCompositionRefitScrollAdjustment();
   scheduleMobileMapViewportFix();
-  requestMapRedraw();
+  if (deferMapRedraw) {
+    clearTimeout(app.map.deferredRedrawTimer);
+    app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
+  } else {
+    requestMapRedraw();
+  }
   requestAnimationFrame(() => {
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
     if (researchTreeScroll) {

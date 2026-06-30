@@ -229,8 +229,9 @@ function positionTutorialElements(target, card, step) {
   card.dataset.arrow = cardLeft > rect.left ? 'left' : 'right';
 }
 
-function renderAll() {
+function renderAll(options = {}) {
   if (!app.state) return;
+  const deferMapRedraw = Boolean(options && typeof options === 'object' && options.deferMapRedraw);
   const compositionScrollKey = currentCompositionScrollKey();
   const researchTreeScroll = app.activeTab === 'research' ? (() => {
     const tree = document.querySelector('.research-skilltree-scroll');
@@ -244,7 +245,12 @@ function renderAll() {
   syncFocusedLineUi();
   scheduleCompositionRefitScrollAdjustment();
   scheduleMobileMapViewportFix();
-  requestMapRedraw();
+  if (deferMapRedraw) {
+    clearTimeout(app.map.deferredRedrawTimer);
+    app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
+  } else {
+    requestMapRedraw();
+  }
   requestAnimationFrame(() => {
     if (compositionScrollKey) restoreCompositionScrollPosition(compositionScrollKey);
     if (researchTreeScroll) {
