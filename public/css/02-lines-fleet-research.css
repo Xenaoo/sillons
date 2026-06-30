@@ -637,8 +637,9 @@
 }
 
 .maintenance-facility-card {
+  display: flex;
+  flex-direction: column;
   gap: 7px;
-  align-content: start;
   padding: 10px;
   border-radius: 12px;
 }
@@ -733,6 +734,10 @@
   gap: 8px;
   min-height: 40px;
   padding: 8px 10px;
+}
+
+.maintenance-facility-card > button[data-action="buy-maintenance-facility"] {
+  margin-top: auto;
 }
 
 .maintenance-facility-card button span {
