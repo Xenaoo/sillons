@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.10` (package npm : `0.71.10`).
+- Version de code actuelle : `v0.71.11` (package npm : `0.71.11`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -54,7 +54,7 @@ Variables utiles :
 - La demande voyageurs OD est normalisée par budget de gare pour éviter qu’une gare commune génère une demande illimitée quand plusieurs lignes se superposent.
 - `Demande voy. / an` et `Demande fret / an` restent des valeurs structurelles stables : les facteurs dynamiques `state.market.demand`, `state.market.freight` et événements temporaires agissent sur le potentiel économique effectif, pas sur ces champs affichés.
 - `handoff.md` doit rester dans l’archive de travail actuelle.
-- Les changements v0.71.01 à v0.71.10 concernent surtout le cycle achat/fabrication des trains, les bâtiments de maintenance, les maintenances globales, les annulations et les corrections visuelles de `Parc`.
+- Les changements v0.71.01 à v0.71.11 concernent surtout le cycle achat/fabrication des trains, les bâtiments de maintenance, les maintenances globales, les annulations et les corrections visuelles de `Parc`.
 
 ## 4. Architecture
 

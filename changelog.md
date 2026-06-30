@@ -1,3 +1,10 @@
+# v0.71.11 — alignement des effets des bâtiments
+
+- Les cartes Dépôt, Atelier et Technicentre réservent maintenant la même hauteur de description.
+- Les blocs d’effets commencent donc sur la même ligne, même lorsque la description d’un bâtiment tient sur une seule ligne.
+- L’alignement bas des boutons `Construire` reste conservé.
+- Incrément de version : interface et serveur v0.71.11, package npm 0.71.11.
+
 # v0.71.10 — cartes bâtiments de maintenance compactes
 
 - Les vignettes Dépôt, Atelier et Technicentre sont plus denses et les boutons `Construire` restent alignés en bas de carte.
