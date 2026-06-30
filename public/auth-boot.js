@@ -1,7 +1,7 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.0-perf9';
+  const APP_VERSION = 'v0.71.10';
   const LEAFLET_VERSION = '1.9.4';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';

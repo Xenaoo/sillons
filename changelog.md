@@ -1,3 +1,82 @@
+# v0.71.10 — cartes bâtiments de maintenance compactes
+
+- Les vignettes Dépôt, Atelier et Technicentre sont plus denses et les boutons `Construire` restent alignés en bas de carte.
+- Les effets par niveau sont affichés explicitement : bonus par niveau, effet actuel, niveau suivant, coût et durée de chantier.
+- Les bonus des bâtiments de maintenance sont rééquilibrés à 2 % par niveau pour le dépôt, 2,5 % pour l’atelier et 3 % pour le technicentre.
+- Le bouton d’annulation d’un chantier de bâtiment est plus visible.
+- Incrément de version : interface et serveur v0.71.10, package npm 0.71.10.
+
+# v0.71.09 — stabilité de l’écran Maintenance
+
+- Correction du clignotement des images de trains dans `Parc > Maintenance` lors des ticks serveur.
+- Les compteurs de maintenance continuent d’avancer côté client sans reconstruire toute la liste à chaque tick.
+- Les trains sortant de maintenance déclenchent un rafraîchissement ciblé lorsque le compteur arrive à zéro.
+- Le nom de ligne dans les cartes de maintenance peut revenir à la ligne au lieu d’être coupé.
+- Incrément de version : interface et serveur v0.71.09, package npm 0.71.9.
+
+# v0.71.08 — annulations et maintenance globale
+
+- Ajout d’un bouton `Annuler tout` pour vider la file de fabrications de trains en cours avec remboursement.
+- Les constructions de Dépôt, Atelier et Technicentre peuvent être annulées avec remboursement du chantier.
+- Le bouton `Tout envoyer en maintenance` ouvre maintenant une fenêtre de choix du type de maintenance, avec coût total, durée maximale et disponibilité.
+- Les fabrications terminées disparaissent de la liste des fabrications en cours.
+- Les étapes de fabrication affichées sur les trains suivent réellement la progression au lieu de rester bloquées sur la première étape.
+- Incrément de version : interface et serveur v0.71.08, package npm 0.71.8.
+
+# v0.71.07 — file de fabrication séquentielle
+
+- Les trains achetés en plusieurs exemplaires sont fabriqués l’un après l’autre au lieu d’être livrés simultanément.
+- Le serveur recalcule la file de fabrication après achat, duplication, annulation et tick de simulation.
+- Le catalogue affiche la dernière livraison prévue en tenant compte de la file déjà en cours.
+- Les trains en attente affichent un état `En file d’attente` et le délai avant démarrage.
+- Incrément de version : interface et serveur v0.71.07, package npm 0.71.7.
+
+# v0.71.06 — durée totale d’achat des trains
+
+- La durée affichée près du bouton `Acheter` montre directement le temps total prévu pour la quantité saisie.
+- L’affichage ne présente plus une forme `N × HH:MM:SS` dans le catalogue.
+- Les confirmations d’achat indiquent la dernière livraison prévue et la durée unitaire de fabrication.
+- Incrément de version : interface et serveur v0.71.06, package npm 0.71.6.
+
+# v0.71.05 — lisibilité des fabrications et maintenances
+
+- Les fabrications en cours dans le catalogue utilisent une mise en page plus lisible, avec image, progression, étapes et action d’annulation séparées.
+- Les trains en construction sont retirés de la liste principale de maintenance.
+- Chaque train en maintenance affiche son temps restant, sa progression, sa durée totale et son état cible.
+- Incrément de version : interface et serveur v0.71.05, package npm 0.71.5.
+
+# v0.71.04 — suivi catalogue des fabrications
+
+- Les trains en construction sont affichés en haut de `Parc > Catalogue`, comme les files visibles dans l’écran R&D.
+- La durée de fabrication affichée à côté du bouton `Acheter` se met à jour dynamiquement selon la quantité saisie.
+- Le joueur peut annuler la fabrication d’un train en cours avec remboursement du prix payé.
+- Les trains encore en fabrication ne peuvent plus être affectés, dupliqués, vendus ou modifiés comme du matériel livré.
+- Incrément de version : interface et serveur v0.71.04, package npm 0.71.4.
+
+# v0.71.03 — chantiers des bâtiments de maintenance
+
+- Les améliorations de Dépôt, Atelier et Technicentre passent par une construction temporisée au lieu d’être instantanées.
+- Les durées de niveau 1 sont fixées à 2 h pour le dépôt, 6 h pour l’atelier et 18 h pour le technicentre.
+- Les coûts et durées de niveau augmentent avec un multiplicateur x1,25.
+- Les chantiers affichent un compteur numérique, une barre de progression et s’activent automatiquement à la fin.
+- Incrément de version : interface et serveur v0.71.03, package npm 0.71.3.
+
+# v0.71.02 — événements temporaires stabilisés
+
+- Les événements de marché utilisent maintenant des durées réelles en millisecondes et un prochain déclenchement planifié.
+- Les événements appliquent aussi des pénalités ponctuelles de ponctualité et de satisfaction lorsque leur type le prévoit.
+- L’écran Compagnie affiche le temps restant des événements ainsi que leurs effets voyageurs, fret, ponctualité et satisfaction.
+- Les facteurs de marché reviennent progressivement vers une cible influencée par les événements au lieu de dériver brutalement.
+- Incrément de version : interface et serveur v0.71.02, package npm 0.71.2.
+
+# v0.71.01 — maintenance et achat de trains
+
+- Les achats de trains lancent une fabrication avec état dédié, durée restante et livraison automatique.
+- Les trains en fabrication sont identifiés dans `Parc`, exclus des actions de composition, d’affectation et de vente, et comptabilisés séparément.
+- La maintenance du matériel est structurée par types d’intervention, bâtiments requis et durées dépendant du niveau des bâtiments.
+- Les bâtiments de maintenance Dépôt, Atelier et Technicentre sont introduits dans l’écran Maintenance avec niveaux et effets.
+- Incrément de version : interface et serveur v0.71.01, package npm 0.71.1.
+
 # v0.71.0 — calcul cumulatif réseau OD
 
 - Remplacement du marché « terminus à terminus » par un calcul réseau en couples origine/destination commerciaux.
