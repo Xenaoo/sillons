@@ -143,6 +143,15 @@
     .toast.error { border-color: rgba(239,68,68,.48); color: #fecaca; }
     @media (max-width: 520px) { .setup { align-items: start; padding: 10px; } .setup-card { padding: 16px; } .logo-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   </style>
+  <script>
+    (function preloadLoggedInStyles() {
+      try {
+        if (!localStorage.getItem('sillons.authToken')) return;
+        document.write('<link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=1.9.4">');
+        document.write('<link rel="stylesheet" href="/styles.css?v=v0.71.15">');
+      } catch (error) {}
+    })();
+  </script>
 </head>
 <body class="auth-boot">
   <div id="setup" class="setup">
@@ -283,7 +292,16 @@
     </form>
   </dialog>
 
-  <script defer src="/auth-boot.js?v=v0.71.14"></script>
-  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.14</button>
+  <script defer src="/auth-boot.js?v=v0.71.15"></script>
+  <script>
+    (function preloadLoggedInApp() {
+      try {
+        if (!localStorage.getItem('sillons.authToken')) return;
+        document.write('<script defer src="/vendor/leaflet/leaflet.js?v=1.9.4"><\/script>');
+        document.write('<script defer src="/app.js?v=v0.71.15"><\/script>');
+      } catch (error) {}
+    })();
+  </script>
+  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.15</button>
 </body>
 </html>

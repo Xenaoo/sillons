@@ -1,3 +1,10 @@
+# v0.71.15 - chargement direct du client connecte
+
+- Les sessions deja connectees demandent maintenant `styles.css`, Leaflet et `app.js` directement depuis le HTML.
+- `auth-boot.js` reste execute en premier pour amorcer l'etat, mais le vrai client n'attend plus que le shell ait fini son chargement dynamique pour commencer a se charger.
+- Correction de l'ecran `app-shell-boot` non interactif visible plusieurs secondes apres F5.
+- Increment de version : interface et serveur v0.71.15, package npm 0.71.15.
+
 # v0.71.14 - etat initial parallele
 
 - `auth-boot.js` lance maintenant `/api/state` des qu'une session existe, en parallele du chargement CSS/JS.
