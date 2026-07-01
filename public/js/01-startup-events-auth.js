@@ -21,7 +21,7 @@ async function init() {
 
   const snapshotStartedAt = performance.now();
   let renderedFromCachedState = false;
-  const bootState = consumeBootState();
+  const bootState = await consumeBootState();
   app.bootTimings.snapshotHit = Boolean(bootState);
   if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
   if (!renderedFromCachedState) {
@@ -37,13 +37,19 @@ async function init() {
   setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
 }
 
-function consumeBootState() {
+async function consumeBootState() {
   const bootAuth = window.__sillonsBootAuth;
   if (bootAuth?.token) {
     app.authToken = String(bootAuth.token || '');
     app.playerId = String(bootAuth.playerId || app.playerId || '');
   }
-  const data = window.__sillonsBootState;
+  let data = window.__sillonsBootState;
+  if (!data && window.__sillonsBootStatePromise) {
+    data = await Promise.race([
+      window.__sillonsBootStatePromise.catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve(null), 650))
+    ]);
+  }
   if (data) {
     try { delete window.__sillonsBootState; } catch (error) { window.__sillonsBootState = null; }
   }

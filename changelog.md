@@ -1,3 +1,10 @@
+# v0.71.14 - etat initial parallele
+
+- `auth-boot.js` lance maintenant `/api/state` des qu'une session existe, en parallele du chargement CSS/JS.
+- Le client complet attend brievement cette requete deja lancee afin d'eviter l'ecran vide quand le snapshot de session est absent ou refuse par le quota navigateur.
+- Le bundle principal n'attend plus la fin du chargement des feuilles de style completes pour commencer l'initialisation applicative.
+- Increment de version : interface et serveur v0.71.14, package npm 0.71.14.
+
 # v0.71.13 - affichage plus rapide apres F5
 
 - Le shell connecte est peint avant la lecture du snapshot de session et avant le chargement des feuilles de style completes.

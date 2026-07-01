@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.13` (package npm : `0.71.13`).
+- Version de code actuelle : `v0.71.14` (package npm : `0.71.14`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -57,6 +57,7 @@ Variables utiles :
 - Les changements v0.71.01 à v0.71.11 concernent surtout le cycle achat/fabrication des trains, les bâtiments de maintenance, les maintenances globales, les annulations et les corrections visuelles de `Parc`.
 - v0.71.12 sort les tuiles OpenStreetMap du chemin critique de chargement : Leaflet et le canvas s'initialisent immediatement, puis le fond OSM externe est ajoute apres `load`.
 - v0.71.13 force la peinture du shell connecte avant le chargement complet et differe le premier rendu lourd de la carte apres F5.
+- v0.71.14 lance l'etat initial en parallele de CSS/JS pour eviter un shell vide lorsque le snapshot navigateur n'est pas disponible.
 
 ## 4. Architecture
 

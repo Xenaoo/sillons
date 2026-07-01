@@ -1,7 +1,7 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.13';
+  const APP_VERSION = 'v0.71.14';
   const LEAFLET_VERSION = '1.9.4';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
@@ -38,6 +38,7 @@
 
   const $ = selector => document.querySelector(selector);
   let appWarmPromise = null;
+  let bootStateFetchPromise = null;
   let warmIntentBound = false;
 
   function escapeHtml(value) {
@@ -165,6 +166,27 @@
     }
   }
 
+  function fetchBootState() {
+    if (bootStateFetchPromise) return bootStateFetchPromise;
+    const token = String(window.__sillonsBootAuth?.token || localStorage.getItem(AUTH_TOKEN_KEY) || '').trim();
+    if (!token) return Promise.resolve(null);
+    bootStateFetchPromise = fetch('/api/state', {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(async response => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.ok) return null;
+        return seedBootState(data);
+      })
+      .catch(error => {
+        console.warn('Etat initial indisponible:', error.message);
+        return null;
+      });
+    window.__sillonsBootStatePromise = bootStateFetchPromise;
+    return bootStateFetchPromise;
+  }
+
   function formatInt(value) {
     return new Intl.NumberFormat('fr-FR').format(Math.round(Number(value || 0)));
   }
@@ -280,6 +302,11 @@
     if (window.__sillonsAppLoading) return;
     window.__sillonsAppLoading = true;
     let bootState = options.state ? seedBootState(options.state) : null;
+    const bootStatePromise = bootState ? Promise.resolve(bootState) : fetchBootState();
+    const stylesPromise = Promise.all([
+      loadStyle(APP_ASSETS.leafletCss),
+      loadStyle(APP_ASSETS.styles)
+    ]);
     if (bootState) renderConnectedShell(bootState);
     else renderEmptyShell();
     await afterBootShellPaint();
@@ -291,12 +318,13 @@
       }
     }
     void warmAppAssets();
-    await Promise.all([
-      loadStyle(APP_ASSETS.leafletCss),
-      loadStyle(APP_ASSETS.styles)
-    ]);
     await loadScript(APP_ASSETS.leafletJs);
+    await Promise.race([
+      bootStatePromise,
+      new Promise(resolve => window.setTimeout(resolve, 650))
+    ]);
     await loadScript(APP_ASSETS.appJs);
+    stylesPromise.catch(error => toast(error.message || 'Style complet indisponible.', 'error'));
   }
 
   function afterBootShellPaint() {

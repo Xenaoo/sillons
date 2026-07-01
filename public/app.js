@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.13';
+const PROJECT_VERSION = 'v0.71.14';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -455,7 +455,7 @@ async function init() {
 
   const snapshotStartedAt = performance.now();
   let renderedFromCachedState = false;
-  const bootState = consumeBootState();
+  const bootState = await consumeBootState();
   app.bootTimings.snapshotHit = Boolean(bootState);
   if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
   if (!renderedFromCachedState) {
@@ -471,13 +471,19 @@ async function init() {
   setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
 }
 
-function consumeBootState() {
+async function consumeBootState() {
   const bootAuth = window.__sillonsBootAuth;
   if (bootAuth?.token) {
     app.authToken = String(bootAuth.token || '');
     app.playerId = String(bootAuth.playerId || app.playerId || '');
   }
-  const data = window.__sillonsBootState;
+  let data = window.__sillonsBootState;
+  if (!data && window.__sillonsBootStatePromise) {
+    data = await Promise.race([
+      window.__sillonsBootStatePromise.catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve(null), 650))
+    ]);
+  }
   if (data) {
     try { delete window.__sillonsBootState; } catch (error) { window.__sillonsBootState = null; }
   }
