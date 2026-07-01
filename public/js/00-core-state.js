@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.17';
+const PROJECT_VERSION = 'v0.71.18';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -177,6 +177,7 @@ const app = {
     tileLayerScheduled: false,
     tileLayerInstallTimer: null,
     startupMapScheduled: false,
+    mobileViewportFixPending: false,
     deferredRedrawTimer: null,
     followedTrain: null,
     lastFollowCenterAt: 0,

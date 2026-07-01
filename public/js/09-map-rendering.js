@@ -43,16 +43,17 @@ function scheduleLeafletInvalidateSize() {
 }
 
 function scheduleMobileMapViewportFix() {
+  if (!window.matchMedia?.('(max-width: 1100px)')?.matches) return;
+  if (app.map.mobileViewportFixPending) return;
   const section = document.querySelector('.map-section');
   const holder = document.querySelector('#osmMap');
   if (!section || !holder) return;
+  app.map.mobileViewportFixPending = true;
   const run = () => {
-    if (window.matchMedia?.('(max-width: 1100px)')?.matches) {
-      section.classList.remove('hidden-by-layout');
-      section.style.removeProperty('display');
-      const height = holder.getBoundingClientRect().height;
-      if (height < 260) holder.style.minHeight = '300px';
-    }
+    section.classList.remove('hidden-by-layout');
+    section.style.removeProperty('display');
+    const height = holder.getBoundingClientRect().height;
+    if (height < 260) holder.style.minHeight = '300px';
     resizeCanvas();
     scheduleLeafletInvalidateSize();
   };
@@ -60,7 +61,10 @@ function scheduleMobileMapViewportFix() {
     run();
     requestAnimationFrame(run);
   });
-  window.setTimeout(run, 180);
+  window.setTimeout(() => {
+    run();
+    app.map.mobileViewportFixPending = false;
+  }, 180);
 }
 
 function hasPixelMapArt() {
@@ -103,22 +107,44 @@ function requestMapRedraw(options = {}) {
 }
 
 
+function isMapRenderReady() {
+  return Boolean(app.state?.world && app.map.ctx && app.map.width && app.map.height);
+}
+
+function trainMarkerSyncDelay(moving = false) {
+  if (moving) return app.map.followedTrain || app.hoverTrain ? 40 : 55;
+  if (app.map.followedTrain || app.hoverTrain) return 80;
+  if (app.hoverLine || app.hoverStation) return 120;
+  return 180;
+}
+
+function fullMapRedrawDelay(moving = false) {
+  if (moving) return 160;
+  if (app.map.followedTrain || app.hoverTrain || app.hoverLine || app.hoverStation) return 900;
+  return 2500;
+}
+
 function drawLoop(timestamp = performance.now()) {
   if (document.hidden) {
     app.map.lastDrawAt = timestamp;
     requestAnimationFrame(drawLoop);
     return;
   }
+  if (!isMapRenderReady()) {
+    requestAnimationFrame(drawLoop);
+    return;
+  }
 
   const moving = app.map.navigating;
-  const markerDelay = moving ? 16 : 33;
-  if (timestamp - Number(app.map.lastTrainMarkerSyncAt || 0) >= markerDelay) {
+  const markerJobs = app.map.trainMarkerJobs || [];
+  const hasMarkerWork = Boolean(markerJobs.length || app.map.trainMarkers?.size || app.map.followedTrain);
+  if (hasMarkerWork && timestamp - Number(app.map.lastTrainMarkerSyncAt || 0) >= trainMarkerSyncDelay(moving)) {
     syncTrainMarkerLayer();
     updateFollowedTrainPosition();
     app.map.lastTrainMarkerSyncAt = timestamp;
   }
 
-  const fullDelay = moving ? 120 : 1000;
+  const fullDelay = fullMapRedrawDelay(moving);
   if (!app.map.redrawRaf && timestamp - Number(app.map.lastFullDrawAt || 0) >= fullDelay) {
     drawMap({ lite: moving });
     app.map.lastDrawAt = timestamp;
@@ -1490,6 +1516,16 @@ function applyTrainMarkerElementPosition(el, point, pose, job) {
   if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
 }
 
+function isTrainMarkerPointVisible(point, margin = 72) {
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const width = Number(app.map.width || app.map.canvas?.clientWidth || 0);
+  const height = Number(app.map.height || app.map.canvas?.clientHeight || 0);
+  if (!width || !height) return true;
+  return x >= -margin && x <= width + margin && y >= -margin && y <= height + margin;
+}
+
 function syncTrainMarkerLayer(jobs = null, options = {}) {
   const layer = ensureTrainMarkerLayer();
   if (!layer) return;
@@ -1507,6 +1543,7 @@ function syncTrainMarkerLayer(jobs = null, options = {}) {
     if (!pose) continue;
     const point = trainMarkerProjectedPoint(pose, frame);
     if (!point) continue;
+    if (!isTrainMarkerPointVisible(point)) continue;
     registerTrainHitTarget(job, point, pose);
 
     const key = trainMarkerKey(job);

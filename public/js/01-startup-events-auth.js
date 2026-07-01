@@ -770,7 +770,7 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
       // menus déroulants, saisie, sliders, suggestions et formulaires restent ouverts.
       renderTopbar();
     } else {
-      renderAll({ deferMapRedraw: first && !app.map.mapReady });
+      renderAll({ deferMapRedraw: first && !app.map.mapReady, renderKey: nextRenderKey });
     }
     if (first) {
       reportClientBootMetrics({

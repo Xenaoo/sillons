@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.17` (package npm : `0.71.17`).
+- Version de code actuelle : `v0.71.18` (package npm : `0.71.18`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -61,6 +61,7 @@ Variables utiles :
 - v0.71.15 charge directement CSS/Leaflet/app.js depuis le HTML pour les sessions connectees afin de supprimer l'ecran boot non interactif apres F5.
 - v0.71.16 precharge CSS sans bloquer les scripts afin que le vrai client interactif ne reste pas retenu derriere `styles.css` apres F5.
 - v0.71.17 applique les styles complets depuis une minuterie pour eviter qu'une stylesheet dynamique ne bloque les scripts `defer`.
+- v0.71.18 allege la boucle carte : cadence adaptative des marqueurs de trains, redessins complets moins frequents en idle, culling des marqueurs hors viewport, viewport mobile non empile et reutilisation de signature d'etat pendant les rendus auto.
 
 ## 4. Architecture
 

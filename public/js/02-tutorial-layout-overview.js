@@ -232,6 +232,7 @@ function positionTutorialElements(target, card, step) {
 function renderAll(options = {}) {
   if (!app.state) return;
   const deferMapRedraw = Boolean(options && typeof options === 'object' && options.deferMapRedraw);
+  const renderKey = options && typeof options === 'object' ? String(options.renderKey || '') : '';
   const compositionScrollKey = currentCompositionScrollKey();
   const researchTreeScroll = app.activeTab === 'research' ? (() => {
     const tree = document.querySelector('.research-skilltree-scroll');
@@ -261,7 +262,7 @@ function renderAll(options = {}) {
       }
     }
   });
-  app.lastRenderKey = stateRenderSignature();
+  app.lastRenderKey = renderKey || stateRenderSignature();
 }
 
 function renderTopbar() {

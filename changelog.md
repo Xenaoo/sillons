@@ -1,3 +1,13 @@
+# v0.71.18 - carte plus fluide
+
+- La boucle de rendu carte ne resynchronise plus les marqueurs de trains toutes les 33 ms quand la carte est immobile.
+- La cadence des marqueurs devient adaptative : plus rapide pendant navigation, suivi ou survol, plus espacée en idle.
+- Les redessins complets automatiques de la carte sont espacés quand aucun élément interactif n'est ciblé.
+- Les marqueurs de trains hors viewport ne sont plus crees ni mis a jour dans le DOM.
+- Le correctif viewport mobile de la carte n'est plus planifie a chaque rendu desktop et ne peut plus s'empiler pendant une frame mobile deja prevue.
+- Les rendus automatiques reutilisent la signature d'etat deja calculee par le refresh au lieu de reparcourir inutilement l'etat.
+- Increment de version : interface et serveur v0.71.18, package npm 0.71.18.
+
 # v0.71.17 - CSS applique hors chemin critique
 
 - `auth-boot.js` ne pose plus les feuilles de style completes dans le meme tour d'execution que le chargement des scripts applicatifs.
