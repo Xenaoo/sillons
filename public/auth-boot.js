@@ -1,7 +1,7 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.15';
+  const APP_VERSION = 'v0.71.17';
   const LEAFLET_VERSION = '1.9.4';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
@@ -39,6 +39,7 @@
   const $ = selector => document.querySelector(selector);
   let appWarmPromise = null;
   let bootStateFetchPromise = null;
+  let fullStylesPromise = null;
   let warmIntentBound = false;
 
   function escapeHtml(value) {
@@ -100,6 +101,30 @@
       preloadAsset(APP_ASSETS.appJs, 'script')
     ]).catch(() => null);
     return appWarmPromise;
+  }
+
+  function loadFullStylesSoon(delayMs = 0) {
+    if (fullStylesPromise) return fullStylesPromise;
+    fullStylesPromise = new Promise(resolve => {
+      let installed = false;
+      const install = () => window.setTimeout(() => {
+        if (installed) return;
+        installed = true;
+        Promise.all([
+          loadStyle(APP_ASSETS.leafletCss),
+          loadStyle(APP_ASSETS.styles)
+        ]).then(resolve, error => {
+          toast(error.message || 'Style complet indisponible.', 'error');
+          resolve();
+        });
+      }, Math.max(0, Number(delayMs) || 0));
+      if (document.readyState === 'complete') install();
+      else {
+        document.addEventListener('DOMContentLoaded', install, { once: true });
+        window.setTimeout(install, 1200);
+      }
+    });
+    return fullStylesPromise;
   }
 
   function bindWarmupIntent() {
@@ -303,10 +328,7 @@
     window.__sillonsAppLoading = true;
     let bootState = options.state ? seedBootState(options.state) : null;
     const bootStatePromise = bootState ? Promise.resolve(bootState) : fetchBootState();
-    const stylesPromise = Promise.all([
-      loadStyle(APP_ASSETS.leafletCss),
-      loadStyle(APP_ASSETS.styles)
-    ]);
+    loadFullStylesSoon(0);
     if (bootState) renderConnectedShell(bootState);
     else renderEmptyShell();
     await afterBootShellPaint();
@@ -324,7 +346,7 @@
       new Promise(resolve => window.setTimeout(resolve, 650))
     ]);
     await loadScript(APP_ASSETS.appJs);
-    stylesPromise.catch(error => toast(error.message || 'Style complet indisponible.', 'error'));
+    void loadFullStylesSoon(0);
   }
 
   function afterBootShellPaint() {

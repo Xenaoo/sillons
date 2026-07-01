@@ -1,3 +1,17 @@
+# v0.71.17 - CSS applique hors chemin critique
+
+- `auth-boot.js` ne pose plus les feuilles de style completes dans le meme tour d'execution que le chargement des scripts applicatifs.
+- Les styles complets restent precharges puis sont appliques via minuterie, afin de ne pas retenir Leaflet et `app.js` derriere le chargement CSS.
+- Correction du maintien sur le shell non interactif lorsque le navigateur attend une stylesheet avant d'executer les scripts `defer`.
+- Increment de version : interface et serveur v0.71.17, package npm 0.71.17.
+
+# v0.71.16 - scripts non bloques par les styles
+
+- Le HTML des sessions connectees precharge maintenant `styles.css` et Leaflet CSS sans les rendre bloquants pour les scripts.
+- `app.js` et Leaflet JS restent demandes des le parsing HTML, mais ne sont plus retenus derriere une feuille de style complete lente.
+- Correction du maintien sur le shell `app-shell-boot` non interactif lorsque le chargement CSS prend plusieurs secondes apres F5.
+- Increment de version : interface et serveur v0.71.16, package npm 0.71.16.
+
 # v0.71.15 - chargement direct du client connecte
 
 - Les sessions deja connectees demandent maintenant `styles.css`, Leaflet et `app.js` directement depuis le HTML.
