@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.19';
+const PROJECT_VERSION = 'v0.71.23';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -342,27 +342,27 @@ const STAFF_COST_DIVISOR_CLIENT = 82;
 
 
 const ART = {
-  map: '/assets/art/hero-france-map.png',
+  map: '/assets/art/hero-france-map.jpg',
   tabs: {
-    overview: '/assets/art/hero-overview-v12.png',
-    lines: '/assets/art/hero-lines-v12.png',
-    fleet: '/assets/art/hero-fleet-v12.png',
-    stations: '/assets/art/hero-stations-v12.png',
-    staff: '/assets/art/hero-staff-v12.png',
-    research: '/assets/art/hero-research-v12.png',
-    market: '/assets/art/hero-market-v12.png',
-    resources: '/assets/art/hero-market-v12.png',
-    budget: '/assets/art/hero-market-v12.png',
-    bugs: '/assets/art/hero-overview-v12.png'
+    overview: '/assets/art/hero-overview-v12.jpg',
+    lines: '/assets/art/hero-lines-v12.jpg',
+    fleet: '/assets/art/hero-fleet-v12.jpg',
+    stations: '/assets/art/hero-stations-v12.jpg',
+    staff: '/assets/art/hero-staff-v12.jpg',
+    research: '/assets/art/hero-research-v12.jpg',
+    market: '/assets/art/hero-market-v12.jpg',
+    resources: '/assets/art/hero-market-v12.jpg',
+    budget: '/assets/art/hero-market-v12.jpg',
+    bugs: '/assets/art/hero-overview-v12.jpg'
   },
   researchGroups: {
-    traction: '/assets/art/board-traction.png',
-    energy: '/assets/art/board-energy.png',
-    maintenance: '/assets/art/board-maintenance.png',
-    operations: '/assets/art/board-operations.png',
-    stations: '/assets/art/board-transports.png',
-    freight: '/assets/art/board-freight.png',
-    social: '/assets/art/board-transports.png'
+    traction: '/assets/art/board-traction.jpg',
+    energy: '/assets/art/board-energy.jpg',
+    maintenance: '/assets/art/board-maintenance.jpg',
+    operations: '/assets/art/board-operations.jpg',
+    stations: '/assets/art/board-transports.jpg',
+    freight: '/assets/art/board-freight.jpg',
+    social: '/assets/art/board-transports.jpg'
   },
   researchNodes: {}
 };
@@ -459,11 +459,6 @@ async function init() {
   const bootState = await consumeBootState();
   app.bootTimings.snapshotHit = Boolean(bootState);
   if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
-  if (!renderedFromCachedState) {
-    const snapshot = await readStateSnapshot();
-    app.bootTimings.snapshotHit = Boolean(snapshot);
-    if (snapshot) renderedFromCachedState = applyStateSnapshot(snapshot);
-  }
   app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
   window.setTimeout(() => {
@@ -1403,17 +1398,33 @@ function initOsmMap() {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
+  const delayMs = 6000;
+  const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
+  let installed = false;
+  let armed = false;
+  const cleanup = () => {
+    events.forEach(type => window.removeEventListener(type, install, true));
+  };
   const install = () => {
+    if (installed) return;
+    installed = true;
+    cleanup();
     clearTimeout(app.map.tileLayerInstallTimer);
     app.map.tileLayerInstallTimer = window.setTimeout(() => {
       if (!app.map.leaflet || app.map.tileLayerName) return;
       addReliableFrenchTileLayer(app.map.leaflet);
       scheduleLeafletInvalidateSize();
       requestMapRedraw({ lite: true });
-    }, 1200);
+    }, 0);
   };
-  if (document.readyState === 'complete') install();
-  else window.addEventListener('load', install, { once: true });
+  const armInstall = () => {
+    if (armed) return;
+    armed = true;
+    events.forEach(type => window.addEventListener(type, install, { once: true, passive: true, capture: true }));
+    clearTimeout(app.map.tileLayerInstallTimer);
+    app.map.tileLayerInstallTimer = window.setTimeout(install, delayMs);
+  };
+  window.setTimeout(armInstall, 0);
 }
 
 function addReliableFrenchTileLayer(map) {
@@ -14383,6 +14394,6 @@ function escapeAttr(value) {
 }
 
 
-if (typeof init === 'function') Promise.resolve(init()).catch(showSillonsClientBootError);
+if (typeof init === 'function') Promise.resolve(init()).then(() => { window.__sillonsFullClientReady = true; document.dispatchEvent(new Event('sillons:client-ready')); }).catch(showSillonsClientBootError);
 
 else showSillonsClientBootError(new Error('Initialisation client absente.'));

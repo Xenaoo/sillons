@@ -5,7 +5,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const CLIENT_VERSION = 'v0.71.19';
+const CLIENT_VERSION = 'v0.71.23';
 
 const CLIENT_SCRIPT_PARTS = [
   '00-core-state.js',
@@ -51,7 +51,7 @@ const appBundle = [
   "}",
   "window.__sillonsClientBootError = showSillonsClientBootError;",
   readParts(path.join(PUBLIC_DIR, 'js'), CLIENT_SCRIPT_PARTS, 'js'),
-  "if (typeof init === 'function') Promise.resolve(init()).catch(showSillonsClientBootError);",
+  "if (typeof init === 'function') Promise.resolve(init()).then(() => { window.__sillonsFullClientReady = true; document.dispatchEvent(new Event('sillons:client-ready')); }).catch(showSillonsClientBootError);",
   "else showSillonsClientBootError(new Error('Initialisation client absente.'));"
 ].join('\n\n');
 

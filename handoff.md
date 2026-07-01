@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.19` (package npm : `0.71.19`).
+- Version de code actuelle : `v0.71.23` (package npm : `0.71.23`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -63,6 +63,10 @@ Variables utiles :
 - v0.71.17 applique les styles complets depuis une minuterie pour eviter qu'une stylesheet dynamique ne bloque les scripts `defer`.
 - v0.71.18 allege la boucle carte : cadence adaptative des marqueurs de trains, redessins complets moins frequents en idle, culling des marqueurs hors viewport, viewport mobile non empile et reutilisation de signature d'etat pendant les rendus auto.
 - v0.71.19 remplace les images pleine taille des cartes de trains par des vignettes WebP dans `public/assets/train-thumbs/`, pour retirer environ 165 Mo de decodage PNG potentiel du F5 sur l'onglet Parc.
+- v0.71.20 supprime le double chargement `defer` de `Leaflet/app.js` dans le HTML connecte : `auth-boot.js` charge le client, puis applique les styles complets apres initialisation. Le footer de bundle est synchronise dans `scripts/build-static-bundles.js` et dans le generateur dynamique serveur.
+- v0.71.21 remplace les PNG critiques de fond par leurs versions JPEG legeres (`hero-*` et `board-*`) pour eviter plusieurs Mo d'images decoratives au rechargement.
+- v0.71.22 sort l'etat complet du boot public : plus de fetch `/api/state` ni de snapshot complet serialise dans `auth-boot.js`, et le client complet ne relit plus IndexedDB/sessionStorage avant la premiere synchronisation serveur.
+- v0.71.23 differe les tuiles OpenStreetMap externes hors F5 : installation apres interaction ou delai, sans bloquer le canvas de carte interne.
 
 ## 4. Architecture
 

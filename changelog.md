@@ -1,3 +1,29 @@
+# v0.71.23 - tuiles OSM hors F5
+
+- Les tuiles OpenStreetMap externes ne sont plus demandees pendant le demarrage critique.
+- Le fond OSM est installe apres interaction utilisateur ou apres delai d'inactivite, pendant que le canvas interne reste disponible immediatement.
+- Increment de version : interface et serveur v0.71.23, package npm 0.71.23.
+
+# v0.71.22 - boot sans double etat complet
+
+- `auth-boot.js` ne telecharge plus `/api/state` avant le client complet : le F5 ne parse plus deux fois l'etat joueur.
+- Le shell connecte utilise uniquement un resume local leger pour les chiffres visibles, au lieu de serialiser un snapshot complet dans `sessionStorage`.
+- L'initialisation du client complet saute la lecture IndexedDB/sessionStorage avant le premier rendu et synchronise directement l'etat serveur.
+- Increment de version : interface et serveur v0.71.22, package npm 0.71.22.
+
+# v0.71.21 - images de boot legeres
+
+- Les fonds critiques du demarrage utilisent les versions JPEG deja presentes au lieu des PNG de plusieurs Mo.
+- Les visuels de carte, onglets et groupes R&D gardent le meme cadrage mais sortent le decodage PNG lourd du chemin critique du F5.
+- Increment de version : interface et serveur v0.71.21, package npm 0.71.21.
+
+# v0.71.20 - boot client sans double defer
+
+- Le HTML connecte ne reinjecte plus `Leaflet` et `app.js` en scripts `defer` pendant que `auth-boot.js` pilote deja le chargement.
+- `auth-boot.js` charge maintenant le client applicatif avant d'appliquer les styles complets, pour eviter un shell non interactif bloque derriere CSS ou scripts deferres.
+- Les deux generateurs de bundle principal, statique et serveur, marquent explicitement `window.__sillonsFullClientReady` quand `init()` est termine.
+- Increment de version : interface et serveur v0.71.20, package npm 0.71.20.
+
 # v0.71.19 - vignettes trains legeres
 
 - Les cartes du catalogue, de la maintenance et des fabrications utilisent des vignettes WebP generees dans `public/assets/train-thumbs/`.

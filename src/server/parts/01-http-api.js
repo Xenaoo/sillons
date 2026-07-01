@@ -67,7 +67,7 @@ function clientScriptBundle() {
       "window.__sillonsClientBootError = showSillonsClientBootError;"
     ].join('\n'),
     [
-      "if (typeof init === 'function') Promise.resolve(init()).catch(showSillonsClientBootError);",
+      "if (typeof init === 'function') Promise.resolve(init()).then(() => { window.__sillonsFullClientReady = true; document.dispatchEvent(new Event('sillons:client-ready')); }).catch(showSillonsClientBootError);",
       "else showSillonsClientBootError(new Error('Initialisation client absente.'));"
     ].join('\n')
   );

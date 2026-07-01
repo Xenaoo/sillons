@@ -1,12 +1,12 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.19';
+  const APP_VERSION = 'v0.71.23';
   const LEAFLET_VERSION = '1.9.4';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
-  const STATE_SESSION_SNAPSHOT_KEY = 'sillons.stateSnapshot.v1';
-  const STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const SHELL_SNAPSHOT_KEY = 'sillons.bootShellSnapshot.v1';
+  const SHELL_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   const APP_ASSETS = {
     leafletCss: `/vendor/leaflet/leaflet.css?v=${LEAFLET_VERSION}`,
     styles: `/styles.css?v=${APP_VERSION}`,
@@ -38,7 +38,6 @@
 
   const $ = selector => document.querySelector(selector);
   let appWarmPromise = null;
-  let bootStateFetchPromise = null;
   let fullStylesPromise = null;
   let warmIntentBound = false;
 
@@ -154,6 +153,36 @@
     return String(state?.auth?.playerId || state?.me?.id || '').trim();
   }
 
+  function compactShellState(state) {
+    const me = state?.me;
+    if (!me) return null;
+    return {
+      ok: true,
+      auth: state.auth ? { playerId: statePlayerId(state) } : undefined,
+      me: {
+        id: me.id,
+        name: me.name,
+        logo: me.logo,
+        cash: me.cash,
+        score: me.score,
+        eraName: me.eraName,
+        lines: Array.isArray(me.lines) ? me.lines.map(line => ({ active: Boolean(line?.active) })) : [],
+        trains: Array.isArray(me.trains) ? me.trains.map(() => ({})) : []
+      }
+    };
+  }
+
+  function writeShellSnapshot(state) {
+    const shell = compactShellState(state);
+    const playerId = statePlayerId(state) || String(shell?.me?.id || '').trim();
+    if (!shell || !playerId) return;
+    try {
+      localStorage.setItem(SHELL_SNAPSHOT_KEY, JSON.stringify({ playerId, savedAt: Date.now(), state: shell }));
+    } catch (error) {
+      // Le shell reste optionnel : le client complet charge toujours l'etat serveur.
+    }
+  }
+
   function seedBootAuth(auth, fallbackPlayerId = '') {
     const token = String(auth?.token || localStorage.getItem(AUTH_TOKEN_KEY) || '').trim();
     const playerId = String(auth?.playerId || fallbackPlayerId || localStorage.getItem(PLAYER_ID_KEY) || '').trim();
@@ -167,11 +196,7 @@
     const playerId = statePlayerId(state);
     if (!playerId) return null;
     window.__sillonsBootState = state;
-    try {
-      sessionStorage.setItem(STATE_SESSION_SNAPSHOT_KEY, JSON.stringify({ playerId, savedAt: Date.now(), state }));
-    } catch (error) {
-      // Le client complet conservera le secours IndexedDB si sessionStorage est plein.
-    }
+    writeShellSnapshot(state);
     return state;
   }
 
@@ -179,37 +204,15 @@
     try {
       const playerId = String(localStorage.getItem(PLAYER_ID_KEY) || '').trim();
       if (!playerId) return null;
-      const raw = sessionStorage.getItem(STATE_SESSION_SNAPSHOT_KEY);
+      const raw = localStorage.getItem(SHELL_SNAPSHOT_KEY);
       const record = raw ? JSON.parse(raw) : null;
       if (!record?.state || String(record.playerId || statePlayerId(record.state)) !== playerId) return null;
-      if (Date.now() - Number(record.savedAt || 0) > STATE_SNAPSHOT_MAX_AGE_MS) return null;
-      const state = record.state?.ok && record.state?.me && record.state?.world ? record.state : null;
-      if (state) window.__sillonsBootState = state;
+      if (Date.now() - Number(record.savedAt || 0) > SHELL_SNAPSHOT_MAX_AGE_MS) return null;
+      const state = record.state?.ok && record.state?.me ? record.state : null;
       return state;
     } catch (error) {
       return null;
     }
-  }
-
-  function fetchBootState() {
-    if (bootStateFetchPromise) return bootStateFetchPromise;
-    const token = String(window.__sillonsBootAuth?.token || localStorage.getItem(AUTH_TOKEN_KEY) || '').trim();
-    if (!token) return Promise.resolve(null);
-    bootStateFetchPromise = fetch('/api/state', {
-      cache: 'no-store',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(async response => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok || !data?.ok) return null;
-        return seedBootState(data);
-      })
-      .catch(error => {
-        console.warn('Etat initial indisponible:', error.message);
-        return null;
-      });
-    window.__sillonsBootStatePromise = bootStateFetchPromise;
-    return bootStateFetchPromise;
   }
 
   function formatInt(value) {
@@ -327,8 +330,7 @@
     if (window.__sillonsAppLoading) return;
     window.__sillonsAppLoading = true;
     let bootState = options.state ? seedBootState(options.state) : null;
-    const bootStatePromise = bootState ? Promise.resolve(bootState) : fetchBootState();
-    loadFullStylesSoon(0);
+    void warmAppAssets();
     if (bootState) renderConnectedShell(bootState);
     else renderEmptyShell();
     await afterBootShellPaint();
@@ -339,14 +341,9 @@
         await afterBootShellPaint();
       }
     }
-    void warmAppAssets();
     await loadScript(APP_ASSETS.leafletJs);
-    await Promise.race([
-      bootStatePromise,
-      new Promise(resolve => window.setTimeout(resolve, 650))
-    ]);
     await loadScript(APP_ASSETS.appJs);
-    void loadFullStylesSoon(0);
+    window.setTimeout(() => { void loadFullStylesSoon(0); }, 0);
   }
 
   function afterBootShellPaint() {

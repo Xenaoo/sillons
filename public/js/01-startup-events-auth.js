@@ -24,11 +24,6 @@ async function init() {
   const bootState = await consumeBootState();
   app.bootTimings.snapshotHit = Boolean(bootState);
   if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
-  if (!renderedFromCachedState) {
-    const snapshot = await readStateSnapshot();
-    app.bootTimings.snapshotHit = Boolean(snapshot);
-    if (snapshot) renderedFromCachedState = applyStateSnapshot(snapshot);
-  }
   app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
   window.setTimeout(() => {
@@ -968,17 +963,33 @@ function initOsmMap() {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
+  const delayMs = 6000;
+  const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
+  let installed = false;
+  let armed = false;
+  const cleanup = () => {
+    events.forEach(type => window.removeEventListener(type, install, true));
+  };
   const install = () => {
+    if (installed) return;
+    installed = true;
+    cleanup();
     clearTimeout(app.map.tileLayerInstallTimer);
     app.map.tileLayerInstallTimer = window.setTimeout(() => {
       if (!app.map.leaflet || app.map.tileLayerName) return;
       addReliableFrenchTileLayer(app.map.leaflet);
       scheduleLeafletInvalidateSize();
       requestMapRedraw({ lite: true });
-    }, 1200);
+    }, 0);
   };
-  if (document.readyState === 'complete') install();
-  else window.addEventListener('load', install, { once: true });
+  const armInstall = () => {
+    if (armed) return;
+    armed = true;
+    events.forEach(type => window.addEventListener(type, install, { once: true, passive: true, capture: true }));
+    clearTimeout(app.map.tileLayerInstallTimer);
+    app.map.tileLayerInstallTimer = window.setTimeout(install, delayMs);
+  };
+  window.setTimeout(armInstall, 0);
 }
 
 function addReliableFrenchTileLayer(map) {
