@@ -148,9 +148,9 @@
       try {
         if (!localStorage.getItem('sillons.authToken')) return;
         document.write('<link rel="preload" as="style" href="/vendor/leaflet/leaflet.css?v=1.9.4">');
-        document.write('<link rel="preload" as="style" href="/styles.css?v=v0.71.18">');
+        document.write('<link rel="preload" as="style" href="/styles.css?v=v0.71.19">');
         document.write('<link rel="preload" as="script" href="/vendor/leaflet/leaflet.js?v=1.9.4">');
-        document.write('<link rel="preload" as="script" href="/app.js?v=v0.71.18">');
+        document.write('<link rel="preload" as="script" href="/app.js?v=v0.71.19">');
       } catch (error) {}
     })();
   </script>
@@ -294,16 +294,16 @@
     </form>
   </dialog>
 
-  <script defer src="/auth-boot.js?v=v0.71.18"></script>
+  <script defer src="/auth-boot.js?v=v0.71.19"></script>
   <script>
     (function preloadLoggedInApp() {
       try {
         if (!localStorage.getItem('sillons.authToken')) return;
         document.write('<script defer src="/vendor/leaflet/leaflet.js?v=1.9.4"><\/script>');
-        document.write('<script defer src="/app.js?v=v0.71.18"><\/script>');
+        document.write('<script defer src="/app.js?v=v0.71.19"><\/script>');
       } catch (error) {}
     })();
   </script>
-  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.18</button>
+  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.19</button>
 </body>
 </html>

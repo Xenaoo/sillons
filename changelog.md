@@ -1,3 +1,10 @@
+# v0.71.19 - vignettes trains legeres
+
+- Les cartes du catalogue, de la maintenance et des fabrications utilisent des vignettes WebP generees dans `public/assets/train-thumbs/`.
+- Les 70 visuels de trains affiches en cartes passent d'environ 166,8 Mo de PNG sources a environ 1,1 Mo de vignettes chargeables.
+- Les images pleine taille restent en fallback si une vignette manque, mais ne sont plus dans le chemin critique du F5.
+- Increment de version : interface et serveur v0.71.19, package npm 0.71.19.
+
 # v0.71.18 - carte plus fluide
 
 - La boucle de rendu carte ne resynchronise plus les marqueurs de trains toutes les 33 ms quand la carte est immobile.

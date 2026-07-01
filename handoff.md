@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.18` (package npm : `0.71.18`).
+- Version de code actuelle : `v0.71.19` (package npm : `0.71.19`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -62,6 +62,7 @@ Variables utiles :
 - v0.71.16 precharge CSS sans bloquer les scripts afin que le vrai client interactif ne reste pas retenu derriere `styles.css` apres F5.
 - v0.71.17 applique les styles complets depuis une minuterie pour eviter qu'une stylesheet dynamique ne bloque les scripts `defer`.
 - v0.71.18 allege la boucle carte : cadence adaptative des marqueurs de trains, redessins complets moins frequents en idle, culling des marqueurs hors viewport, viewport mobile non empile et reutilisation de signature d'etat pendant les rendus auto.
+- v0.71.19 remplace les images pleine taille des cartes de trains par des vignettes WebP dans `public/assets/train-thumbs/`, pour retirer environ 165 Mo de decodage PNG potentiel du F5 sur l'onglet Parc.
 
 ## 4. Architecture
 

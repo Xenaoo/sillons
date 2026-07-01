@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.18';
+const PROJECT_VERSION = 'v0.71.19';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -4677,6 +4677,13 @@ function trainArtUrl(model) {
   return src ? `${src}?v=${encodeURIComponent(PROJECT_VERSION)}` : '';
 }
 
+function trainArtThumbUrl(model) {
+  const src = TRAIN_ART_BY_MODEL_ID[model?.id];
+  if (!src) return '';
+  const thumb = src.replace('/assets/trains/', '/assets/train-thumbs/').replace(/\.png$/i, '.webp');
+  return `${thumb}?v=${encodeURIComponent(PROJECT_VERSION)}`;
+}
+
 function trainArtClass(model) {
   const classes = ['train-art'];
   if (model?.era) classes.push(`train-art-${String(model.era).replace(/[^a-z0-9_-]/gi, '-')}`);
@@ -4686,8 +4693,9 @@ function trainArtClass(model) {
 
 function renderTrainArt(model) {
   const artUrl = trainArtUrl(model);
-  if (artUrl) {
-    return `<div class="${escapeAttr(trainArtClass(model))}" data-train-art-id="${escapeAttr(model.id)}" aria-label="Visuel de ${escapeAttr(model.name)}"><img src="${escapeAttr(artUrl)}" alt="Illustration du train ${escapeAttr(model.name)}" loading="lazy" decoding="async"></div>`;
+  const thumbUrl = trainArtThumbUrl(model);
+  if (thumbUrl || artUrl) {
+    return `<div class="${escapeAttr(trainArtClass(model))}" data-train-art-id="${escapeAttr(model.id)}" aria-label="Visuel de ${escapeAttr(model.name)}"><img src="${escapeAttr(thumbUrl || artUrl)}" data-full-src="${escapeAttr(artUrl)}" alt="Illustration du train ${escapeAttr(model.name)}" loading="lazy" decoding="async" fetchpriority="low" width="520" height="320" onerror="this.onerror=null;this.src=this.dataset.fullSrc||this.src"></div>`;
   }
   return `<div class="train-art train-art-placeholder" aria-label="Visuel à refaire pour ${escapeAttr(model.name)}"><span>Visuel matériel</span><b>À refaire</b></div>`;
 }
