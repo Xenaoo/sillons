@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.29';
+const PROJECT_VERSION = 'v0.71.30';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -363,6 +363,9 @@ const LOCAL_BASEMAP = {
   flavor: 'dark',
   lang: 'fr',
   maxDataZoom: 14,
+  minZoom: 5,
+  dataBounds: [[41.0, -5.6], [51.8, 10.0]],
+  viewBounds: [[41.08, -5.45], [51.68, 9.85]],
   attribution: 'Carte locale PMTiles - donnees OpenStreetMap contributors'
 };
 

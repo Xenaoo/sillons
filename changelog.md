@@ -1,3 +1,11 @@
+# v0.71.30 - limites de carte locale
+
+- La carte locale PMTiles expose maintenant ses bounds de donnees et une zone de vue utile centree sur la France.
+- Le zoom minimum Leaflet est recalcule selon la taille reelle du viewport afin que la vue reste toujours contenue dans la zone couverte par l'archive.
+- Le deplacement de carte est contraint aux bounds utiles et la couche PMTiles ne demande plus de tuiles hors archive.
+- Le recentrage initial utilise ces limites pour eviter toute zone vide visible au premier chargement ou au dezoom maximal.
+- Increment de version : interface et serveur v0.71.30, package npm 0.71.30.
+
 # v0.71.29 - zoom fluide sans snapshot au demarrage
 
 - Le recentrage initial de la carte sur la France est force sans animation pour eviter qu'un snapshot de zoom apparaisse pendant le chargement.

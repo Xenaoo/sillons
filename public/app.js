@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.29';
+const PROJECT_VERSION = 'v0.71.30';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -384,6 +384,9 @@ const LOCAL_BASEMAP = {
   flavor: 'dark',
   lang: 'fr',
   maxDataZoom: 14,
+  minZoom: 5,
+  dataBounds: [[41.0, -5.6], [51.8, 10.0]],
+  viewBounds: [[41.08, -5.45], [51.68, 9.85]],
   attribution: 'Carte locale PMTiles - donnees OpenStreetMap contributors'
 };
 
@@ -1449,8 +1452,10 @@ function initOsmMap() {
   app.map.leaflet = L.map(target, {
     center: [46.75, 2.35],
     zoom: 6,
-    minZoom: 5,
+    minZoom: LOCAL_BASEMAP.minZoom || 5,
     maxZoom: 13,
+    maxBounds: LOCAL_BASEMAP.viewBounds,
+    maxBoundsViscosity: 1,
     zoomControl: false,
     attributionControl: true,
     preferCanvas: true,
@@ -1558,14 +1563,57 @@ function initOsmMap() {
     app.map.mapReady = true;
     app.map.initializing = false;
     resizeCanvas();
+    constrainLocalBasemapViewport(app.map.leaflet, { fit: true });
     fitFranceMap();
     updateIsoClass();
   });
 
   if ('ResizeObserver' in window) {
-    const observer = new ResizeObserver(() => resizeCanvas());
+    const observer = new ResizeObserver(() => {
+      resizeCanvas();
+      constrainLocalBasemapViewport(app.map.leaflet);
+    });
     observer.observe(target);
   }
+}
+
+function localBasemapDataBounds() {
+  if (!window.L || !Array.isArray(LOCAL_BASEMAP.dataBounds)) return null;
+  return L.latLngBounds(LOCAL_BASEMAP.dataBounds);
+}
+
+function localBasemapViewBounds() {
+  if (!window.L || !Array.isArray(LOCAL_BASEMAP.viewBounds)) return localBasemapDataBounds();
+  return L.latLngBounds(LOCAL_BASEMAP.viewBounds);
+}
+
+function localBasemapMinZoomForViewport(map, bounds) {
+  if (!map || !bounds?.isValid?.()) return LOCAL_BASEMAP.minZoom || 5;
+  const baseMinZoom = Number(LOCAL_BASEMAP.minZoom || 5);
+  try {
+    const containedZoom = map.getBoundsZoom(bounds, true);
+    if (!Number.isFinite(containedZoom)) return baseMinZoom;
+    return Math.max(baseMinZoom, Math.ceil(containedZoom));
+  } catch {
+    return baseMinZoom;
+  }
+}
+
+function constrainLocalBasemapViewport(map, options = {}) {
+  if (!map || !window.L) return;
+  const viewBounds = localBasemapViewBounds();
+  if (!viewBounds?.isValid?.()) return;
+  const minZoom = localBasemapMinZoomForViewport(map, viewBounds);
+  map.setMaxBounds(viewBounds);
+  if (map.getMinZoom() !== minZoom) map.setMinZoom(minZoom);
+  if (map.getZoom() < minZoom) map.setZoom(minZoom, { animate: false });
+  if (options.fit) {
+    map.fitBounds(viewBounds, { padding: [0, 0], animate: false, maxZoom: Math.max(minZoom, 7) });
+    return;
+  }
+  try {
+    map.panInsideBounds(viewBounds, { animate: false });
+  } catch {}
 }
 
 function scheduleMapTileLayerInstall(map) {
@@ -1643,7 +1691,7 @@ async function addLocalPmtilesBasemap(map) {
       updateWhenZooming: false,
       keepBuffer: 5,
       noWrap: true,
-      bounds: [[-85, -180], [85, 180]]
+      bounds: LOCAL_BASEMAP.dataBounds
     });
     layer.addTo(map);
     app.map.localBasemapLayer = layer;
@@ -1657,7 +1705,7 @@ async function addLocalPmtilesBasemap(map) {
 
 function fitFranceMap() {
   if (!app.map.leaflet) return;
-  app.map.leaflet.fitBounds([[41.2, -5.3], [51.2, 9.7]], { padding: [20, 20], animate: false });
+  constrainLocalBasemapViewport(app.map.leaflet, { fit: true });
 }
 
 function updateIsoClass() {

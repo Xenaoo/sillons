@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.29` (package npm : `0.71.29`).
+- Version de code actuelle : `v0.71.30` (package npm : `0.71.30`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -72,6 +72,7 @@ Variables utiles :
 - v0.71.27 ajoute une transition de zoom reelle par snapshot temporaire de la carte visible et suspend les redraws complets pendant cette courte animation, car le fondu de tuiles seul ne rendait pas le zoom perceptiblement plus fluide.
 - v0.71.28 allonge la transition du snapshot de zoom et force un nouveau cache-buster, les bundles etant servis avec `Cache-Control: immutable`.
 - v0.71.29 desactive l'animation du recentrage initial France afin que le snapshot de zoom ne s'affiche pas au demarrage, tout en conservant la transition pour les zooms utilisateur.
+- v0.71.30 ajoute des bounds stricts pour la carte locale PMTiles, recalcule le zoom minimum selon le viewport et empeche le dezoom/pan d'afficher une zone hors archive.
 
 ## 4. Architecture
 
