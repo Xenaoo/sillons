@@ -596,6 +596,151 @@ function leafletNewPixelOrigin(center, zoom) {
   }
 }
 
+function cancelMapZoomSnapshotTimers(snapshot = app.map.zoomSnapshot) {
+  if (!snapshot) return;
+  const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+  if (snapshot.raf) {
+    cancelFrame(snapshot.raf);
+    snapshot.raf = 0;
+  }
+  if (snapshot.fadeTimer) {
+    clearTimeout(snapshot.fadeTimer);
+    snapshot.fadeTimer = null;
+  }
+  if (snapshot.removeTimer) {
+    clearTimeout(snapshot.removeTimer);
+    snapshot.removeTimer = null;
+  }
+}
+
+function clearMapZoomSnapshot() {
+  const snapshot = app.map.zoomSnapshot;
+  if (!snapshot) return;
+  cancelMapZoomSnapshotTimers(snapshot);
+  try { snapshot.canvas?.remove?.(); } catch {}
+  snapshot.canvas = null;
+  snapshot.active = false;
+  snapshot.finishing = false;
+  snapshot.baseZoom = null;
+  snapshot.basePixelOrigin = null;
+  snapshot.transform = '';
+  $('#osmMap')?.classList.remove('map-zoom-snapshot-active');
+}
+
+function drawMapZoomSnapshotElement(ctx, element, containerRect) {
+  if (!ctx || !element || typeof element.getBoundingClientRect !== 'function') return false;
+  const rect = element.getBoundingClientRect();
+  if (!rect.width || !rect.height) return false;
+  const x = rect.left - containerRect.left;
+  const y = rect.top - containerRect.top;
+  try {
+    const style = getComputedStyle(element);
+    ctx.save();
+    const opacity = Number(style.opacity);
+    if (Number.isFinite(opacity)) ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+    if (style.filter && style.filter !== 'none') ctx.filter = style.filter;
+    ctx.drawImage(element, x, y, rect.width, rect.height);
+    ctx.restore();
+    return true;
+  } catch {
+    try { ctx.restore(); } catch {}
+    return false;
+  }
+}
+
+function startMapZoomSnapshot() {
+  clearMapZoomSnapshot();
+  const map = app.map.leaflet;
+  const target = $('#osmMap');
+  if (!map || !target) return;
+  const rect = target.getBoundingClientRect();
+  const width = Math.round(rect.width);
+  const height = Math.round(rect.height);
+  if (width <= 0 || height <= 0) return;
+
+  const canvas = document.createElement('canvas');
+  const dpr = Math.max(1, Math.min(2, Number(window.devicePixelRatio || 1)));
+  canvas.width = Math.max(1, Math.round(width * dpr));
+  canvas.height = Math.max(1, Math.round(height * dpr));
+  canvas.className = 'sillons-map-zoom-snapshot';
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  canvas.style.transform = 'translate3d(0, 0, 0) scale(1)';
+  canvas.style.opacity = '1';
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  let drawn = 0;
+  const tiles = Array.from(target.querySelectorAll('.leaflet-tile-pane .leaflet-tile-loaded'));
+  for (const tile of tiles) {
+    if (drawMapZoomSnapshotElement(ctx, tile, rect)) drawn++;
+  }
+  if (drawMapZoomSnapshotElement(ctx, app.map.canvas, rect)) drawn++;
+  if (!drawn) return;
+
+  const snapshot = app.map.zoomSnapshot;
+  snapshot.canvas = canvas;
+  snapshot.active = true;
+  snapshot.finishing = false;
+  snapshot.baseZoom = map.getZoom();
+  snapshot.basePixelOrigin = cloneLeafletPoint(map.getPixelOrigin?.());
+  snapshot.transform = canvas.style.transform;
+  target.appendChild(canvas);
+  target.classList.add('map-zoom-snapshot-active');
+}
+
+function setMapZoomSnapshotTransform(center, zoom) {
+  const snapshot = app.map.zoomSnapshot;
+  const map = app.map.leaflet;
+  const canvas = snapshot?.canvas;
+  if (!snapshot?.active || !map || !canvas) return;
+
+  const baseZoom = Number.isFinite(Number(snapshot.baseZoom)) ? Number(snapshot.baseZoom) : map.getZoom();
+  const baseOrigin = snapshot.basePixelOrigin || cloneLeafletPoint(map.getPixelOrigin?.());
+  const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
+  const targetCenter = center || map.getCenter();
+  const targetOrigin = leafletNewPixelOrigin(targetCenter, targetZoom);
+  if (!baseOrigin || !targetOrigin) return;
+
+  const scale = map.getZoomScale ? map.getZoomScale(targetZoom, baseZoom) : Math.pow(2, targetZoom - baseZoom);
+  const dx = (baseOrigin.x * scale) - targetOrigin.x;
+  const dy = (baseOrigin.y * scale) - targetOrigin.y;
+  const roundedDx = Math.round(dx * 1000) / 1000;
+  const roundedDy = Math.round(dy * 1000) / 1000;
+  const roundedScale = Math.round(scale * 1000000) / 1000000;
+  const transform = `translate3d(${roundedDx}px, ${roundedDy}px, 0) scale(${roundedScale})`;
+  if (snapshot.transform === transform) return;
+  snapshot.transform = transform;
+
+  const requestFrame = window.requestAnimationFrame || (fn => window.setTimeout(fn, 16));
+  const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+  if (snapshot.raf) cancelFrame(snapshot.raf);
+  snapshot.raf = requestFrame(() => {
+    snapshot.raf = 0;
+    if (!snapshot.active || snapshot.canvas !== canvas) return;
+    canvas.classList.add('is-animating');
+    canvas.style.transform = transform;
+  });
+}
+
+function finishMapZoomSnapshot(center, zoom) {
+  const snapshot = app.map.zoomSnapshot;
+  if (!snapshot?.active || !snapshot.canvas) return;
+  setMapZoomSnapshotTransform(center, zoom);
+  snapshot.finishing = true;
+  const canvas = snapshot.canvas;
+  snapshot.fadeTimer = window.setTimeout(() => {
+    if (app.map.zoomSnapshot?.canvas === canvas) canvas.classList.add('is-finishing');
+  }, 260);
+  snapshot.removeTimer = window.setTimeout(() => {
+    if (app.map.zoomSnapshot?.canvas === canvas) clearMapZoomSnapshot();
+  }, 620);
+}
+
 function startPanOverlay(mode = 'pan') {
   resetMapCanvasTransform();
 }
@@ -875,6 +1020,7 @@ function initOsmMap() {
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
 
   app.map.leaflet.on('zoomstart', () => {
+    startMapZoomSnapshot();
     app.map.navigating = true;
     app.map.zoomAnimating = true;
     app.map.lastMoveEventAt = performance.now();
@@ -882,14 +1028,15 @@ function initOsmMap() {
     resetMapCanvasTransform();
     resizeCanvas();
     invalidateMapProjection('zoom-start');
-    requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoomanim', event => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
     if (event && Number.isFinite(Number(event.zoom)) && event.center) {
+      setMapZoomSnapshotTransform(event.center, Number(event.zoom));
       requestTrainMarkerLayerSync({ zoomFrame: { zoom: Number(event.zoom), center: event.center } });
     } else {
+      setMapZoomSnapshotTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
       updateTrainMarkerPositions();
     }
     markMapProjectionDirty();
@@ -899,10 +1046,13 @@ function initOsmMap() {
     app.map.lastMoveEventAt = performance.now();
     resetMapCanvasTransform();
     invalidateMapProjection('zoom');
+    setMapZoomSnapshotTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
     if (app.map.zoomAnimating) updateTrainMarkerPositions();
     else requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoomend', () => {
+    const finalCenter = app.map.leaflet.getCenter();
+    const finalZoom = app.map.leaflet.getZoom();
     app.map.navigating = false;
     app.map.zoomAnimating = false;
     app.map.trainMarkerZoomFrame = null;
@@ -912,6 +1062,7 @@ function initOsmMap() {
     updateIsoClass();
     invalidateMapProjection('zoom-end');
     requestMapRedraw({ lite: false });
+    finishMapZoomSnapshot(finalCenter, finalZoom);
   });
 
   app.map.leaflet.on('movestart', () => {
@@ -1058,7 +1209,7 @@ async function addLocalPmtilesBasemap(map) {
 
 function fitFranceMap() {
   if (!app.map.leaflet) return;
-  app.map.leaflet.fitBounds([[41.2, -5.3], [51.2, 9.7]], { padding: [20, 20] });
+  app.map.leaflet.fitBounds([[41.2, -5.3], [51.2, 9.7]], { padding: [20, 20], animate: false });
 }
 
 function updateIsoClass() {

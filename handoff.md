@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.26` (package npm : `0.71.26`).
+- Version de code actuelle : `v0.71.29` (package npm : `0.71.29`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -69,6 +69,9 @@ Variables utiles :
 - v0.71.23 differe les tuiles OpenStreetMap externes hors F5 : installation apres interaction ou delai, sans bloquer le canvas de carte interne.
 - v0.71.24 remplace le fond de tuiles externe par une carte locale PMTiles optionnelle (`public/assets/maps/world.pmtiles`) via `protomaps-leaflet`; le serveur gere les requetes Range sur `.pmtiles` et le jeu conserve son fond interne si l'archive locale est absente.
 - v0.71.26 reactive le zoom anime Leaflet, ajoute un fondu d'opacite sur les tuiles PMTiles locales et reduit le delai de rendu des tuiles pour rendre l'exploration plus fluide.
+- v0.71.27 ajoute une transition de zoom reelle par snapshot temporaire de la carte visible et suspend les redraws complets pendant cette courte animation, car le fondu de tuiles seul ne rendait pas le zoom perceptiblement plus fluide.
+- v0.71.28 allonge la transition du snapshot de zoom et force un nouveau cache-buster, les bundles etant servis avec `Cache-Control: immutable`.
+- v0.71.29 desactive l'animation du recentrage initial France afin que le snapshot de zoom ne s'affiche pas au demarrage, tout en conservant la transition pour les zooms utilisateur.
 
 ## 4. Architecture
 

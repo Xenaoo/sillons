@@ -145,7 +145,7 @@ function drawLoop(timestamp = performance.now()) {
   }
 
   const fullDelay = fullMapRedrawDelay(moving);
-  if (!app.map.redrawRaf && timestamp - Number(app.map.lastFullDrawAt || 0) >= fullDelay) {
+  if (!app.map.zoomAnimating && !app.map.redrawRaf && timestamp - Number(app.map.lastFullDrawAt || 0) >= fullDelay) {
     drawMap({ lite: moving });
     app.map.lastDrawAt = timestamp;
     if (!moving) app.map.lastFullDrawAt = timestamp;

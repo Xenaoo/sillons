@@ -1,3 +1,23 @@
+# v0.71.29 - zoom fluide sans snapshot au demarrage
+
+- Le recentrage initial de la carte sur la France est force sans animation pour eviter qu'un snapshot de zoom apparaisse pendant le chargement.
+- Le zoom utilisateur conserve la transition par snapshot ajoutee precedemment.
+- Nouveau cache-buster `v0.71.29` apres correction du bundle servi en `immutable`.
+- Increment de version : interface et serveur v0.71.29, package npm 0.71.29.
+
+# v0.71.28 - transition de zoom forcee par cache
+
+- Allongement de la transition du snapshot de zoom afin qu'elle couvre visiblement le remplacement des tuiles PMTiles.
+- Nouveau cache-buster `v0.71.28`, car les bundles `app.js` et `styles.css` sont servis en `immutable`.
+- Increment de version : interface et serveur v0.71.28, package npm 0.71.28.
+
+# v0.71.27 - zoom carte avec transition reelle
+
+- Ajout d'un snapshot temporaire de la carte visible pendant le zoom : les tuiles PMTiles et le canvas des lignes sont captures puis scales pendant que les nouvelles tuiles arrivent.
+- Les redraws complets du canvas carte sont suspendus pendant la courte animation de zoom afin d'eviter les saccades au milieu de la transition.
+- Les controles Leaflet restent au-dessus du snapshot et l'animation reste active malgre la regle globale `prefers-reduced-motion`.
+- Increment de version : interface et serveur v0.71.27, package npm 0.71.27.
+
 # v0.71.26 - zoom carte plus fluide
 
 - Le zoom Leaflet est de nouveau anime sur la carte afin d'eviter les sauts visuels pendant les changements de niveau.

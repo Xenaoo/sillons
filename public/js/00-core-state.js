@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.26';
+const PROJECT_VERSION = 'v0.71.29';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -179,6 +179,7 @@ const app = {
     localBasemapLayer: null,
     localBasemapStatus: 'idle',
     zoomAnimating: false,
+    zoomSnapshot: { canvas: null, active: false, finishing: false, raf: 0, fadeTimer: null, removeTimer: null, baseZoom: null, basePixelOrigin: null, transform: '' },
     startupMapScheduled: false,
     mobileViewportFixPending: false,
     deferredRedrawTimer: null,

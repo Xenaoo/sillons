@@ -769,6 +769,31 @@ body.dragging-map #map {
   z-index: 400;
 }
 
+#osmMap .leaflet-control-container {
+  z-index: 980;
+}
+
+.sillons-map-zoom-snapshot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 940;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  contain: strict;
+}
+
+.sillons-map-zoom-snapshot.is-animating {
+  transition:
+    transform 340ms cubic-bezier(.18, .82, .24, 1),
+    opacity 220ms ease-out;
+}
+
+.sillons-map-zoom-snapshot.is-finishing {
+  opacity: 0 !important;
+}
+
 .leaflet-tile {
   filter: saturate(0.82) contrast(1.05) brightness(0.72) hue-rotate(175deg);
 }

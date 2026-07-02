@@ -788,6 +788,11 @@ button, input, select, textarea { max-width: 100%; }
   #osmMap .leaflet-tile {
     transition: opacity 220ms ease-out, filter 160ms ease-out !important;
   }
+  #osmMap .sillons-map-zoom-snapshot.is-animating {
+    transition:
+      transform 340ms cubic-bezier(.18, .82, .24, 1),
+      opacity 220ms ease-out !important;
+  }
 }
 
 
