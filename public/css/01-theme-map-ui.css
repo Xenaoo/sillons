@@ -1493,6 +1493,26 @@ button[data-tooltip]:focus-visible::before {
 .leaflet-tile {
   filter: saturate(.62) brightness(.82) contrast(1.12) sepia(.20) hue-rotate(158deg) !important;
 }
+#osmMap.leaflet-container {
+  background: transparent;
+}
+#osmMap.leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+}
+#osmMap.leaflet-fade-anim .leaflet-tile,
+#osmMap .leaflet-tile {
+  opacity: 0;
+  transition: opacity 220ms ease-out, filter 160ms ease-out;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+#osmMap.leaflet-fade-anim .leaflet-tile-loaded,
+#osmMap .leaflet-tile-loaded {
+  opacity: 1;
+}
+#osmMap.map-zooming .leaflet-tile-pane {
+  will-change: transform;
+}
 .osm-map::after {
   background:
     linear-gradient(180deg, rgba(6, 12, 22, 0.08), rgba(6, 12, 22, 0.18)),

@@ -1,3 +1,12 @@
+# v0.71.26 - zoom carte plus fluide
+
+- Le zoom Leaflet est de nouveau anime sur la carte afin d'eviter les sauts visuels pendant les changements de niveau.
+- Les tuiles PMTiles locales apparaissent avec un fondu d'opacite quand elles sont pretes, pour que les details se chargent progressivement.
+- Le fondu des tuiles reste actif meme quand la regle globale `prefers-reduced-motion` reduit les autres transitions de l'interface.
+- La couche PMTiles supprime le delai artificiel de rendu par tuile et garde plus de tuiles en tampon autour de la vue.
+- Les marqueurs de trains suivent le zoom anime via la projection cible sans forcer un redraw lourd a chaque micro-etape.
+- Increment de version : interface et serveur v0.71.26, package npm 0.71.26.
+
 # v0.71.24 - carte locale PMTiles
 
 - Ajout du support d'un fond de carte local PMTiles via `protomaps-leaflet`, servi depuis `/assets/maps/world.pmtiles`.

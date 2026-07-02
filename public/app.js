@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.24';
+const PROJECT_VERSION = 'v0.71.26';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -199,6 +199,7 @@ const app = {
     tileLayerInstallTimer: null,
     localBasemapLayer: null,
     localBasemapStatus: 'idle',
+    zoomAnimating: false,
     startupMapScheduled: false,
     mobileViewportFixPending: false,
     deferredRedrawTimer: null,
@@ -1307,9 +1308,12 @@ function initOsmMap() {
     zoomControl: false,
     attributionControl: true,
     preferCanvas: true,
-    zoomAnimation: false,
-    markerZoomAnimation: false,
-    fadeAnimation: false
+    zoomAnimation: true,
+    zoomAnimationThreshold: 5,
+    markerZoomAnimation: true,
+    fadeAnimation: true,
+    wheelDebounceTime: 24,
+    wheelPxPerZoomLevel: 96
   });
 
   scheduleMapTileLayerInstall(app.map.leaflet);
@@ -1319,31 +1323,37 @@ function initOsmMap() {
 
   app.map.leaflet.on('zoomstart', () => {
     app.map.navigating = true;
+    app.map.zoomAnimating = true;
     app.map.lastMoveEventAt = performance.now();
+    target.classList.add('map-zooming');
     resetMapCanvasTransform();
     resizeCanvas();
     invalidateMapProjection('zoom-start');
     requestMapRedraw({ lite: true });
   });
-  app.map.leaflet.on('zoomanim', () => {
-    // Les animations de zoom Leaflet sont désactivées pour cette carte canvas.
-    // Si un navigateur déclenche malgré tout l'événement, on force un redraw simple.
+  app.map.leaflet.on('zoomanim', event => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    resetMapCanvasTransform();
-    invalidateMapProjection('zoom-anim');
-    requestMapRedraw({ lite: true });
+    if (event && Number.isFinite(Number(event.zoom)) && event.center) {
+      requestTrainMarkerLayerSync({ zoomFrame: { zoom: Number(event.zoom), center: event.center } });
+    } else {
+      updateTrainMarkerPositions();
+    }
+    markMapProjectionDirty();
   });
   app.map.leaflet.on('zoom', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
     resetMapCanvasTransform();
     invalidateMapProjection('zoom');
-    requestMapRedraw({ lite: true });
+    if (app.map.zoomAnimating) updateTrainMarkerPositions();
+    else requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoomend', () => {
     app.map.navigating = false;
+    app.map.zoomAnimating = false;
     app.map.trainMarkerZoomFrame = null;
+    target.classList.remove('map-zooming');
     resetMapCanvasTransform();
     resizeCanvas();
     updateIsoClass();
@@ -1476,6 +1486,10 @@ async function addLocalPmtilesBasemap(map) {
       lang: LOCAL_BASEMAP.lang,
       maxDataZoom: LOCAL_BASEMAP.maxDataZoom,
       attribution: LOCAL_BASEMAP.attribution,
+      tileDelay: 0.1,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      keepBuffer: 5,
       noWrap: true,
       bounds: [[-85, -180], [85, 180]]
     });
