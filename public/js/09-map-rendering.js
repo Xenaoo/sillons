@@ -164,6 +164,15 @@ function drawMap(options = {}) {
 
   const lite = !!options.lite;
   ctx.clearRect(0, 0, w, h);
+  if (!app.map.tileLayerName) {
+    if (hasPixelMapArt()) drawBackdropArt(ctx, w, h);
+    else {
+      updateMapFrame();
+      drawSea(ctx, w, h);
+      drawGrid(ctx, w, h);
+      drawFrance(ctx);
+    }
+  }
   const trainDrawQueue = drawAllLines(ctx, lite) || [];
   drawStations(ctx, lite);
   syncTrainMarkerLayer(trainDrawQueue);

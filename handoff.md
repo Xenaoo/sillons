@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.23` (package npm : `0.71.23`).
+- Version de code actuelle : `v0.71.25` (package npm : `0.71.25`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -67,6 +67,8 @@ Variables utiles :
 - v0.71.21 remplace les PNG critiques de fond par leurs versions JPEG legeres (`hero-*` et `board-*`) pour eviter plusieurs Mo d'images decoratives au rechargement.
 - v0.71.22 sort l'etat complet du boot public : plus de fetch `/api/state` ni de snapshot complet serialise dans `auth-boot.js`, et le client complet ne relit plus IndexedDB/sessionStorage avant la premiere synchronisation serveur.
 - v0.71.23 differe les tuiles OpenStreetMap externes hors F5 : installation apres interaction ou delai, sans bloquer le canvas de carte interne.
+- v0.71.24 rend la carte plus tot : fond France JPEG directement sur `#osmMap`, redraw canvas immediat sans attente 180 ms et fond interne tant que les tuiles OSM ne sont pas installees.
+- v0.71.25 reduit le delai d'installation des tuiles OSM externes de 6 s a 1,2 s apres le rendu initial, ou immediatement a la premiere interaction.
 
 ## 4. Architecture
 

@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.23';
+const PROJECT_VERSION = 'v0.71.25';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -1252,12 +1252,16 @@ function scheduleStartupMapInitialization() {
     return;
   }
   app.map.startupMapScheduled = true;
-  window.setTimeout(() => {
+  requestAnimationFrame(() => {
     app.map.startupMapScheduled = false;
-    ensureMapInitialized();
     resizeCanvas();
     requestMapRedraw({ lite: true });
-  }, 180);
+    window.setTimeout(() => {
+      ensureMapInitialized();
+      resizeCanvas();
+      requestMapRedraw({ lite: true });
+    }, 0);
+  });
 }
 
 function ensureMapInitialized() {
@@ -1398,7 +1402,7 @@ function initOsmMap() {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
-  const delayMs = 6000;
+  const delayMs = 1200;
   const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
   let installed = false;
   let armed = false;
@@ -2387,7 +2391,7 @@ function renderAll(options = {}) {
   scheduleMobileMapViewportFix();
   if (deferMapRedraw) {
     clearTimeout(app.map.deferredRedrawTimer);
-    app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
+    requestMapRedraw({ lite: true });
   } else {
     requestMapRedraw();
   }
@@ -10116,6 +10120,15 @@ function drawMap(options = {}) {
 
   const lite = !!options.lite;
   ctx.clearRect(0, 0, w, h);
+  if (!app.map.tileLayerName) {
+    if (hasPixelMapArt()) drawBackdropArt(ctx, w, h);
+    else {
+      updateMapFrame();
+      drawSea(ctx, w, h);
+      drawGrid(ctx, w, h);
+      drawFrance(ctx);
+    }
+  }
   const trainDrawQueue = drawAllLines(ctx, lite) || [];
   drawStations(ctx, lite);
   syncTrainMarkerLayer(trainDrawQueue);

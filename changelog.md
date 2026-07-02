@@ -1,3 +1,15 @@
+# v0.71.25 - tuiles carte plus rapides
+
+- Les tuiles OSM restent hors chemin critique du F5 mais ne patientent plus 6 s : elles se lancent apres 1,2 s d'inactivite ou des la premiere interaction.
+- Increment de version : interface et serveur v0.71.25, package npm 0.71.25.
+
+# v0.71.24 - carte visible plus tot
+
+- Le conteneur de carte affiche directement le fond France JPEG leger, sans attendre Leaflet ni les tuiles OSM.
+- Le premier redraw canvas n'attend plus la temporisation de 180 ms et utilise le fallback de projection avant que Leaflet soit pret.
+- Le rendu de carte initial dessine un fond interne tant que les tuiles OSM externes ne sont pas installees.
+- Increment de version : interface et serveur v0.71.24, package npm 0.71.24.
+
 # v0.71.23 - tuiles OSM hors F5
 
 - Les tuiles OpenStreetMap externes ne sont plus demandees pendant le demarrage critique.
