@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.23';
+const PROJECT_VERSION = 'v0.71.24';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -176,6 +176,8 @@ const app = {
     lastTrainMarkerSyncAt: 0,
     tileLayerScheduled: false,
     tileLayerInstallTimer: null,
+    localBasemapLayer: null,
+    localBasemapStatus: 'idle',
     startupMapScheduled: false,
     mobileViewportFixPending: false,
     deferredRedrawTimer: null,
@@ -352,6 +354,15 @@ const MAP_ART_FRAME = { x: 0.177, y: 0.067, w: 0.58, h: 0.79 };
 const AUTO_MAP_TABS = new Set(['overview', 'lines', 'stations']);
 
 const TRAIN_MAP_SPRITES = {};
+
+const LOCAL_BASEMAP = {
+  url: '/assets/maps/world.pmtiles',
+  name: 'Carte locale PMTiles',
+  flavor: 'dark',
+  lang: 'fr',
+  maxDataZoom: 14,
+  attribution: 'Carte locale PMTiles - donnees OpenStreetMap contributors'
+};
 
 const STATION_MAP_SPRITES = {
   1: '/assets/map/stations/station_level_1.png',

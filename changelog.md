@@ -1,3 +1,12 @@
+# v0.71.24 - carte locale PMTiles
+
+- Ajout du support d'un fond de carte local PMTiles via `protomaps-leaflet`, servi depuis `/assets/maps/world.pmtiles`.
+- Le moteur PMTiles est precharge mais ne bloque plus `app.js` : le jeu reste interactif pendant que le fond local se prepare.
+- Les tuiles OSM/Carto externes ne sont plus appelees automatiquement : si le fichier PMTiles local est absent, Sillons garde son fond interne immediat.
+- Le serveur statique prend en charge les requetes `Range` sur les fichiers `.pmtiles`, necessaires au streaming local des archives de carte.
+- Ajout du dossier `public/assets/maps/` et du script `npm.cmd run install:local-map -- <url>` pour installer une archive PMTiles sans la versionner.
+- Increment de version : interface et serveur v0.71.24, package npm 0.71.24.
+
 # v0.71.23 - tuiles OSM hors F5
 
 - Les tuiles OpenStreetMap externes ne sont plus demandees pendant le demarrage critique.

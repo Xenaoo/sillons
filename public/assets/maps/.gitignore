@@ -1,0 +1,4 @@
+*.pmtiles
+*.pmtiles.download
+!README.md
+!.gitignore

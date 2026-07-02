@@ -24,7 +24,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.25';
+const PROJECT_VERSION = 'v0.71.24';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -197,6 +197,8 @@ const app = {
     lastTrainMarkerSyncAt: 0,
     tileLayerScheduled: false,
     tileLayerInstallTimer: null,
+    localBasemapLayer: null,
+    localBasemapStatus: 'idle',
     startupMapScheduled: false,
     mobileViewportFixPending: false,
     deferredRedrawTimer: null,
@@ -373,6 +375,15 @@ const MAP_ART_FRAME = { x: 0.177, y: 0.067, w: 0.58, h: 0.79 };
 const AUTO_MAP_TABS = new Set(['overview', 'lines', 'stations']);
 
 const TRAIN_MAP_SPRITES = {};
+
+const LOCAL_BASEMAP = {
+  url: '/assets/maps/world.pmtiles',
+  name: 'Carte locale PMTiles',
+  flavor: 'dark',
+  lang: 'fr',
+  maxDataZoom: 14,
+  attribution: 'Carte locale PMTiles - donnees OpenStreetMap contributors'
+};
 
 const STATION_MAP_SPRITES = {
   1: '/assets/map/stations/station_level_1.png',
@@ -1252,16 +1263,12 @@ function scheduleStartupMapInitialization() {
     return;
   }
   app.map.startupMapScheduled = true;
-  requestAnimationFrame(() => {
+  window.setTimeout(() => {
     app.map.startupMapScheduled = false;
+    ensureMapInitialized();
     resizeCanvas();
     requestMapRedraw({ lite: true });
-    window.setTimeout(() => {
-      ensureMapInitialized();
-      resizeCanvas();
-      requestMapRedraw({ lite: true });
-    }, 0);
-  });
+  }, 180);
 }
 
 function ensureMapInitialized() {
@@ -1402,7 +1409,7 @@ function initOsmMap() {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
-  const delayMs = 1200;
+  const delayMs = 350;
   const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
   let installed = false;
   let armed = false;
@@ -1416,9 +1423,7 @@ function scheduleMapTileLayerInstall(map) {
     clearTimeout(app.map.tileLayerInstallTimer);
     app.map.tileLayerInstallTimer = window.setTimeout(() => {
       if (!app.map.leaflet || app.map.tileLayerName) return;
-      addReliableFrenchTileLayer(app.map.leaflet);
-      scheduleLeafletInvalidateSize();
-      requestMapRedraw({ lite: true });
+      void addLocalPmtilesBasemap(app.map.leaflet);
     }, 0);
   };
   const armInstall = () => {
@@ -1431,66 +1436,58 @@ function scheduleMapTileLayerInstall(map) {
   window.setTimeout(armInstall, 0);
 }
 
-function addReliableFrenchTileLayer(map) {
-  const layers = [
-    {
-      name: 'Carte standard',
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      options: {
-        maxZoom: 19,
-        subdomains: ['a', 'b', 'c'],
-        attribution: 'Cartographie'
-      }
-    },
-    {
-      name: 'Carte France',
-      url: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
-      options: {
-        maxZoom: 20,
-        subdomains: ['a', 'b', 'c'],
-        attribution: 'Cartographie · rendu Carte France'
-      }
-    },
-    {
-      name: 'Carte secours',
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      options: {
-        maxZoom: 19,
-        attribution: 'Cartographie'
-      }
-    }
-  ];
-
-  let index = 0;
-  let current = null;
-  let errorCount = 0;
-
-  function installLayer(nextIndex) {
-    index = Math.min(nextIndex, layers.length - 1);
-    const def = layers[index];
-    errorCount = 0;
-    if (current) {
-      current.off('tileerror');
-      try { map.removeLayer(current); } catch {}
-    }
-    current = L.tileLayer(def.url, {
-      ...def.options,
-      crossOrigin: false,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      keepBuffer: 3
-    });
-    current.on('tileerror', () => {
-      errorCount += 1;
-      if (errorCount >= 4 && index < layers.length - 1) installLayer(index + 1);
-    });
-    current.addTo(map);
-    app.map.tileLayerName = def.name;
+async function localPmtilesArchiveAvailable() {
+  if (app.map.localBasemapStatus === 'available') return true;
+  if (app.map.localBasemapStatus === 'missing') return false;
+  app.map.localBasemapStatus = 'checking';
+  try {
+    const response = await fetch(LOCAL_BASEMAP.url, { method: 'HEAD', cache: 'no-cache' });
+    if (!response.ok) throw new Error(`Carte locale indisponible (${response.status})`);
+    const size = Number(response.headers.get('content-length') || 0);
+    app.map.localBasemapStatus = size > 0 ? 'available' : 'missing';
+    return app.map.localBasemapStatus === 'available';
+  } catch {
+    app.map.localBasemapStatus = 'missing';
+    return false;
   }
-
-  installLayer(0);
 }
 
+async function localPmtilesRuntimeAvailable() {
+  if (window.protomapsL?.leafletLayer) return true;
+  if (window.__sillonsProtomapsLeafletReady) {
+    try { await window.__sillonsProtomapsLeafletReady; } catch {}
+  }
+  return Boolean(window.protomapsL?.leafletLayer);
+}
+
+async function addLocalPmtilesBasemap(map) {
+  if (!map || app.map.localBasemapLayer || app.map.tileLayerName) return;
+  const runtimeAvailable = await localPmtilesRuntimeAvailable();
+  if (!runtimeAvailable) {
+    app.map.localBasemapStatus = 'missing';
+    return;
+  }
+  const available = await localPmtilesArchiveAvailable();
+  if (!available || !app.map.leaflet || app.map.tileLayerName) return;
+  try {
+    const layer = window.protomapsL.leafletLayer({
+      url: LOCAL_BASEMAP.url,
+      flavor: LOCAL_BASEMAP.flavor,
+      lang: LOCAL_BASEMAP.lang,
+      maxDataZoom: LOCAL_BASEMAP.maxDataZoom,
+      attribution: LOCAL_BASEMAP.attribution,
+      noWrap: true,
+      bounds: [[-85, -180], [85, 180]]
+    });
+    layer.addTo(map);
+    app.map.localBasemapLayer = layer;
+    app.map.tileLayerName = LOCAL_BASEMAP.name;
+  } catch (error) {
+    console.warn(error?.message || 'Carte locale PMTiles indisponible.');
+    app.map.localBasemapLayer = null;
+    app.map.localBasemapStatus = 'missing';
+  }
+}
 
 function fitFranceMap() {
   if (!app.map.leaflet) return;
@@ -2391,7 +2388,7 @@ function renderAll(options = {}) {
   scheduleMobileMapViewportFix();
   if (deferMapRedraw) {
     clearTimeout(app.map.deferredRedrawTimer);
-    requestMapRedraw({ lite: true });
+    app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
   } else {
     requestMapRedraw();
   }
@@ -10120,15 +10117,6 @@ function drawMap(options = {}) {
 
   const lite = !!options.lite;
   ctx.clearRect(0, 0, w, h);
-  if (!app.map.tileLayerName) {
-    if (hasPixelMapArt()) drawBackdropArt(ctx, w, h);
-    else {
-      updateMapFrame();
-      drawSea(ctx, w, h);
-      drawGrid(ctx, w, h);
-      drawFrance(ctx);
-    }
-  }
   const trainDrawQueue = drawAllLines(ctx, lite) || [];
   drawStations(ctx, lite);
   syncTrainMarkerLayer(trainDrawQueue);

@@ -21,7 +21,9 @@ function mimeType(file) {
     '.webp': 'image/webp',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
-    '.ico': 'image/x-icon'
+    '.ico': 'image/x-icon',
+    '.pmtiles': 'application/vnd.pmtiles',
+    '.mvt': 'application/vnd.mapbox-vector-tile'
   }[ext] || 'application/octet-stream';
 }
 

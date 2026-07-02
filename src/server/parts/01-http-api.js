@@ -103,7 +103,7 @@ function compressStaticBody(res, filePath, body) {
 
 function staticCacheControl(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  return ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css', '.svg'].includes(ext)
+  return ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css', '.svg', '.pmtiles', '.mvt'].includes(ext)
     ? STATIC_LONG_CACHE
     : STATIC_NO_STORE;
 }
@@ -135,6 +135,68 @@ function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheCont
     return;
   }
   res.end(compressed.body);
+}
+
+function parseByteRange(rangeHeader, size) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
+  if (!match) return null;
+  let start = match[1] === '' ? NaN : Number(match[1]);
+  let end = match[2] === '' ? NaN : Number(match[2]);
+  if (!Number.isFinite(start) && Number.isFinite(end)) {
+    const suffixLength = Math.max(0, Math.floor(end));
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    if (!Number.isFinite(start)) start = 0;
+    if (!Number.isFinite(end)) end = size - 1;
+  }
+  start = Math.max(0, Math.floor(start));
+  end = Math.min(size - 1, Math.floor(end));
+  if (start > end || start >= size) return null;
+  return { start, end };
+}
+
+function sendRangeStaticFile(req, res, filePath, cacheControl = staticCacheControl(filePath)) {
+  fs.stat(filePath, (statError, stat) => {
+    if (statError || !stat.isFile()) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    const size = stat.size;
+    const commonHeaders = {
+      'Accept-Ranges': 'bytes',
+      'Content-Type': mimeType(filePath),
+      'Cache-Control': cacheControl
+    };
+    const rangeHeader = req.headers.range;
+    if (!rangeHeader) {
+      res.writeHead(200, { ...commonHeaders, 'Content-Length': size });
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+    const range = parseByteRange(rangeHeader, size);
+    if (!range) {
+      res.writeHead(416, { ...commonHeaders, 'Content-Range': `bytes */${size}` });
+      res.end();
+      return;
+    }
+    const length = range.end - range.start + 1;
+    res.writeHead(206, {
+      ...commonHeaders,
+      'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+      'Content-Length': length
+    });
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+  });
 }
 
 async function handleApi(req, res, url) {
@@ -362,6 +424,10 @@ function serveStatic(req, res, url) {
   }
   if (filePath === '/app.js') {
     sendStaticBody(req, res, absolute, clientScriptBundle(), STATIC_LONG_CACHE);
+    return;
+  }
+  if (path.extname(absolute).toLowerCase() === '.pmtiles') {
+    sendRangeStaticFile(req, res, absolute);
     return;
   }
   fs.readFile(absolute, (err, data) => {

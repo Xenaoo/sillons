@@ -1,8 +1,9 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.23';
+  const APP_VERSION = 'v0.71.24';
   const LEAFLET_VERSION = '1.9.4';
+  const PROTOMAPS_LEAFLET_VERSION = '5.1.0';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
   const SHELL_SNAPSHOT_KEY = 'sillons.bootShellSnapshot.v1';
@@ -11,6 +12,7 @@
     leafletCss: `/vendor/leaflet/leaflet.css?v=${LEAFLET_VERSION}`,
     styles: `/styles.css?v=${APP_VERSION}`,
     leafletJs: `/vendor/leaflet/leaflet.js?v=${LEAFLET_VERSION}`,
+    protomapsLeafletJs: `/vendor/protomaps-leaflet/protomaps-leaflet.js?v=${PROTOMAPS_LEAFLET_VERSION}`,
     appJs: `/app.js?v=${APP_VERSION}`
   };
   const LOGOS = [
@@ -97,6 +99,7 @@
       preloadAsset(APP_ASSETS.leafletCss, 'style'),
       preloadAsset(APP_ASSETS.styles, 'style'),
       preloadAsset(APP_ASSETS.leafletJs, 'script'),
+      preloadAsset(APP_ASSETS.protomapsLeafletJs, 'script'),
       preloadAsset(APP_ASSETS.appJs, 'script')
     ]).catch(() => null);
     return appWarmPromise;
@@ -342,6 +345,10 @@
       }
     }
     await loadScript(APP_ASSETS.leafletJs);
+    window.__sillonsProtomapsLeafletReady = loadScript(APP_ASSETS.protomapsLeafletJs).catch(error => {
+      console.warn(error.message || 'Fond de carte local indisponible.');
+      return null;
+    });
     await loadScript(APP_ASSETS.appJs);
     window.setTimeout(() => { void loadFullStylesSoon(0); }, 0);
   }
