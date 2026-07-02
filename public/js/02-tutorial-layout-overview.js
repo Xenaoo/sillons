@@ -248,7 +248,7 @@ function renderAll(options = {}) {
   scheduleMobileMapViewportFix();
   if (deferMapRedraw) {
     clearTimeout(app.map.deferredRedrawTimer);
-    requestMapRedraw({ lite: true });
+    app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
   } else {
     requestMapRedraw();
   }

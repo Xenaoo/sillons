@@ -817,16 +817,12 @@ function scheduleStartupMapInitialization() {
     return;
   }
   app.map.startupMapScheduled = true;
-  requestAnimationFrame(() => {
+  window.setTimeout(() => {
     app.map.startupMapScheduled = false;
+    ensureMapInitialized();
     resizeCanvas();
     requestMapRedraw({ lite: true });
-    window.setTimeout(() => {
-      ensureMapInitialized();
-      resizeCanvas();
-      requestMapRedraw({ lite: true });
-    }, 0);
-  });
+  }, 180);
 }
 
 function ensureMapInitialized() {
@@ -967,7 +963,7 @@ function initOsmMap() {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
-  const delayMs = 1200;
+  const delayMs = 6000;
   const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
   let installed = false;
   let armed = false;
