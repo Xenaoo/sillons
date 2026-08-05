@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const RESEARCH_TECHNICAL_MAX_LEVEL = 1000000;
-const PROJECT_VERSION = 'v0.71.30';
+const PROJECT_VERSION = 'v0.71.55';
 const ROUTE_CACHE_MAX_ENTRIES = 2500;
 const OSM_ROUTE_CACHE_MAX_ENTRIES = 3500;
 const OSM_ROUTE_FETCH_PARALLEL_LIMIT = 10;
@@ -24,6 +24,7 @@ const MONTPARNASSE_STATION_UIC_ALIASES = new Set(['87391003', '87391102']);
 function canonicalStationDisplayNameClient(name) {
   const raw = String(name || '').trim();
   if (!raw) return raw;
+  if (!/vaugirard|montparnasse[- ]ceinture/i.test(raw)) return raw;
   const normalized = raw
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -70,14 +71,14 @@ function canonicalizeLineLabelsClient(obj) {
 
 function canonicalizeStateStationDisplays(data) {
   const world = data?.world;
-  if (world?.stations && Array.isArray(world.stations)) {
+  if (world?.stations && Array.isArray(world.stations) && !world.stationIndex) {
     world.stations = world.stations.map(canonicalizeStationDisplayClient);
     world.stationIndex = Object.fromEntries(world.stations.map(station => [station.id, station]));
-  } else if (world?.stationIndex && typeof world.stationIndex === 'object') {
+  } else if (!world?.stations && world?.stationIndex && typeof world.stationIndex === 'object') {
     world.stationIndex = Object.fromEntries(Object.entries(world.stationIndex).map(([id, station]) => [id, canonicalizeStationDisplayClient(station)]));
   }
   canonicalizeLineLabelsClient(data?.me?.lines || []);
-  canonicalizeLineLabelsClient(data?.players || []);
+  for (const player of data?.players || []) canonicalizeLineLabelsClient(player?.lines || []);
   return data;
 }
 
@@ -123,6 +124,7 @@ const app = {
   researchEraCollapsed: loadJson('sillons.researchEraCollapsed', {}),
   activeLinesSubtab: localStorage.getItem('sillons.linesSubtab') || 'create',
   activeFleetSubtab: localStorage.getItem('sillons.fleetSubtab') || 'catalog',
+  mapTheme: localStorage.getItem('sillons.mapTheme') === 'light' ? 'light' : 'dark',
   fleetCatalogEraCollapsed: loadJson('sillons.fleetCatalogEraCollapsed', {}),
   fleetMaintenanceEraCollapsed: loadJson('sillons.fleetMaintenanceEraCollapsed', {}),
   sidePanelCollapsed: localStorage.getItem('sillons.sidePanelCollapsed') === '1',
@@ -174,10 +176,16 @@ const app = {
     trainMarkerRaf: false,
     trainMarkerZoomFrame: null,
     lastTrainMarkerSyncAt: 0,
+    initialTrainMarkersReady: false,
+    initialTrainMarkerSyncScheduled: false,
     tileLayerScheduled: false,
     tileLayerInstallTimer: null,
     localBasemapLayer: null,
     localBasemapStatus: 'idle',
+    basemapLoaded: false,
+    bootPreviewElement: null,
+    bootPreviewStored: false,
+    initialViewportSettled: false,
     zoomAnimating: false,
     zoomSnapshot: { canvas: null, active: false, finishing: false, raf: 0, fadeTimer: null, removeTimer: null, baseZoom: null, basePixelOrigin: null, transform: '' },
     startupMapScheduled: false,
@@ -188,7 +196,7 @@ const app = {
     followingProgrammatically: false,
     redrawAfterPan: false,
     lastMoveEventAt: 0,
-    panOverlay: { active: false, finishing: false, zooming: false, baseZoom: null, basePixelOrigin: null, anchorLatLng: null, anchorPoint: null, raf: false, transform: '' },
+    panOverlay: { active: false, finishing: false, zooming: false, baseZoom: null, basePixelOrigin: null, baseMapPanePosition: null, mapPaneObserver: null, anchorLatLng: null, anchorPoint: null, raf: false, transform: '' },
     view: { zoom: 1, panX: 0, panY: 0 },
     drag: { active: false, moved: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 }
   },
@@ -230,6 +238,8 @@ const app = {
   constructionCompletionRefreshAt: 0,
   maintenanceProgressCache: {},
   maintenanceCompletionRefreshAt: 0,
+  pendingStateSnapshot: null,
+  stateSnapshotIdleCallback: null,
   tutorial: { syncing: false, currentId: '', rect: null, timer: null, positionTimer: null, positionFrame: null, lastScrollKey: '' },
   epochTrafficAnimation: { displayed: null, target: null, lastTarget: null, lastTargetAt: 0, lastFrameAt: 0, rate: 0 }
 };
@@ -360,7 +370,6 @@ const TRAIN_MAP_SPRITES = {};
 const LOCAL_BASEMAP = {
   url: '/assets/maps/world.pmtiles',
   name: 'Carte locale PMTiles',
-  flavor: 'dark',
   lang: 'fr',
   maxDataZoom: 14,
   minZoom: 5,

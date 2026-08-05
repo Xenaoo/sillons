@@ -239,13 +239,20 @@ function renderAll(options = {}) {
     return tree ? { left: tree.scrollLeft, top: tree.scrollTop } : null;
   })() : null;
   captureCompositionScrollPosition();
+  let phaseStartedAt = performance.now();
   renderTopbar();
+  document.documentElement.setAttribute('data-sillons-render-topbar-ms', String(Math.round(performance.now() - phaseStartedAt)));
+  phaseStartedAt = performance.now();
   renderTabs();
+  document.documentElement.setAttribute('data-sillons-render-tabs-ms', String(Math.round(performance.now() - phaseStartedAt)));
+  phaseStartedAt = performance.now();
   renderTutorialOverlay();
   applyLayoutMode();
   syncFocusedLineUi();
+  document.documentElement.setAttribute('data-sillons-render-layout-ms', String(Math.round(performance.now() - phaseStartedAt)));
   scheduleCompositionRefitScrollAdjustment();
   scheduleMobileMapViewportFix();
+  scheduleBootUiSnapshot();
   if (deferMapRedraw) {
     clearTimeout(app.map.deferredRedrawTimer);
     app.map.deferredRedrawTimer = window.setTimeout(() => requestMapRedraw({ lite: true }), 180);
@@ -524,6 +531,19 @@ function renderTabs() {
     bugs: renderBugs,
     admin: renderAdmin
   };
+  const reuseBootSnapshot = !app.bootUiSnapshotHydrated
+    && content.dataset.bootPlayerId === String(app.state.me.id || '')
+    && content.dataset.bootTab === app.activeTab
+    && Boolean(content.innerHTML.trim());
+  if (reuseBootSnapshot) {
+    app.bootUiSnapshotHydrated = true;
+    delete content.dataset.bootPlayerId;
+    delete content.dataset.bootTab;
+    if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
+    if (app.activeTab === 'stations') refreshStationSearchWidgets();
+    setTimeout(renderTutorialOverlay, 0);
+    return;
+  }
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
   if (app.activeTab === 'stations') refreshStationSearchWidgets();

@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.30` (package npm : `0.71.30`).
+- Version de code actuelle : `v0.71.55` (package npm : `0.71.55`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -29,6 +29,7 @@ Scripts disponibles :
 
 ```powershell
 npm.cmd run check
+npm.cmd run build:static
 npm.cmd run check:stations
 npm.cmd run migrate:save
 npm.cmd run reset
@@ -73,6 +74,12 @@ Variables utiles :
 - v0.71.28 allonge la transition du snapshot de zoom et force un nouveau cache-buster, les bundles etant servis avec `Cache-Control: immutable`.
 - v0.71.29 desactive l'animation du recentrage initial France afin que le snapshot de zoom ne s'affiche pas au demarrage, tout en conservant la transition pour les zooms utilisateur.
 - v0.71.30 ajoute des bounds stricts pour la carte locale PMTiles, recalcule le zoom minimum selon le viewport et empeche le dezoom/pan d'afficher une zone hors archive.
+- v0.71.34 restaure l'extrait PMTiles France, remplace le chargeur dynamique par des scripts/styles directs, charge la couche locale sans delai artificiel et accelere le F5 avec un snapshot de session, des synchronisations compactes et un polling adapte a la visibilite.
+- v0.71.35 fiabilise `Sillons.bat` : chemin relatif au projet, controle de Node.js, detection du port 3000, ouverture automatique du site et conservation des erreurs visibles.
+- v0.71.36 ajoute le theme clair/sombre persistant de la carte, retire la serialisation synchrone du snapshot pendant `pagehide`, reporte ses ecritures en periode inactive et initialise Leaflet des la premiere frame utile.
+- v0.71.48 supprime la deduplication quadratique des gares, restaure avant le client un snapshot HTML exact de l'onglet et un apercu WebP de la carte, hydrate les marqueurs par lots, differe les caches de routes et sert un bundle Terser minifie. Sur le compte Xenao et l'onglet Parc, cinq F5 consecutifs ont ete mesures entre 195 et 228 ms.
+- v0.71.52 déplace les surcouches de lignes et de trains par transformation GPU pendant la navigation, suspend et fusionne les recalculs intermédiaires, diffère la création des tuiles PMTiles jusqu'à la fin du pan et synchronise le zoom en 180 ms. Le geste de référence passe d'environ 615 ms à 71-88 ms sur le compte Xenao.
+- v0.71.55 recale les transformations GPU des lignes et des trains dans la même microtâche que la position réelle du panneau Leaflet et réactive la création progressive des tuiles pendant le glissement avec une cadence de 120 ms. Au zoom 11, les tuiles passent de 9 à 12 avant le relâchement ; le geste court de référence prend 59 ms.
 
 ## 4. Architecture
 
@@ -94,7 +101,7 @@ Variables utiles :
 
 ### Client
 
-`public/app.js` charge les fichiers de `public/js/` dans l’ordre numérique. Les vues principales sont :
+Les sources client vivent dans `public/js/` et sont concatenees dans l'ordre numerique par `npm.cmd run build:static`. Le script produit `public/app.js` et `public/app.min.js` avec le meme bundle Terser minifie ; le HTML charge `app.min.js`. Les vues principales sont :
 
 - `02-tutorial-layout-overview.js` : navigation, tutoriel, vue compagnie et finances.
 - `04-lines.js` + `10-routing-line-utils.js` : lignes, arrêts, routage et tarifs.
@@ -222,7 +229,9 @@ Toute version doit être mise à jour de façon cohérente dans :
 - `src/server/parts/00-config-bootstrap.js` (`PROJECT_VERSION`, et schéma si nécessaire) ;
 - `public/js/00-core-state.js` ;
 - `public/index.html` (cache busting CSS/JS et badge) ;
-- `public/app.js` (`SILLONS_CLIENT_VERSION`, cache des modules client) ;
+- `public/auth-boot.js` (version des ressources et restauration F5) ;
+- `scripts/build-static-bundles.js` (`CLIENT_VERSION`) ;
+- `public/app.js` et `public/app.min.js` (bundles générés, ne pas modifier directement) ;
 - `package.json` et `package-lock.json` ;
 - `changelog.md` ;
 - ce fichier si une convention ou un état de reprise change.

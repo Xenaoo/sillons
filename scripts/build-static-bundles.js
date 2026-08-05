@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const { minify } = require('terser');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const CLIENT_VERSION = 'v0.71.30';
+const CLIENT_VERSION = 'v0.71.55';
 
 const CLIENT_SCRIPT_PARTS = [
   '00-core-state.js',
@@ -60,7 +61,22 @@ const styles = [
   readParts(path.join(PUBLIC_DIR, 'css'), CLIENT_STYLE_PARTS, 'css')
 ].join('\n\n');
 
-fs.writeFileSync(path.join(PUBLIC_DIR, 'app.js'), `${appBundle.trimEnd()}\n`, 'utf8');
-fs.writeFileSync(path.join(PUBLIC_DIR, 'styles.css'), `${styles.trimEnd()}\n`, 'utf8');
+async function buildStaticBundles() {
+  const minified = await minify(appBundle, {
+    ecma: 2020,
+    compress: { passes: 2 },
+    mangle: true,
+    format: { comments: false }
+  });
+  if (!minified.code) throw new Error('Terser n\'a produit aucun bundle client.');
+  const minifiedBundle = `${minified.code}\n`;
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'app.js'), minifiedBundle, 'utf8');
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'app.min.js'), minifiedBundle, 'utf8');
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'styles.css'), `${styles.trimEnd()}\n`, 'utf8');
+  console.log(`Built minified public/app.js, public/app.min.js and public/styles.css for ${CLIENT_VERSION}.`);
+}
 
-console.log(`Built public/app.js and public/styles.css for ${CLIENT_VERSION}.`);
+buildStaticBundles().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

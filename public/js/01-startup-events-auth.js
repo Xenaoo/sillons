@@ -3,33 +3,71 @@ const STATE_SNAPSHOT_DB = 'sillons-state-snapshot-v1';
 const STATE_SNAPSHOT_STORE = 'players';
 const STATE_SESSION_SNAPSHOT_KEY = 'sillons.stateSnapshot.v1';
 const STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const STATE_SNAPSHOT_MIN_WRITE_INTERVAL_MS = 15 * 1000;
+const STATE_SNAPSHOT_BOOT_WAIT_MS = 75;
+const STATE_REFRESH_VISIBLE_MS = 2300;
+const STATE_REFRESH_HIDDEN_MS = 12000;
+const MAP_BOOT_PREVIEW_CACHE = 'sillons-map-preview-v1';
+const MAP_BOOT_PREVIEW_STORAGE_PREFIX = 'sillons.mapPreview.v1';
+const BOOT_UI_SNAPSHOT_KEY = 'sillons.bootUiSnapshot.v1';
+let routeCacheHydrationScheduled = false;
+let bootUiSnapshotTimer = null;
 
 async function init() {
   app.bootTimings = { startedAt: performance.now(), initMs: 0, snapshotMs: 0 };
+  window.__sillonsMarkBoot?.('client-start');
   app.map.canvas = $('#map');
   app.map.ctx = app.map.canvas.getContext('2d');
-  hydratePersistedOsmRouteCache();
+  app.map.bootPreviewElement = $('#osmMap .sillons-map-boot-preview') || null;
+  if (app.map.bootPreviewElement) window.__sillonsMarkBoot?.('map-preview');
+  void restoreMapBootPreview();
+  let phaseStartedAt = performance.now();
   bindStaticEvents();
+  document.documentElement.setAttribute('data-sillons-bind-events-ms', String(Math.round(performance.now() - phaseStartedAt)));
   if (!app.authToken) {
     renderSetupLogoPicker();
     $('#setup')?.classList.remove('hidden');
     setAuthMode(app.authMode || 'login');
   }
   startResearchAnimationLoop();
-  window.addEventListener('pagehide', persistStateSnapshotBeforeReload);
   app.bootTimings.initMs = performance.now() - app.bootTimings.startedAt;
 
   const snapshotStartedAt = performance.now();
   let renderedFromCachedState = false;
-  const bootState = await consumeBootState();
+  let bootState = await consumeBootState();
+  if (!bootState && app.authToken && app.playerId) {
+    bootState = readSessionStateSnapshot(app.playerId);
+  }
+  if (!bootState && app.authToken && app.playerId) {
+    bootState = await Promise.race([
+      readStateSnapshot(),
+      new Promise(resolve => window.setTimeout(() => resolve(null), STATE_SNAPSHOT_BOOT_WAIT_MS))
+    ]);
+  }
   app.bootTimings.snapshotHit = Boolean(bootState);
   if (bootState) renderedFromCachedState = applyStateSnapshot(bootState);
   app.bootTimings.snapshotMs = performance.now() - snapshotStartedAt;
 
   window.setTimeout(() => {
     void refreshState(!renderedFromCachedState);
-  }, renderedFromCachedState ? 900 : 0);
-  setInterval(() => refreshState(false, { includeAdmin: app.activeTab === 'admin' }), 2300);
+  }, renderedFromCachedState ? 100 : 0);
+  startStateRefreshLoop();
+}
+
+function startStateRefreshLoop() {
+  if (app.stateRefreshLoopStarted) return;
+  app.stateRefreshLoopStarted = true;
+  const schedule = delayMs => {
+    clearTimeout(app.stateRefreshTimer);
+    app.stateRefreshTimer = window.setTimeout(async () => {
+      await refreshState(false, { includeAdmin: app.activeTab === 'admin' });
+      schedule(document.hidden ? STATE_REFRESH_HIDDEN_MS : STATE_REFRESH_VISIBLE_MS);
+    }, delayMs);
+  };
+  document.addEventListener('visibilitychange', () => {
+    schedule(document.hidden ? STATE_REFRESH_HIDDEN_MS : 100);
+  }, { passive: true });
+  schedule(STATE_REFRESH_VISIBLE_MS);
 }
 
 async function consumeBootState() {
@@ -138,12 +176,13 @@ function compactStateSnapshot(data) {
       hasFreightStation: Boolean(station.hasFreightStation)
     }))
     : [];
+  const { stationIndex: _derivedStationIndex, ...snapshotWorld } = data?.world || {};
   // Le premier rendu n'a besoin que de la compagnie courante. Les données des
   // autres joueurs et les rapports administratifs arrivent à la synchronisation
   // suivante ; cela garde le snapshot sous le quota des stockages synchrones.
   return {
     ...data,
-    world: data.world ? { ...data.world, stations: snapshotStations } : data.world,
+    world: data.world ? { ...snapshotWorld, stations: snapshotStations } : data.world,
     bugReports: [],
     admin: null
   };
@@ -152,39 +191,98 @@ function compactStateSnapshot(data) {
 function scheduleStateSnapshot(data) {
   const playerId = String(data?.auth?.playerId || data?.me?.id || '');
   if (!playerId || !data?.me) return;
-  const snapshot = compactStateSnapshot(data);
-  clearTimeout(app.stateSnapshotTimer);
-  app.stateSnapshotTimer = setTimeout(async () => {
-    try {
-      writeSessionStateSnapshot(playerId, snapshot);
-      const db = await openStateSnapshotDb();
-      const transaction = db.transaction(STATE_SNAPSHOT_STORE, 'readwrite');
-      transaction.objectStore(STATE_SNAPSHOT_STORE).put({ playerId, savedAt: Date.now(), state: snapshot });
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = () => { db.close(); console.warn('Écriture du cache local impossible.'); };
-    } catch (error) {
-      console.warn('Cache local de session indisponible:', error.message);
+  app.pendingStateSnapshot = { playerId, data };
+  if (app.stateSnapshotTimer || app.stateSnapshotIdleCallback) return;
+  const elapsed = Date.now() - Number(app.lastStateSnapshotWriteAt || 0);
+  const delay = Math.max(0, STATE_SNAPSHOT_MIN_WRITE_INTERVAL_MS - elapsed);
+  app.stateSnapshotTimer = setTimeout(() => {
+    app.stateSnapshotTimer = null;
+    const persist = async () => {
+      app.stateSnapshotIdleCallback = null;
+      const pending = app.pendingStateSnapshot;
+      app.pendingStateSnapshot = null;
+      if (!pending?.data?.me) return;
+      const snapshot = compactStateSnapshot(pending.data);
+      const savedAt = Date.now();
+      app.lastStateSnapshotWriteAt = savedAt;
+      try {
+        const db = await openStateSnapshotDb();
+        const transaction = db.transaction(STATE_SNAPSHOT_STORE, 'readwrite');
+        transaction.objectStore(STATE_SNAPSHOT_STORE).put({ playerId: pending.playerId, savedAt, state: snapshot });
+        transaction.oncomplete = () => db.close();
+        transaction.onerror = () => { db.close(); console.warn('Écriture du cache local impossible.'); };
+      } catch (error) {
+        console.warn('Cache local de session indisponible:', error.message);
+      }
+    };
+    if ('requestIdleCallback' in window) {
+      app.stateSnapshotIdleCallback = window.requestIdleCallback(() => void persist(), { timeout: 10000 });
+    } else {
+      app.stateSnapshotIdleCallback = window.setTimeout(() => void persist(), 0);
     }
-  }, 0);
+  }, delay);
 }
 
-function persistStateSnapshotBeforeReload() {
-  const playerId = String(app.state?.auth?.playerId || app.state?.me?.id || '');
-  if (!playerId || !app.state?.me) return;
-  writeSessionStateSnapshot(playerId, compactStateSnapshot(app.state));
+function syncMapThemeUi() {
+  const theme = app.mapTheme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.mapTheme = theme;
+  const button = $('#mapThemeBtn');
+  if (!button) return;
+  const showLight = theme === 'dark';
+  const label = showLight ? 'Afficher la carte en mode clair.' : 'Afficher la carte en mode sombre.';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
+  const icon = button.querySelector('span');
+  if (icon) icon.textContent = showLight ? '☀' : '☾';
+}
+
+async function setMapTheme(theme) {
+  const nextTheme = theme === 'light' ? 'light' : 'dark';
+  if (app.mapTheme === nextTheme && app.map.localBasemapLayer) {
+    syncMapThemeUi();
+    return;
+  }
+  app.mapTheme = nextTheme;
+  localStorage.setItem('sillons.mapTheme', nextTheme);
+  syncMapThemeUi();
+  const map = app.map.leaflet;
+  if (!map) return;
+  if (app.map.localBasemapLayer) map.removeLayer(app.map.localBasemapLayer);
+  app.map.localBasemapLayer = null;
+  app.map.tileLayerName = '';
+  app.map.tileLayerScheduled = false;
+  app.map.basemapLoaded = false;
+  app.map.bootPreviewStored = false;
+  clearMapBootPreview();
+  void restoreMapBootPreview();
+  try {
+    await addLocalPmtilesBasemap(map);
+  } finally {
+    requestMapRedraw({ lite: false });
+  }
 }
 
 function applyStateSnapshot(data) {
   if (!data?.ok || !data?.me || !data?.world) return false;
+  let phaseStartedAt = performance.now();
   canonicalizeStateStationDisplays(data);
+  document.documentElement.setAttribute('data-sillons-state-normalize-ms', String(Math.round(performance.now() - phaseStartedAt)));
   app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
+  phaseStartedAt = performance.now();
   app.routeDataSignature = worldRouteSignature(data);
+  document.documentElement.setAttribute('data-sillons-route-signature-ms', String(Math.round(performance.now() - phaseStartedAt)));
   app.state = data;
   document.body.classList.remove('auth-boot', 'app-shell-boot');
   $('#setup')?.classList.add('hidden');
+  phaseStartedAt = performance.now();
   ensureSelectedStation();
   resizeCanvas();
+  document.documentElement.setAttribute('data-sillons-initial-layout-ms', String(Math.round(performance.now() - phaseStartedAt)));
+  phaseStartedAt = performance.now();
   renderAll({ deferMapRedraw: true });
+  document.documentElement.setAttribute('data-sillons-initial-render-ms', String(Math.round(performance.now() - phaseStartedAt)));
+  markInteractivePaint();
   scheduleStartupMapInitialization();
   return true;
 }
@@ -216,6 +314,7 @@ function toggleSidePanelCollapse() {
 }
 
 function bindStaticEvents() {
+  syncMapThemeUi();
   $('#setupForm').addEventListener('submit', handleAuthSubmit);
   $('#authLoginTab')?.addEventListener('click', () => setAuthMode('login'));
   $('#authRegisterTab')?.addEventListener('click', () => setAuthMode('register'));
@@ -239,6 +338,7 @@ function bindStaticEvents() {
   $('#zoomInBtn')?.addEventListener('click', () => app.map.leaflet?.zoomIn());
   $('#zoomOutBtn')?.addEventListener('click', () => app.map.leaflet?.zoomOut());
   $('#zoomResetBtn')?.addEventListener('click', fitFranceMap);
+  $('#mapThemeBtn')?.addEventListener('click', () => void setMapTheme(app.mapTheme === 'dark' ? 'light' : 'dark'));
   const showOtherLinesBox = $('#showOtherLines');
   if (showOtherLinesBox) {
     showOtherLinesBox.checked = app.showOtherLines;
@@ -563,16 +663,29 @@ function persistOsmRouteCache() {
 
 function resetMapCanvasTransform() {
   const overlay = app.map.panOverlay || {};
+  const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+  if (overlay.raf) cancelFrame(overlay.raf);
+  overlay.mapPaneObserver?.disconnect?.();
+  overlay.mapPaneObserver = null;
   overlay.active = false;
   overlay.finishing = false;
   overlay.zooming = false;
-  overlay.raf = false;
+  overlay.raf = 0;
+  overlay.pendingTransform = '';
   overlay.transform = '';
+  overlay.baseMapPanePosition = null;
   if (app.map.canvas) {
     app.map.canvas.style.transform = '';
     app.map.canvas.style.transformOrigin = '';
     app.map.canvas.style.willChange = '';
     app.map.canvas.classList.remove('map-pan-overlay');
+  }
+  const trainLayer = app.map.trainMarkerLayer;
+  if (trainLayer) {
+    trainLayer.style.transform = '';
+    trainLayer.style.transformOrigin = '';
+    trainLayer.style.willChange = '';
+    trainLayer.classList.remove('map-pan-overlay', 'map-zoom-overlay', 'is-navigating');
   }
 }
 
@@ -594,6 +707,63 @@ function leafletNewPixelOrigin(center, zoom) {
   } catch {
     return null;
   }
+}
+
+function leafletMapPanePosition(map = app.map.leaflet) {
+  if (!map?._mapPane) return null;
+  try {
+    const point = window.L?.DomUtil?.getPosition?.(map._mapPane);
+    if (point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y))) {
+      return cloneLeafletPoint(point);
+    }
+  } catch {}
+  return null;
+}
+
+function markInteractivePaint() {
+  window.__sillonsMarkBoot?.('ui-ready');
+  window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+    window.__sillonsMarkBoot?.('ui-painted');
+    scheduleRouteCacheHydration();
+  }));
+}
+
+function scheduleBootUiSnapshot() {
+  window.clearTimeout(bootUiSnapshotTimer);
+  bootUiSnapshotTimer = window.setTimeout(() => {
+    const me = app.state?.me;
+    const content = $('#tabContent');
+    if (!me || !content) return;
+    const tabContentHtml = content.innerHTML || '';
+    if (!tabContentHtml || tabContentHtml.length > 1_000_000) return;
+    const side = $('.side.panel');
+    const logo = $('#companyLogoBadge');
+    const record = {
+      version: PROJECT_VERSION,
+      playerId: String(me.id || app.playerId || ''),
+      savedAt: Date.now(),
+      activeTab: app.activeTab || 'overview',
+      fleetSubtab: app.activeFleetSubtab || '',
+      companySubtitle: $('#companySubtitle')?.textContent || '',
+      topStatsHtml: $('#topStats')?.innerHTML || '',
+      tabContentHtml,
+      menuBg: side?.style.getPropertyValue('--menu-bg') || '',
+      logoSrc: logo?.getAttribute('src') || ''
+    };
+    try { sessionStorage.setItem(BOOT_UI_SNAPSHOT_KEY, JSON.stringify(record)); } catch (error) {}
+  }, 120);
+}
+
+function scheduleRouteCacheHydration() {
+  if (routeCacheHydrationScheduled) return;
+  routeCacheHydrationScheduled = true;
+  window.setTimeout(() => {
+    const startedAt = performance.now();
+    hydratePersistedOsmRouteCache();
+    document.documentElement.setAttribute('data-sillons-route-cache-hydrate-ms', String(Math.round(performance.now() - startedAt)));
+    invalidateMapProjection('route-cache-hydrated');
+    requestMapRedraw({ lite: false });
+  }, 0);
 }
 
 function cancelMapZoomSnapshotTimers(snapshot = app.map.zoomSnapshot) {
@@ -646,6 +816,117 @@ function drawMapZoomSnapshotElement(ctx, element, containerRect) {
     try { ctx.restore(); } catch {}
     return false;
   }
+}
+
+function mapBootPreviewUrl() {
+  const playerId = encodeURIComponent(String(app.playerId || 'anonymous'));
+  const theme = app.mapTheme === 'light' ? 'light' : 'dark';
+  return `${location.origin}/__sillons-map-preview/${playerId}/${theme}`;
+}
+
+function mapBootPreviewStorageKey() {
+  const playerId = String(app.playerId || 'anonymous');
+  const theme = app.mapTheme === 'light' ? 'light' : 'dark';
+  return `${MAP_BOOT_PREVIEW_STORAGE_PREFIX}.${playerId}.${theme}`;
+}
+
+function clearMapBootPreview() {
+  const preview = app.map.bootPreviewElement;
+  if (!preview) return;
+  const objectUrl = preview.dataset.objectUrl || '';
+  try { preview.remove(); } catch {}
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  app.map.bootPreviewElement = null;
+}
+
+async function restoreMapBootPreview() {
+  if (app.map.basemapLoaded || app.map.bootPreviewElement) return;
+  try {
+    let source = '';
+    let objectUrl = '';
+    try { source = localStorage.getItem(mapBootPreviewStorageKey()) || ''; } catch {}
+    if (!source && 'caches' in window) {
+      const cache = await caches.open(MAP_BOOT_PREVIEW_CACHE);
+      const response = await cache.match(mapBootPreviewUrl());
+      if (response) {
+        const blob = await response.blob();
+        if (blob.size) {
+          objectUrl = URL.createObjectURL(blob);
+          source = objectUrl;
+        }
+      }
+    }
+    if (!source || app.map.basemapLoaded || app.map.bootPreviewElement) return;
+    const target = $('#osmMap');
+    if (!target || app.map.basemapLoaded) return;
+    const preview = document.createElement('img');
+    preview.className = 'sillons-map-boot-preview';
+    preview.alt = '';
+    preview.decoding = 'async';
+    preview.dataset.objectUrl = objectUrl;
+    preview.src = source;
+    target.appendChild(preview);
+    app.map.bootPreviewElement = preview;
+    const markPreview = () => window.__sillonsMarkBoot?.('map-preview');
+    preview.addEventListener('load', markPreview, { once: true });
+    if (preview.complete && preview.naturalWidth) markPreview();
+    try { await preview.decode(); } catch {}
+    if (app.map.bootPreviewElement === preview && !app.map.basemapLoaded) markPreview();
+  } catch {}
+}
+
+function fadeMapBootPreview() {
+  const preview = app.map.bootPreviewElement;
+  if (!preview) return;
+  preview.classList.add('is-ready');
+  window.setTimeout(() => {
+    if (app.map.bootPreviewElement === preview) clearMapBootPreview();
+  }, 220);
+}
+
+function captureVisibleMapPreviewCanvas() {
+  const target = $('#osmMap');
+  if (!target) return null;
+  const rect = target.getBoundingClientRect();
+  const width = Math.round(rect.width);
+  const height = Math.round(rect.height);
+  if (width <= 0 || height <= 0) return null;
+  const canvas = document.createElement('canvas');
+  const dpr = Math.max(1, Math.min(1.5, Number(window.devicePixelRatio || 1)));
+  canvas.width = Math.max(1, Math.round(width * dpr));
+  canvas.height = Math.max(1, Math.round(height * dpr));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const tile of target.querySelectorAll('.leaflet-tile-pane .leaflet-tile-loaded')) {
+    drawMapZoomSnapshotElement(ctx, tile, rect);
+  }
+  drawMapZoomSnapshotElement(ctx, app.map.canvas, rect);
+  return canvas;
+}
+
+async function persistMapBootPreview() {
+  if (app.map.bootPreviewStored) return;
+  app.map.bootPreviewStored = true;
+  await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+  const canvas = captureVisibleMapPreviewCanvas();
+  if (!canvas) return;
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.82));
+  if (!blob?.size) return;
+  try {
+    const dataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
+    if (dataUrl && dataUrl.length <= 1_500_000) localStorage.setItem(mapBootPreviewStorageKey(), dataUrl);
+  } catch {}
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open(MAP_BOOT_PREVIEW_CACHE);
+    await cache.put(mapBootPreviewUrl(), new Response(blob, { headers: { 'Content-Type': 'image/webp' } }));
+  } catch {}
 }
 
 function startMapZoomSnapshot() {
@@ -724,6 +1005,8 @@ function setMapZoomSnapshotTransform(center, zoom) {
     if (!snapshot.active || snapshot.canvas !== canvas) return;
     canvas.classList.add('is-animating');
     canvas.style.transform = transform;
+    const trainLayer = app.map.trainMarkerLayer;
+    if (trainLayer) trainLayer.style.transform = transform;
   });
 }
 
@@ -735,14 +1018,39 @@ function finishMapZoomSnapshot(center, zoom) {
   const canvas = snapshot.canvas;
   snapshot.fadeTimer = window.setTimeout(() => {
     if (app.map.zoomSnapshot?.canvas === canvas) canvas.classList.add('is-finishing');
-  }, 260);
+  }, 70);
   snapshot.removeTimer = window.setTimeout(() => {
     if (app.map.zoomSnapshot?.canvas === canvas) clearMapZoomSnapshot();
-  }, 620);
+  }, 280);
 }
 
 function startPanOverlay(mode = 'pan') {
   resetMapCanvasTransform();
+  const overlay = app.map.panOverlay;
+  const map = app.map.leaflet;
+  const canvas = app.map.canvas;
+  if (!overlay || !map || !canvas) return;
+  overlay.active = true;
+  overlay.zooming = mode === 'zoom';
+  overlay.baseZoom = map.getZoom();
+  overlay.basePixelOrigin = cloneLeafletPoint(map.getPixelOrigin?.());
+  overlay.baseMapPanePosition = leafletMapPanePosition(map);
+  overlay.transform = 'translate3d(0, 0, 0) scale(1)';
+  canvas.classList.add('map-pan-overlay');
+  canvas.style.transformOrigin = '0 0';
+  canvas.style.willChange = 'transform';
+  const trainLayer = app.map.trainMarkerLayer;
+  if (trainLayer) {
+    trainLayer.classList.add('map-pan-overlay', 'is-navigating');
+    trainLayer.style.transformOrigin = '0 0';
+    trainLayer.style.willChange = 'transform';
+  }
+  if (!overlay.zooming && map._mapPane && window.MutationObserver) {
+    overlay.mapPaneObserver = new MutationObserver(() => {
+      if (overlay.active && !overlay.zooming) setMapOverlayTransform(map.getCenter(), map.getZoom());
+    });
+    overlay.mapPaneObserver.observe(map._mapPane, { attributes: true, attributeFilter: ['style'] });
+  }
 }
 
 function setMapOverlayTransform(center, zoom) {
@@ -751,36 +1059,49 @@ function setMapOverlayTransform(center, zoom) {
   const canvas = app.map.canvas;
   if (!overlay.active || !map || !canvas) return;
 
-  const baseZoom = Number.isFinite(Number(overlay.baseZoom)) ? Number(overlay.baseZoom) : map.getZoom();
-  const baseOrigin = overlay.basePixelOrigin || cloneLeafletPoint(map.getPixelOrigin?.());
-  const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
-  const targetCenter = center || map.getCenter();
-  const targetOrigin = leafletNewPixelOrigin(targetCenter, targetZoom);
-  if (!baseOrigin || !targetOrigin) return;
-
-  const scale = map.getZoomScale ? map.getZoomScale(targetZoom, baseZoom) : Math.pow(2, targetZoom - baseZoom);
-  const dx = (baseOrigin.x * scale) - targetOrigin.x;
-  const dy = (baseOrigin.y * scale) - targetOrigin.y;
+  let scale = 1;
+  let dx = 0;
+  let dy = 0;
+  const basePanePosition = overlay.baseMapPanePosition;
+  const panePosition = leafletMapPanePosition(map);
+  if (!overlay.zooming && basePanePosition && panePosition) {
+    dx = panePosition.x - basePanePosition.x;
+    dy = panePosition.y - basePanePosition.y;
+  } else {
+    const baseZoom = Number.isFinite(Number(overlay.baseZoom)) ? Number(overlay.baseZoom) : map.getZoom();
+    const baseOrigin = overlay.basePixelOrigin || cloneLeafletPoint(map.getPixelOrigin?.());
+    const targetZoom = Number.isFinite(Number(zoom)) ? Number(zoom) : map.getZoom();
+    const targetCenter = center || map.getCenter();
+    const targetOrigin = leafletNewPixelOrigin(targetCenter, targetZoom);
+    if (!baseOrigin || !targetOrigin) return;
+    scale = map.getZoomScale ? map.getZoomScale(targetZoom, baseZoom) : Math.pow(2, targetZoom - baseZoom);
+    dx = (baseOrigin.x * scale) - targetOrigin.x;
+    dy = (baseOrigin.y * scale) - targetOrigin.y;
+  }
   const roundedDx = Math.round(dx * 1000) / 1000;
   const roundedDy = Math.round(dy * 1000) / 1000;
   const roundedScale = Math.round(scale * 1000000) / 1000000;
-  overlay.transform = `translate3d(${roundedDx}px, ${roundedDy}px, 0) scale(${roundedScale})`;
-  canvas.style.transform = overlay.transform;
+  const transform = `translate3d(${roundedDx}px, ${roundedDy}px, 0) scale(${roundedScale})`;
+  if (overlay.transform === transform) return;
+  overlay.transform = transform;
+  canvas.style.transform = transform;
+  const trainLayer = app.map.trainMarkerLayer;
+  if (trainLayer) trainLayer.style.transform = transform;
 }
 
 function updatePanOverlay() {
-  resetMapCanvasTransform();
+  if (!app.map.panOverlay?.active || !app.map.leaflet) return;
+  setMapOverlayTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
 }
 
 function updateZoomOverlay(event) {
-  resetMapCanvasTransform();
-  markMapProjectionDirty();
-  requestMapRedraw({ lite: true });
+  if (!app.map.panOverlay?.active) startPanOverlay('zoom');
+  setMapOverlayTransform(event?.center || app.map.leaflet?.getCenter(), Number(event?.zoom ?? app.map.leaflet?.getZoom()));
 }
 
 function endPanOverlay() {
-  resetMapCanvasTransform();
-  requestMapRedraw({ lite: false });
+  app.map.settleOverlayAfterRedraw = true;
+  requestMapRedraw({ lite: false, settleOverlay: true });
 }
 
 function worldRouteSignature(state = app.state) {
@@ -862,14 +1183,25 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
   app.refreshInFlight = true;
   try {
     const requestStartedAt = performance.now();
-    const stateUrl = includeAdmin ? '/api/state?include=admin' : '/api/state';
+    const hasStaticState = Boolean(app.state?.world && app.state?.balance);
+    const stateParams = new URLSearchParams();
+    if (includeAdmin) stateParams.set('include', 'admin');
+    if (hasStaticState) stateParams.set('compact', '1');
+    const stateUrl = `/api/state${stateParams.size ? `?${stateParams}` : ''}`;
     const response = await fetch(stateUrl, { cache: 'no-store', headers: authHeaders() });
     const responseReceivedAt = performance.now();
-    const data = await readJsonResponse(response, 'Reponse serveur invalide.');
+    let data = await readJsonResponse(response, 'Reponse serveur invalide.');
     const parsedAt = performance.now();
     if (response.status === 401) {
       clearAuthState();
+      document.body.classList.remove('auth-boot', 'app-shell-boot');
+      renderSetupLogoPicker();
       $('#setup')?.classList.remove('hidden');
+      setAuthMode(app.authMode || 'login');
+      return;
+    }
+    if (data.ok && !data.world && app.state?.world) {
+      data = { ...data, world: app.state.world, balance: data.balance || app.state.balance };
     }
     if (!data.ok) throw new Error(data.error || 'État indisponible.');
     canonicalizeStateStationDisplays(data);
@@ -891,6 +1223,7 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
     }
     if (data.auth?.playerId) { app.playerId = data.auth.playerId; localStorage.setItem('sillons.playerId', app.playerId); }
     if (data.me) {
+      document.body.classList.remove('auth-boot', 'app-shell-boot');
       $('#setup').classList.add('hidden');
       if (first && !app.map.mapReady && !app.map.leaflet) scheduleStartupMapInitialization();
       else ensureMapInitialized();
@@ -912,6 +1245,7 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
     } else {
       renderAll({ deferMapRedraw: first && !app.map.mapReady, renderKey: nextRenderKey });
     }
+    if (first) markInteractivePaint();
     if (first) {
       reportClientBootMetrics({
         initMs: app.bootTimings?.initMs || 0,
@@ -962,12 +1296,12 @@ function scheduleStartupMapInitialization() {
     return;
   }
   app.map.startupMapScheduled = true;
-  window.setTimeout(() => {
+  window.requestAnimationFrame(() => {
     app.map.startupMapScheduled = false;
     ensureMapInitialized();
     resizeCanvas();
     requestMapRedraw({ lite: true });
-  }, 180);
+  });
 }
 
 function ensureMapInitialized() {
@@ -982,6 +1316,7 @@ function ensureMapInitialized() {
 }
 
 function initOsmMap() {
+  const mapInitStartedAt = performance.now();
   if (app.map.mapReady || app.map.leaflet) return;
   const target = $('#osmMap');
   if (!target) {
@@ -1012,8 +1347,8 @@ function initOsmMap() {
     zoomAnimationThreshold: 5,
     markerZoomAnimation: true,
     fadeAnimation: true,
-    wheelDebounceTime: 24,
-    wheelPxPerZoomLevel: 96
+    wheelDebounceTime: 16,
+    wheelPxPerZoomLevel: 80
   });
 
   scheduleMapTileLayerInstall(app.map.leaflet);
@@ -1022,12 +1357,18 @@ function initOsmMap() {
   L.control.zoom({ position: 'bottomright' }).addTo(app.map.leaflet);
 
   app.map.leaflet.on('zoomstart', () => {
+    resetMapCanvasTransform();
     startMapZoomSnapshot();
     app.map.navigating = true;
     app.map.zoomAnimating = true;
     app.map.lastMoveEventAt = performance.now();
     target.classList.add('map-zooming');
-    resetMapCanvasTransform();
+    const trainLayer = app.map.trainMarkerLayer;
+    if (trainLayer) {
+      trainLayer.classList.add('map-zoom-overlay', 'is-navigating');
+      trainLayer.style.transformOrigin = '0 0';
+      trainLayer.style.willChange = 'transform';
+    }
     resizeCanvas();
     invalidateMapProjection('zoom-start');
   });
@@ -1036,21 +1377,14 @@ function initOsmMap() {
     app.map.lastMoveEventAt = performance.now();
     if (event && Number.isFinite(Number(event.zoom)) && event.center) {
       setMapZoomSnapshotTransform(event.center, Number(event.zoom));
-      requestTrainMarkerLayerSync({ zoomFrame: { zoom: Number(event.zoom), center: event.center } });
     } else {
       setMapZoomSnapshotTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
-      updateTrainMarkerPositions();
     }
-    markMapProjectionDirty();
   });
   app.map.leaflet.on('zoom', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    resetMapCanvasTransform();
-    invalidateMapProjection('zoom');
     setMapZoomSnapshotTransform(app.map.leaflet.getCenter(), app.map.leaflet.getZoom());
-    if (app.map.zoomAnimating) updateTrainMarkerPositions();
-    else requestMapRedraw({ lite: true });
   });
   app.map.leaflet.on('zoomend', () => {
     const finalCenter = app.map.leaflet.getCenter();
@@ -1059,35 +1393,32 @@ function initOsmMap() {
     app.map.zoomAnimating = false;
     app.map.trainMarkerZoomFrame = null;
     target.classList.remove('map-zooming');
-    resetMapCanvasTransform();
+    setMapZoomSnapshotTransform(finalCenter, finalZoom);
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('zoom-end');
-    requestMapRedraw({ lite: false });
+    requestMapRedraw({ lite: false, settleOverlay: true });
     finishMapZoomSnapshot(finalCenter, finalZoom);
   });
 
   app.map.leaflet.on('movestart', () => {
+    if (app.map.initialViewportSettled) clearMapBootPreview();
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    resetMapCanvasTransform();
-    markMapProjectionDirty();
-    requestMapRedraw({ lite: true });
+    if (!app.map.zoomAnimating) startPanOverlay('pan');
   });
   app.map.leaflet.on('move', () => {
     app.map.navigating = true;
     app.map.lastMoveEventAt = performance.now();
-    resetMapCanvasTransform();
-    markMapProjectionDirty();
-    requestMapRedraw({ lite: true });
+    if (!app.map.zoomAnimating) updatePanOverlay();
   });
   app.map.leaflet.on('moveend', () => {
+    if (app.map.zoomAnimating || app.map.zoomSnapshot?.finishing) return;
     app.map.navigating = false;
-    resetMapCanvasTransform();
     resizeCanvas();
     updateIsoClass();
     invalidateMapProjection('move-end');
-    requestMapRedraw({ lite: false });
+    endPanOverlay();
   });
   app.map.leaflet.on('resize', () => {
     app.map.navigating = false;
@@ -1111,10 +1442,12 @@ function initOsmMap() {
   app.map.leaflet.whenReady(() => {
     app.map.mapReady = true;
     app.map.initializing = false;
+    app.map.initialViewportSettled = false;
     resizeCanvas();
     constrainLocalBasemapViewport(app.map.leaflet, { fit: true });
     fitFranceMap();
     updateIsoClass();
+    app.map.initialViewportSettled = true;
   });
 
   if ('ResizeObserver' in window) {
@@ -1124,6 +1457,7 @@ function initOsmMap() {
     });
     observer.observe(target);
   }
+  document.documentElement.setAttribute('data-sillons-map-init-duration-ms', String(Math.round(performance.now() - mapInitStartedAt)));
 }
 
 function localBasemapDataBounds() {
@@ -1168,47 +1502,18 @@ function constrainLocalBasemapViewport(map, options = {}) {
 function scheduleMapTileLayerInstall(map) {
   if (!map || app.map.tileLayerScheduled || app.map.tileLayerName) return;
   app.map.tileLayerScheduled = true;
-  const delayMs = 350;
-  const events = ['pointerdown', 'wheel', 'keydown', 'touchstart'];
-  let installed = false;
-  let armed = false;
-  const cleanup = () => {
-    events.forEach(type => window.removeEventListener(type, install, true));
-  };
-  const install = () => {
-    if (installed) return;
-    installed = true;
-    cleanup();
-    clearTimeout(app.map.tileLayerInstallTimer);
-    app.map.tileLayerInstallTimer = window.setTimeout(() => {
-      if (!app.map.leaflet || app.map.tileLayerName) return;
-      void addLocalPmtilesBasemap(app.map.leaflet);
-    }, 0);
-  };
-  const armInstall = () => {
-    if (armed) return;
-    armed = true;
-    events.forEach(type => window.addEventListener(type, install, { once: true, passive: true, capture: true }));
-    clearTimeout(app.map.tileLayerInstallTimer);
-    app.map.tileLayerInstallTimer = window.setTimeout(install, delayMs);
-  };
-  window.setTimeout(armInstall, 0);
+  clearTimeout(app.map.tileLayerInstallTimer);
+  app.map.tileLayerInstallTimer = window.setTimeout(() => {
+    if (!app.map.leaflet || app.map.tileLayerName) return;
+    void addLocalPmtilesBasemap(app.map.leaflet);
+  }, 0);
 }
 
 async function localPmtilesArchiveAvailable() {
   if (app.map.localBasemapStatus === 'available') return true;
   if (app.map.localBasemapStatus === 'missing') return false;
-  app.map.localBasemapStatus = 'checking';
-  try {
-    const response = await fetch(LOCAL_BASEMAP.url, { method: 'HEAD', cache: 'no-cache' });
-    if (!response.ok) throw new Error(`Carte locale indisponible (${response.status})`);
-    const size = Number(response.headers.get('content-length') || 0);
-    app.map.localBasemapStatus = size > 0 ? 'available' : 'missing';
-    return app.map.localBasemapStatus === 'available';
-  } catch {
-    app.map.localBasemapStatus = 'missing';
-    return false;
-  }
+  app.map.localBasemapStatus = 'available';
+  return true;
 }
 
 async function localPmtilesRuntimeAvailable() {
@@ -1231,17 +1536,26 @@ async function addLocalPmtilesBasemap(map) {
   try {
     const layer = window.protomapsL.leafletLayer({
       url: LOCAL_BASEMAP.url,
-      flavor: LOCAL_BASEMAP.flavor,
+      flavor: app.mapTheme === 'light' ? 'light' : 'dark',
       lang: LOCAL_BASEMAP.lang,
       maxDataZoom: LOCAL_BASEMAP.maxDataZoom,
       attribution: LOCAL_BASEMAP.attribution,
       tileDelay: 0.1,
       updateWhenIdle: false,
+      updateInterval: 120,
       updateWhenZooming: false,
       keepBuffer: 5,
       noWrap: true,
       bounds: LOCAL_BASEMAP.dataBounds
     });
+    layer.once?.('tileload', () => window.__sillonsMarkBoot?.('map-first-tile'));
+    layer.once?.('load', () => {
+      app.map.basemapLoaded = true;
+      window.__sillonsMarkBoot?.('map-ready');
+      void persistMapBootPreview();
+      fadeMapBootPreview();
+    });
+    layer.once?.('tileerror', () => { app.map.localBasemapStatus = 'missing'; });
     layer.addTo(map);
     app.map.localBasemapLayer = layer;
     app.map.tileLayerName = LOCAL_BASEMAP.name;

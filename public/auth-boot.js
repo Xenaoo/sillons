@@ -1,19 +1,21 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.30';
+  const APP_VERSION = 'v0.71.55';
   const LEAFLET_VERSION = '1.9.4';
   const PROTOMAPS_LEAFLET_VERSION = '5.1.0';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
   const PLAYER_ID_KEY = 'sillons.playerId';
   const SHELL_SNAPSHOT_KEY = 'sillons.bootShellSnapshot.v1';
+  const UI_SNAPSHOT_KEY = 'sillons.bootUiSnapshot.v1';
   const SHELL_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  window.__sillonsStaticClientScripts = Boolean(document.querySelector('script[src*="/app.min.js"]'));
   const APP_ASSETS = {
     leafletCss: `/vendor/leaflet/leaflet.css?v=${LEAFLET_VERSION}`,
     styles: `/styles.css?v=${APP_VERSION}`,
     leafletJs: `/vendor/leaflet/leaflet.js?v=${LEAFLET_VERSION}`,
     protomapsLeafletJs: `/vendor/protomaps-leaflet/protomaps-leaflet.js?v=${PROTOMAPS_LEAFLET_VERSION}`,
-    appJs: `/app.js?v=${APP_VERSION}`
+    appJs: `/app.min.js?v=${APP_VERSION}`
   };
   const LOGOS = [
     ['steam_front', 'Locomotive vapeur'],
@@ -218,6 +220,70 @@
     }
   }
 
+  function readUiSnapshot() {
+    try {
+      const playerId = String(localStorage.getItem(PLAYER_ID_KEY) || '').trim();
+      const raw = sessionStorage.getItem(UI_SNAPSHOT_KEY);
+      const record = raw ? JSON.parse(raw) : null;
+      if (!playerId || record?.version !== APP_VERSION || !record?.tabContentHtml || String(record.playerId || '') !== playerId) return null;
+      if (Date.now() - Number(record.savedAt || 0) > SHELL_SNAPSHOT_MAX_AGE_MS) return null;
+      return record;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function restoreBootMapPreview(playerId) {
+    const holder = $('#osmMap');
+    if (!holder || holder.querySelector('.sillons-map-boot-preview')) return;
+    try {
+      const theme = localStorage.getItem('sillons.mapTheme') === 'light' ? 'light' : 'dark';
+      const source = localStorage.getItem(`sillons.mapPreview.v1.${playerId || 'anonymous'}.${theme}`);
+      if (!source) return;
+      const preview = document.createElement('img');
+      preview.className = 'sillons-map-boot-preview';
+      preview.alt = '';
+      preview.decoding = 'async';
+      preview.src = source;
+      holder.appendChild(preview);
+    } catch (error) {}
+  }
+
+  function renderCachedUiSnapshot(record) {
+    if (!record?.tabContentHtml) return false;
+    const tabContent = $('#tabContent');
+    if (!tabContent) return false;
+    document.body.classList.remove('auth-boot', 'app-shell-boot');
+    $('#setup')?.classList.add('hidden');
+    const subtitle = $('#companySubtitle');
+    if (subtitle) subtitle.textContent = record.companySubtitle || '';
+    const topStats = $('#topStats');
+    if (topStats && record.topStatsHtml) topStats.innerHTML = record.topStatsHtml;
+    const activeTab = String(record.activeTab || 'overview');
+    document.querySelectorAll('#tabs button[data-tab]').forEach(button => {
+      button.classList.toggle('active', button.dataset.tab === activeTab);
+    });
+    tabContent.dataset.tab = activeTab;
+    tabContent.dataset.fleetSubtab = record.fleetSubtab || '';
+    tabContent.dataset.bootPlayerId = String(record.playerId || '');
+    tabContent.dataset.bootTab = activeTab;
+    tabContent.innerHTML = record.tabContentHtml;
+    const side = document.querySelector('.side.panel');
+    if (side) {
+      side.dataset.menu = activeTab;
+      if (record.menuBg) side.style.setProperty('--menu-bg', record.menuBg);
+    }
+    const badge = $('#companyLogoBadge');
+    const fallback = $('#companyLogoFallback');
+    if (badge && record.logoSrc) {
+      badge.src = record.logoSrc;
+      badge.classList.remove('hidden');
+      fallback?.classList.add('hidden');
+    }
+    restoreBootMapPreview(record.playerId);
+    return true;
+  }
+
   function formatInt(value) {
     return new Intl.NumberFormat('fr-FR').format(Math.round(Number(value || 0)));
   }
@@ -344,6 +410,10 @@
         await afterBootShellPaint();
       }
     }
+    if (window.__sillonsStaticClientScripts) {
+      window.setTimeout(() => { void loadFullStylesSoon(0); }, 0);
+      return;
+    }
     await loadScript(APP_ASSETS.leafletJs);
     window.__sillonsProtomapsLeafletReady = loadScript(APP_ASSETS.protomapsLeafletJs).catch(error => {
       console.warn(error.message || 'Fond de carte local indisponible.');
@@ -463,8 +533,24 @@
 
   function initPublicAuth() {
     if (localStorage.getItem(AUTH_TOKEN_KEY)) {
-      seedBootAuth(null);
+      const auth = seedBootAuth(null);
+      if (window.__sillonsStaticClientScripts) {
+        const uiSnapshot = readUiSnapshot();
+        if (!renderCachedUiSnapshot(uiSnapshot)) {
+          const shell = readBootSnapshot();
+          if (shell) renderConnectedShell(shell);
+          else renderEmptyShell();
+          restoreBootMapPreview(auth?.playerId || '');
+        }
+        return;
+      }
       loadApp().catch(error => toast(error.message || 'Chargement impossible.', 'error'));
+      return;
+    }
+    if (window.__sillonsStaticClientScripts) {
+      document.body.classList.remove('app-shell-boot');
+      document.body.classList.add('auth-boot');
+      $('#setup')?.classList.remove('hidden');
       return;
     }
     document.body.classList.add('auth-boot');
@@ -483,7 +569,7 @@
     $('#setupForm')?.addEventListener('submit', onSubmit);
   }
 
-  if (document.readyState === 'loading') {
+  if (document.readyState === 'loading' && (!document.body || !$('#tabContent'))) {
     document.addEventListener('DOMContentLoaded', initPublicAuth, { once: true });
   } else {
     initPublicAuth();

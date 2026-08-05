@@ -541,6 +541,8 @@
   border: 1px solid rgba(217,168,82,.16);
   border-radius: 18px;
   padding: 12px;
+  content-visibility: auto;
+  contain-intrinsic-block-size: 820px;
   background:
     linear-gradient(180deg, rgba(5,10,20,.40), rgba(3,8,18,.30));
 }
@@ -3288,13 +3290,41 @@ button.train-prereq-chip.missing:hover {
 /* ===== v69.1.10 : pastilles trains recollées au canvas commun ===== */
 #map,
 #map.map-pan-overlay {
-  transform: none !important;
   transition: none !important;
-  will-change: auto !important;
+  transform-origin: 0 0 !important;
+  backface-visibility: hidden;
+}
+
+#map.map-pan-overlay {
+  will-change: transform !important;
 }
 
 #sillonsTrainOverlay.sillons-train-overlay {
   display: block !important;
+  transform-origin: 0 0;
+  backface-visibility: hidden;
+}
+
+#sillonsTrainOverlay.map-pan-overlay,
+#sillonsTrainOverlay.map-zoom-overlay {
+  will-change: transform;
+}
+
+#sillonsTrainOverlay.map-pan-overlay {
+  transition: none !important;
+}
+
+#sillonsTrainOverlay.map-zoom-overlay {
+  transition: transform 180ms cubic-bezier(.22, .72, .25, 1) !important;
+}
+
+.sillons-train-overlay.is-navigating .sillons-train-marker__halo {
+  animation-play-state: paused;
+  filter: none;
+}
+
+.sillons-train-overlay.is-navigating .sillons-train-marker__trail {
+  opacity: .24;
 }
 
 .leaflet-sillonsTrainPane-pane,

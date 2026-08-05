@@ -6,6 +6,27 @@
   <meta name="description" content="Sillons est un jeu navigateur de gestion ferroviaire multijoueur en France. Connecte-toi pour retrouver ta compagnie, tes lignes et ta progression.">
   <meta name="theme-color" content="#07111d">
   <title>Sillons — Gestion ferroviaire multijoueur</title>
+  <script>
+    (function installBootMilestones() {
+      const root = document.documentElement;
+      const mark = name => root.setAttribute(`data-sillons-${name}-ms`, String(Math.round(performance.now())));
+      window.__sillonsMarkBoot = mark;
+      mark('html');
+      document.addEventListener('DOMContentLoaded', () => mark('dom-ready'), { once: true });
+      window.addEventListener('load', () => mark('window-load'), { once: true });
+      try {
+        let longestTask = 0;
+        new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            if ((entry.duration || 0) <= longestTask) continue;
+            longestTask = entry.duration || 0;
+            root.setAttribute('data-sillons-long-task-start-ms', String(Math.round(entry.startTime || 0)));
+          }
+          root.setAttribute('data-sillons-long-task-max-ms', String(Math.round(longestTask)));
+        }).observe({ type: 'longtask', buffered: true });
+      } catch (error) {}
+    })();
+  </script>
   <style>
     :root { color-scheme: dark; --text: #f4ead2; --muted: #b6a986; --line: rgba(217,168,82,.24); }
     * { box-sizing: border-box; }
@@ -143,20 +164,23 @@
     .toast.error { border-color: rgba(239,68,68,.48); color: #fecaca; }
     @media (max-width: 520px) { .setup { align-items: start; padding: 10px; } .setup-card { padding: 16px; } .logo-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   </style>
-  <script>
-    (function preloadLoggedInStyles() {
-      try {
-        if (!localStorage.getItem('sillons.authToken')) return;
-        document.write('<link rel="preload" as="style" href="/vendor/leaflet/leaflet.css?v=1.9.4">');
-        document.write('<link rel="preload" as="style" href="/styles.css?v=v0.71.30">');
-        document.write('<link rel="preload" as="script" href="/vendor/leaflet/leaflet.js?v=1.9.4">');
-        document.write('<link rel="preload" as="script" href="/vendor/protomaps-leaflet/protomaps-leaflet.js?v=5.1.0">');
-        document.write('<link rel="preload" as="script" href="/app.js?v=v0.71.30">');
-      } catch (error) {}
-    })();
-  </script>
+  <link rel="preload" as="style" href="/vendor/leaflet/leaflet.css?v=1.9.4">
+  <link rel="preload" as="style" href="/styles.css?v=v0.71.55">
+  <link rel="preload" as="script" href="/vendor/leaflet/leaflet.js?v=1.9.4">
+  <link rel="preload" as="script" href="/vendor/protomaps-leaflet/protomaps-leaflet.js?v=5.1.0">
+  <link rel="preload" as="script" href="/app.min.js?v=v0.71.55">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=1.9.4">
+  <link rel="stylesheet" href="/styles.css?v=v0.71.55">
+  <script defer src="/vendor/leaflet/leaflet.js?v=1.9.4"></script>
+  <script defer src="/vendor/protomaps-leaflet/protomaps-leaflet.js?v=5.1.0"></script>
+  <script defer src="/app.min.js?v=v0.71.55"></script>
 </head>
 <body class="auth-boot">
+  <script>
+    try {
+      if (localStorage.getItem('sillons.authToken')) document.body.className = 'app-shell-boot';
+    } catch (error) {}
+  </script>
   <div id="setup" class="setup">
     <form id="setupForm" class="setup-card auth-card">
       <div class="brand-block">
@@ -250,6 +274,7 @@
             <button id="clearFocusedLineBtn" class="ghost hidden" type="button" title="Réaffiche toutes les lignes sur la carte.">Toutes lignes</button>
             <button id="addStopBtn" class="ghost hidden" type="button" title="Création manuelle désactivée.">Ajout désactivé</button>
             <button id="cancelStopBtn" class="ghost hidden" type="button" title="Annule le mode création d’arrêt sans rien dépenser.">Annuler</button>
+            <button id="mapThemeBtn" class="ghost map-theme-toggle" type="button" title="Afficher la carte en mode clair." aria-label="Afficher la carte en mode clair."><span aria-hidden="true">☀</span></button>
             <button id="zoomOutBtn" class="ghost" type="button" title="Dézoome la carte.">−</button>
             <button id="zoomResetBtn" class="ghost" type="button" title="Recentre la carte sur la France entière.">France</button>
             <button id="zoomInBtn" class="ghost" type="button" title="Zoome la carte. Les gares secondaires apparaissent progressivement.">+</button>
@@ -295,7 +320,7 @@
     </form>
   </dialog>
 
-  <script defer src="/auth-boot.js?v=v0.71.30"></script>
-  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.30</button>
+  <button id="versionBadge" type="button" title="Afficher le changelog complet">v0.71.55</button>
+  <script src="/auth-boot.js?v=v0.71.55"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // État public, création joueur et actions de gameplay.
-function publicState(playerId, authUser = null, { includeAdmin = false } = {}) {
+function publicState(playerId, authUser = null, { includeAdmin = false, includeStatic = true } = {}) {
   const active = activePlayers();
   const player = playerId ? active.find(item => item.id === playerId) || null : null;
   // La carte a seulement besoin d'un résumé des autres compagnies. Envoyer
@@ -18,8 +18,7 @@ function publicState(playerId, authUser = null, { includeAdmin = false } = {}) {
       bugReportsReadAt: Number(authUser.bugReportsReadAt || 0) || 0,
       bugReportsUnreadCount: unreadBugReportCountForUser(authUser)
     } : null,
-    world: publicWorld(),
-    balance: BALANCE.public,
+    ...(includeStatic ? { world: publicWorld(), balance: BALANCE.public } : {}),
     game: {
       day: state.day,
       eraYear: state.eraYear,

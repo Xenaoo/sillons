@@ -27,6 +27,7 @@ const STATIC_NO_STORE = 'no-store';
 const TEXT_STATIC_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg', '.txt', '.md']);
 const PRECOMPRESSED_STATIC_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.ico', '.gz', '.br']);
 const staticBundleCache = new Map();
+const staticCompressionCache = new Map();
 
 function fileSignature(files) {
   return files.map(file => {
@@ -88,15 +89,18 @@ function compressStaticBody(res, filePath, body) {
     return { body, encoding: '' };
   }
   if (acceptsContentEncoding(res, 'br') && zlib.brotliCompressSync) {
-    return {
-      body: zlib.brotliCompressSync(body, {
+    const cacheKey = `br:${PROJECT_VERSION}:${filePath}:${body.length}`;
+    if (!staticCompressionCache.has(cacheKey)) {
+      staticCompressionCache.set(cacheKey, zlib.brotliCompressSync(body, {
         params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
-      }),
-      encoding: 'br'
-    };
+      }));
+    }
+    return { body: staticCompressionCache.get(cacheKey), encoding: 'br' };
   }
   if (acceptsContentEncoding(res, 'gzip')) {
-    return { body: zlib.gzipSync(body, { level: 6 }), encoding: 'gzip' };
+    const cacheKey = `gzip:${PROJECT_VERSION}:${filePath}:${body.length}`;
+    if (!staticCompressionCache.has(cacheKey)) staticCompressionCache.set(cacheKey, zlib.gzipSync(body, { level: 6 }));
+    return { body: staticCompressionCache.get(cacheKey), encoding: 'gzip' };
   }
   return { body, encoding: '' };
 }
@@ -259,8 +263,13 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/state') {
     const stateStartedAt = process.hrtime.bigint();
     const auth = authenticateRequest(req, url, {});
+    if (Object.keys(state.users || {}).length && !auth) {
+      sendJson(res, 401, { ok: false, error: 'Connexion requise.' });
+      return;
+    }
     const playerId = auth?.user?.playerId || '';
     const includeAdmin = url.searchParams.get('include') === 'admin';
+    const includeStatic = url.searchParams.get('compact') !== '1';
     // Ne bloque jamais l'écran de jeu sur une actualisation réseau des gares.
     // Un cache local, même en cours de rafraîchissement, suffit à construire
     // le monde ; le rafraîchissement se poursuit en arrière-plan.
@@ -270,7 +279,7 @@ async function handleApi(req, res, url) {
       await waitForCommuneCache(3500);
     }
     const stationReferencesChanged = sanitizeStateStationReferencesForPublicWorld();
-    const payload = publicState(playerId, auth?.user || null, { includeAdmin });
+    const payload = publicState(playerId, auth?.user || null, { includeAdmin, includeStatic });
     const stateBuildMs = Number(process.hrtime.bigint() - stateStartedAt) / 1e6;
     res.setHeader('Server-Timing', `state;dur=${stateBuildMs.toFixed(1)}`);
     sendJson(res, 200, payload);
@@ -418,11 +427,11 @@ function serveStatic(req, res, url) {
     res.end('Forbidden');
     return;
   }
-  if (filePath === '/styles.css') {
+  if (process.env.SILLONS_DYNAMIC_ASSETS === '1' && filePath === '/styles.css') {
     sendStaticBody(req, res, absolute, clientStyleBundle(), STATIC_LONG_CACHE);
     return;
   }
-  if (filePath === '/app.js') {
+  if (process.env.SILLONS_DYNAMIC_ASSETS === '1' && filePath === '/app.js') {
     sendStaticBody(req, res, absolute, clientScriptBundle(), STATIC_LONG_CACHE);
     return;
   }

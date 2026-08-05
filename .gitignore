@@ -3,3 +3,4 @@ data/save.sqlite-shm
 data/save.sqlite-wal
 data/client-boot-metrics.json
 pmtiles.exe
+node_modules/

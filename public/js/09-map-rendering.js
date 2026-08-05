@@ -1,4 +1,6 @@
 // Rendu carte, tracés, trains, gares et interactions de base.
+const trainGeoPathCache = new WeakMap();
+
 function resizeCanvas() {
   if (!app.map.canvas || !app.map.ctx) return;
   const holder = $('#osmMap') || app.map.canvas;
@@ -97,12 +99,29 @@ function updateMapFrame() {
 
 
 function requestMapRedraw(options = {}) {
+  if (options.settleOverlay) app.map.settleOverlayAfterRedraw = true;
+  const navigationActive = app.map.navigating || app.map.zoomAnimating || app.map.panOverlay?.active;
+  if (navigationActive && !app.map.settleOverlayAfterRedraw) {
+    app.map.redrawPendingAfterNavigation = true;
+    return;
+  }
   if (app.map.redrawRaf) return;
   app.map.redrawRaf = true;
   requestAnimationFrame(() => {
     app.map.redrawRaf = false;
-    drawMap({ lite: !!options.lite });
+    const stillNavigating = app.map.navigating || app.map.zoomAnimating || app.map.panOverlay?.active;
+    if (stillNavigating && !app.map.settleOverlayAfterRedraw) {
+      app.map.redrawPendingAfterNavigation = true;
+      return;
+    }
+    const pendingFullRedraw = !!app.map.redrawPendingAfterNavigation;
+    app.map.redrawPendingAfterNavigation = false;
+    drawMap({ lite: !!options.lite && !pendingFullRedraw });
     app.map.lastFullDrawAt = performance.now();
+    if (app.map.settleOverlayAfterRedraw) {
+      app.map.settleOverlayAfterRedraw = false;
+      resetMapCanvasTransform();
+    }
   });
 }
 
@@ -136,9 +155,13 @@ function drawLoop(timestamp = performance.now()) {
   }
 
   const moving = app.map.navigating;
+  if (moving || app.map.zoomAnimating || app.map.panOverlay?.active) {
+    requestAnimationFrame(drawLoop);
+    return;
+  }
   const markerJobs = app.map.trainMarkerJobs || [];
   const hasMarkerWork = Boolean(markerJobs.length || app.map.trainMarkers?.size || app.map.followedTrain);
-  if (hasMarkerWork && timestamp - Number(app.map.lastTrainMarkerSyncAt || 0) >= trainMarkerSyncDelay(moving)) {
+  if (app.map.initialTrainMarkersReady && hasMarkerWork && timestamp - Number(app.map.lastTrainMarkerSyncAt || 0) >= trainMarkerSyncDelay(moving)) {
     syncTrainMarkerLayer();
     updateFollowedTrainPosition();
     app.map.lastTrainMarkerSyncAt = timestamp;
@@ -163,13 +186,27 @@ function drawMap(options = {}) {
   if (app.map.needsRouteReproject) invalidateMapProjection('dirty-projection');
 
   const lite = !!options.lite;
+  const drawStartedAt = performance.now();
   ctx.clearRect(0, 0, w, h);
   const trainDrawQueue = drawAllLines(ctx, lite) || [];
+  const linesDrawnAt = performance.now();
   drawStations(ctx, lite);
-  syncTrainMarkerLayer(trainDrawQueue);
-  updateFollowedTrainPosition();
+  const stationsDrawnAt = performance.now();
+  if (app.map.initialTrainMarkersReady) {
+    syncTrainMarkerLayer(trainDrawQueue);
+    updateFollowedTrainPosition();
+  } else {
+    scheduleInitialTrainMarkerSync(trainDrawQueue);
+  }
   if (!lite) drawMapHud(ctx);
   if (!lite) drawTooltip(ctx);
+  const root = document.documentElement;
+  if (!root.hasAttribute('data-sillons-map-draw-duration-ms')) {
+    root.setAttribute('data-sillons-map-lines-duration-ms', String(Math.round(linesDrawnAt - drawStartedAt)));
+    root.setAttribute('data-sillons-map-stations-duration-ms', String(Math.round(stationsDrawnAt - linesDrawnAt)));
+    root.setAttribute('data-sillons-map-markers-duration-ms', String(Math.round(performance.now() - stationsDrawnAt)));
+    root.setAttribute('data-sillons-map-draw-duration-ms', String(Math.round(performance.now() - drawStartedAt)));
+  }
 }
 
 
@@ -623,10 +660,20 @@ function speedProfileSegmentAtKm(speedProfile, km) {
   const segments = speedProfile?.segments || [];
   if (!segments.length) return null;
   const value = Number(km) || 0;
-  for (const segment of segments) {
-    if (value >= Number(segment.fromKm || 0) && value <= Number(segment.toKm || 0)) return segment;
+  let low = 0;
+  let high = segments.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const segment = segments[middle];
+    const fromKm = Number(segment?.fromKm || 0);
+    const toKm = Number(segment?.toKm || 0);
+    if (value < fromKm) high = middle - 1;
+    else if (value > toKm) low = middle + 1;
+    else return segment;
   }
-  return value < Number(segments[0].fromKm || 0) ? segments[0] : segments[segments.length - 1];
+  if (low <= 0) return segments[0];
+  if (low >= segments.length) return segments[segments.length - 1];
+  return segments[Math.max(0, high)];
 }
 
 function trainVisualSpeedAtKm(line, train, model, route, km) {
@@ -1311,6 +1358,32 @@ function validRouteCoords(coords) {
     .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
 }
 
+function cachedTrainGeoPath(coords) {
+  if (!Array.isArray(coords)) return { line: [], lengths: [], total: 0 };
+  const cached = trainGeoPathCache.get(coords);
+  if (cached) return cached;
+  const line = coords;
+  const lengths = [];
+  let total = 0;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1];
+    const b = line[i];
+    const aLon = Number(a?.[0]);
+    const aLat = Number(a?.[1]);
+    const bLon = Number(b?.[0]);
+    const bLat = Number(b?.[1]);
+    const meanLatitude = (aLat + bLat) * Math.PI / 360;
+    const dx = (bLon - aLon) * Math.cos(meanLatitude);
+    const dy = bLat - aLat;
+    const length = [aLon, aLat, bLon, bLat].every(Number.isFinite) ? Math.hypot(dx, dy) : 0;
+    lengths.push(length);
+    total += length;
+  }
+  const path = { line, lengths, total };
+  trainGeoPathCache.set(coords, path);
+  return path;
+}
+
 function bearingDegreesBetweenCoords(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return 0;
   const lat1 = Number(a[1]) * Math.PI / 180;
@@ -1323,20 +1396,11 @@ function bearingDegreesBetweenCoords(a, b) {
 }
 
 function trainGeoPoseAlongCoords(coords, progress) {
-  const line = validRouteCoords(coords);
+  const { line, lengths, total } = cachedTrainGeoPath(coords);
   if (!line.length) return null;
   if (line.length === 1) return { lat: line[0][1], lon: line[0][0], bearing: 0 };
 
   const targetT = clamp(Number(progress) || 0, 0, 1);
-  let total = 0;
-  const lengths = [];
-  for (let i = 1; i < line.length; i += 1) {
-    const a = line[i - 1];
-    const b = line[i];
-    const len = haversineClient(a[1], a[0], b[1], b[0]);
-    lengths.push(len);
-    total += Math.max(0, len);
-  }
   if (!Number.isFinite(total) || total <= 0) {
     return { lat: line[0][1], lon: line[0][0], bearing: bearingDegreesBetweenCoords(line[0], line[1]) };
   }
@@ -1501,19 +1565,32 @@ function trainMarkerProjectedPoint(pose, explicitFrame = null) {
 }
 
 function trainMarkerSignature(job, pose) {
-  return `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose?.motion?.dwell ? 1 : 0}:${Math.round(Number(pose?.motion?.speedKmh || 0) / 10)}:${Math.round(Number(pose?.bearing || 0) / 2)}:${trainMarkerIsFollowed(job) ? 1 : 0}:${trainMarkerIsHovered(job) ? 1 : 0}`;
+  return `${trainMarkerColor(job.color)}:${job.own ? 1 : 0}:${job.instanceIndex || 0}:${job.instanceCount || 1}:${pose?.motion?.dwell ? 1 : 0}:${Math.round(Number(pose?.motion?.speedKmh || 0) / 10)}:${trainMarkerIsFollowed(job) ? 1 : 0}:${trainMarkerIsHovered(job) ? 1 : 0}`;
 }
 
-function applyTrainMarkerElementPosition(el, point, pose, job) {
+function applyTrainMarkerElementPosition(record, point, pose, job) {
+  const el = record?.el || record;
   if (!el || !point) return;
   const ownBoost = job?.own ? 1000 : 0;
   const selectedBoost = trainMarkerIsFollowed(job) || trainMarkerIsHovered(job) ? 2200 : 0;
   const x = Math.round((Number(point.x) - 22) * 1000) / 1000;
   const y = Math.round((Number(point.y) - 22) * 1000) / 1000;
-  el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  el.style.zIndex = String(30000 + ownBoost + selectedBoost + Number(job?.instanceIndex || 0));
-  const inner = el.querySelector?.('.sillons-train-marker');
-  if (inner) inner.style.setProperty('--train-angle', `${Number(pose?.bearing || 0)}deg`);
+  const transform = `translate3d(${x}px, ${y}px, 0)`;
+  if (!record?.lastTransform || record.lastTransform !== transform) {
+    el.style.transform = transform;
+    if (record?.el) record.lastTransform = transform;
+  }
+  const zIndex = String(30000 + ownBoost + selectedBoost + Number(job?.instanceIndex || 0));
+  if (!record?.lastZIndex || record.lastZIndex !== zIndex) {
+    el.style.zIndex = zIndex;
+    if (record?.el) record.lastZIndex = zIndex;
+  }
+  const angle = Math.round(Number(pose?.bearing || 0) * 10) / 10;
+  const inner = record?.inner || el.querySelector?.('.sillons-train-marker');
+  if (inner && (!record?.el || record.lastAngle !== angle)) {
+    inner.style.setProperty('--train-angle', `${angle}deg`);
+    if (record?.el) record.lastAngle = angle;
+  }
 }
 
 function isTrainMarkerPointVisible(point, margin = 72) {
@@ -1527,15 +1604,16 @@ function isTrainMarkerPointVisible(point, margin = 72) {
 }
 
 function syncTrainMarkerLayer(jobs = null, options = {}) {
+  const syncStartedAt = performance.now();
   const layer = ensureTrainMarkerLayer();
   if (!layer) return;
 
   const markers = app.map.trainMarkers || (app.map.trainMarkers = new Map());
-  if (Array.isArray(jobs)) app.map.trainMarkerJobs = jobs;
+  if (Array.isArray(jobs) && options.updateJobs !== false) app.map.trainMarkerJobs = jobs;
   const activeJobs = Array.isArray(jobs) ? jobs : (app.map.trainMarkerJobs || []);
   const frame = options.zoomFrame || trainMarkerCurrentZoomFrame();
   const seen = new Set();
-  app.map.trainHit = [];
+  if (!options.preserveHits) app.map.trainHit = [];
   layer.classList.toggle('is-navigating', !!app.map.navigating);
 
   for (const job of activeJobs) {
@@ -1549,7 +1627,10 @@ function syncTrainMarkerLayer(jobs = null, options = {}) {
     const key = trainMarkerKey(job);
     const sig = trainMarkerSignature(job, pose);
     seen.add(key);
-    const tooltip = trainMarkerTooltipText(job, pose);
+    const trainId = String(job?.train?.id || '');
+    const playerId = String(job?.playerId || '');
+    const lineId = String(job?.line?.sourceLineId || job?.line?.id || '');
+    const metadataSig = `${trainId}:${playerId}:${lineId}:${trainMarkerDisplayName(job)}:${trainMarkerLineLabel(job)}`;
 
     let record = markers.get(key);
     if (!record || !record.el) {
@@ -1559,27 +1640,77 @@ function syncTrainMarkerLayer(jobs = null, options = {}) {
       el.setAttribute('role', 'img');
       el.innerHTML = trainMarkerIconHtml(job, pose);
       layer.appendChild(el);
-      record = { el, sig: '' };
+      record = { el, sig, inner: el.firstElementChild };
       markers.set(key, record);
     }
-    record.el.dataset.trainId = String(job?.train?.id || '');
-    record.el.dataset.playerId = String(job?.playerId || '');
-    record.el.dataset.lineId = String(job?.line?.sourceLineId || job?.line?.id || '');
-    record.el.title = tooltip;
-    record.el.setAttribute('aria-label', tooltip.replace(/\n+/g, ' · '));
 
     if (record.sig !== sig) {
       record.el.innerHTML = trainMarkerIconHtml(job, pose);
       record.sig = sig;
+      record.inner = record.el.firstElementChild;
+      record.lastAngle = null;
     }
-    applyTrainMarkerElementPosition(record.el, point, pose, job);
+    if (record.metadataSig !== metadataSig || record.tooltipSig !== sig) {
+      const tooltip = trainMarkerTooltipText(job, pose);
+      record.el.dataset.trainId = trainId;
+      record.el.dataset.playerId = playerId;
+      record.el.dataset.lineId = lineId;
+      record.el.title = tooltip;
+      record.el.setAttribute('aria-label', tooltip.replace(/\n+/g, ' · '));
+      record.metadataSig = metadataSig;
+      record.tooltipSig = sig;
+    }
+    applyTrainMarkerElementPosition(record, point, pose, job);
   }
 
-  for (const [key, record] of markers.entries()) {
-    if (seen.has(key)) continue;
-    try { record.el?.remove?.(); } catch {}
-    markers.delete(key);
+  if (!options.preserveMissing) {
+    for (const [key, record] of markers.entries()) {
+      if (seen.has(key)) continue;
+      try { record.el?.remove?.(); } catch {}
+      markers.delete(key);
+    }
   }
+  const duration = performance.now() - syncStartedAt;
+  app.map.lastTrainMarkerSyncDurationMs = duration;
+  app.map.maxTrainMarkerSyncDurationMs = Math.max(Number(app.map.maxTrainMarkerSyncDurationMs || 0), duration);
+  document.documentElement.setAttribute('data-sillons-marker-sync-last-ms', duration.toFixed(1));
+  document.documentElement.setAttribute('data-sillons-marker-sync-max-ms', Number(app.map.maxTrainMarkerSyncDurationMs).toFixed(1));
+}
+
+function scheduleInitialTrainMarkerSync(jobs) {
+  if (Array.isArray(jobs)) app.map.trainMarkerJobs = jobs;
+  if (app.map.initialTrainMarkersReady || app.map.initialTrainMarkerSyncScheduled) return;
+  if (!app.map.trainMarkerJobs.length) {
+    app.map.initialTrainMarkersReady = true;
+    return;
+  }
+
+  app.map.initialTrainMarkerSyncScheduled = true;
+  let offset = 0;
+  const batchSize = 5;
+  const runBatch = () => {
+    const currentJobs = app.map.trainMarkerJobs || [];
+    if (offset === 0) app.map.trainHit = [];
+    const batch = currentJobs.slice(offset, offset + batchSize);
+    if (batch.length) {
+      syncTrainMarkerLayer(batch, {
+        updateJobs: false,
+        preserveHits: offset > 0,
+        preserveMissing: true
+      });
+      offset += batch.length;
+      app.map.lastTrainMarkerSyncAt = performance.now();
+    }
+    if (offset < currentJobs.length) {
+      requestAnimationFrame(runBatch);
+      return;
+    }
+    app.map.initialTrainMarkersReady = true;
+    app.map.initialTrainMarkerSyncScheduled = false;
+    document.documentElement.setAttribute('data-sillons-map-markers-ready-ms', String(Math.round(performance.now())));
+    updateFollowedTrainPosition();
+  };
+  window.setTimeout(() => requestAnimationFrame(runBatch), 32);
 }
 
 function requestTrainMarkerLayerSync(options = {}) {
@@ -1804,6 +1935,14 @@ function drawableStations(lite = false) {
   const servedStationIds = new Set((me?.lines || [])
     .filter(line => line.active)
     .flatMap(line => lineStopsOf(line)));
+  const selectedStationIds = new Set([
+    ...servedStationIds,
+    ...Object.keys(me?.stations || {}),
+    ...(app.selectedStation ? [app.selectedStation] : [])
+  ]);
+  const stationSource = lite
+    ? Array.from(selectedStationIds, id => app.state.world.stationIndex?.[id] || station(id)).filter(Boolean)
+    : dedupedStations(app.state.world.stations);
   const candidates = [];
   const bounds = app.map.leaflet?.getBounds?.();
   const viewport = bounds ? {
@@ -1813,7 +1952,7 @@ function drawableStations(lite = false) {
     north: bounds.getNorth() + 0.12
   } : null;
 
-  for (const s of dedupedStations(app.state.world.stations)) {
+  for (const s of stationSource) {
     const asset = me?.stations?.[s.id];
     const selected = app.selectedStation === s.id;
     const served = servedStationIds.has(s.id);
@@ -2415,10 +2554,35 @@ function dedupedStations(list = app.state?.world?.stations || []) {
   }
 
   const out = [];
+  const communeIndex = new Map();
+  const normalizedNameIndex = new Map();
   for (const s of list) {
     if (!s) continue;
-    const dup = out.find(existing => isStationDuplicateClient(s, existing));
-    if (!dup) out.push(s);
+    const communeCode = stationCommuneCodeClient(s);
+    const communeRecord = communeCode ? communeIndex.get(communeCode) : null;
+    let duplicate = Boolean(communeRecord && (!s.multiStation || communeRecord.hasNonMultiStation));
+
+    const normalizedName = stationDedupNameClient(s.name);
+    if (!duplicate && normalizedName) {
+      const sameNameStations = normalizedNameIndex.get(normalizedName) || [];
+      duplicate = sameNameStations.some(existing => {
+        if (![s.lat, s.lon, existing.lat, existing.lon].every(Number.isFinite)) return false;
+        return haversineClient(s.lat, s.lon, existing.lat, existing.lon) <= 1.25;
+      });
+    }
+    if (duplicate) continue;
+
+    out.push(s);
+    if (communeCode) {
+      const nextRecord = communeRecord || { hasNonMultiStation: false };
+      if (!s.multiStation) nextRecord.hasNonMultiStation = true;
+      communeIndex.set(communeCode, nextRecord);
+    }
+    if (normalizedName) {
+      const sameNameStations = normalizedNameIndex.get(normalizedName) || [];
+      sameNameStations.push(s);
+      normalizedNameIndex.set(normalizedName, sameNameStations);
+    }
   }
   app.stationListCache = { source: list, signature, deduped: out };
   return out;

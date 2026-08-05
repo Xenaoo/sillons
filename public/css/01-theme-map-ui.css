@@ -719,6 +719,19 @@ dialog {
   min-width: 42px;
   padding-inline: 12px;
 }
+.map-controls .map-theme-toggle {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+.map-theme-toggle span {
+  display: inline-grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
 #map {
   cursor: grab;
 }
@@ -786,12 +799,28 @@ body.dragging-map #map {
 
 .sillons-map-zoom-snapshot.is-animating {
   transition:
-    transform 340ms cubic-bezier(.18, .82, .24, 1),
-    opacity 220ms ease-out;
+    transform 180ms cubic-bezier(.22, .72, .25, 1),
+    opacity 160ms ease-out;
 }
 
 .sillons-map-zoom-snapshot.is-finishing {
   opacity: 0 !important;
+}
+
+.sillons-map-boot-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 940;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 180ms ease-out;
+}
+
+.sillons-map-boot-preview.is-ready {
+  opacity: 0;
 }
 
 .leaflet-tile {
@@ -1516,18 +1545,37 @@ button[data-tooltip]:focus-visible::before {
     #0b1726 !important;
 }
 .leaflet-tile {
-  filter: saturate(.62) brightness(.82) contrast(1.12) sepia(.20) hue-rotate(158deg) !important;
+  filter: none !important;
+}
+:root[data-map-theme="light"] .osm-map {
+  background:
+    linear-gradient(180deg, rgba(245, 247, 242, .16), rgba(230, 234, 227, .28)),
+    url('/assets/art/hero-france-map.jpg') center/cover no-repeat,
+    #e8ece7 !important;
+}
+:root[data-map-theme="light"] #osmMap .leaflet-tile {
+  filter: none !important;
+}
+:root[data-map-theme="light"] #osmMap .leaflet-control-attribution {
+  color: #263438;
+  background: rgba(248, 250, 246, .88) !important;
+  text-shadow: none;
+}
+:root[data-map-theme="light"] #osmMap .leaflet-control-attribution a {
+  color: #175d74;
 }
 #osmMap.leaflet-container {
   background: transparent;
 }
 #osmMap.leaflet-zoom-anim .leaflet-zoom-animated {
   will-change: transform;
+  transition-duration: 180ms !important;
+  transition-timing-function: cubic-bezier(.22, .72, .25, 1) !important;
 }
 #osmMap.leaflet-fade-anim .leaflet-tile,
 #osmMap .leaflet-tile {
   opacity: 0;
-  transition: opacity 220ms ease-out, filter 160ms ease-out;
+  transition: opacity 160ms ease-out;
   will-change: opacity, transform;
   backface-visibility: hidden;
 }
@@ -1539,12 +1587,9 @@ button[data-tooltip]:focus-visible::before {
   will-change: transform;
 }
 .osm-map::after {
-  background:
-    linear-gradient(180deg, rgba(6, 12, 22, 0.08), rgba(6, 12, 22, 0.18)),
-    radial-gradient(circle at 20% 15%, rgba(217,168,82,.12), transparent 34%),
-    radial-gradient(circle at 80% 76%, rgba(106,197,143,.06), transparent 28%) !important;
-  mix-blend-mode: soft-light !important;
-  opacity: .8;
+  background: linear-gradient(180deg, rgba(6, 12, 22, 0.04), rgba(6, 12, 22, 0.12)) !important;
+  mix-blend-mode: normal !important;
+  opacity: .42;
 }
 #map {
   filter: drop-shadow(0 0 7px rgba(217,168,82,.10));

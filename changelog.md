@@ -1,3 +1,69 @@
+# v0.71.55 - Déplacement continu de la carte
+
+- Les lignes et les marqueurs de trains suivent désormais exactement la translation interne de Leaflet pendant le glissement, sans attendre le relâchement de la souris.
+- Les tuiles PMTiles situées hors du cadre sont de nouveau chargées progressivement pendant le déplacement, avec une cadence limitée à 120 ms et le fondu existant.
+- Les calculs géographiques, la reconstruction des marqueurs et le dessin complet du réseau restent suspendus pendant le geste : seules deux transformations CSS accélérées par le GPU sont mises à jour dans la même microtâche que Leaflet.
+- Test navigateur Xenao : au zoom 11, les tuiles passent de 9 à 12 avant le relâchement puis à 15 ; les surcouches reproduisent exactement le déplacement Leaflet de `(252, -24)` et le geste court reste à 59 ms.
+- Incrément de version : interface et serveur v0.71.55, package npm 0.71.55.
+
+# v0.71.52 - Navigation de carte fluide
+
+- Les lignes et les marqueurs de trains ne sont plus recalculés à chaque événement de déplacement : leurs surcouches existantes suivent maintenant la carte par une transformation GPU regroupée sur la frame suivante.
+- La boucle de dessin de la carte est suspendue pendant un pan ou un zoom, puis effectue un unique rendu précis à la fin du geste.
+- Les redessins demandés par une synchronisation serveur ou un survol pendant un geste sont fusionnés avec ce rendu final au lieu de provoquer une saccade intermédiaire.
+- La couche PMTiles attend désormais la fin du déplacement avant de décoder les nouvelles tuiles, qui apparaissent ensuite avec le fondu existant.
+- Le zoom anime de façon synchronisée le fond visible, les lignes et les trains avec une transition courte de 180 ms ; l'ancienne règle de 340 ms qui ralentissait encore certains navigateurs a été supprimée.
+- Les filtres de tuiles et le mélange de calques coûteux sont neutralisés, tandis que les halos de trains sont mis en pause pendant la navigation.
+- La synchronisation des marqueurs réutilise leurs nœuds DOM et leurs métadonnées statiques ; un changement d'orientation ne reconstruit plus leur contenu HTML.
+- Test navigateur sur le compte Xenao : le geste de déplacement de référence passe d'environ 615 ms à 71-88 ms, un grand déplacement prend 140 ms et la resynchronisation finale des 34 trains prend entre 1,4 et 2,1 ms.
+- Incrément de version : interface et serveur v0.71.52, package npm 0.71.52.
+
+# v0.71.48 - F5 complet sous 300 ms
+
+- Le principal blocage du premier rendu est supprime : la deduplication des quelque 3 400 gares utilise maintenant des index par code commune et nom normalise au lieu d'une comparaison quadratique entre toutes les gares.
+- L'interface exacte du dernier onglet est conservee dans un snapshot de session puis restauree par `auth-boot.js` avant l'execution du client complet ; les gestionnaires d'evenements la reutilisent sans reconstruire le DOM.
+- Un apercu WebP local de la carte, de ses lignes et de ses gares est restaure avant le decodage des tuiles PMTiles, puis disparait en fondu lorsque le fond vectoriel est pret.
+- Les trajectoires geographiques et profils de vitesse des trains reutilisent leurs calculs ; les marqueurs sont hydrates par lots de cinq pour ne plus monopoliser une frame.
+- Le premier dessin de carte n'inspecte plus toutes les gares du monde et ne conserve que les gares desservies, possedees ou selectionnees.
+- L'hydratation du cache de routes est reportee apres le premier affichage et la normalisation des noms de gares ignore immediatement les noms qui ne peuvent pas etre des alias historiques.
+- Le snapshot d'etat est lu depuis IndexedDB au demarrage et ses ecritures ne passent plus par un stockage synchrone pendant le chemin critique du F5.
+- Le test HTTP inutile de presence de l'archive PMTiles est supprime ; la couche locale commence directement son chargement.
+- Le client JavaScript est maintenant minifie avec Terser dans `public/app.js` et `public/app.min.js`, soit environ 494 Ko au lieu de 692 Ko.
+- En production, le serveur sert les bundles statiques preconstruits et compresses ; la concatenation dynamique des sources reste disponible uniquement avec `SILLONS_DYNAMIC_ASSETS=1`.
+- Test navigateur connecte au compte Xenao sur l'onglet Parc : cinq F5 consecutifs termines entre 195 et 228 ms, interface reconnectee entre 52 et 65 ms et carte restauree entre 35 et 43 ms.
+- Increment de version : interface et serveur v0.71.48, package npm 0.71.48.
+
+# v0.71.36 - F5 instantane et themes de carte
+
+- La carte locale peut maintenant basculer entre un rendu sombre et un rendu clair depuis sa barre d'outils.
+- Le theme de carte choisi est conserve entre les sessions et la couche PMTiles est recreee sans modifier les lignes ni les interactions.
+- Le rechargement ne serialise plus plusieurs megaoctets de donnees pendant `pagehide`, operation synchrone qui bloquait le depart du F5 pendant plusieurs secondes.
+- Les snapshots de session sont desormais compactes et ecrits uniquement pendant une periode inactive du navigateur, au maximum une fois toutes les 15 secondes.
+- L'initialisation de Leaflet et des premieres tuiles commence des la premiere frame utile au lieu d'attendre artificiellement 180 ms.
+- Increment de version : interface et serveur v0.71.36, package npm 0.71.36.
+
+# v0.71.35 - lanceur Windows fiable
+
+- `Sillons.bat` utilise maintenant son propre emplacement au lieu d'un chemin absolu.
+- Le lanceur verifie que Node.js est disponible avant de demarrer le serveur.
+- Si le port 3000 est deja utilise par Sillons, aucun second processus n'est lance et le site est simplement ouvert.
+- Le navigateur s'ouvre automatiquement apres le demarrage et la console reste visible si Node retourne une erreur.
+- Increment de version : interface et serveur v0.71.35, package npm 0.71.35.
+
+# v0.71.34 - carte restauree et synchronisations allegees
+
+- L'archive PMTiles France est restauree dans `public/assets/maps/world.pmtiles` et validee jusqu'au zoom 15.
+- La couche de carte locale est installee des que Leaflet est pret, sans attente d'une interaction ni delai artificiel.
+- Un F5 reutilise immediatement le dernier etat complet de la session pendant que la synchronisation serveur se fait en arriere-plan.
+- Les synchronisations suivantes utilisent un payload compact qui ne retransmet plus le monde et la balance inchanges a chaque tick.
+- L'ecriture du snapshot local est limitee a une fois toutes les 15 secondes et le polling ralentit lorsque l'onglet est masque.
+- Les synchronisations compactes reutilisent l'index des gares deja normalise et ne parcourent plus recursivement toutes les donnees des joueurs a chaque tick.
+- Le snapshot de F5 ne serialise plus l'index derive des gares en doublon de leur liste source.
+- Une session expiree affiche de nouveau correctement la fenetre de connexion au lieu de laisser un shell inutilisable.
+- L'API d'etat refuse explicitement les jetons absents ou expires lorsqu'il existe des comptes, ce qui evite de remplacer silencieusement une session par un etat public inutilisable.
+- Les scripts critiques et leurs styles sont declares directement dans le HTML afin que Leaflet et le client s'executent fiablement apres chaque rechargement, sans chargeur dynamique intermediaire.
+- Increment de version : interface et serveur v0.71.34, package npm 0.71.34.
+
 # v0.71.30 - limites de carte locale
 
 - La carte locale PMTiles expose maintenant ses bounds de donnees et une zone de vue utile centree sur la France.
