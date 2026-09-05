@@ -494,6 +494,16 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     }
   }
   if (action === 'close-bug-report') return doAction('closeBugReport', { id: button.dataset.id, resolution: 'Réglé' });
+  if (action === 'maintenance-page') {
+    const epoch = Number(button.dataset.epoch || 0);
+    app.maintenancePages ||= {};
+    app.maintenancePages[epoch] = Math.max(0, Number(button.dataset.page) || 0);
+    renderAll();
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-action="toggle-fleet-maintenance-era"][data-epoch="${epoch}"]`)?.scrollIntoView({ block: 'start' });
+    });
+    return;
+  }
   if (action === 'toggle-fleet-catalog-era') { const epoch = Number(button.dataset.epoch || 0); setFleetCatalogEraCollapsed(epoch, !isFleetCatalogEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-fleet-maintenance-era') { const epoch = Number(button.dataset.epoch || 0); setFleetMaintenanceEraCollapsed(epoch, !isFleetMaintenanceEraCollapsed(epoch)); renderAll(); return; }
   if (action === 'toggle-research-era') { toggleResearchEra(button.dataset.group, button.dataset.bucket); return; }

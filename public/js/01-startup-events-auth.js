@@ -388,6 +388,9 @@ function bindStaticEvents() {
   });
 
   document.addEventListener('focusin', markUiInteraction, true);
+  document.addEventListener('focusin', event => {
+    if (event.target.matches?.('select[data-assign-line-select]')) hydrateTrainAssignmentSelect(event.target);
+  });
   document.addEventListener('pointerdown', event => {
     if (isInteractiveElement(event.target)) markUiInteraction();
   }, true);
@@ -1178,19 +1181,47 @@ function isResearchTreeAutoRefreshFrozen() {
   return app.activeTab === 'research';
 }
 
+function stablePanelSignature(state = app.state) {
+  const me = state?.me;
+  if (!me) return '';
+  return JSON.stringify([
+    state.world?.revision, me.epoch, me.techUnlocked, me.researchProject?.nodeId, me.researchProject?.targetLevel,
+    me.researchQueue?.map(item => [item.nodeId, item.targetLevel]),
+    me.lines?.map(line => [line.id, line.active, line.stops, line.trainIds, line.trainId]),
+    me.trains?.map(train => [train.id, train.modelId, train.composition,
+      Math.floor(Number(train.condition || 0) * 100),
+      Boolean(train.construction?.active), Boolean(train.maintenance?.active)]),
+    Object.entries(me.maintenanceFacilities || {}).map(([id, facility]) => [id, facility.level, Boolean(facility.construction?.active)]),
+    me.maintenancePolicy, me.stations, me.staff
+  ]);
+}
+
 async function refreshState(first, { includeAdmin = false, forceRender = false } = {}) {
-  if (app.refreshInFlight) return;
+  if (!first && !app.authToken) return;
+  if (app.refreshInFlight) {
+    if (forceRender || includeAdmin) app.queuedStateRefresh = {
+      includeAdmin: includeAdmin || Boolean(app.queuedStateRefresh?.includeAdmin),
+      forceRender: forceRender || Boolean(app.queuedStateRefresh?.forceRender)
+    };
+    return;
+  }
+  if (app.pendingActions.size) return;
   app.refreshInFlight = true;
+  const requestToken = app.authToken;
+  const requestState = app.state;
   try {
     const requestStartedAt = performance.now();
     const hasStaticState = Boolean(app.state?.world && app.state?.balance);
     const stateParams = new URLSearchParams();
     if (includeAdmin) stateParams.set('include', 'admin');
     if (hasStaticState) stateParams.set('compact', '1');
+    if (app.state?.world?.revision) stateParams.set('worldRevision', app.state.world.revision);
     const stateUrl = `/api/state${stateParams.size ? `?${stateParams}` : ''}`;
-    const response = await fetch(stateUrl, { cache: 'no-store', headers: authHeaders() });
+    const response = await fetch(stateUrl, { cache: 'no-store', headers: authHeaders(), signal: AbortSignal.timeout(15000) });
     const responseReceivedAt = performance.now();
     let data = await readJsonResponse(response, 'Reponse serveur invalide.');
+    // Une réponse de polling ancienne ne doit pas annuler une action ou une reconnexion.
+    if (app.authToken !== requestToken || app.state !== requestState || app.pendingActions.size) return;
     const parsedAt = performance.now();
     if (response.status === 401) {
       clearAuthState();
@@ -1209,6 +1240,8 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
     app.serverClockOffset = Number(data.serverTime || Date.now()) - Date.now();
     const previousSignature = app.routeDataSignature;
     const previousCash = Number(app.state?.me?.cash);
+    const stablePanel = isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen();
+    const panelChanged = stablePanel && app.lastStablePanelSignature !== stablePanelSignature(data);
     app.state = data;
     scheduleStateSnapshot(data);
     const nextSignature = worldRouteSignature(data);
@@ -1231,9 +1264,9 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
       ensureSelectedStation();
     }
     const nextRenderKey = stateRenderSignature(data);
-    const shouldRender = forceRender || first || nextRenderKey !== app.lastRenderKey;
+    const shouldRender = forceRender || first || panelChanged || nextRenderKey !== app.lastRenderKey;
     if (!shouldRender) return;
-    if (!forceRender && !first && (isFleetSubmenuAutoRefreshFrozen() || isResearchTreeAutoRefreshFrozen())) {
+    if (!forceRender && !first && stablePanel && !panelChanged) {
       // Les sous-menus du Parc ne sont plus reconstruits à chaque tick serveur :
       // les sélections, scrolls, boutons et champs restent stables jusqu'à une action utilisateur.
       renderTopbar();
@@ -1269,6 +1302,9 @@ async function refreshState(first, { includeAdmin = false, forceRender = false }
     console.error(error);
   } finally {
     app.refreshInFlight = false;
+    const queued = app.queuedStateRefresh;
+    app.queuedStateRefresh = null;
+    if (queued) void refreshState(false, queued);
   }
 }
 

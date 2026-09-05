@@ -6,7 +6,7 @@ function renderStations() {
   const ownedEntries = sortOwnedStationEntries(Object.entries(me.stations || {}));
   const collapsed = app.ownedStationsCollapsed;
   return `
-    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Développe les pôles voyageurs et les commerces tout en gardant la sélection de gare stable côté interface.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Péages'])}
+    ${renderSectionHero('AMÉNAGEMENT DU RÉSEAU', 'Gestion des gares', 'Recherche une gare, développe ses équipements et gère ton réseau.', ART.tabs.stations, ['Niveaux', 'Commerces', 'Péages'])}
 
     <div class="card">
       <h2>Gare sélectionnée</h2>

@@ -90,6 +90,8 @@ npm run check
 
 Cette commande vérifie maintenant la syntaxe de tous les fichiers JS découpés et des deux bundles reconstitués.
 
+Les régressions ciblées se vérifient avec `npm test`, sans démarrer le serveur ni modifier la sauvegarde. Après une modification du client, lancer `npm run build:static` pour régénérer les bundles servis. Les résultats de la passe de performances v0.71.56 sont consignés dans [AUDIT.md](AUDIT.md).
+
 ## Données ferroviaires
 
 Le serveur utilise les données SNCF Open Data lorsque l’accès réseau est disponible :

@@ -11,8 +11,12 @@ const clientPartFiles = fs.readdirSync(path.join(ROOT, 'public/js')).filter(name
 const files = [
   'server.js',
   'src/server/bootstrap.js',
+  'src/server/persistence-sqlite.js',
   ...serverPartFiles.map(name => `src/server/parts/${name}`),
   'public/app.js',
+  'public/app.min.js',
+  'public/auth-boot.js',
+  ...fs.readdirSync(path.join(ROOT, 'scripts')).filter(name => name.endsWith('.js')).map(name => `scripts/${name}`),
   ...clientPartFiles.map(name => `public/js/${name}`)
 ];
 

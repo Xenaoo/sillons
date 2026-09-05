@@ -79,8 +79,13 @@ function clientStyleBundle() {
 }
 
 function acceptsContentEncoding(res, encoding) {
-  const escaped = encoding.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|,)\\s*${escaped}(?:;|,|$)`, 'i').test(String(res.__sillonsAcceptEncoding || ''));
+  const entries = String(res.__sillonsAcceptEncoding || '').toLowerCase().split(',').map(value => {
+    const [name, ...parameters] = value.trim().split(';');
+    const quality = parameters.find(parameter => /^\s*q\s*=/.test(parameter));
+    return { name: name.trim(), q: quality ? Number(quality.split('=')[1]) : 1 };
+  });
+  const entry = entries.find(item => item.name === encoding) || entries.find(item => item.name === '*');
+  return Boolean(entry && entry.q > 0 && entry.q <= 1);
 }
 
 function compressStaticBody(res, filePath, body) {
@@ -89,8 +94,9 @@ function compressStaticBody(res, filePath, body) {
     return { body, encoding: '' };
   }
   if (acceptsContentEncoding(res, 'br') && zlib.brotliCompressSync) {
-    const cacheKey = `br:${PROJECT_VERSION}:${filePath}:${body.length}`;
+    const cacheKey = `br:${filePath}:${crypto.createHash('sha256').update(body).digest('hex')}`;
     if (!staticCompressionCache.has(cacheKey)) {
+      if (staticCompressionCache.size >= 64) staticCompressionCache.delete(staticCompressionCache.keys().next().value);
       staticCompressionCache.set(cacheKey, zlib.brotliCompressSync(body, {
         params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
       }));
@@ -98,8 +104,11 @@ function compressStaticBody(res, filePath, body) {
     return { body: staticCompressionCache.get(cacheKey), encoding: 'br' };
   }
   if (acceptsContentEncoding(res, 'gzip')) {
-    const cacheKey = `gzip:${PROJECT_VERSION}:${filePath}:${body.length}`;
-    if (!staticCompressionCache.has(cacheKey)) staticCompressionCache.set(cacheKey, zlib.gzipSync(body, { level: 6 }));
+    const cacheKey = `gzip:${filePath}:${crypto.createHash('sha256').update(body).digest('hex')}`;
+    if (!staticCompressionCache.has(cacheKey)) {
+      if (staticCompressionCache.size >= 64) staticCompressionCache.delete(staticCompressionCache.keys().next().value);
+      staticCompressionCache.set(cacheKey, zlib.gzipSync(body, { level: 6 }));
+    }
     return { body: staticCompressionCache.get(cacheKey), encoding: 'gzip' };
   }
   return { body, encoding: '' };
@@ -107,6 +116,7 @@ function compressStaticBody(res, filePath, body) {
 
 function staticCacheControl(filePath) {
   const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.js' || ext === '.css') return 'no-cache';
   return ['.png', '.jpg', '.jpeg', '.webp', '.ico', '.js', '.css', '.svg', '.pmtiles', '.mvt'].includes(ext)
     ? STATIC_LONG_CACHE
     : STATIC_NO_STORE;
@@ -127,7 +137,9 @@ function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheCont
   const headers = {
     'Content-Type': mimeType(filePath),
     'Cache-Control': cacheControl,
-    'Content-Length': compressed.body.length
+    'Content-Length': compressed.body.length,
+    Vary: 'Accept-Encoding',
+    'X-Content-Type-Options': 'nosniff'
   };
   if (compressed.encoding) {
     headers['Content-Encoding'] = compressed.encoding;
@@ -143,7 +155,7 @@ function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheCont
 
 function parseByteRange(rangeHeader, size) {
   const match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
-  if (!match) return null;
+  if (!match || (!match[1] && !match[2]) || size <= 0) return null;
   let start = match[1] === '' ? NaN : Number(match[1]);
   let end = match[2] === '' ? NaN : Number(match[2]);
   if (!Number.isFinite(start) && Number.isFinite(end)) {
@@ -269,7 +281,6 @@ async function handleApi(req, res, url) {
     }
     const playerId = auth?.user?.playerId || '';
     const includeAdmin = url.searchParams.get('include') === 'admin';
-    const includeStatic = url.searchParams.get('compact') !== '1';
     // Ne bloque jamais l'écran de jeu sur une actualisation réseau des gares.
     // Un cache local, même en cours de rafraîchissement, suffit à construire
     // le monde ; le rafraîchissement se poursuit en arrière-plan.
@@ -279,6 +290,8 @@ async function handleApi(req, res, url) {
       await waitForCommuneCache(3500);
     }
     const stationReferencesChanged = sanitizeStateStationReferencesForPublicWorld();
+    const includeStatic = url.searchParams.get('compact') !== '1'
+      || url.searchParams.get('worldRevision') !== publicWorld().revision;
     const payload = publicState(playerId, auth?.user || null, { includeAdmin, includeStatic });
     const stateBuildMs = Number(process.hrtime.bigint() - stateStartedAt) / 1e6;
     res.setHeader('Server-Timing', `state;dur=${stateBuildMs.toFixed(1)}`);
@@ -420,6 +433,12 @@ function serveStatic(req, res, url) {
     return;
   }
   if (filePath === '/') filePath = '/index.html';
+  // Les anciens assistants de connexion locaux ne sont pas des pages publiques.
+  if (/(?:^|\/)_[^/]*\.html$/i.test(filePath)) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
   const absolute = path.resolve(PUBLIC_DIR, `.${filePath}`);
   const relative = path.relative(PUBLIC_DIR, absolute);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -439,48 +458,46 @@ function serveStatic(req, res, url) {
     sendRangeStaticFile(req, res, absolute);
     return;
   }
-  fs.readFile(absolute, (err, data) => {
+  const responsePath = optimizedStaticAssetPath(absolute);
+  fs.readFile(responsePath, (err, data) => {
     if (err) {
       res.writeHead(404);
       res.end('Not found');
       return;
     }
-    const responsePath = optimizedStaticAssetPath(absolute);
-    if (responsePath !== absolute) {
-      fs.readFile(responsePath, (optimizedErr, optimizedData) => {
-        if (optimizedErr) {
-          sendStaticBody(req, res, absolute, data);
-          return;
-        }
-        sendStaticBody(req, res, responsePath, optimizedData);
-      });
-      return;
-    }
-    sendStaticBody(req, res, absolute, data);
+    const cacheControl = url.searchParams.get('v') === PROJECT_VERSION
+      ? STATIC_LONG_CACHE : staticCacheControl(responsePath);
+    sendStaticBody(req, res, responsePath, data, cacheControl);
   });
 }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    const chunks = [];
+    let bytes = 0;
     let tooLarge = false;
     req.on('data', chunk => {
       if (tooLarge) return;
-      data += chunk;
-      if (data.length > API_JSON_BODY_LIMIT) {
+      bytes += chunk.length;
+      if (bytes > API_JSON_BODY_LIMIT) {
         tooLarge = true;
+        chunks.length = 0;
         reject(httpError(413, 'Payload trop volumineux.'));
+        return;
       }
+      chunks.push(Buffer.from(chunk));
     });
     req.on('end', () => {
       if (tooLarge) return;
       try {
+        const data = Buffer.concat(chunks).toString('utf8');
         resolve(data ? JSON.parse(data) : {});
       } catch {
         reject(httpError(400, 'JSON invalide.'));
       }
     });
     req.on('error', reject);
+    req.on('aborted', () => reject(httpError(400, 'Requête interrompue.')));
   });
 }
 
@@ -491,47 +508,37 @@ function httpError(statusCode, message) {
 }
 
 function sendJson(res, status, payload) {
-  const serializeStartedAt = process.hrtime.bigint();
-  const json = JSON.stringify(payload);
-  const stringifyMs = Number(process.hrtime.bigint() - serializeStartedAt) / 1e6;
-  const acceptsBr = acceptsContentEncoding(res, 'br');
-  const acceptsGzip = acceptsContentEncoding(res, 'gzip');
-  if (acceptsBr && zlib.brotliCompressSync && json.length >= 1024) {
-    const brStartedAt = process.hrtime.bigint();
-    const body = zlib.brotliCompressSync(Buffer.from(json), {
-      params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
-    });
-    const brMs = Number(process.hrtime.bigint() - brStartedAt) / 1e6;
+  const startedAt = process.hrtime.bigint();
+  const raw = Buffer.from(JSON.stringify(payload));
+  const stringifyMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+  const encoding = raw.length < 1024 || status === 204 ? ''
+    : acceptsContentEncoding(res, 'br') ? 'br'
+    : acceptsContentEncoding(res, 'gzip') ? 'gzip' : '';
+  const compressionStartedAt = process.hrtime.bigint();
+  const finish = (error, compressed) => {
+    if (res.destroyed || res.writableEnded) return;
+    const actualEncoding = error ? '' : encoding;
+    const body = actualEncoding ? compressed : raw;
     const existingTiming = String(res.getHeader('Server-Timing') || '');
-    res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}, br;dur=${brMs.toFixed(1)}`);
-    res.writeHead(status, {
+    const compressionMs = Number(process.hrtime.bigint() - compressionStartedAt) / 1e6;
+    res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}${actualEncoding ? `, ${actualEncoding};dur=${compressionMs.toFixed(1)}` : ''}`);
+    const headers = {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
-      'Content-Encoding': 'br',
-      'Content-Length': body.length,
-      Vary: 'Accept-Encoding'
-    });
-    res.end(body);
-    return;
+      Vary: 'Accept-Encoding',
+      'X-Content-Type-Options': 'nosniff'
+    };
+    if (status !== 204) headers['Content-Length'] = body.length;
+    if (actualEncoding) headers['Content-Encoding'] = actualEncoding;
+    res.writeHead(status, headers);
+    res.end(status === 204 ? undefined : body);
+  };
+  // Le pool natif compresse sans immobiliser la simulation ni les autres joueurs.
+  if (encoding === 'br') {
+    zlib.brotliCompress(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }, finish);
+  } else if (encoding === 'gzip') {
+    zlib.gzip(raw, { level: 4 }, finish);
+  } else {
+    finish(null, raw);
   }
-  if (acceptsGzip) {
-    const gzipStartedAt = process.hrtime.bigint();
-    const body = zlib.gzipSync(json, { level: 6 });
-    const gzipMs = Number(process.hrtime.bigint() - gzipStartedAt) / 1e6;
-    const existingTiming = String(res.getHeader('Server-Timing') || '');
-    res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}, gzip;dur=${gzipMs.toFixed(1)}`);
-    res.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'Content-Encoding': 'gzip',
-      'Content-Length': body.length,
-      Vary: 'Accept-Encoding'
-    });
-    res.end(body);
-    return;
-  }
-  const existingTiming = String(res.getHeader('Server-Timing') || '');
-  res.setHeader('Server-Timing', `${existingTiming}${existingTiming ? ', ' : ''}json;dur=${stringifyMs.toFixed(1)}`);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' });
-  res.end(json);
 }

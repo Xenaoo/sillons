@@ -6,7 +6,7 @@ const { minify } = require('terser');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const CLIENT_VERSION = 'v0.71.55';
+const CLIENT_VERSION = 'v0.71.56';
 
 const CLIENT_SCRIPT_PARTS = [
   '00-core-state.js',

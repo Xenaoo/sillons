@@ -1,3 +1,12 @@
+# v0.71.56 - Fluidité des menus et fiabilité des actualisations
+
+- Catalogue centré sur l'époque actuelle, maintenance paginée et compatibilités d'affectation chargées à la demande dans les compositions.
+- Recherche de gares accélérée, tri corrigé et rafraîchissement des anciennes données en cache.
+- Synchronisations protégées contre les réponses obsolètes ; recherches et travaux terminés réactualisent les panneaux sans reconstruire toutes les cartes à chaque tick.
+- Compression JSON asynchrone, lecture des images optimisées simplifiée, corrections des caches HTTP et du décodage UTF-8.
+- Fonds plus discrets, focus clavier visible et grille mobile corrigée pour garder la carte accessible.
+- Tests de régression et compte rendu détaillé dans AUDIT.md.
+
 # v0.71.55 - Déplacement continu de la carte
 
 - Les lignes et les marqueurs de trains suivent désormais exactement la translation interne de Leaflet pendant le glissement, sans attendre le relâchement de la souris.

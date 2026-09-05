@@ -270,6 +270,7 @@ function renderAll(options = {}) {
     }
   });
   app.lastRenderKey = renderKey || stateRenderSignature();
+  app.lastStablePanelSignature = stablePanelSignature();
 }
 
 function renderTopbar() {
@@ -501,7 +502,12 @@ function renderTabs() {
     app.activeTab = 'overview';
     localStorage.setItem('sillons.activeTab', app.activeTab);
   }
-  $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === app.activeTab));
+  $$('#tabs button').forEach(b => {
+    const active = b.dataset.tab === app.activeTab;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
   if (app.activeTab === 'bugs') markBugReportsRead({ syncServer: true, skipRender: true });
   syncBugTabBadge();
   const content = $('#tabContent');
@@ -544,7 +550,15 @@ function renderTabs() {
     setTimeout(renderTutorialOverlay, 0);
     return;
   }
+  const samePanel = app.renderedTab === app.activeTab && app.renderedFleetSubtab === (app.activeFleetSubtab || '');
+  const scrollTop = samePanel ? content.scrollTop : 0;
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
+  const generation = app.tabRenderGeneration = (app.tabRenderGeneration || 0) + 1;
+  requestAnimationFrame(() => {
+    if (app.tabRenderGeneration === generation) content.scrollTop = scrollTop;
+  });
+  app.renderedTab = app.activeTab;
+  app.renderedFleetSubtab = app.activeFleetSubtab || '';
   if (app.activeTab === 'lines') { refreshLineSearchWidgets(); updateLinePreview(); }
   if (app.activeTab === 'stations') refreshStationSearchWidgets();
   setTimeout(renderTutorialOverlay, 0);
@@ -849,7 +863,7 @@ function renderOverview() {
   const ranking = [...app.state.players].sort((a, b) => b.score - a.score);
   const myRank = ranking.findIndex(p => p.id === me.id) + 1;
   return `
-    ${renderSectionHero('POSTE DE COMMANDE', me.name, 'Pilote ton entreprise ferroviaire depuis un tableau de bord entièrement intégré à la direction artistique pixel-art du projet.', ART.tabs.overview, [me.eraName, `${activeLines} lignes actives`, `${me.trains.length} trains`])}
+    ${renderSectionHero('POSTE DE COMMANDE', me.name, 'Suis ton réseau, tes revenus et les priorités de ta compagnie.', ART.tabs.overview, [me.eraName, `${activeLines} lignes actives`, `${me.trains.length} trains`])}
 
     <div class="card">
       <h2>${escapeHtml(me.name)}</h2>

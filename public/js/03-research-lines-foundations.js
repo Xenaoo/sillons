@@ -528,6 +528,10 @@ function startResearchAnimationLoop() {
   if (app.researchAnimationLoopStarted) return;
   app.researchAnimationLoopStarted = true;
   const tick = () => {
+    if (document.hidden) {
+      window.setTimeout(tick, 1000);
+      return;
+    }
     updateResearchTimers();
     updateEpochTrafficAnimation();
     const visibleResearch = app.activeTab === 'research' || document.querySelector('[data-research-timer], [data-research-total-timer], [data-construction-timer], [data-maintenance-timer], [data-epoch-traffic-value]');

@@ -1009,8 +1009,8 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
   const inConstruction = !!train.construction?.active;
   const inMaint = !!train.maintenance?.active;
   const canSell = !line && !inConstruction && !inMaint;
-  const assignable = safeAssignableLinesForTrain(train, line);
-  const hasAssignmentAction = !!line || (assignable.length > 0 && !inConstruction && !inMaint);
+  // Les compatibilités RFN ne sont nécessaires qu'à l'ouverture du sélecteur.
+  const hasAssignmentAction = !!line || (!inConstruction && !inMaint && app.state.me.lines.some(candidate => candidate.active));
   const statusLabel = line ? linePublicName(line) : inConstruction ? 'En fabrication' : inMaint ? 'En maintenance' : 'Libre';
   const assignButtonLabel = line ? 'Appliquer' : 'Affecter';
   const sellEstimate = trainResaleEstimateClient(train, model);
@@ -1040,14 +1040,9 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
         </div>
       </div>
       <div class="composition-assign-row">
-        <select class="composition-assign-select" data-assign-line-select="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>
-          <option value="">${line ? 'Changer / retirer...' : inConstruction ? 'En fabrication' : inMaint ? 'En maintenance' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
+        <select class="composition-assign-select" aria-label="Affectation de ${escapeAttr(model.name)}" data-assign-line-select="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>
+          <option value="">${line ? 'Changer / retirer...' : inConstruction ? 'En fabrication' : inMaint ? 'En maintenance' : hasAssignmentAction ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>
           ${line ? `<option value="__remove__">Retirer de la ligne actuelle</option>` : ''}
-          ${assignable.map(candidate => {
-            const slots = lineAvailableSillonsClient(candidate);
-            const label = slots ? `${linePublicName(candidate)} · ${slots.available} sillons dispo` : linePublicName(candidate);
-            return `<option value="${escapeAttr(candidate.id)}">${escapeHtml(label)}</option>`;
-          }).join('')}
         </select>
         <button type="button" class="ghost" data-action="assign-train-line" data-id="${escapeAttr(train.id)}" ${hasAssignmentAction ? '' : 'disabled'}>${escapeHtml(assignButtonLabel)}</button>
       </div>
@@ -1057,6 +1052,26 @@ function renderCompositionTrainVignette(train, selectedTrainIds = new Set(compos
       </div>
     </article>
   `;
+}
+
+const assignmentSelectStates = new WeakMap();
+
+function hydrateTrainAssignmentSelect(select) {
+  if (!select || assignmentSelectStates.get(select) === app.state) return;
+  const train = app.state?.me?.trains?.find(item => item.id === select.dataset.assignLineSelect);
+  if (!train) return;
+  const line = trainCurrentLine(train.id);
+  const assignable = safeAssignableLinesForTrain(train, line);
+  const previousValue = select.value;
+  select.innerHTML = `<option value="">${line ? 'Changer / retirer...' : assignable.length ? 'Affecter à une ligne...' : 'Aucune ligne compatible'}</option>`
+    + (line ? '<option value="__remove__">Retirer de la ligne actuelle</option>' : '')
+    + assignable.map(candidate => {
+      const slots = lineAvailableSillonsClient(candidate);
+      const label = slots ? `${linePublicName(candidate)} · ${slots.available} sillons dispo` : linePublicName(candidate);
+      return `<option value="${escapeAttr(candidate.id)}">${escapeHtml(label)}</option>`;
+    }).join('');
+  if (previousValue === '__remove__' && line || assignable.some(candidate => candidate.id === previousValue)) select.value = previousValue;
+  assignmentSelectStates.set(select, app.state);
 }
 
 function renderCompositionTrainGroup(group, selectedTrainIds = new Set(compositionSelectedIds())) {
@@ -1473,13 +1488,13 @@ function fleetCatalogEraStorageKey(epoch) {
 }
 
 function isFleetCatalogEraCollapsed(epoch) {
-  return Boolean(app.fleetCatalogEraCollapsed?.[fleetCatalogEraStorageKey(epoch)]);
+  const saved = app.fleetCatalogEraCollapsed?.[fleetCatalogEraStorageKey(epoch)];
+  return saved === undefined ? Number(epoch) !== Number(app.state?.me?.epoch ?? 0) : Boolean(saved);
 }
 
 function setFleetCatalogEraCollapsed(epoch, collapsed) {
   const key = fleetCatalogEraStorageKey(epoch);
   app.fleetCatalogEraCollapsed = { ...(app.fleetCatalogEraCollapsed || {}), [key]: Boolean(collapsed) };
-  if (!collapsed) delete app.fleetCatalogEraCollapsed[key];
   localStorage.setItem('sillons.fleetCatalogEraCollapsed', JSON.stringify(app.fleetCatalogEraCollapsed));
 }
 
@@ -1578,7 +1593,7 @@ function renderFleetCatalogPanel(available, locked) {
         <div class="fleet-card-heading">
           <div>
             <h2>Catalogue de matériel roulant</h2>
-            <p class="muted small">Les cartes sont classées par époque. Utilise-les comme choix de stratégie : Économique, grande capacité, Fret, Vitesse, Confort ou Énergie propre.</p>
+            <p class="muted small">Ton époque est ouverte par défaut. Déplie les autres pour comparer capacité, vitesse, confort et énergie.</p>
           </div>
           <span class="tag">${models.length} modèles</span>
         </div>
@@ -1641,6 +1656,9 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
   const free = maintenanceTrains.filter(t => !t.maintenance?.active && !me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const assigned = maintenanceTrains.filter(t => me.lines.some(l => l.active && lineHasTrain(l, t.id))).length;
   const mapSelectedTrainId = typeof selectedOwnedMapTrainId === 'function' ? selectedOwnedMapTrainId() : '';
+  const mapSelectionChanged = mapSelectedTrainId !== app.lastMaintenanceMapSelection;
+  app.lastMaintenanceMapSelection = mapSelectedTrainId;
+  app.maintenancePages ||= {};
   const bulkPreviews = maintenanceBulkPreviewsClient();
   const bulkAvailable = bulkPreviews.some(preview => !preview.locked && preview.count > 0);
   const bulkTooltip = bulkAvailable ? 'Choisir le type de maintenance et vérifier le coût total.' : 'Aucun type de maintenance globale disponible pour le parc actuel.';
@@ -1693,6 +1711,11 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
               const mb = app.state.balance.trains[b.modelId] || {};
               return String(ma.name || '').localeCompare(String(mb.name || ''), 'fr') || String(a.id).localeCompare(String(b.id));
             });
+            const pageSize = 12;
+            const pageCount = Math.ceil(sorted.length / pageSize);
+            if (selectedInEra && mapSelectionChanged) app.maintenancePages[epoch] = Math.floor(sorted.findIndex(train => train.id === mapSelectedTrainId) / pageSize);
+            const page = Math.max(0, Math.min(pageCount - 1, Number(app.maintenancePages[epoch]) || 0));
+            const visibleTrains = sorted.slice(page * pageSize, (page + 1) * pageSize);
             return `
               <section class="era-block fleet-era-block ${collapsed ? 'collapsed' : ''}">
                 <button type="button" class="era-title fleet-era-toggle" data-action="toggle-fleet-maintenance-era" data-epoch="${escapeAttr(String(epoch))}" aria-expanded="${collapsed ? 'false' : 'true'}">
@@ -1704,8 +1727,13 @@ function renderFleetMaintenancePanel(avgCondition, inWorkshop) {
                 </button>
                 ${collapsed ? '' : `
                   <div class="train-card-grid fleet-catalog-grid fleet-maintenance-grid">
-                    ${sorted.map(t => renderOwnedTrain(t)).join('')}
+                    ${visibleTrains.map(t => renderOwnedTrain(t)).join('')}
                   </div>
+                  ${pageCount > 1 ? `<div class="maintenance-pagination" aria-label="Pages du parc ${escapeAttr(trainEraLabel(Number(epoch)))}">
+                    <button type="button" class="ghost" data-action="maintenance-page" data-epoch="${epoch}" data-page="${page - 1}" ${page === 0 ? 'disabled' : ''}>Précédents</button>
+                    <span>${page * pageSize + 1}–${Math.min(sorted.length, (page + 1) * pageSize)} / ${sorted.length} trains</span>
+                    <button type="button" class="ghost" data-action="maintenance-page" data-epoch="${epoch}" data-page="${page + 1}" ${page + 1 >= pageCount ? 'disabled' : ''}>Suivants</button>
+                  </div>` : ''}
                 `}
               </section>
             `;

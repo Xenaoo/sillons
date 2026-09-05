@@ -815,6 +815,7 @@ function publicWorld() {
   const stationIndex = Object.fromEntries(communeStations.map(s => [s.id, s]));
   const world = {
     ...WORLD,
+    revision: `${PROJECT_VERSION}:${cacheKey}`,
     stations,
     communesStatus: {
       status: communeCache.status,

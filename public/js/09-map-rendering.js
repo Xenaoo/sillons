@@ -2548,10 +2548,8 @@ function stationListSignature(list) {
 function dedupedStations(list = app.state?.world?.stations || []) {
   if (app.stationListCache.source === list) return app.stationListCache.deduped;
   const signature = stationListSignature(list);
-  if (app.stationListCache.signature === signature) {
-    app.stationListCache.source = list;
-    return app.stationListCache.deduped;
-  }
+  // Un nouveau tableau peut contenir des noms, prix ou coordonnées corrigés.
+  // Ne jamais réutiliser les objets de l'ancien monde sur la seule signature des IDs.
 
   const out = [];
   const communeIndex = new Map();

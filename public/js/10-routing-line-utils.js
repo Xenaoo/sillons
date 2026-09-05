@@ -1424,6 +1424,21 @@ function renderStationSuggestions(role, matches, rawValue) {
   `).join('') : '<div class="station-suggest-empty">Aucune gare trouvée.</div>';
 }
 
+const stationSearchIndexCache = new WeakMap();
+const stationSearchCollator = new Intl.Collator('fr', { sensitivity: 'base' });
+
+function stationSearchIndex(all) {
+  if (!stationSearchIndexCache.has(all)) {
+    stationSearchIndexCache.set(all, all.map(s => ({
+      s,
+      name: normalizeStationSearchText(s.name),
+      postal: (s.codesPostaux || []).join(' '),
+      populationScore: Math.log10(Math.max(1, Number(s.population || s.baseDemand * 450 || 10000))) * 12
+    })));
+  }
+  return stationSearchIndexCache.get(all);
+}
+
 function findStationMatches(query, limit = 12, sortMode = '') {
   const q = normalizeStationSearchText(query || '');
   const all = dedupedStations(app.state?.world?.stations || []);
@@ -1431,10 +1446,8 @@ function findStationMatches(query, limit = 12, sortMode = '') {
     const candidates = sortMode ? sortStationsForPurchase(all, sortMode) : topStationCandidates(limit);
     return candidates.slice(0, limit);
   }
-  const matches = all
-    .map(s => {
-      const name = normalizeStationSearchText(s.name);
-      const postal = (s.codesPostaux || []).join(' ');
+  const matches = stationSearchIndex(all)
+    .map(({ s, name, postal, populationScore }) => {
       // Le rang est volontairement distinct du score : une gare dont le nom
       // commence par la saisie doit toujours précéder une simple occurrence.
       const exact = name === q;
@@ -1443,17 +1456,17 @@ function findStationMatches(query, limit = 12, sortMode = '') {
       const postalMatch = postal.includes(q);
       const rank = exact ? 0 : starts ? 1 : includes ? 2 : postalMatch ? 3 : 4;
       const owned = app.state.me?.stations?.[s.id] ? 500 : 0;
-      const pop = Number(s.population || s.baseDemand * 450 || 10000);
       return {
         s,
         rank,
-        score: owned + Math.log10(pop) * 12,
+        score: owned + populationScore,
         matches: exact || starts || includes || postalMatch
       };
     })
     .filter(x => x.matches);
 
-  const collator = new Intl.Collator('fr', { sensitivity: 'base' });
+  if (sortMode) return sortStationsForPurchase(matches.map(x => x.s), sortMode).slice(0, limit);
+  const collator = stationSearchCollator;
   const ordered = matches
     .sort((a, b) => a.rank - b.rank || b.score - a.score || collator.compare(a.s.name || '', b.s.name || ''))
     .map(x => x.s);
@@ -1463,6 +1476,7 @@ function findStationMatches(query, limit = 12, sortMode = '') {
 
 function topStationCandidates(limit = 12) {
   return dedupedStations(app.state?.world?.stations || [])
+    .slice()
     .sort((a, b) => Number(b.population || b.baseDemand * 450 || 0) - Number(a.population || a.baseDemand * 450 || 0))
     .slice(0, limit);
 }
@@ -1516,6 +1530,7 @@ function isInteractiveElement(target) {
 }
 
 function markUiInteraction(duration = 1800) {
+  if (!Number.isFinite(duration)) duration = 1800;
   app.uiInteractionUntil = Math.max(app.uiInteractionUntil || 0, performance.now() + duration);
 }
 
@@ -1523,7 +1538,7 @@ function isInteractiveUiActive() {
   if (performance.now() < (app.uiInteractionUntil || 0)) return true;
   const active = document.activeElement;
   if (!active || active === document.body) return false;
-  if (active.matches?.('input, select, textarea, button, [contenteditable="true"]')) {
+  if (active.matches?.('input, select, textarea, [contenteditable="true"]')) {
     return Boolean(active.closest('#tabContent, #setup, .modal'));
   }
   return Boolean(active.closest?.('.station-suggestions, .modal'));
