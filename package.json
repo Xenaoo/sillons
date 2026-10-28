@@ -1,13 +1,14 @@
 {
   "name": "sillons-rail-browser-game",
-  "version": "0.71.56",
+  "version": "0.71.59",
   "description": "Jeu navigateur multijoueur de gestion ferroviaire en France, sans dépendance externe.",
   "main": "server.js",
   "scripts": {
     "build:static": "node scripts/build-static-bundles.js",
     "start": "node server.js",
     "check": "node scripts/check-split-code.js",
-    "test": "node --test scripts/test-regressions.js",
+    "test": "node --test scripts/test-regressions.js scripts/test-reliability.js scripts/test-http-integration.js",
+    "benchmark": "node scripts/benchmark-runtime.js",
     "reset": "node scripts/reset-save.js",
     "check:stations": "node scripts/check-station-duplicates.js",
     "install:local-map": "node scripts/install-local-map.js",

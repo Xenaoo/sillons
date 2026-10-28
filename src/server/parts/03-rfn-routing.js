@@ -127,7 +127,7 @@ class SncfRouteWorkerPool {
       workerData: { role: 'rfn-route-worker', index },
       env: { ...process.env, SILLONS_RFN_WORKERS: '0' }
     });
-    const slot = { worker, busy: false, current: null, index };
+    const slot = { worker, busy: false, failed: false, current: null, index };
     worker.on('message', message => this.handleMessage(slot, message));
     worker.on('error', error => this.handleFailure(slot, error));
     worker.on('exit', code => {
@@ -151,6 +151,8 @@ class SncfRouteWorkerPool {
   }
 
   handleFailure(slot, error) {
+    if (slot.failed) return;
+    slot.failed = true;
     const current = slot.current;
     if (current) {
       clearTimeout(current.timer);
@@ -163,30 +165,40 @@ class SncfRouteWorkerPool {
   }
 
   run(task) {
+    if (this.queue.length >= 64) return Promise.reject(httpError(503, 'Calculs RFN saturés. Réessaie dans quelques secondes.'));
     return new Promise((resolve, reject) => {
-      this.queue.push({ id: this.nextId++, task, resolve, reject, timer: null });
+      const job = { id: this.nextId++, task, resolve, reject, timer: null };
+      job.timer = setTimeout(() => {
+        const position = this.queue.indexOf(job);
+        const error = httpError(503, 'Délai de calcul RFN dépassé. Réessaie dans quelques secondes.');
+        if (position >= 0) { this.queue.splice(position, 1); reject(error); }
+        else {
+          const slot = this.workers.find(item => item.current === job);
+          if (slot) this.handleFailure(slot, error);
+        }
+      }, SNCF_ROUTE_WORKER_TIMEOUT_MS);
+      job.timer.unref?.();
+      this.queue.push(job);
       this.pump();
     });
   }
 
   pump() {
     for (const slot of this.workers) {
-      if (slot.busy) continue;
+      if (slot.busy || slot.failed) continue;
       const job = this.queue.shift();
       if (!job) return;
       slot.busy = true;
       slot.current = job;
-      job.timer = setTimeout(() => {
-        this.handleFailure(slot, new Error('Timeout calcul RFN worker.'));
-      }, SNCF_ROUTE_WORKER_TIMEOUT_MS);
-      if (typeof job.timer.unref === 'function') job.timer.unref();
-      slot.worker.postMessage({ id: job.id, task: job.task });
+      try { slot.worker.postMessage({ id: job.id, task: job.task }); }
+      catch (error) { this.handleFailure(slot, error); }
     }
   }
 }
 
 let sncfRouteWorkerPool = null;
 let sncfRouteWorkerFailureLogged = false;
+const pendingSncfRouteWorkerTasks = new Map();
 
 function getSncfRouteWorkerPool() {
   if (!isMainThread || SNCF_ROUTE_WORKER_POOL_SIZE <= 0) return null;
@@ -197,15 +209,17 @@ function getSncfRouteWorkerPool() {
 async function runSncfRouteWorkerTask(task) {
   const pool = getSncfRouteWorkerPool();
   if (!pool) return null;
-  try {
-    return await pool.run(task);
-  } catch (error) {
+  const key = JSON.stringify(task);
+  if (pendingSncfRouteWorkerTasks.has(key)) return pendingSncfRouteWorkerTasks.get(key);
+  const pending = pool.run(task).catch(error => {
     if (!sncfRouteWorkerFailureLogged) {
       sncfRouteWorkerFailureLogged = true;
-      console.warn('Workers RFN indisponibles, fallback mono-thread :', error.message);
+      console.warn('Calcul RFN temporairement indisponible :', error.message);
     }
-    return null;
-  }
+    throw httpError(503, error.message || 'Calcul RFN temporairement indisponible.');
+  }).finally(() => pendingSncfRouteWorkerTasks.delete(key));
+  pendingSncfRouteWorkerTasks.set(key, pending);
+  return pending;
 }
 
 async function sncfRouteGeometryForStationsFast(fromKey, toKey, options = {}) {
@@ -217,6 +231,7 @@ async function sncfRouteGeometryForStationsFast(fromKey, toKey, options = {}) {
   if (Array.isArray(workerResult?.geometry) && workerResult.geometry.length >= 2) {
     return rememberSncfRouteGeometry(cacheKey, workerResult.geometry);
   }
+  if (workerResult) return [];
   return sncfRouteGeometryForStations(fromKey, toKey, options);
 }
 
@@ -235,6 +250,7 @@ async function sncfRouteGeometryForStopSequenceFast(stops, options = {}) {
       chunks: Array.isArray(workerResult.chunks) ? workerResult.chunks : []
     });
   }
+  if (workerResult) return { ids, geometry: [], chunks: [] };
   return sncfRouteGeometryForStopSequence(ids, options);
 }
 

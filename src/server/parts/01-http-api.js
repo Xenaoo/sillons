@@ -10,7 +10,8 @@ const CLIENT_SCRIPT_PARTS = Object.freeze([
   '07-resources-budget-market.js',
   '08-actions-modals.js',
   '09-map-rendering.js',
-  '10-routing-line-utils.js'
+  '10-routing-line-utils.js',
+  '11-research-workspace.js'
 ]);
 
 const CLIENT_STYLE_PARTS = Object.freeze([
@@ -19,7 +20,9 @@ const CLIENT_STYLE_PARTS = Object.freeze([
   '02-lines-fleet-research.css',
   '03-accounts-budget-admin.css',
   '04-compositions.css',
-  '05-bugs-research-overview.css'
+  '05-bugs-research-overview.css',
+  '06-visual-polish.css',
+  '07-research-workspace.css'
 ]);
 
 const STATIC_LONG_CACHE = 'public, max-age=31536000, immutable';
@@ -28,6 +31,37 @@ const TEXT_STATIC_EXTENSIONS = new Set(['.html', '.css', '.js', '.json', '.svg',
 const PRECOMPRESSED_STATIC_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.ico', '.gz', '.br']);
 const staticBundleCache = new Map();
 const staticCompressionCache = new Map();
+const staticCompressionPending = new Map();
+const staticFileCache = new Map();
+const STATIC_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+
+function rememberStaticEntry(cache, key, entry) {
+  cache.delete(key);
+  if (entry.body.length > STATIC_CACHE_MAX_BYTES) return;
+  cache.set(key, entry);
+  let bytes = 0;
+  for (const value of cache.values()) bytes += value.body.length;
+  while (cache.size > 64 || bytes > STATIC_CACHE_MAX_BYTES) {
+    const oldest = cache.keys().next().value;
+    bytes -= cache.get(oldest).body.length;
+    cache.delete(oldest);
+  }
+}
+
+async function readStaticFile(filePath) {
+  const stat = await fs.promises.stat(filePath);
+  if (!stat.isFile()) throw httpError(404, 'Not found');
+  const signature = `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
+  const cached = staticFileCache.get(filePath);
+  if (cached?.signature === signature) {
+    staticFileCache.delete(filePath);
+    staticFileCache.set(filePath, cached);
+    return cached.body;
+  }
+  const body = await fs.promises.readFile(filePath);
+  rememberStaticEntry(staticFileCache, filePath, { signature, body });
+  return body;
+}
 
 function fileSignature(files) {
   return files.map(file => {
@@ -88,30 +122,34 @@ function acceptsContentEncoding(res, encoding) {
   return Boolean(entry && entry.q > 0 && entry.q <= 1);
 }
 
-function compressStaticBody(res, filePath, body) {
+async function compressStaticBody(res, filePath, body) {
   const ext = path.extname(filePath).toLowerCase();
   if (!TEXT_STATIC_EXTENSIONS.has(ext) || PRECOMPRESSED_STATIC_EXTENSIONS.has(ext) || body.length < 1024) {
     return { body, encoding: '' };
   }
-  if (acceptsContentEncoding(res, 'br') && zlib.brotliCompressSync) {
-    const cacheKey = `br:${filePath}:${crypto.createHash('sha256').update(body).digest('hex')}`;
-    if (!staticCompressionCache.has(cacheKey)) {
-      if (staticCompressionCache.size >= 64) staticCompressionCache.delete(staticCompressionCache.keys().next().value);
-      staticCompressionCache.set(cacheKey, zlib.brotliCompressSync(body, {
-        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 }
-      }));
-    }
-    return { body: staticCompressionCache.get(cacheKey), encoding: 'br' };
+  const encoding = acceptsContentEncoding(res, 'br') ? 'br' : acceptsContentEncoding(res, 'gzip') ? 'gzip' : '';
+  if (!encoding || body.length > STATIC_CACHE_MAX_BYTES) return { body, encoding: '' };
+  const cacheKey = `${encoding}:${filePath}:${crypto.createHash('sha256').update(body).digest('hex')}`;
+  const cached = staticCompressionCache.get(cacheKey);
+  if (cached) {
+    staticCompressionCache.delete(cacheKey);
+    staticCompressionCache.set(cacheKey, cached);
+    return { body: cached.body, encoding };
   }
-  if (acceptsContentEncoding(res, 'gzip')) {
-    const cacheKey = `gzip:${filePath}:${crypto.createHash('sha256').update(body).digest('hex')}`;
-    if (!staticCompressionCache.has(cacheKey)) {
-      if (staticCompressionCache.size >= 64) staticCompressionCache.delete(staticCompressionCache.keys().next().value);
-      staticCompressionCache.set(cacheKey, zlib.gzipSync(body, { level: 6 }));
-    }
-    return { body: staticCompressionCache.get(cacheKey), encoding: 'gzip' };
+  if (!staticCompressionPending.has(cacheKey)) {
+    if (staticCompressionPending.size >= 16) return { body, encoding: '' };
+    const pending = new Promise(resolve => {
+      const finish = (error, compressed) => {
+        if (error) return resolve({ body, encoding: '' });
+        rememberStaticEntry(staticCompressionCache, cacheKey, { body: compressed });
+        resolve({ body: compressed, encoding });
+      };
+      if (encoding === 'br') zlib.brotliCompress(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }, finish);
+      else zlib.gzip(body, { level: 6 }, finish);
+    }).finally(() => staticCompressionPending.delete(cacheKey));
+    staticCompressionPending.set(cacheKey, pending);
   }
-  return { body, encoding: '' };
+  return staticCompressionPending.get(cacheKey);
 }
 
 function staticCacheControl(filePath) {
@@ -131,10 +169,20 @@ function optimizedStaticAssetPath(filePath) {
   return fs.existsSync(optimizedPngPath) ? optimizedPngPath : filePath;
 }
 
-function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheControl(filePath)) {
+async function sendStaticBody(req, res, filePath, body, cacheControl = staticCacheControl(filePath)) {
+  if (res.destroyed || res.writableEnded) return;
   const raw = Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'utf8');
-  const compressed = compressStaticBody(res, filePath, raw);
+  const etag = `W/"${crypto.createHash('sha256').update(raw).digest('hex')}"`;
+  const validators = String(req.headers?.['if-none-match'] || '').split(',').map(value => value.trim().replace(/^W\//, ''));
+  if (validators.includes('*') || validators.includes(etag.replace(/^W\//, ''))) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl, Vary: 'Accept-Encoding' });
+    res.end();
+    return;
+  }
+  const compressed = await compressStaticBody(res, filePath, raw);
+  if (res.destroyed || res.writableEnded) return;
   const headers = {
+    ETag: etag,
     'Content-Type': mimeType(filePath),
     'Cache-Control': cacheControl,
     'Content-Length': compressed.body.length,
@@ -174,6 +222,7 @@ function parseByteRange(rangeHeader, size) {
 
 function sendRangeStaticFile(req, res, filePath, cacheControl = staticCacheControl(filePath)) {
   fs.stat(filePath, (statError, stat) => {
+    if (res.destroyed || res.writableEnded) return;
     if (statError || !stat.isFile()) {
       res.writeHead(404);
       res.end('Not found');
@@ -183,7 +232,8 @@ function sendRangeStaticFile(req, res, filePath, cacheControl = staticCacheContr
     const commonHeaders = {
       'Accept-Ranges': 'bytes',
       'Content-Type': mimeType(filePath),
-      'Cache-Control': cacheControl
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff'
     };
     const rangeHeader = req.headers.range;
     if (!rangeHeader) {
@@ -192,7 +242,7 @@ function sendRangeStaticFile(req, res, filePath, cacheControl = staticCacheContr
         res.end();
         return;
       }
-      fs.createReadStream(filePath).pipe(res);
+      pipeStaticFile(req, res, filePath);
       return;
     }
     const range = parseByteRange(rangeHeader, size);
@@ -211,8 +261,17 @@ function sendRangeStaticFile(req, res, filePath, cacheControl = staticCacheContr
       res.end();
       return;
     }
-    fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+    pipeStaticFile(req, res, filePath, { start: range.start, end: range.end });
   });
+}
+
+function pipeStaticFile(req, res, filePath, options) {
+  const stream = fs.createReadStream(filePath, options);
+  const close = () => stream.destroy();
+  res.once('close', close);
+  stream.once('error', error => res.destroy(error));
+  stream.once('close', () => res.removeListener('close', close));
+  stream.pipe(res);
 }
 
 async function handleApi(req, res, url) {
@@ -249,14 +308,14 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/auth/register') {
     const body = await readBody(req);
-    const result = registerAccount(body, req);
+    const result = await registerAccount(body, req);
     sendJson(res, result.ok ? 200 : 400, result);
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
     const body = await readBody(req);
-    const result = loginAccount(body, req);
+    const result = await loginAccount(body, req);
     sendJson(res, result.ok ? 200 : 401, result);
     return;
   }
@@ -375,7 +434,10 @@ async function handleApi(req, res, url) {
       sendJson(res, 403, { ok: false, error: 'Accès admin refusé.' });
       return;
     }
-    const result = adminUpdatePlayer(body || {}, auth.user);
+    const target = adminFindPlayer(body);
+    const result = target
+      ? await enqueuePlayerAction(target.id, () => adminUpdatePlayer(body, auth.user))
+      : fail('Compte joueur introuvable.');
     if (result.ok) recordUserActivity(auth.user, 'admin', 'update-player');
     sendJson(res, result.ok ? 200 : 400, { ...result, state: publicState(auth.user.playerId, auth.user) });
     return;
@@ -400,16 +462,11 @@ async function handleApi(req, res, url) {
       return;
     }
     const playerId = auth?.user?.playerId || body.playerId || '';
-    const playerBefore = state.players?.[playerId] || null;
-    const cashBefore = Number(playerBefore?.cash);
     const result = await applyAction(playerId, body.type, body.payload || {});
     if (result.ok && auth?.user) recordUserActivity(auth.user, 'action', String(body.type || 'unknown'));
-    const playerAfter = state.players?.[playerId] || null;
-    const cashAfter = Number(playerAfter?.cash);
-    const cashDelta = Number.isFinite(cashBefore) && Number.isFinite(cashAfter)
-      ? Math.round(cashAfter - cashBefore)
-      : 0;
-    sendJson(res, result.ok ? 200 : 400, { ...result, cashDelta, state: publicState(playerId, auth?.user || null) });
+    const cashDelta = result.cashDelta || 0;
+    const includeStatic = body.worldRevision !== publicWorld().revision;
+    sendJson(res, result.ok ? 200 : 400, { ...result, cashDelta, state: publicState(playerId, auth?.user || null, { includeStatic }) });
     return;
   }
 
@@ -423,7 +480,12 @@ async function handleApi(req, res, url) {
   sendJson(res, 404, { ok: false, error: 'Route API inconnue.' });
 }
 
-function serveStatic(req, res, url) {
+async function serveStatic(req, res, url) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { Allow: 'GET, HEAD' });
+    res.end();
+    return;
+  }
   let filePath;
   try {
     filePath = decodeURIComponent(url.pathname);
@@ -433,6 +495,7 @@ function serveStatic(req, res, url) {
     return;
   }
   if (filePath === '/') filePath = '/index.html';
+  if (filePath.includes('\0') || filePath.includes('\\') || filePath.includes(':')) throw httpError(400, 'Bad request');
   // Les anciens assistants de connexion locaux ne sont pas des pages publiques.
   if (/(?:^|\/)_[^/]*\.html$/i.test(filePath)) {
     res.writeHead(404);
@@ -447,11 +510,11 @@ function serveStatic(req, res, url) {
     return;
   }
   if (process.env.SILLONS_DYNAMIC_ASSETS === '1' && filePath === '/styles.css') {
-    sendStaticBody(req, res, absolute, clientStyleBundle(), STATIC_LONG_CACHE);
+    await sendStaticBody(req, res, absolute, clientStyleBundle());
     return;
   }
   if (process.env.SILLONS_DYNAMIC_ASSETS === '1' && filePath === '/app.js') {
-    sendStaticBody(req, res, absolute, clientScriptBundle(), STATIC_LONG_CACHE);
+    await sendStaticBody(req, res, absolute, clientScriptBundle());
     return;
   }
   if (path.extname(absolute).toLowerCase() === '.pmtiles') {
@@ -459,16 +522,17 @@ function serveStatic(req, res, url) {
     return;
   }
   const responsePath = optimizedStaticAssetPath(absolute);
-  fs.readFile(responsePath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end('Not found');
-      return;
-    }
-    const cacheControl = url.searchParams.get('v') === PROJECT_VERSION
-      ? STATIC_LONG_CACHE : staticCacheControl(responsePath);
-    sendStaticBody(req, res, responsePath, data, cacheControl);
-  });
+  let data;
+  try {
+    data = await readStaticFile(responsePath);
+  } catch (error) {
+    if (!['ENOENT', 'ENOTDIR', 'EISDIR'].includes(error.code) && error.statusCode !== 404) throw error;
+    if (!res.destroyed && !res.writableEnded) { res.writeHead(404); res.end('Not found'); }
+    return;
+  }
+  const cacheControl = url.searchParams.get('v') === PROJECT_VERSION
+    ? STATIC_LONG_CACHE : staticCacheControl(responsePath);
+  await sendStaticBody(req, res, responsePath, data, cacheControl);
 }
 
 function readBody(req) {
@@ -491,7 +555,9 @@ function readBody(req) {
       if (tooLarge) return;
       try {
         const data = Buffer.concat(chunks).toString('utf8');
-        resolve(data ? JSON.parse(data) : {});
+        const parsed = data ? JSON.parse(data) : {};
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Objet JSON attendu.');
+        resolve(parsed);
       } catch {
         reject(httpError(400, 'JSON invalide.'));
       }

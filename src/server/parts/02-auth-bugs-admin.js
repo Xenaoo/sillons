@@ -10,7 +10,7 @@ function sendCachedJson(res, status, payload, maxAgeSeconds = 604800) {
 function normalizeUsername(raw) {
   const username = String(raw || '').trim();
   const key = username.toLowerCase();
-  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username) || Object.hasOwn(Object.prototype, key)) {
     return { ok: false, error: 'Identifiant invalide : 3 à 32 caractères, lettres, chiffres, point, tiret ou underscore.' };
   }
   return { ok: true, username, key };
@@ -23,15 +23,28 @@ function passwordError(raw) {
   return '';
 }
 
-function passwordHash(password, salt) {
-  return crypto.scryptSync(String(password), String(salt), 64).toString('hex');
+let activePasswordHashes = 0;
+
+async function passwordHash(password, salt) {
+  if (activePasswordHashes >= 4) throw httpError(429, 'Trop de connexions simultanées. Réessaie dans quelques secondes.');
+  activePasswordHashes += 1;
+  try {
+    return await new Promise((resolve, reject) => {
+      crypto.scrypt(String(password), String(salt), 64, (error, hash) => {
+        if (error) reject(error);
+        else resolve(hash.toString('hex'));
+      });
+    });
+  } finally {
+    activePasswordHashes -= 1;
+  }
 }
 
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
-function createUserRecord(username, password, playerId) {
+async function createUserRecord(username, password, playerId) {
   const salt = crypto.randomBytes(16).toString('hex');
   return {
     id: crypto.randomUUID(),
@@ -39,7 +52,7 @@ function createUserRecord(username, password, playerId) {
     usernameKey: username.toLowerCase(),
     playerId,
     passwordSalt: salt,
-    passwordHash: passwordHash(password, salt),
+    passwordHash: await passwordHash(password, salt),
     sessions: {},
     activityHistory: [],
     createdAt: Date.now(),
@@ -154,10 +167,10 @@ function normalizeUsers(raw = {}) {
   return out;
 }
 
-function verifyPassword(user, password) {
+async function verifyPassword(user, password) {
   if (!user?.passwordHash || !user?.passwordSalt) return false;
   const expected = Buffer.from(String(user.passwordHash), 'hex');
-  const actual = Buffer.from(passwordHash(password, user.passwordSalt), 'hex');
+  const actual = Buffer.from(await passwordHash(password, user.passwordSalt), 'hex');
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
@@ -435,13 +448,16 @@ function updateClaimedPlayerIdentity(player, body = {}) {
   return player;
 }
 
-function registerAccount(body = {}, req = null) {
+async function registerAccount(body = {}, req = null) {
   const parsed = normalizeUsername(body.username);
   if (!parsed.ok) return { ok: false, error: parsed.error };
   const passError = passwordError(body.password);
   if (passError) return { ok: false, error: passError };
-  state.users = normalizeUsers(state.users || {});
-  if (state.users[parsed.key]) return { ok: false, error: 'Cet identifiant existe déjà.' };
+  if (Object.hasOwn(state.users, parsed.key)) return { ok: false, error: 'Cet identifiant existe déjà.' };
+  // Préparer le mot de passe avant toute mutation ; revérifier l'unicité
+  // après l'attente pour les inscriptions concurrentes du même identifiant.
+  const user = await createUserRecord(parsed.username, body.password, '');
+  if (Object.hasOwn(state.users, parsed.key)) return { ok: false, error: 'Cet identifiant existe déjà.' };
   const starter = !Object.keys(state.users).length ? claimableStarterPlayer() : null;
   const player = starter
     ? updateClaimedPlayerIdentity(starter, body)
@@ -450,19 +466,18 @@ function registerAccount(body = {}, req = null) {
       color: body.color,
       logo: body.logo
     });
-  const user = createUserRecord(parsed.username, body.password, player.id);
+  user.playerId = player.id;
   const token = issueSession(user, req);
   state.users[parsed.key] = user;
   saveState();
   return { ok: true, auth: authPayload(user, token), playerId: player.id, state: publicState(player.id, user) };
 }
 
-function loginAccount(body = {}, req = null) {
+async function loginAccount(body = {}, req = null) {
   const parsed = normalizeUsername(body.username);
-  if (!parsed.ok) return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
-  state.users = normalizeUsers(state.users || {});
-  const user = state.users[parsed.key];
-  if (!user || !verifyPassword(user, String(body.password || ''))) {
+  if (!parsed.ok || passwordError(body.password)) return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
+  const user = Object.hasOwn(state.users, parsed.key) ? state.users[parsed.key] : null;
+  if (!user || !await verifyPassword(user, String(body.password || ''))) {
     return { ok: false, error: 'Identifiant ou mot de passe incorrect.' };
   }
   if (!state.players[user.playerId]) {
@@ -592,12 +607,8 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
   if (!target) return fail('Compte joueur introuvable.');
   const beforeName = target.name;
 
-  if (payload.rawPlayer && typeof payload.rawPlayer === 'object') {
-    const replacement = migratePlayer({ ...payload.rawPlayer, id: target.id }, target.id);
-    state.players[target.id] = replacement;
-  }
-
-  const player = state.players[target.id];
+  const player = payload.rawPlayer && typeof payload.rawPlayer === 'object'
+    ? migratePlayer({ ...payload.rawPlayer, id: target.id }, target.id) : { ...target };
   if (payload.cash !== undefined && payload.cash !== '') {
     const cash = Number(payload.cash);
     if (!Number.isFinite(cash)) return fail('Montant de trésorerie invalide.');
@@ -607,6 +618,7 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
     const delta = Number(payload.cashDelta);
     if (!Number.isFinite(delta)) return fail('Variation de trésorerie invalide.');
     player.cash = Math.round(Number(player.cash || 0) + delta);
+    if (!Number.isFinite(player.cash)) return fail('Trésorerie hors limites.');
   }
   if (payload.name !== undefined) {
     player.name = cleanText(payload.name || player.name, 28);
@@ -615,9 +627,12 @@ function adminUpdatePlayer(payload = {}, adminUser = null) {
     player.color = validateColor(payload.color) || player.color;
   }
   if (payload.reputation !== undefined && payload.reputation !== '') {
-    player.reputation = clamp(Number(payload.reputation || 0), 0, 100);
+    const reputation = Number(payload.reputation);
+    if (!Number.isFinite(reputation)) return fail('Réputation invalide.');
+    player.reputation = clamp(reputation, 0, 100);
   }
 
+  state.players[target.id] = player;
   player.lastSeen = Date.now();
   notify(player, `Modification admin appliquée par ${adminUser?.username || 'admin'}.`);
   state.news.push({ day: state.day, text: `Administration : ${beforeName} a été mis à jour.` });

@@ -1527,7 +1527,7 @@ function currentPriceMultiplier(player, energyType) {
 }
 
 function canPay(player, amount) {
-  return player.cash >= amount;
+  return Number.isFinite(amount) && amount >= 0 && Number.isFinite(player.cash) && player.cash >= amount;
 }
 
 function normalizeNotifications(raw) {

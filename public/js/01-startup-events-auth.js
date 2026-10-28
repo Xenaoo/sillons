@@ -314,6 +314,7 @@ function toggleSidePanelCollapse() {
 }
 
 function bindStaticEvents() {
+  bindResearchWorkspace();
   syncMapThemeUi();
   $('#setupForm').addEventListener('submit', handleAuthSubmit);
   $('#authLoginTab')?.addEventListener('click', () => setAuthMode('login'));
@@ -322,11 +323,11 @@ function bindStaticEvents() {
 
   $('#tabs').addEventListener('click', event => {
     const button = event.target.closest('button[data-tab]');
-    if (!button) return;
+    if (!button || button.dataset.tab === app.activeTab) return;
     app.activeTab = button.dataset.tab;
     localStorage.setItem('sillons.activeTab', app.activeTab);
     if (app.activeTab === 'bugs') markBugReportsRead({ syncServer: true, skipRender: true });
-    renderAll();
+    renderAll({ deferMapRedraw: true });
     if (app.activeTab === 'admin' && app.state?.auth?.isAdmin && !app.state.admin) {
       void refreshState(false, { includeAdmin: true });
     }
@@ -391,6 +392,19 @@ function bindStaticEvents() {
   document.addEventListener('focusin', event => {
     if (event.target.matches?.('select[data-assign-line-select]')) hydrateTrainAssignmentSelect(event.target);
   });
+
+  $('#tabs').setAttribute('aria-label', 'Gestion de la compagnie');
+  $('#tabs').addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const buttons = $$('#tabs button[data-tab]').filter(button => !button.classList.contains('hidden') && !button.disabled);
+    const index = buttons.indexOf(event.target);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next].focus();
+    buttons[next].click();
+  });
   document.addEventListener('pointerdown', event => {
     if (isInteractiveElement(event.target)) markUiInteraction();
   }, true);
@@ -415,7 +429,6 @@ function bindStaticEvents() {
   const tabContent = $('#tabContent');
   tabContent.addEventListener('click', onTabContentClick);
   tabContent.addEventListener('change', onTabContentChange);
-  bindResearchDetailDrag();
   bindCompositionIndependentScroll(tabContent);
   tabContent.addEventListener('input', event => {
     if (['lineTicketPrice', 'lineTicketPriceRange'].includes(event.target.id)) {
@@ -435,7 +448,7 @@ function bindStaticEvents() {
     }
   });
 
-  window.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); hideGlobalTooltip(); constrainResearchDetailPanel(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
+  window.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); hideGlobalTooltip(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
   window.visualViewport?.addEventListener('resize', () => { resizeCanvas(); scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(60, { scroll: false }); });
   window.visualViewport?.addEventListener('scroll', () => { scheduleCompositionRefitScrollAdjustment(); scheduleTutorialOverlayPosition(30, { scroll: false }); });
   window.addEventListener('scroll', () => scheduleTutorialOverlayPosition(30, { scroll: false }), true);
@@ -460,24 +473,45 @@ function syncOtherLinesToggle() {
   if (state) state.textContent = active ? 'Affichées sur la carte' : 'Masquées sur la carte';
 }
 
+let tooltipHideTimer = null;
+let tooltipSource = null;
+
+function scheduleTooltipHide() {
+  clearTimeout(tooltipHideTimer);
+  tooltipHideTimer = setTimeout(hideGlobalTooltip, 180);
+}
+
 function bindGlobalTooltips() {
   document.addEventListener('pointerover', event => {
+    if (event.target.closest?.('#globalTooltip')) { clearTimeout(tooltipHideTimer); return; }
     const target = event.target.closest?.('[data-tooltip]');
     if (!target) return;
     showGlobalTooltip(target);
   });
   document.addEventListener('pointerout', event => {
     const target = event.target.closest?.('[data-tooltip]');
-    if (target) hideGlobalTooltip();
+    if (target?.contains(event.relatedTarget)) return;
+    if (target || event.target.closest?.('#globalTooltip')) scheduleTooltipHide();
   });
   document.addEventListener('focusin', event => {
+    if (event.target.closest?.('#globalTooltip')) { clearTimeout(tooltipHideTimer); return; }
     const target = event.target.closest?.('[data-tooltip]');
     if (target) showGlobalTooltip(target);
   });
   document.addEventListener('focusout', event => {
-    if (event.target.closest?.('[data-tooltip]')) hideGlobalTooltip();
+    if (event.target.closest?.('[data-tooltip], #globalTooltip')) scheduleTooltipHide();
   });
-  document.addEventListener('scroll', hideGlobalTooltip, true);
+  document.addEventListener('scroll', event => {
+    if (!event.target.closest?.('#globalTooltip')) hideGlobalTooltip();
+  }, true);
+  window.addEventListener('resize', hideGlobalTooltip);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const tooltipVisible = $('#globalTooltip')?.classList.contains('visible');
+    if ($('#globalTooltip')?.contains(document.activeElement)) tooltipSource?.focus?.({ preventScroll: true });
+    hideGlobalTooltip();
+    if (!tooltipVisible && app.activeTab === 'research' && app.selectedResearchId) closeResearchDetails();
+  });
   document.addEventListener('scroll', event => {
     const editor = event.target?.closest?.('.composition-editor-card');
     if (editor || event.target?.classList?.contains('composition-editor-card') || event.target?.classList?.contains('composition-strip') || event.target?.classList?.contains('composition-group-list')) {
@@ -489,6 +523,7 @@ function bindGlobalTooltips() {
 function tooltipLineClass(line) {
   const text = String(line || '').trim().toLowerCase();
   if (!text) return '';
+  if (/^-{4,}$/.test(text)) return 'tooltip-line--separator';
   if (/^bonus\b|^\[\+\]|^\+/.test(text)) return 'tooltip-line--production';
   if (/^malus\b|^\[-\]|^-/.test(text)) return 'tooltip-line--consumption';
   if (text.startsWith('dépenses') || text.startsWith('depenses') || text.startsWith('charges') || text.startsWith('consommation')) return 'tooltip-line--consumption';
@@ -497,7 +532,6 @@ function tooltipLineClass(line) {
     const match = text.match(/([-+]?\d[\d\s.,]*)\s*€/);
     if (match) return String(match[1]).trim().startsWith('-') ? 'tooltip-line--consumption' : 'tooltip-line--production';
   }
-  if (/^-{4,}$/.test(text)) return 'tooltip-line--separator';
   return '';
 }
 
@@ -525,16 +559,23 @@ function renderTooltipLine(line) {
 }
 
 function showGlobalTooltip(target) {
+  clearTimeout(tooltipHideTimer);
   const text = target.dataset.tooltip;
   if (!text) return;
+  if (tooltipSource === target && $('#globalTooltip')?.classList.contains('visible')) return;
+  hideGlobalTooltip();
+  tooltipSource = target;
   let tip = $('#globalTooltip');
   if (!tip) {
     tip = document.createElement('div');
     tip.id = 'globalTooltip';
     tip.className = 'global-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.tabIndex = 0;
     document.body.appendChild(tip);
   }
   tip.innerHTML = '';
+  target.setAttribute('aria-describedby', [target.getAttribute('aria-describedby'), 'globalTooltip'].filter(Boolean).join(' '));
   String(text).split('\n').forEach(line => tip.appendChild(renderTooltipLine(line)));
   tip.classList.add('visible');
 
@@ -558,6 +599,13 @@ function showGlobalTooltip(target) {
 }
 
 function hideGlobalTooltip() {
+  clearTimeout(tooltipHideTimer);
+  if (tooltipSource) {
+    const describedBy = (tooltipSource.getAttribute('aria-describedby') || '').split(/\s+/).filter(id => id && id !== 'globalTooltip').join(' ');
+    if (describedBy) tooltipSource.setAttribute('aria-describedby', describedBy);
+    else tooltipSource.removeAttribute('aria-describedby');
+    tooltipSource = null;
+  }
   const tip = $('#globalTooltip');
   if (tip) tip.classList.remove('visible');
 }
@@ -1111,7 +1159,7 @@ function worldRouteSignature(state = app.state) {
   if (!state?.players || !state?.world) return '';
   const playerSig = state.players.map(p => `${p.id}:${(p.lines || []).map(l => `${l.id}:${lineStopsOf(l).join('>')}:${lineTrainIdsOf(l).join('+')}:${l.active ? 1 : 0}:${l.electrified ? 1 : 0}`).join('|')}`).join('||');
   const communeStatus = state.world.communesStatus || {};
-  const stationSig = `${state.world.stations?.length || 0}:${communeStatus.status || ''}:${communeStatus.count || 0}:${communeStatus.updatedAt || ''}`;
+  const stationSig = `${state.world.revision || ''}:${state.world.stations?.length || 0}:${communeStatus.status || ''}:${communeStatus.count || 0}:${communeStatus.updatedAt || ''}`;
   return `${playerSig}::stations:${stationSig}`;
 }
 
@@ -1194,6 +1242,11 @@ function stablePanelSignature(state = app.state) {
     Object.entries(me.maintenanceFacilities || {}).map(([id, facility]) => [id, facility.level, Boolean(facility.construction?.active)]),
     me.maintenancePolicy, me.stations, me.staff
   ]);
+}
+
+function isObsoleteStateResponse(data) {
+  return Boolean(data?.serverInstanceId && data.serverInstanceId === app.state?.serverInstanceId
+    && Number(data.snapshotSequence) < Number(app.state.snapshotSequence));
 }
 
 async function refreshState(first, { includeAdmin = false, forceRender = false } = {}) {

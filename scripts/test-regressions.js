@@ -22,10 +22,10 @@ test('encodages : q=0 reste interdit même avec un joker', () => {
   assert.equal(http.acceptsContentEncoding({ __sillonsAcceptEncoding: '*;q=0' }, 'gzip'), false);
 });
 
-test('cache compressé : une modification de même taille reste visible', () => {
+test('cache compressé : une modification de même taille reste visible', async () => {
   const res = { __sillonsAcceptEncoding: 'gzip' };
-  const a = http.compressStaticBody(res, 'test.js', Buffer.from('a'.repeat(1500)));
-  const b = http.compressStaticBody(res, 'test.js', Buffer.from('b'.repeat(1500)));
+  const a = await http.compressStaticBody(res, 'test.js', Buffer.from('a'.repeat(1500)));
+  const b = await http.compressStaticBody(res, 'test.js', Buffer.from('b'.repeat(1500)));
   assert.equal(zlib.gunzipSync(a.body).toString(), 'a'.repeat(1500));
   assert.equal(zlib.gunzipSync(b.body).toString(), 'b'.repeat(1500));
 });
@@ -167,4 +167,57 @@ test('interaction : un événement de focus ne produit pas une durée NaN', () =
   vm.runInContext(routing.slice(routing.indexOf('function markUiInteraction'), routing.indexOf('function isInteractiveUiActive')), sandbox);
   vm.runInContext('markUiInteraction({ type: "focusin" })', sandbox);
   assert.equal(vm.runInContext('app.uiInteractionUntil', sandbox), 1900);
+});
+
+function researchTestContext() {
+  const node = { id: 'steam', title: 'Vapeur', era: 1, eraLabel: 'Vapeur', requiredEpoch: 0, maxLevel: 1, baseCostMoney: 100, baseDurationSeconds: 60, prereq: [], improves: [], unlocks: [] };
+  const app = {
+    activeResearchTab: 'traction',
+    state: {
+      me: { epoch: 0, cash: 10000, research: 2, techUnlocked: {}, researchQueue: [] },
+      balance: { epochs: [{ name: 'Vapeur' }], techTree: { traction: { id: 'traction', label: 'Traction', nodes: [node] } } }
+    }
+  };
+  const sandbox = vm.createContext({ app, RESEARCH_TECHNICAL_MAX_LEVEL: 1000000 });
+  for (const file of ['03-research-lines-foundations.js', '06-stations-staff-research.js', '10-routing-line-utils.js', '11-research-workspace.js']) vm.runInContext(source(`public/js/${file}`), sandbox);
+  return { app, node, sandbox, state: () => sandbox.researchNodeState(node) };
+}
+
+test('R&D : un dernier niveau planifié reste distinct d’un niveau acquis', () => {
+  const { app, node, state } = researchTestContext();
+  app.state.me.researchProject = { nodeId: node.id, targetLevel: 1 };
+  assert.equal(state().status, 'pending');
+  assert.equal(state().launchable, false);
+  app.state.me.researchProject = null;
+  app.state.me.techUnlocked[node.id] = 1;
+  assert.equal(state().status, 'complete');
+  assert.equal(state().launchable, false);
+});
+
+test('R&D : niveaux infinis, capacité réelle, budget et transition', () => {
+  const { app, node, state } = researchTestContext();
+  node.maxLevel = null;
+  assert.equal(state().duration, 30000);
+  app.state.me.techUnlocked[node.id] = 1;
+  assert.equal(state().target, 2);
+  assert.equal(state().launchable, true);
+  app.state.me.researchQueue = [{ nodeId: node.id, targetLevel: 2 }];
+  assert.equal(state().target, 3);
+  assert.equal(state().status, 'pending');
+  app.state.me.cash = 0;
+  assert.equal(state().launchable, false);
+  app.state.me.cash = 10000;
+  app.state.me.eraTransition = { targetEpoch: 1 };
+  assert.equal(state().launchable, false);
+  assert.match(state().reason, /époque/);
+});
+
+test('R&D : le filtre déjà étudiées inclut les technologies améliorables', () => {
+  const { app, node, sandbox } = researchTestContext();
+  node.maxLevel = null;
+  app.state.me.techUnlocked[node.id] = 1;
+  app.researchStatusFilter = 'complete';
+  assert.match(sandbox.renderResearchSearchResults(''), /1 technologie/);
+  app.researchEraFilter = '2';
+  assert.match(sandbox.renderResearchSearchResults(''), /Aucune technologie/);
 });

@@ -183,6 +183,15 @@ async function onTabContentClick(event) {
     }
   }
   if (action === 'focus-research') return focusResearchNode(button.dataset.id);
+  if (action === 'reset-research-filters') {
+    app.researchSearchQuery = '';
+    app.researchStatusFilter = 'all';
+    app.researchEraFilter = 'all';
+    localStorage.removeItem('sillons.researchSearchQuery');
+    renderAll({ deferMapRedraw: true });
+    $('#researchSearchInput')?.focus();
+    return;
+  }
   if (action === 'select-research-node') return selectResearchNode(button.dataset.id);
   if (action === 'research-detail-prereq') return selectResearchNode(button.dataset.id);
   if (action === 'focus-effect') return focusUiTarget(button.dataset.tab, button.dataset.label, button.dataset.subtab);
@@ -478,7 +487,15 @@ Les trains seront libérés et la ligne ne générera plus de revenus.`;
     if (!(await gameConfirm('Lancer le passage d’époque', `Lancer le passage vers ${nextName} ? La R&D sera indisponible jusqu’à la fin et aucune recherche ne doit être en cours.`, { confirmLabel: 'Lancer' }))) return;
     return doAction('startEpochTransition', {});
   }
-  if (action === 'research-tab') { app.activeResearchTab = button.dataset.id; app.selectedResearchId = ''; localStorage.setItem('sillons.researchTab', app.activeResearchTab); renderAll(); return; }
+  if (action === 'research-tab') {
+    app.activeResearchTab = button.dataset.id;
+    app.selectedResearchId = '';
+    app.researchSearchQuery = '';
+    localStorage.removeItem('sillons.researchSearchQuery');
+    localStorage.setItem('sillons.researchTab', app.activeResearchTab);
+    renderAll({ deferMapRedraw: true });
+    return;
+  }
   if (action === 'clear-research-search') { app.researchSearchQuery = ''; localStorage.removeItem('sillons.researchSearchQuery'); renderAll(); return; }
   if (action === 'toggle-research-queue') { toggleResearchQueue(); return; }
   if (action === 'submit-bug-report') {
@@ -565,23 +582,39 @@ async function performAction(type, payload) {
   if (app.pendingActions.has(actionKey)) return null;
   app.pendingActions.add(actionKey);
   document.body.classList.add('is-busy');
+  const trigger = document.activeElement?.closest('button');
+  const triggerWasDisabled = trigger?.disabled;
+  const requestToken = app.authToken;
+  const requestPlayerId = app.playerId;
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.setAttribute('aria-busy', 'true');
+  }
   try {
-    const response = await post('/api/action', { playerId: app.playerId, type, payload });
-    if (response.state?.serverTime) app.serverClockOffset = Number(response.state.serverTime || Date.now()) - Date.now();
-    if (response.state) {
+    const response = await post('/api/action', { playerId: app.playerId, type, payload, worldRevision: app.state?.world?.revision });
+    if (app.authToken !== requestToken || app.playerId !== requestPlayerId) return null;
+    // Deux réponses compressées peuvent arriver dans un ordre différent des
+    // actions serveur. Conserver le dernier état, même si une ancienne action finit après.
+    const obsolete = isObsoleteStateResponse(response.state);
+    if (response.state && !response.state.world && app.state?.world) {
+      response.state = { ...response.state, world: app.state.world, balance: response.state.balance || app.state.balance };
+    }
+    if (!obsolete && response.state?.serverTime) app.serverClockOffset = Number(response.state.serverTime || Date.now()) - Date.now();
+    if (!obsolete && response.state) {
       canonicalizeStateStationDisplays(response.state);
       app.state = response.state;
+      scheduleStateSnapshot(response.state);
     }
     invalidateMapProjection('action');
     if (app.state?.me) ensureSelectedStation();
     if (!response.ok) {
       toast([response.error, response.hint].filter(Boolean).join(' ' ) || 'Action refusée.', 'error');
     } else {
-      if (type === 'sellSelectedTrains') {
+      if (!obsolete && type === 'sellSelectedTrains') {
         setCompositionSelection([], '');
         setCompositionEditorTrain('');
       }
-      if (type === 'createLine') {
+      if (!obsolete && type === 'createLine') {
         app.lineDraft.trainId = '';
         app.lineDraft.waypoints = [];
         app.lineDraft.viaCandidate = '';
@@ -591,6 +624,11 @@ async function performAction(type, payload) {
       toast(response.message || 'Action réalisée.', 'ok');
     }
     renderAll(true);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const surface = document.querySelector('.side.panel');
+      const color = response.ok ? 'rgba(96, 211, 169, .65)' : 'rgba(248, 126, 126, .65)';
+      surface?.animate([{ boxShadow: `inset 0 0 0 2px ${color}` }, { boxShadow: 'inset 0 0 0 2px transparent' }], { duration: 650, easing: 'ease-out' });
+    }
     setTimeout(renderTutorialOverlay, 40);
     const actionCashDelta = Number(response.cashDelta);
     if (Number.isFinite(actionCashDelta) && actionCashDelta !== 0) {
@@ -598,11 +636,26 @@ async function performAction(type, payload) {
     }
     return response;
   } catch (error) {
-    toast(error.message || 'Erreur réseau.', 'error');
-    return { ok: false, error: error.message || 'Erreur réseau.' };
+    if (app.authToken !== requestToken || app.playerId !== requestPlayerId) return null;
+    // Une réponse perdue ne prouve pas que l'action a échoué. Relire l'état
+    // sans rejouer la mutation (achat, emprunt, etc.).
+    app.queuedStateRefresh = { ...app.queuedStateRefresh, forceRender: true };
+    const message = error.name === 'TimeoutError'
+      ? 'Délai dépassé. Vérifie l’état de la compagnie avant de réessayer.' : error.message || 'Erreur réseau.';
+    toast(message, 'error');
+    return { ok: false, error: message };
   } finally {
+    if (trigger?.isConnected) {
+      trigger.disabled = triggerWasDisabled;
+      trigger.removeAttribute('aria-busy');
+    }
     app.pendingActions.delete(actionKey);
-    if (!app.pendingActions.size) document.body.classList.remove('is-busy');
+    if (!app.pendingActions.size) {
+      document.body.classList.remove('is-busy');
+      const queued = app.queuedStateRefresh;
+      app.queuedStateRefresh = null;
+      if (queued) void refreshState(false, queued);
+    }
   }
 }
 
@@ -613,13 +666,16 @@ async function doAction(type, payload) {
 
 async function post(url, payload, options = {}) {
   const useAuth = options.auth !== false;
+  const requestToken = app.authToken;
+  const timeoutMs = url === '/api/action' && ['createLine', 'updateLine', 'assignTrainToLine', 'setTrainLineAssignment'].includes(payload?.type) ? 135000 : 20000;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(useAuth ? authHeaders() : {}) },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs)
   });
   const data = await readJsonResponse(response, 'Reponse serveur invalide.');
-  if (response.status === 401) {
+  if (response.status === 401 && useAuth && app.authToken === requestToken) {
     clearAuthState();
     $('#setup')?.classList.remove('hidden');
   }

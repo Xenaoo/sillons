@@ -1,0 +1,114 @@
+/* Finitions communes : surfaces lisibles, navigation compacte, retours d'action. */
+:root {
+  --text: #edf1f5;
+  --muted: #a5b2c3;
+  --line: rgba(157, 179, 204, .18);
+}
+body::before { opacity: .08; }
+.topbar { background: #0b1422; box-shadow: 0 4px 24px #0003; }
+.brand strong { letter-spacing: .12em; }
+.map-toolbar { flex-wrap: wrap; gap: 10px; }
+.map-toolbar > div:first-child { flex: 1 1 180px; }
+.map-toolbar-right { flex-wrap: wrap; min-width: 0; }
+.map-controls { flex-wrap: wrap; }
+.side.panel { border-color: #8aabce30; box-shadow: 0 16px 48px #0004; }
+.side.panel::before { opacity: .14 !important; }
+.side.panel::after { background: linear-gradient(180deg, #0a1322aa, #0a1322ee) !important; }
+
+/* Tous les menus restent visibles, même dans le panneau à côté de la carte. */
+#tabs {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)) !important;
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px !important;
+  overflow: visible;
+  background: #0b1422 !important;
+  box-shadow: inset 0 -1px 0 #9db3cc26;
+}
+#tabs button {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 6px !important;
+  border-radius: 9px !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #abbace !important;
+  box-shadow: none !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+#tabs button:hover { color: #fff !important; background: #203149 !important; transform: none; }
+#tabs button.active {
+  color: #f7d995 !important;
+  background: #d9a85218 !important;
+  border-color: #d9a85240 !important;
+  box-shadow: inset 0 -2px #dfb967 !important;
+}
+.tab-content { scrollbar-width: thin; scrollbar-color: #56678066 transparent; }
+.tab-content .card:not(.menu-context), .tab-content .list-item, .tab-content .metric {
+  background: linear-gradient(145deg, #142135f2, #0d1727f5) !important;
+  border-color: #9db3cc26;
+  box-shadow: 0 4px 14px #0002;
+}
+.tab-content .card:not(.menu-context):hover, .tab-content .list-item:hover {
+  background: #17253a !important;
+  border-color: #9db3cc40;
+}
+.tab-content .menu-context {
+  border: 0;
+  border-left: 3px solid #d9b66e;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(90deg, #d9a85212, transparent) !important;
+  box-shadow: none;
+  padding: 12px 16px;
+}
+.menu-context h2 { color: #f4ead2; letter-spacing: -.025em; }
+.menu-context p { line-height: 1.55; color: #a5b2c3; }
+.metric b, .stat-pill b { font-variant-numeric: tabular-nums; }
+button:active:not(:disabled) { transform: scale(.97); }
+button[aria-busy="true"] { cursor: progress; }
+button[aria-busy="true"]::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: action-spin .7s linear infinite;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #101d30 !important;
+  border-radius: 12px;
+  line-height: 1.5;
+  box-shadow: 0 12px 40px #0006;
+  animation: toast-arrive .22s ease-out;
+}
+.toast::before { content: '✓'; color: #79dbb4; font-weight: 800; }
+.toast.error::before, .toast.bad::before { content: '!'; color: #ffaaaa; }
+.toast.ok { border-left: 3px solid #79dbb4; }
+.toast.error, .toast.bad { border-left: 3px solid #ffaaaa; }
+.toast.toast-leaving { opacity: 0; transform: translateY(6px); transition: opacity .18s, transform .18s; }
+dialog[open] { animation: toast-arrive .18s ease-out; }
+dialog::backdrop { background: #030914bb; }
+@keyframes action-spin { to { transform: rotate(360deg); } }
+@keyframes toast-arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 520px) {
+  #tabs { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 3px; padding: 6px !important; }
+  #tabs button { min-height: 44px; font-size: 11px; }
+  .toast-host { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, dialog[open], button[aria-busy="true"]::after { animation: none !important; }
+  .toast.toast-leaving, button { transition: none !important; }
+  button:active:not(:disabled) { transform: none; }
+}

@@ -1,4 +1,7 @@
 // État public, création joueur et actions de gameplay.
+const serverInstanceId = crypto.randomUUID();
+let publicStateSequence = 0;
+
 function publicState(playerId, authUser = null, { includeAdmin = false, includeStatic = true } = {}) {
   const active = activePlayers();
   const player = playerId ? active.find(item => item.id === playerId) || null : null;
@@ -10,6 +13,8 @@ function publicState(playerId, authUser = null, { includeAdmin = false, includeS
   const isAdmin = isAdminUser(authUser);
   return {
     ok: true,
+    serverInstanceId,
+    snapshotSequence: ++publicStateSequence,
     serverTime: Date.now(),
     auth: authUser ? {
       username: authUser.username,
@@ -275,7 +280,38 @@ function createPlayer(input) {
 }
 
 
+const playerActionQueues = new Map();
+const ACTION_NUMERIC_FIELDS = new Set(['amount', 'quantity', 'count', 'powerUnits', 'passengerCars', 'freightCars', 'ticketPrice', 'tariff', 'index', 'readAt']);
+
 async function applyAction(playerId, type, payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return fail('Paramètres d’action invalides.');
+  for (const [key, value] of Object.entries(payload)) {
+    if (ACTION_NUMERIC_FIELDS.has(key) && (typeof value !== 'number' && typeof value !== 'string'
+      || !String(value).trim() || !Number.isFinite(Number(value)))) return fail(`Valeur numérique invalide : ${key}.`);
+  }
+  return enqueuePlayerAction(playerId, () => applyActionNow(playerId, type, payload));
+}
+
+async function enqueuePlayerAction(playerId, operation) {
+  // Un calcul RFN peut céder la main pendant plusieurs secondes. Les actions
+  // suivantes de cette compagnie attendent pour ne pas réutiliser le même train.
+  const previous = playerActionQueues.get(playerId);
+  if ((previous?.depth || 0) >= 16) return fail('Trop d’actions en attente. Patiente avant de réessayer.');
+  const entry = { depth: (previous?.depth || 0) + 1 };
+  entry.promise = (previous?.promise || Promise.resolve()).catch(() => {}).then(operation);
+  playerActionQueues.set(playerId, entry);
+  try {
+    return await entry.promise;
+  } finally {
+    if (playerActionQueues.get(playerId) === entry) playerActionQueues.delete(playerId);
+    else {
+      const latest = playerActionQueues.get(playerId);
+      if (latest) latest.depth -= 1;
+    }
+  }
+}
+
+async function applyActionNow(playerId, type, payload) {
   const player = state.players[playerId];
   if (!player) return { ok: false, error: 'Joueur introuvable.' };
   player.lastSeen = Date.now();
@@ -319,11 +355,14 @@ async function applyAction(playerId, type, payload) {
     markNotificationsRead: () => actionMarkNotificationsRead(player, payload)
   };
 
-  const handler = handlers[type];
+  const handler = Object.hasOwn(handlers, type) ? handlers[type] : null;
   if (!handler) return { ok: false, error: 'Action inconnue.' };
+  const cashBefore = Number(player.cash);
   const result = await handler();
   if (result.ok) saveState();
-  return result;
+  const cashAfter = Number(player.cash);
+  const cashDelta = Number.isFinite(cashBefore) && Number.isFinite(cashAfter) ? Math.round(cashAfter - cashBefore) : 0;
+  return { ...result, cashDelta };
 }
 
 function actionBuyTrain(player, payload) {
@@ -715,6 +754,7 @@ async function actionCreateLine(player, payload) {
   if (!lineServiceCompatibleWithProfile(service, operatingModel)) return fail('Ce train n’est pas compatible avec ce type de service.');
 
   const routeInfo = await realRailRouteBetweenStops(stops);
+  if (state.players[player.id] !== player || !player.trains.includes(train)) return fail('La compagnie a changé pendant le calcul. Réessaie.');
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
     const missing = routeInfo.missing;
     const from = missing ? stationById(missing.from)?.name || missing.from : '';
@@ -762,6 +802,7 @@ async function actionAssignTrainToLine(player, payload) {
   if (!lineServiceCompatibleWithProfile(line.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
 
   const routeInfo = await realRailRouteBetweenStops(lineStops(line));
+  if (state.players[player.id] !== player || !player.lines.includes(line) || !line.active || !player.trains.includes(train)) return fail('La compagnie a changé pendant le calcul. Réessaie.');
   if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
   const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
   if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
@@ -820,6 +861,7 @@ async function actionSetTrainLineAssignment(player, payload) {
   if (!lineServiceCompatibleWithProfile(targetLine.service || 'passengers', operatingModel)) return fail('Ce train n’est pas compatible avec le service de la ligne.');
 
   const routeInfo = await realRailRouteBetweenStops(lineStops(targetLine));
+  if (state.players[player.id] !== player || !player.lines.includes(targetLine) || !targetLine.active || !player.trains.includes(train)) return fail('La compagnie a changé pendant le calcul. Réessaie.');
   if (!routeInfo.ids.length || routeInfo.distance <= 0) return fail('Impossible de recalculer l’itinéraire RFN de cette ligne.');
   const effectiveRange = effectiveTrainRange(player, operatingModel, routeInfo);
   if (routeInfo.distance > effectiveRange) return fail(`Portée insuffisante : ligne ${Math.round(routeInfo.distance)} km, train ${Math.round(effectiveRange)} km.`);
@@ -921,6 +963,7 @@ async function actionUpdateLine(player, payload) {
   if (!nextTrainIds.length) return fail('Sélectionne au moins un train pour cette ligne.');
 
   const routeInfo = await realRailRouteBetweenStops(nextStops);
+  if (state.players[player.id] !== player || !player.lines.includes(line)) return fail('La compagnie a changé pendant le calcul. Réessaie.');
   if (!routeInfo.ids.length || routeInfo.distance <= 0) {
     const missing = routeInfo.missing;
     const from = missing ? stationById(missing.from)?.name || missing.from : '';

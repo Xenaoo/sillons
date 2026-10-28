@@ -1,7 +1,7 @@
 'use strict';
 
 (function bootPublicAuth() {
-  const APP_VERSION = 'v0.71.56';
+  const APP_VERSION = 'v0.71.59';
   const LEAFLET_VERSION = '1.9.4';
   const PROTOMAPS_LEAFLET_VERSION = '5.1.0';
   const AUTH_TOKEN_KEY = 'sillons.authToken';
@@ -493,7 +493,8 @@
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20000)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(data.error || 'Connexion impossible.');

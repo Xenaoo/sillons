@@ -9,7 +9,7 @@ Le projet est un MVP autonome : il ne dépend ni d’Express ni de Socket.io. Le
 ## 2. État de référence
 
 - Branche actuelle : `main`.
-- Version de code actuelle : `v0.71.56` (package npm : `0.71.56`).
+- Version de code actuelle : `v0.71.59` (package npm : `0.71.59`).
 - Schéma de sauvegarde actuel : `190`.
 - Runtime requis : Node.js `>= 22.5` pour SQLite natif.
 - Persistance principale : `data/save.sqlite`.
@@ -37,7 +37,7 @@ npm.cmd run reset
 
 Sous PowerShell, utiliser `npm.cmd` plutôt que `npm` si la politique d’exécution bloque `npm.ps1`.
 
-`npm.cmd run check` vérifie la syntaxe des fichiers JS découpés et des bundles reconstitués. Il n’existe pas encore de suite de tests métier automatisée : toute évolution économique ou de migration doit être vérifiée avec une sauvegarde temporaire et un démarrage isolé du serveur.
+`npm.cmd run check` vérifie la syntaxe des fichiers JS découpés et des bundles reconstitués. `npm.cmd test` couvre 38 régressions, dont les actions concurrentes, SQLite et un parcours HTTP sur une partie temporaire. Les évolutions économiques ou les migrations historiques dépassant cette couverture doivent encore être vérifiées avec une sauvegarde temporaire. `npm.cmd run benchmark` compare les opérations sensibles à Git HEAD ; voir AUDIT.md pour les mesures et leurs limites.
 
 Variables utiles :
 
@@ -48,6 +48,8 @@ Variables utiles :
 
 
 ### Notes récentes v0.71.x
+
+- v0.71.59 (28 octobre 2026) : audit de réactivité et de fiabilité, compression statique et scrypt asynchrones, réponses d'actions compactes, files d'actions par compagnie, workers RFN isolés de SQLite et reprise après panne, protection des sauvegardes illisibles, carte mobile corrigée. Sources et bundles régénérés ; les modifications antérieures du répertoire de travail ont été conservées. Les tests utilisent uniquement des bases temporaires.
 
 - v0.71.56 : optimisation des menus Parc, index de recherche des gares, fiabilisation du polling et du cache du monde, compression JSON asynchrone, lisibilité et carte mobile corrigées. `npm test` ajoute 12 régressions ciblées ; voir `AUDIT.md` pour les mesures, la couverture et les réserves du contrôle des gares.
 

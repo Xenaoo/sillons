@@ -7,8 +7,8 @@ function resizeCanvas() {
   const rect = holder.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
 
-  const width = Math.max(400, Math.ceil(rect.width));
-  const height = Math.max(300, Math.ceil(rect.height));
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
   const dpr = window.devicePixelRatio || 1;
   const pixelWidth = Math.floor(width * dpr);
   const pixelHeight = Math.floor(height * dpr);
@@ -105,6 +105,7 @@ function requestMapRedraw(options = {}) {
     app.map.redrawPendingAfterNavigation = true;
     return;
   }
+  app.map.redrawNeedsFull = Boolean(app.map.redrawNeedsFull || !options.lite);
   if (app.map.redrawRaf) return;
   app.map.redrawRaf = true;
   requestAnimationFrame(() => {
@@ -116,7 +117,9 @@ function requestMapRedraw(options = {}) {
     }
     const pendingFullRedraw = !!app.map.redrawPendingAfterNavigation;
     app.map.redrawPendingAfterNavigation = false;
-    drawMap({ lite: !!options.lite && !pendingFullRedraw });
+    const needsFull = app.map.redrawNeedsFull;
+    app.map.redrawNeedsFull = false;
+    drawMap({ lite: !needsFull && !pendingFullRedraw });
     app.map.lastFullDrawAt = performance.now();
     if (app.map.settleOverlayAfterRedraw) {
       app.map.settleOverlayAfterRedraw = false;

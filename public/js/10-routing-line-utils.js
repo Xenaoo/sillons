@@ -1832,9 +1832,14 @@ function toast(message, type = 'ok') {
   const host = $('#toastHost');
   const div = document.createElement('div');
   div.className = `toast ${type}`;
+  div.setAttribute('role', type === 'error' ? 'alert' : 'status');
   div.textContent = message;
+  while (host.children.length >= 3) host.firstElementChild.remove();
   host.appendChild(div);
-  setTimeout(() => div.remove(), 4200);
+  setTimeout(() => {
+    div.classList.add('toast-leaving');
+    setTimeout(() => div.remove(), 180);
+  }, type === 'error' ? 6500 : 4200);
 }
 
 function formatInt(value) {

@@ -90,7 +90,7 @@ npm run check
 
 Cette commande vérifie maintenant la syntaxe de tous les fichiers JS découpés et des deux bundles reconstitués.
 
-Les régressions ciblées se vérifient avec `npm test`, sans démarrer le serveur ni modifier la sauvegarde. Après une modification du client, lancer `npm run build:static` pour régénérer les bundles servis. Les résultats de la passe de performances v0.71.56 sont consignés dans [AUDIT.md](AUDIT.md).
+Les régressions se vérifient avec `npm test`. Les tests HTTP démarrent un serveur local sur un port libre, avec des fichiers et une base SQLite temporaires ; ils ne modifient pas la sauvegarde de travail. Après une modification du client, lancer `npm run build:static` pour régénérer les bundles servis. `npm run benchmark` mesure le blocage du serveur lors de la compression, de l'authentification et des sauvegardes par rapport à Git HEAD (ou `SILLONS_BENCH_BASE_REF`). Les résultats et limites de la passe v0.71.59 sont consignés dans [AUDIT.md](AUDIT.md).
 
 ## Données ferroviaires
 

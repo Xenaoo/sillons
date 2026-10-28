@@ -6,7 +6,7 @@ const { minify } = require('terser');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const CLIENT_VERSION = 'v0.71.56';
+const CLIENT_VERSION = 'v0.71.59';
 
 const CLIENT_SCRIPT_PARTS = [
   '00-core-state.js',
@@ -19,7 +19,8 @@ const CLIENT_SCRIPT_PARTS = [
   '07-resources-budget-market.js',
   '08-actions-modals.js',
   '09-map-rendering.js',
-  '10-routing-line-utils.js'
+  '10-routing-line-utils.js',
+  '11-research-workspace.js'
 ];
 
 const CLIENT_STYLE_PARTS = [
@@ -28,7 +29,9 @@ const CLIENT_STYLE_PARTS = [
   '02-lines-fleet-research.css',
   '03-accounts-budget-admin.css',
   '04-compositions.css',
-  '05-bugs-research-overview.css'
+  '05-bugs-research-overview.css',
+  '06-visual-polish.css',
+  '07-research-workspace.css'
 ];
 
 function readParts(dir, names, commentType) {

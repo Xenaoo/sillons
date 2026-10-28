@@ -15,7 +15,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const SAVE_DB_FILE = process.env.SILLONS_SAVE_DB_FILE || path.join(ROOT, 'data', 'save.sqlite');
 const LEGACY_SAVE_FILE = path.join(ROOT, 'data', 'save.json');
 const CHANGELOG_FILE = path.join(ROOT, 'changelog.md');
-const PROJECT_VERSION = 'v0.71.56';
+const PROJECT_VERSION = 'v0.71.59';
 const STATE_SCHEMA_VERSION = 190;
 const HOUR_MS = 60 * 60 * 1000;
 const ERA_TRANSITION_DURATIONS_MS = Object.freeze({
@@ -418,7 +418,9 @@ function compositionVariantUnlockedForPlayer(player, model, variant) {
 const WORLD = buildWorld();
 const BALANCE = buildBalance();
 let stationAliasMap = new Map();
-let state = loadOrCreateState();
+// Les workers de géométrie n'utilisent que le monde et les gares. Ils ne
+// doivent ni ouvrir SQLite ni migrer une copie obsolète de la partie en cours.
+let state = isMainThread ? loadOrCreateState() : createState();
 let communeCache = loadCommuneCache();
 remapStateStationAliases();
 let tickCount = 0;
@@ -462,16 +464,11 @@ function warmSncfRailShapeLinesCache() {
 }
 
 if (isMainThread) {
-  setInterval(() => {
+  const simulationTimer = setInterval(() => {
     simulateTick();
     tickCount += 1;
     if (tickCount % SAVE_EVERY_TICKS === 0) saveState();
   }, TICK_MS);
-
-  process.on('SIGINT', () => {
-    saveState();
-    process.exit(0);
-  });
 
   // Le cache RFN pèse plusieurs Mo et son indexation est synchrone. Le charger
   // au démarrage bloquait toutes les premières requêtes, dont /api/state. Les
@@ -480,19 +477,50 @@ if (isMainThread) {
   const server = http.createServer(async (req, res) => {
     try {
       res.__sillonsAcceptEncoding = req.headers['accept-encoding'] || '';
-      const url = new URL(req.url, `http://${req.headers.host}`);
+      const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         await handleApi(req, res, url);
         return;
       }
-      serveStatic(req, res, url);
+      await serveStatic(req, res, url);
     } catch (error) {
-      sendJson(res, error.statusCode || 500, { ok: false, error: error.message });
+      if (res.destroyed || res.writableEnded) return;
+      if (res.headersSent) { res.destroy(); return; }
+      if (!error.statusCode) console.error('Erreur HTTP :', error);
+      sendJson(res, error.statusCode || 500, { ok: false, error: error.statusCode ? error.message : 'Erreur interne du serveur.' });
     }
   });
 
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    clearInterval(simulationTimer);
+    const finish = () => {
+      try {
+        saveState();
+        saveStore?.close();
+        process.exit(0);
+      } catch (error) {
+        console.error('Sauvegarde à l’arrêt impossible :', error);
+        process.exit(1);
+      }
+    };
+    server.close(finish);
+    server.closeIdleConnections?.();
+    setTimeout(finish, 10000).unref();
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+  server.once('error', error => {
+    clearInterval(simulationTimer);
+    console.error('Démarrage HTTP impossible :', error.message);
+    saveStore?.close();
+    process.exitCode = 1;
+  });
+
   server.listen(PORT, HOST, () => {
-    console.log(`Sillons lancé sur http://${HOST}:${PORT}`);
+    console.log(`Sillons lancé sur http://${HOST}:${server.address().port}`);
     console.log(`Workers RFN actifs : ${SNCF_ROUTE_WORKER_POOL_SIZE} thread(s).`);
     refreshCommuneCache(false).catch(error => console.warn('Chargement des populations communales impossible:', error.message));
   });

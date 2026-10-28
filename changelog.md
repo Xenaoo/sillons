@@ -1,3 +1,13 @@
+# v0.71.59 - Réactivité du serveur et intégrité des actions
+
+- Compression des fichiers et calcul des mots de passe asynchrones, cache mémoire borné et revalidation HTTP par ETag.
+- Réponses d'actions compactes, protection contre les réponses arrivant dans le désordre et délais réseau bornés sans répétition automatique des achats.
+- Actions ordonnées par compagnie pour éviter les doubles affectations ; montants invalides et modifications administrateur partielles refusés.
+- Workers RFN isolés de SQLite, demandes identiques regroupées, attente bornée et remplacement correct après une panne.
+- Sauvegarde illisible signalée au démarrage sans remplacement silencieux ; suppression du checkpoint forcé à chaque écriture et sauvegarde lors des arrêts SIGINT/SIGTERM.
+- Canvas mobile aligné sur la carte et demandes de redessin fusionnées sans perdre les mises à jour complètes.
+- 38 tests automatisés, dont un parcours HTTP sur une partie temporaire ; mesures et réserves dans AUDIT.md.
+
 # v0.71.56 - Fluidité des menus et fiabilité des actualisations
 
 - Catalogue centré sur l'époque actuelle, maintenance paginée et compatibilités d'affectation chargées à la demande dans les compositions.

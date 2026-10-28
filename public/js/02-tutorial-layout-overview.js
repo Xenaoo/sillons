@@ -551,8 +551,16 @@ function renderTabs() {
     return;
   }
   const samePanel = app.renderedTab === app.activeTab && app.renderedFleetSubtab === (app.activeFleetSubtab || '');
-  const scrollTop = samePanel ? content.scrollTop : 0;
+  const panelKey = `${app.activeTab}:${app.activeTab === 'fleet' ? app.activeFleetSubtab || '' : ''}`;
+  app.panelScrollPositions ||= {};
+  if (app.renderedPanelKey) app.panelScrollPositions[app.renderedPanelKey] = content.scrollTop;
+  const scrollTop = samePanel ? content.scrollTop : (app.panelScrollPositions[panelKey] || 0);
   content.innerHTML = renderers[app.activeTab]?.() || renderOverview();
+  if (app.renderedPanelKey !== panelKey && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    content.getAnimations().forEach(animation => animation.cancel());
+    content.animate([{ opacity: .45, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 180, easing: 'ease-out' });
+  }
+  app.renderedPanelKey = panelKey;
   const generation = app.tabRenderGeneration = (app.tabRenderGeneration || 0) + 1;
   requestAnimationFrame(() => {
     if (app.tabRenderGeneration === generation) content.scrollTop = scrollTop;

@@ -39,7 +39,9 @@ function loadOrCreateState() {
       return migrated;
     }
   } catch (error) {
-    console.warn('Base SQLite illisible, tentative de reprise depuis le JSON.', error.message);
+    // Une base existante en erreur ne doit jamais être remplacée par un ancien
+    // JSON ou une partie vide. La reprise doit être une décision explicite.
+    throw new Error(`Chargement SQLite impossible (${SAVE_DB_FILE}) : ${error.message}`, { cause: error });
   }
 
   if (fs.existsSync(LEGACY_SAVE_FILE)) {
@@ -51,8 +53,9 @@ function loadOrCreateState() {
         console.log(`Sauvegarde JSON migrée vers ${path.basename(SAVE_DB_FILE)}.`);
         return migrated;
       }
+      throw new Error('Structure de sauvegarde JSON invalide.');
     } catch (error) {
-      console.warn('Sauvegarde illisible, nouvelle partie créée.', error.message);
+      throw new Error(`Migration de la sauvegarde JSON impossible : ${error.message}`, { cause: error });
     }
   }
   return createState();

@@ -161,140 +161,41 @@ function toggleResearchEra(groupId, bucketKey) {
 }
 
 function focusResearchNode(nodeId) {
-  const groupId = researchGroupForNode(nodeId);
-  if (!groupId) return;
-  app.activeTab = 'research';
-  app.activeResearchTab = groupId;
-  app.highlightResearchId = nodeId;
-  const bucketInfo = researchEraBucketForNode(nodeId);
-  if (bucketInfo) setResearchEraCollapsed(bucketInfo.groupId, bucketInfo.bucket, false);
-  localStorage.setItem('sillons.activeTab', app.activeTab);
-  localStorage.setItem('sillons.researchTab', app.activeResearchTab);
-  renderAll();
-  requestAnimationFrame(() => {
-    const el = document.querySelector(`.tech-node[data-node-id="${CSS.escape(nodeId)}"]`);
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  });
-  setTimeout(() => {
-    if (app.highlightResearchId === nodeId) {
-      app.highlightResearchId = '';
-      renderAll();
-    }
-  }, 2800);
+  selectResearchNode(nodeId);
 }
 
 function selectResearchNode(nodeId) {
   const groupId = researchGroupForNode(nodeId);
   if (!groupId) return;
-  if (typeof hideGlobalTooltip === 'function') hideGlobalTooltip();
+  const visible = [...document.querySelectorAll('.rd-row')].some(el => el.dataset.nodeId === nodeId);
+  hideGlobalTooltip();
   app.activeTab = 'research';
   app.activeResearchTab = groupId;
   app.selectedResearchId = nodeId;
-  app.highlightResearchId = '';
+  if (!visible) {
+    app.researchSearchQuery = '';
+    app.researchStatusFilter = 'all';
+    app.researchEraFilter = 'all';
+    localStorage.removeItem('sillons.researchSearchQuery');
+  }
   localStorage.setItem('sillons.activeTab', app.activeTab);
-  localStorage.setItem('sillons.researchTab', app.activeResearchTab);
-  renderAll();
+  localStorage.setItem('sillons.researchTab', groupId);
+  renderAll({ deferMapRedraw: true });
   requestAnimationFrame(() => {
-    const el = document.querySelector(`.tech-node[data-node-id="${CSS.escape(nodeId)}"]`);
-    if (el) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
-    constrainResearchDetailPanel();
+    const row = [...document.querySelectorAll('.rd-row')].find(el => el.dataset.nodeId === nodeId);
+    row?.querySelector('.rd-row-select')?.focus({ preventScroll: true });
+    row?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   });
 }
 
 function closeResearchDetails() {
-  if (!app.selectedResearchId) return;
-  if (typeof hideGlobalTooltip === 'function') hideGlobalTooltip();
+  const nodeId = app.selectedResearchId;
+  if (!nodeId) return;
+  hideGlobalTooltip();
   app.selectedResearchId = '';
-  renderAll();
-}
-
-function bindResearchDetailDrag() {
-  const startDrag = (event, id) => {
-    const panel = event.target.closest?.('[data-research-detail-drag]');
-    if (!panel) return;
-    if (event.target.closest('button, a, input, select, textarea, [data-action]')) return;
-    const offset = app.researchDetailOffset || { x: 0, y: 0 };
-    app.researchDetailDrag = {
-      pointerId: id,
-      panel,
-      x: Number(offset.x || 0),
-      y: Number(offset.y || 0),
-      lastX: event.clientX,
-      lastY: event.clientY
-    };
-    panel.classList.add('is-dragging');
-    event.preventDefault();
-  };
-
-  const moveDrag = (event, id) => {
-    const drag = app.researchDetailDrag;
-    if (!drag || drag.pointerId !== id) return;
-    let dx = event.clientX - drag.lastX;
-    let dy = event.clientY - drag.lastY;
-    const rect = drag.panel.getBoundingClientRect();
-    const margin = 10;
-    if (rect.left + dx < margin) dx += margin - (rect.left + dx);
-    if (rect.right + dx > window.innerWidth - margin) dx -= rect.right + dx - (window.innerWidth - margin);
-    if (rect.top + dy < margin) dy += margin - (rect.top + dy);
-    if (rect.bottom + dy > window.innerHeight - margin) dy -= rect.bottom + dy - (window.innerHeight - margin);
-    drag.x += dx;
-    drag.y += dy;
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    app.researchDetailOffset = { x: Math.round(drag.x), y: Math.round(drag.y) };
-    drag.panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
-    drag.panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
-    event.preventDefault();
-  };
-
-  const finishDrag = id => {
-    const drag = app.researchDetailDrag;
-    if (!drag || drag.pointerId !== id) return;
-    drag.panel.classList.remove('is-dragging');
-    localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset || { x: 0, y: 0 }));
-    app.researchDetailDrag = null;
-  };
-
-  // Souris : clic gauche maintenu, indépendamment du comportement PointerEvent
-  // que certains navigateurs réservent au bouton du milieu dans ce contexte.
-  document.addEventListener('mousedown', event => {
-    if (event.button !== 0) return;
-    startDrag(event, 'mouse-left');
-  }, true);
-  document.addEventListener('mousemove', event => moveDrag(event, 'mouse-left'), true);
-  document.addEventListener('mouseup', event => {
-    if (event.button === 0) finishDrag('mouse-left');
-  }, true);
-
-  // Tactile et stylet conservent PointerEvent.
-  document.addEventListener('pointerdown', event => {
-    if (event.pointerType === 'mouse') return;
-    startDrag(event, `pointer-${event.pointerId}`);
-  }, true);
-  document.addEventListener('pointermove', event => {
-    if (event.pointerType !== 'mouse') moveDrag(event, `pointer-${event.pointerId}`);
-  }, true);
-  document.addEventListener('pointerup', event => finishDrag(`pointer-${event.pointerId}`), true);
-  document.addEventListener('pointercancel', event => finishDrag(`pointer-${event.pointerId}`), true);
-}
-
-function constrainResearchDetailPanel() {
-  const panel = document.querySelector('.research-detail-panel');
-  if (!panel) return;
-  const rect = panel.getBoundingClientRect();
-  const margin = 10;
-  let dx = 0;
-  let dy = 0;
-  if (rect.left < margin) dx = margin - rect.left;
-  if (rect.right + dx > window.innerWidth - margin) dx += window.innerWidth - margin - (rect.right + dx);
-  if (rect.top < margin) dy = margin - rect.top;
-  if (rect.bottom + dy > window.innerHeight - margin) dy += window.innerHeight - margin - (rect.bottom + dy);
-  if (!dx && !dy) return;
-  const offset = app.researchDetailOffset || { x: 0, y: 0 };
-  app.researchDetailOffset = { x: Math.round(Number(offset.x || 0) + dx), y: Math.round(Number(offset.y || 0) + dy) };
-  panel.style.setProperty('--research-detail-x', `${app.researchDetailOffset.x}px`);
-  panel.style.setProperty('--research-detail-y', `${app.researchDetailOffset.y}px`);
-  localStorage.setItem('sillons.researchDetailOffset', JSON.stringify(app.researchDetailOffset));
+  refreshResearchSearchResults();
+  const row = [...document.querySelectorAll('.rd-row')].find(el => el.dataset.nodeId === nodeId);
+  row?.querySelector('.rd-row-select')?.focus({ preventScroll: true });
 }
 
 function researchEffectTarget(effect, node) {

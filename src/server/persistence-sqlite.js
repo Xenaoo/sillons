@@ -252,7 +252,7 @@ function dropLegacyTables(db) {
 function createSaveStore(filename) {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 1000;');
 
   const isLegacy = tableExists(db, 'players') && tableColumns(db, 'players').includes('payload');
   const legacyState = isLegacy ? readLegacyState(db) : null;
@@ -433,7 +433,6 @@ function createSaveStore(filename) {
         for (const [imagePosition, image] of images.entries()) insert.bugImage.run(report?.id || `report-${position}`, imagePosition, JSON.stringify(image));
       }
       db.exec('COMMIT');
-      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     } catch (error) {
       db.exec('ROLLBACK');
       throw error;
